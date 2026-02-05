@@ -1,0 +1,53 @@
+name: Block External Issues
+
+on:
+  issues:
+    types:
+      - opened
+      - reopened
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  block-external-issues:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Comment and close issues from non-collaborators
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const issueNumber = context.payload.issue.number;
+            const username = context.payload.issue.user.login;
+
+            try {
+              await github.rest.repos.checkCollaborator({
+                owner,
+                repo,
+                username,
+              });
+              return;
+            } catch (error) {
+              if (error.status !== 404) {
+                throw error;
+              }
+            }
+
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number: issueNumber,
+              body: [
+                "Thanks for reaching out! This repository doesn't accept issues from external sources right now.",
+                "You can read up on the current status in the [contributing file](/Markdown/CONTRIBUTING.md).",
+              ].join("\n"),
+            });
+
+            await github.rest.issues.update({
+              owner,
+              repo,
+              issue_number: issueNumber,
+              state: "closed",
+            });
