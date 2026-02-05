@@ -1,0 +1,40 @@
+// @see https://www.electron.build/configuration/configuration
+{
+    $schema: 'https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json',
+    appId: 'com.example.electron-template',
+    productName: 'Electron Template',
+
+    files: ['dist', 'dist-electron'],
+    asar: true,
+    asarUnpack: [],
+
+    // Single icon source - electron-builder converts to .ico/.icns automatically
+    icon: 'src/assets/appicon.png',
+
+    directories: {
+        output: 'release/${version}',
+        buildResources: '.',
+    },
+    mac: {
+        target: ['dmg'],
+        artifactName: '${productName}-Mac-${version}-Installer.${ext}',
+    },
+    win: {
+        target: [{ target: 'nsis', arch: ['x64'] }],
+        artifactName: '${productName}-Windows-${version}-Setup.${ext}',
+        signAndEditExecutable: true,
+    },
+    nsis: {
+        oneClick: true,
+        perMachine: false,
+        allowToChangeInstallationDirectory: false,
+        deleteAppDataOnUninstall: true,
+    },
+    linux: {
+        target: ['AppImage'],
+        artifactName: '${productName}-Linux-${version}.${ext}',
+    },
+    // Uncomment and configure when you're ready to set up auto-updates:
+    // Use HTTP if your certificate isn't trusted
+    // publish: [{ provider: 'generic', url: 'https://your-generic-domain.tld' }],
+}
