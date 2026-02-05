@@ -1,0 +1,62 @@
+name: Changeset Version
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "Project/.changeset/**"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install
+        run: pnpm -C Project install
+
+      - name: Check for changesets
+        id: changesets
+        shell: bash
+        run: |
+          if ls Project/.changeset/*.md >/dev/null 2>&1; then
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Version packages
+        if: steps.changesets.outputs.skip != 'true'
+        run: pnpm -C Project changeset version
+
+      - name: Create version PR
+        if: steps.changesets.outputs.skip != 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: changeset-release/main
+          base: main
+          title: "chore(release): version"
+          commit-message: "chore(release): version"
+          add-paths: |
+            Project/package.json
+            Project/CHANGELOG.md
+            Project/.changeset/**

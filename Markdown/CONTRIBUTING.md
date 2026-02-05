@@ -8,10 +8,10 @@ KiloDesktop uses a three-tier branch gate system to ensure code quality and depl
 
 **Work-in-Progress Branches**
 
--   Any branch outside of the 3 main branches (`dev`, `preview`, `main`) represents work-in-progress, prototypes, and ideas
+-   Any branch outside of the 3 main branches (`dev`, `prev`, `main`) represents work-in-progress, prototypes, and ideas
 -   These branches have no special meaning and are for experimentation and feature development
 
-**dev → preview → main**
+**dev → prev → main**
 
 1. **dev branch** - Current Development State
 
@@ -19,14 +19,14 @@ KiloDesktop uses a three-tier branch gate system to ensure code quality and depl
     - Reflects the current active development state
     - All feature branches should target `dev` for pull requests
 
-2. **preview branch** - Staging Environment
+2. **prev branch** - Staging Environment
 
     - Takes everything from `dev` branch that has passed initial checks
-    - Generates preview deployments and publishes to the beta branch
+    - Generates preview deployments and publishes to the beta channel
     - Acts as a staging gate before production
 
 3. **main branch** - Production Ready
-    - Receives stable changes from `preview` branch
+    - Receives stable changes from `prev` branch
     - Should only contain thoroughly tested, stable code
     - Triggers production deployment when all checks pass on PR merge
     - Represents the stable/production state
@@ -34,10 +34,41 @@ KiloDesktop uses a three-tier branch gate system to ensure code quality and depl
 ### Deployment Pipeline
 
 -   **dev** → CI checks only
--   **preview** → CI checks + preview deployment generation
+-   **prev** → CI checks + preview deployment generation
 -   **main** → CI checks + production deployment (on merge)
 
 This ensures progressive stability validation as code moves through the development pipeline.
+
+## External Contribution Branching
+
+If you are contributing from a fork, please:
+
+- Create a descriptive branch name
+- Open the PR **against `dev`**
+
+**Branch name conventions (pick the one that fits):**
+
+- `feature/<short-description>` (new capability)
+- `fix/<short-description>` (bug fix)
+- `docs/<short-description>` (documentation)
+- `chore/<short-description>` (maintenance/refactor)
+
+Examples:
+
+- `feature/onboarding-flow`
+- `fix/window-crash-on-startup`
+- `docs/branching-guide`
+- `chore/update-eslint`
+
+## Changesets & Releases
+
+-   PRs targeting `dev` do **not** require changesets.
+-   Changesets are required for PRs targeting `prev` or `main` **when files under `Project/**` change**.
+-   The changelog lives in `Project/CHANGELOG.md` and is generated from changesets.
+-   Stable releases are automated on `main` via version PRs created by Changesets.
+-   Pre-releases are triggered by tags:
+    -   `dev`: `vX.Y.Z-alpha.N` (alpha channel)
+    -   `prev`: `vX.Y.Z-beta.N` (beta channel)
 
 ## Labels Guide
 
@@ -108,3 +139,4 @@ This ensures progressive stability validation as code moves through the developm
 | `status: done` | Completed and verified |
 | `status: duplicate` | Duplicate of an existing issue |
 | `status: wontfix` | Closed without planned changes |
+| Label Title | When to use it |

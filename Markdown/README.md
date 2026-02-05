@@ -26,7 +26,14 @@
 > [!IMPORTANT]
 > This project is currently under active development.
 
-The [`dev` branch](https://github.com/Neonsy/KiloDesktop/tree/dev) hosts the latest changes expected to reach production.
+Release channels map to branches:
+
+- **`dev` → alpha**
+- **`prev` → beta**
+- **`main` → stable**
+
+Stable releases are automated from `main` using Changesets and update `Project/CHANGELOG.md`.
+Pre-releases are published by tagging `dev` or `prev` with `vX.Y.Z-alpha.N` / `vX.Y.Z-beta.N`.
 
 ## Analytics
 

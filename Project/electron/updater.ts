@@ -16,6 +16,20 @@ export function initAutoUpdater(): void {
 
     mainWindow = BrowserWindow.getAllWindows()[0] ?? null;
 
+    const version = app.getVersion();
+    const isAlpha = version.includes('-alpha.');
+    const isBeta = version.includes('-beta.');
+
+    if (isAlpha) {
+        autoUpdater.channel = 'alpha';
+    } else if (isBeta) {
+        autoUpdater.channel = 'beta';
+    } else {
+        autoUpdater.channel = 'latest';
+    }
+
+    autoUpdater.allowPrerelease = isAlpha || isBeta;
+
     // === DEFAULT: Background download, prompt when ready ===
     autoUpdater.autoDownload = true;
     autoUpdater.autoInstallOnAppQuit = true; // Install on quit if user chose "Later"

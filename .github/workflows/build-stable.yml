@@ -1,0 +1,76 @@
+name: Build Stable Release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "Project/package.json"
+      - "Project/CHANGELOG.md"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+          - macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Guard release
+        id: guard
+        shell: bash
+        run: |
+          changed=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }})
+          echo "$changed"
+          if echo "$changed" | grep -q "^Project/package.json$" && echo "$changed" | grep -q "^Project/CHANGELOG.md$"; then
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Skip non-release commits
+        if: steps.guard.outputs.should_release != 'true'
+        shell: bash
+        run: echo "No release changes detected. Skipping."
+
+      - name: Setup Node
+        if: steps.guard.outputs.should_release == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup pnpm
+        if: steps.guard.outputs.should_release == 'true'
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install
+        if: steps.guard.outputs.should_release == 'true'
+        run: pnpm -C Project install
+
+      - name: Build and publish
+        if: steps.guard.outputs.should_release == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: |
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            pnpm -C Project build:win -- --publish always
+          elif [ "${{ matrix.os }}" = "macos-latest" ]; then
+            pnpm -C Project build:mac -- --publish always
+          else
+            pnpm -C Project build:linux -- --publish always
+          fi

@@ -13,6 +13,8 @@
         "build:mac": "vite build && electron-builder --mac -c electron-builder.json5",
         "build:linux": "vite build && electron-builder --linux -c electron-builder.json5",
         "publish:generic": "tsx scripts/publish.ts",
+        "changeset": "changeset",
+        "changeset:version": "changeset version",
         "lint": "eslint .",
         "lint:fix": "eslint . --fix",
         "format": "prettier --write .",
@@ -37,6 +39,7 @@
         "zustand": "^5.0.11"
     },
     "devDependencies": {
+        "@changesets/cli": "^2.27.1",
         "@eslint/js": "^9.39.2",
         "@tailwindcss/forms": "^0.5.11",
         "@tailwindcss/vite": "^4.1.18",

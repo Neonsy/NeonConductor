@@ -1,0 +1,81 @@
+name: Build Prerelease
+
+on:
+  push:
+    tags:
+      - "v*-alpha.*"
+      - "v*-beta.*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+          - macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Parse tag
+        id: tag
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          if [[ "$TAG" == *"-alpha."* ]]; then
+            CHANNEL="alpha"
+          elif [[ "$TAG" == *"-beta."* ]]; then
+            CHANNEL="beta"
+          else
+            echo "Unsupported tag: $TAG"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
+
+      - name: Validate tag branch
+        shell: bash
+        run: |
+          git fetch origin dev prev --depth=1
+          if [ "${{ steps.tag.outputs.channel }}" = "alpha" ]; then
+            git branch -r --contains "$GITHUB_SHA" | grep -q "origin/dev"
+          else
+            git branch -r --contains "$GITHUB_SHA" | grep -q "origin/prev"
+          fi
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install
+        run: pnpm -C Project install
+
+      - name: Build and publish
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: |
+          VERSION="${{ steps.tag.outputs.version }}"
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            pnpm -C Project build:win -- --publish always --config.extraMetadata.version="$VERSION"
+          elif [ "${{ matrix.os }}" = "macos-latest" ]; then
+            pnpm -C Project build:mac -- --publish always --config.extraMetadata.version="$VERSION"
+          else
+            pnpm -C Project build:linux -- --publish always --config.extraMetadata.version="$VERSION"
+          fi
