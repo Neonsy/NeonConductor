@@ -1,0 +1,383 @@
+name: Build Prerelease
+
+on:
+  push:
+    tags:
+      - "v*-alpha.*"
+      - "v*-beta.*"
+
+concurrency:
+  group: build-prerelease-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            build_command: build:win
+          - os: macos-latest
+            build_command: build:mac
+          - os: ubuntu-latest
+            build_command: build:linux
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0
+
+      - name: Parse tag
+        id: tag
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          if [[ "$TAG" == *"-alpha."* ]]; then
+            CHANNEL="alpha"
+          elif [[ "$TAG" == *"-beta."* ]]; then
+            CHANNEL="beta"
+          else
+            echo "Unsupported tag: $TAG"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
+
+      - name: Validate tag branch
+        shell: bash
+        run: |
+          git fetch origin dev prev --depth=1
+          if [ "${{ steps.tag.outputs.channel }}" = "alpha" ]; then
+            git branch -r --contains "$GITHUB_SHA" | grep -q "origin/dev"
+          else
+            git branch -r --contains "$GITHUB_SHA" | grep -q "origin/prev"
+          fi
+
+      - name: Setup Node
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238
+        with:
+          node-version: 20
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061
+        with:
+          version: 9
+
+      - name: Install
+        run: pnpm -C Project install
+
+      - name: Build and publish
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: |
+          VERSION="${{ steps.tag.outputs.version }}"
+          CHANNEL="${{ steps.tag.outputs.channel }}"
+          pnpm -C Project ${{ matrix.build_command }} -- --publish always --config.extraMetadata.version="$VERSION" --config.publish.channel="$CHANNEL" --config.publish.releaseType=prerelease
+
+  notes:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238
+        with:
+          node-version: 20
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061
+        with:
+          version: 9
+
+      - name: Install
+        run: pnpm -C Project install
+
+      - name: Build prerelease notes
+        id: notes
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+
+          if [[ "$TAG" == *"-alpha."* ]]; then
+            CHANNEL="alpha"
+            CHANNEL_TITLE="Alpha"
+          elif [[ "$TAG" == *"-beta."* ]]; then
+            CHANNEL="beta"
+            CHANNEL_TITLE="Beta"
+          else
+            echo "Unsupported tag: $TAG"
+            exit 1
+          fi
+
+          git fetch --tags --force
+          PREVIOUS_TAG="$(git tag --list "v*-${CHANNEL}.*" --sort=-v:refname | grep -Fxv "$TAG" | head -n1 || true)"
+          RANGE="$TAG"
+          SUMMARY_HEADER="Changes included in ${TAG}:"
+          if [ -n "$PREVIOUS_TAG" ]; then
+            RANGE="${PREVIOUS_TAG}..${TAG}"
+            SUMMARY_HEADER="Changes since ${PREVIOUS_TAG}:"
+          fi
+
+          CHANGESET_FILES="$(git log --diff-filter=AM --name-only --pretty=format: "$RANGE" -- 'Project/.changeset/*.md' | sed '/^$/d' | grep -v '^Project/.changeset/README.md$' | sort -u || true)"
+          FALLBACK_CHANGES="$(git log --no-merges --pretty=format:'- %s (%h)' "$RANGE" -- Project || true)"
+          if [ -z "$FALLBACK_CHANGES" ]; then
+            FALLBACK_CHANGES="- No commits under Project/ in this release range."
+          fi
+          REPO_PATH="${GITHUB_REPOSITORY}"
+
+          export TAG VERSION CHANNEL CHANNEL_TITLE PREVIOUS_TAG SUMMARY_HEADER CHANGESET_FILES FALLBACK_CHANGES RANGE REPO_PATH
+          node <<'NODE'
+          const fs = require("node:fs");
+          const { execSync, execFileSync } = require("node:child_process");
+          const githubChangelog = require("./Project/node_modules/@changesets/changelog-github").default;
+
+          const tag = process.env.TAG;
+          const version = process.env.VERSION;
+          const channel = process.env.CHANNEL;
+          const channelTitle = process.env.CHANNEL_TITLE;
+          const previousTag = process.env.PREVIOUS_TAG;
+          const summaryHeader = process.env.SUMMARY_HEADER;
+          const repo = process.env.REPO_PATH || process.env.GITHUB_REPOSITORY || "Neonsy/NeonConductor";
+          const range = process.env.RANGE || tag;
+          const fallbackChanges = process.env.FALLBACK_CHANGES || "- No commits under Project/ in this release range.";
+          const channelThemeHeadline =
+            channel === "alpha"
+              ? "The condctor has whiped up a new experimental version to try out. use with caution as it migt be unstable"
+              : "The condctor has pushed these new updates to the preview stage. this update should be safe to try, right?";
+          const files = (process.env.CHANGESET_FILES || "")
+            .split("\n")
+            .map((x) => x.trim())
+            .filter(Boolean);
+
+          const bumpRank = { none: 0, patch: 1, minor: 2, major: 3 };
+          const escapePipes = (text) => text.replace(/\|/g, "\\|");
+          const cleanInline = (text) =>
+            text
+              .replace(/\r\n/g, "\n")
+              .replace(/\n{2,}/g, "\n")
+              .replace(/\n/g, " ")
+              .replace(/\s+/g, " ")
+              .trim();
+
+          function readFileAtTag(filePath) {
+            try {
+              return execSync(`git show ${tag}:${filePath}`, {
+                encoding: "utf8",
+                stdio: ["ignore", "pipe", "ignore"],
+              });
+            } catch {
+              return "";
+            }
+          }
+
+          function latestCommitForFile(filePath) {
+            try {
+              const raw = execFileSync("git", ["log", "--format=%H", range, "--", filePath], {
+                encoding: "utf8",
+                stdio: ["ignore", "pipe", "ignore"],
+              }).trim();
+              if (!raw) return null;
+              return (
+                raw
+                  .split("\n")
+                  .map((x) => x.trim())
+                  .filter(Boolean)[0] || null
+              );
+            } catch {
+              return null;
+            }
+          }
+
+          function parseChangeset(content) {
+            const normalized = content.replace(/\r\n/g, "\n");
+            const match = normalized.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
+            const frontmatter = match ? match[1] : "";
+            const markdownBody = match ? match[2] : normalized;
+
+            const releases = [];
+            for (const rawLine of frontmatter.split("\n")) {
+              const line = rawLine.trim();
+              if (!line) continue;
+              const releaseMatch = line.match(
+                /^(?:"([^"]+)"|'([^']+)'|([^:]+))\s*:\s*(major|minor|patch|none)\s*$/i
+              );
+              if (!releaseMatch) continue;
+              const name = (releaseMatch[1] || releaseMatch[2] || releaseMatch[3] || "").trim();
+              const type = releaseMatch[4].toLowerCase();
+              if (!name) continue;
+              releases.push({ name, type });
+            }
+
+            const summary = cleanInline(markdownBody);
+            return { releases, summary };
+          }
+
+          function strongestReleaseType(releases) {
+            let strongest = "patch";
+            for (const release of releases) {
+              if (bumpRank[release.type] > bumpRank[strongest]) {
+                strongest = release.type;
+              }
+            }
+            return strongest;
+          }
+
+          async function renderGithubStyleReleaseLine(summary, type, commit) {
+            try {
+              const rendered = await githubChangelog.getReleaseLine(
+                { summary, commit },
+                type,
+                { repo }
+              );
+              const trimmed = rendered.trim();
+              return trimmed || `- ${summary}`;
+            } catch {
+              return `- ${summary}`;
+            }
+          }
+
+          async function main() {
+            const byPackage = new Map();
+            const summaries = [];
+            const releaseLines = [];
+
+            for (const filePath of files) {
+              const content = readFileAtTag(filePath);
+              if (!content) continue;
+
+              const parsed = parseChangeset(content);
+              if (parsed.summary) {
+                summaries.push(parsed.summary);
+                const commit = latestCommitForFile(filePath);
+                const type = strongestReleaseType(parsed.releases);
+                const releaseLine = await renderGithubStyleReleaseLine(parsed.summary, type, commit);
+                releaseLines.push(releaseLine);
+              }
+
+              for (const release of parsed.releases) {
+                const existing = byPackage.get(release.name);
+                if (!existing || bumpRank[release.type] > bumpRank[existing]) {
+                  byPackage.set(release.name, release.type);
+                }
+              }
+            }
+
+            const lines = [];
+            lines.push(`## ${channelThemeHeadline}`);
+            lines.push("");
+            lines.push(`_${channelTitle} changelog_`);
+            lines.push("");
+            lines.push(`- Version: \`${version}\``);
+            if (previousTag) {
+              lines.push(`- Previous ${channel} tag: \`${previousTag}\``);
+            }
+            lines.push("");
+ 
+            if (summaries.length > 0) {
+              lines.push("### What to test");
+              for (const item of summaries.slice(0, 12)) {
+                lines.push(`- ${item}`);
+              }
+              lines.push("");
+
+              const packageRows = [...byPackage.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+              if (packageRows.length > 0) {
+                lines.push("### Release intent from changesets");
+                lines.push("| Package | Bump |");
+                lines.push("| --- | --- |");
+                for (const [pkg, bump] of packageRows) {
+                  lines.push(`| \`${escapePipes(pkg)}\` | ${bump} |`);
+                }
+                lines.push("");
+              }
+
+              lines.push(`### ${summaryHeader}`);
+              for (const releaseLine of releaseLines) {
+                lines.push(releaseLine);
+              }
+            } else {
+              lines.push("### What to test");
+              lines.push(`- Update/install flow from the previous ${channel} build.`);
+              lines.push("- App launch, critical paths, and regressions in touched areas.");
+              lines.push("- Verify commits listed below.");
+              lines.push("");
+              lines.push(`### ${summaryHeader}`);
+              lines.push(fallbackChanges);
+              lines.push("");
+              lines.push("_No `.changeset/*.md` entries found in this release range; using commit summary fallback._");
+            }
+
+            fs.writeFileSync("prerelease-notes.md", `${lines.join("\n")}\n`);
+          }
+
+          main().catch((error) => {
+            console.error(error);
+            process.exit(1);
+          });
+          NODE
+
+          echo "channel_title=${CHANNEL_TITLE}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Upsert prerelease release notes
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+          RELEASE_NAME: ${{ steps.notes.outputs.channel_title }} ${{ steps.notes.outputs.version }}
+        with:
+          script: |
+            const fs = require("node:fs");
+            const { owner, repo } = context.repo;
+            const tag = process.env.TAG_NAME;
+            const name = process.env.RELEASE_NAME;
+            const body = fs.readFileSync("prerelease-notes.md", "utf8");
+
+            let existing = null;
+            try {
+              const found = await github.rest.repos.getReleaseByTag({ owner, repo, tag });
+              existing = found.data;
+            } catch (error) {
+              if (error.status !== 404) throw error;
+            }
+
+            if (existing) {
+              await github.rest.repos.updateRelease({
+                owner,
+                repo,
+                release_id: existing.id,
+                tag_name: tag,
+                name,
+                body,
+                prerelease: true,
+                draft: false,
+              });
+              core.info(`Updated prerelease notes for ${tag}`);
+            } else {
+              await github.rest.repos.createRelease({
+                owner,
+                repo,
+                tag_name: tag,
+                target_commitish: context.sha,
+                name,
+                body,
+                prerelease: true,
+                draft: false,
+              });
+              core.info(`Created prerelease notes for ${tag}`);
+            }

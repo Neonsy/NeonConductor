@@ -1,0 +1,189 @@
+name: Changeset Check
+
+on:
+  pull_request:
+    branches:
+      - dev
+      - prev
+      - main
+    paths:
+      - "Project/**"
+
+concurrency:
+  group: changeset-check-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  changeset:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0
+
+      - name: Detect changeset check scope
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin "${{ github.base_ref }}" --depth=1
+          changed="$(git diff --name-only "origin/${{ github.base_ref }}...HEAD" -- Project)"
+          echo "$changed"
+
+          requires_changeset="false"
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+
+            # Changeset files always require validation.
+            if [[ "$file" == Project/.changeset/* ]]; then
+              requires_changeset="true"
+              break
+            fi
+
+            # Docs-only paths are excluded from changeset validation.
+            if [[ "$file" == Project/docs/* ]]; then
+              continue
+            fi
+            if [[ "$file" == *.md || "$file" == *.mdx ]]; then
+              continue
+            fi
+
+            requires_changeset="true"
+            break
+          done <<< "$changed"
+
+          echo "requires_changeset=$requires_changeset" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Node
+        if: steps.scope.outputs.requires_changeset == 'true'
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238
+        with:
+          node-version: 20
+
+      - name: Setup pnpm
+        if: steps.scope.outputs.requires_changeset == 'true'
+        uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061
+        with:
+          version: 9
+
+      - name: Install
+        if: steps.scope.outputs.requires_changeset == 'true'
+        run: pnpm -C Project install
+
+      - name: Skip docs-only changes
+        if: steps.scope.outputs.requires_changeset != 'true'
+        run: echo "Docs-only changes detected in Project/. Skipping changeset validation."
+
+      - name: Verify changeset
+        if: steps.scope.outputs.requires_changeset == 'true'
+        id: verify
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          output="$(pnpm -C Project exec changeset status --since=origin/${{ github.base_ref }} 2>&1)"
+          code=$?
+          {
+            echo "exit_code=$code"
+            echo "output<<EOF"
+            echo "$output"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+          exit $code
+
+      - name: Upsert changeset comment
+        if: always()
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
+        env:
+          REQUIRES_CHANGESET: ${{ steps.scope.outputs.requires_changeset }}
+          VERIFY_EXIT_CODE: ${{ steps.verify.outputs.exit_code }}
+          VERIFY_OUTPUT: ${{ steps.verify.outputs.output }}
+        with:
+          script: |
+            const marker = "<!-- changeset-check-comment -->";
+            const issue_number = context.payload.pull_request.number;
+            const { owner, repo } = context.repo;
+            const base = context.payload.pull_request.base.ref;
+            const changesetGuide = [
+              "### Changeset quick guide",
+              "",
+              "Use this format in `Project/.changeset/<name>.md`:",
+              "",
+              "```md",
+              "---",
+              "\"neon-conductor\": patch|minor|major|none",
+              "---",
+              "",
+              "Short summary of the change for release notes.",
+              "```",
+              "",
+              "When to use each bump:",
+              "- `patch`: backwards-compatible bug fixes or small improvements",
+              "- `minor`: backwards-compatible new features",
+              "- `major`: breaking changes",
+              "- `none`: no version bump for this package, but keep release note context",
+            ].join("\n");
+
+            let body;
+            if (process.env.REQUIRES_CHANGESET !== "true") {
+              body = [
+                marker,
+                "Changeset check skipped (docs-only/non-release changes in `Project/`).",
+                "",
+                changesetGuide,
+              ].join("\n");
+            } else if (process.env.VERIFY_EXIT_CODE === "0") {
+              body = [
+                marker,
+                `Changeset check passed for base branch \`${base}\`.`,
+                "",
+                changesetGuide,
+              ].join("\n");
+            } else {
+              const raw = process.env.VERIFY_OUTPUT || "No output captured";
+              const clipped =
+                raw.length > 6000 ? `${raw.slice(0, 6000)}\n...truncated...` : raw;
+              body = [
+                marker,
+                `Changeset check failed for base branch \`${base}\`.`,
+                "",
+                "```text",
+                clipped,
+                "```",
+                "",
+                changesetGuide,
+              ].join("\n");
+            }
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number,
+              per_page: 100,
+            });
+
+            const existing = comments.find((c) => (c.body || "").includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number,
+                body,
+              });
+            }
+
+      - name: Fail when changeset check fails
+        if: steps.scope.outputs.requires_changeset == 'true' && steps.verify.outputs.exit_code != '0'
+        run: exit 1
