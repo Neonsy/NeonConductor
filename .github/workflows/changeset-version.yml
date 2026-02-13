@@ -1,0 +1,199 @@
+name: Changeset Version
+
+on:
+  pull_request:
+    types:
+      - closed
+    branches:
+      - main
+    paths:
+      - "Project/.changeset/**"
+
+concurrency:
+  group: changeset-version-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  version:
+    if: github.event.pull_request.merged == true && github.event.pull_request.head.ref == 'prev'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238
+        with:
+          node-version: 24.13.1
+          cache: pnpm
+          cache-dependency-path: Project/pnpm-lock.yaml
+
+      - name: Install
+        run: pnpm -C Project install --frozen-lockfile
+
+      - name: Create GitHub App token
+        id: app_token
+        uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+
+      - name: Version package from changesets
+        env:
+          GITHUB_TOKEN: ${{ steps.app_token.outputs.token }}
+        run: |
+          pnpm -C Project exec changeset version
+          node <<'NODE'
+          const fs = require("node:fs");
+
+          const stableTagline = "The conductor just signed off on a new stable release.";
+          const targetPath = "Project/CHANGELOG.md";
+
+          if (!fs.existsSync(targetPath)) {
+            process.exit(0);
+          }
+
+          const original = fs.readFileSync(targetPath, "utf8");
+          const normalized = original.replace(/\r\n/g, "\n");
+          const lines = normalized.split("\n");
+
+          const firstReleaseHeaderIndex = lines.findIndex((line) => /^##\s+\S+/.test(line));
+          if (firstReleaseHeaderIndex === -1) {
+            process.exit(0);
+          }
+
+          let firstNonEmptyAfterHeader = firstReleaseHeaderIndex + 1;
+          while (
+            firstNonEmptyAfterHeader < lines.length &&
+            lines[firstNonEmptyAfterHeader].trim() === ""
+          ) {
+            firstNonEmptyAfterHeader += 1;
+          }
+
+          if (lines[firstNonEmptyAfterHeader] === stableTagline) {
+            process.exit(0);
+          }
+
+          lines.splice(firstReleaseHeaderIndex + 1, 0, "", stableTagline, "");
+          const updated = `${lines.join("\n")}\n`;
+          if (updated !== normalized) {
+            fs.writeFileSync(targetPath, updated, "utf8");
+          }
+          NODE
+
+      - name: Resolve stable release version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(node -p "require('./Project/package.json').version")"
+          if [[ -z "$VERSION" ]]; then
+            echo "Unable to resolve Project/package.json version after changeset version."
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Create version PR
+        id: release_pr
+        uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676
+        with:
+          token: ${{ steps.app_token.outputs.token }}
+          commit-message: "release(stable): v${{ steps.version.outputs.version }}"
+          title: "release(stable): v${{ steps.version.outputs.version }}"
+          branch: "changeset-release/main"
+          base: "main"
+          delete-branch: true
+
+      - name: Enable auto-merge for release PR
+        if: steps.release_pr.outputs.pull-request-number != ''
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
+        env:
+          RELEASE_PR_NUMBER: ${{ steps.release_pr.outputs.pull-request-number }}
+        with:
+          github-token: ${{ steps.app_token.outputs.token }}
+          script: |
+            const prNumber = Number(process.env.RELEASE_PR_NUMBER || "0");
+            if (!Number.isInteger(prNumber) || prNumber <= 0) {
+              core.info("No release PR number detected; skipping auto-merge enablement.");
+              return;
+            }
+
+            const { owner, repo } = context.repo;
+            const pr = await github.rest.pulls.get({
+              owner,
+              repo,
+              pull_number: prNumber,
+            });
+            const mergeImmediately = async () => {
+              try {
+                await github.rest.pulls.merge({
+                  owner,
+                  repo,
+                  pull_number: prNumber,
+                  merge_method: "squash",
+                });
+                core.info(`Merged release PR #${prNumber} with SQUASH.`);
+              } catch (mergeError) {
+                const mergeDetail = mergeError instanceof Error ? mergeError.message : String(mergeError);
+                const lower = mergeDetail.toLowerCase();
+                if (lower.includes("already merged")) {
+                  core.info(`Release PR #${prNumber} is already merged.`);
+                  return;
+                }
+                throw mergeError;
+              }
+            };
+
+            if (pr.data.merged) {
+              core.info(`Release PR #${prNumber} is already merged.`);
+              return;
+            }
+            if (pr.data.auto_merge) {
+              core.info(`Auto-merge is already enabled for release PR #${prNumber}.`);
+              return;
+            }
+            if (pr.data.mergeable_state === "clean") {
+              core.info(`Release PR #${prNumber} is already mergeable; merging immediately with SQUASH.`);
+              await mergeImmediately();
+              return;
+            }
+
+            const mutation = `
+              mutation EnableAutoMerge($pullRequestId: ID!) {
+                enablePullRequestAutoMerge(input: { pullRequestId: $pullRequestId, mergeMethod: SQUASH }) {
+                  pullRequest {
+                    number
+                  }
+                }
+              }
+            `;
+
+            try {
+              await github.graphql(mutation, { pullRequestId: pr.data.node_id });
+              core.info(`Enabled auto-merge (SQUASH) for release PR #${prNumber}.`);
+            } catch (error) {
+              const detail = error instanceof Error ? error.message : String(error);
+              if (detail.toLowerCase().includes("clean status")) {
+                core.info(`Release PR #${prNumber} is already mergeable; merging immediately with SQUASH.`);
+                await mergeImmediately();
+                return;
+              }
+              core.setFailed(
+                `Unable to enable auto-merge for release PR #${prNumber}. Ensure repository auto-merge is enabled and branch protection permits bot auto-merge. Details: ${detail}`
+              );
+            }

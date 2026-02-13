@@ -1,0 +1,51 @@
+changelog:
+  exclude:
+    labels:
+      - ignore-for-release
+      - "type: question"
+  categories:
+    - title: Breaking Changes 💥
+      labels:
+        - "type: breaking"
+    - title: Features 🚀
+      labels:
+        - "type: feature"
+    - title: Bug Fixes 🐞
+      labels:
+        - "type: bug"
+    - title: Refactoring 🛠
+      labels:
+        - "type: refactor"
+    - title: Performance Improvements ⚡️
+      labels:
+        - "type: performance"
+    - title: UI/UX 🎨
+      labels:
+        - "type: ui-ux"
+    - title: Documentation 📚
+      labels:
+        - "type: docs"
+    - title: Tests 🧪
+      labels:
+        - "type: test"
+    - title: Build System 🏗
+      labels:
+        - "type: build"
+    - title: Continuous Integration 🔄
+      labels:
+        - "type: ci"
+    - title: Dependency Updates 📦
+      labels:
+        - "type: dependencies"
+    - title: Chores 🧹
+      labels:
+        - "type: chore"
+    - title: Security 🔐
+      labels:
+        - "type: security"
+    - title: Style 💅
+      labels:
+        - "type: style"
+    - title: Reverts 🔄
+      labels:
+        - "type: revert"

@@ -1,0 +1,32 @@
+name: Sync labels
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/labels.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: label-sync
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout labels config
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          sparse-checkout: .github/labels.yml
+      - name: Sync labels from config
+        uses: EndBug/label-sync@52074158190acb45f3077f9099fea818aa43f97a
+        with:
+          config-file: .github/labels.yml
+          delete-other-labels: true

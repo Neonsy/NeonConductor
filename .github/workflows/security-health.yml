@@ -1,0 +1,64 @@
+name: Security and Health
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+    - cron: "29 4 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: security-health-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - name: Setup pnpm
+        uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061
+        with:
+          version: 10
+      - name: Setup Node
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238
+        with:
+          node-version: 24.13.1
+          cache: pnpm
+          cache-dependency-path: Project/pnpm-lock.yaml
+      - name: Install
+        run: pnpm -C Project install --frozen-lockfile
+      - name: Audit production dependencies
+        run: pnpm -C Project audit --prod --audit-level=high
+
+  weekly-project-health:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.schedule == '29 4 * * 1' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - name: Setup pnpm
+        uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061
+        with:
+          version: 10
+      - name: Setup Node
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238
+        with:
+          node-version: 24.13.1
+          cache: pnpm
+          cache-dependency-path: Project/pnpm-lock.yaml
+      - name: Install
+        run: pnpm -C Project install --frozen-lockfile
+      - name: Lint
+        run: pnpm -C Project lint
+      - name: Typecheck
+        run: pnpm -C Project typecheck
+      - name: Test
+        run: pnpm -C Project test
+      - name: Build
+        run: pnpm -C Project build

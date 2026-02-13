@@ -1,0 +1,383 @@
+name: Build Prerelease
+
+on:
+  push:
+    tags:
+      - "v*-alpha.*"
+      - "v*-beta.*"
+
+concurrency:
+  group: build-prerelease-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: s
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target_args: --win
+          - os: macos-latest
+            target_args: --mac --arm64 --x64
+          - os: ubuntu-latest
+            target_args: --linux
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0
+          path: s
+
+      - name: Parse tag
+        id: tag
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          if [[ "$TAG" == *"-alpha."* ]]; then
+            CHANNEL="alpha"
+          elif [[ "$TAG" == *"-beta."* ]]; then
+            CHANNEL="beta"
+          else
+            echo "Unsupported tag: $TAG"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
+
+      - name: Validate tag branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin \
+            +refs/heads/dev:refs/remotes/origin/dev \
+            +refs/heads/prev:refs/remotes/origin/prev \
+            --force --tags
+
+          if [ "${{ steps.tag.outputs.channel }}" = "alpha" ]; then
+            target_ref="origin/dev"
+          else
+            target_ref="origin/prev"
+          fi
+
+          target_head="$(git rev-parse "$target_ref")"
+          if [[ "$GITHUB_SHA" != "$target_head" ]]; then
+            echo "Tag commit $GITHUB_SHA is not the current head of $target_ref ($target_head)."
+            echo "Refusing prerelease publish from a stale branch commit."
+            exit 1
+          fi
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238
+        with:
+          node-version: 24.13.1
+          cache: pnpm
+          cache-dependency-path: s/Project/pnpm-lock.yaml
+
+      - name: Configure pnpm for Windows
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          cat > Project/.npmrc <<'EOF'
+          node-linker=hoisted
+          virtual-store-dir=.pnpm
+          EOF
+
+      - name: Install
+        run: pnpm -C Project install --frozen-lockfile
+
+      - name: Build package
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: |
+          VERSION="${{ steps.tag.outputs.version }}"
+          CHANNEL="${{ steps.tag.outputs.channel }}"
+          pnpm -C Project build
+          pnpm -C Project exec electron-builder ${{ matrix.target_args }} -c electron-builder.json5 --publish never --config.extraMetadata.version="$VERSION" --config.publish.channel="$CHANNEL" --config.publish.releaseType=prerelease
+
+      - name: Stage release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.tag.outputs.version }}"
+          CHANNEL="${{ steps.tag.outputs.channel }}"
+          RELEASE_DIR="Project/release/${VERSION}"
+          STAGE_DIR="Project/release-assets"
+          rm -rf "$STAGE_DIR"
+          mkdir -p "$STAGE_DIR"
+
+          find "$RELEASE_DIR" -maxdepth 1 -type f \
+            \( -name "*.exe" -o -name "*.dmg" -o -name "*.zip" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" -o -name "*.blockmap" -o -name "latest*.yml" -o -name "latest*.yaml" -o -name "${CHANNEL}*.yml" -o -name "${CHANNEL}*.yaml" \) \
+            -print0 |
+          while IFS= read -r -d '' file; do
+            cp "$file" "$STAGE_DIR/$(basename "$file")"
+          done
+
+          file_count="$(find "$STAGE_DIR" -type f | wc -l | tr -d ' ')"
+          if [ "$file_count" = "0" ]; then
+            echo "No release assets staged from $RELEASE_DIR"
+            exit 1
+          fi
+
+      - name: Upload release assets
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: release-assets-${{ matrix.os }}-${{ steps.tag.outputs.version }}
+          path: s/Project/release-assets/**
+          if-no-files-found: error
+
+  notes:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      tag: ${{ steps.ctx.outputs.tag }}
+      version: ${{ steps.ctx.outputs.version }}
+      channel: ${{ steps.ctx.outputs.channel }}
+      channel_title: ${{ steps.ctx.outputs.channel_title }}
+      release_name: ${{ steps.ctx.outputs.release_name }}
+      is_prerelease: ${{ steps.ctx.outputs.is_prerelease }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238
+        with:
+          node-version: 24.13.1
+
+      - name: Parse prerelease context
+        id: ctx
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+
+          if [[ "$TAG" == *"-alpha."* ]]; then
+            CHANNEL="alpha"
+            CHANNEL_TITLE="Alpha"
+            CHANNEL_HEADLINE="The conductor has whipped up a new experimental version to try out. Use with caution, as it might be unstable."
+          elif [[ "$TAG" == *"-beta."* ]]; then
+            CHANNEL="beta"
+            CHANNEL_TITLE="Beta"
+            CHANNEL_HEADLINE="The conductor has pushed these new updates to the preview stage. This update should be safe to try, right?"
+          else
+            echo "Unsupported tag: $TAG"
+            exit 1
+          fi
+
+          RELEASE_NAME="${CHANNEL_TITLE} ${VERSION}"
+
+          git fetch --tags --force
+          PREVIOUS_TAG="$(git tag --list "v*-${CHANNEL}.*" --sort=-v:refname | grep -Fxv "$TAG" | head -n1 || true)"
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
+          echo "channel_title=$CHANNEL_TITLE" >> "$GITHUB_OUTPUT"
+          echo "release_name=$RELEASE_NAME" >> "$GITHUB_OUTPUT"
+          echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
+          echo "previous_tag=$PREVIOUS_TAG" >> "$GITHUB_OUTPUT"
+          {
+            echo "headline<<EOF"
+            echo "$CHANNEL_HEADLINE"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Render prerelease release notes
+        env:
+          CHANNEL: ${{ steps.ctx.outputs.channel }}
+          TAG_NAME: ${{ steps.ctx.outputs.tag }}
+          VERSION: ${{ steps.ctx.outputs.version }}
+          PREVIOUS_TAG: ${{ steps.ctx.outputs.previous_tag }}
+          CHANNEL_HEADLINE: ${{ steps.ctx.outputs.headline }}
+          REPO_OWNER: ${{ github.repository_owner }}
+          REPO_NAME: ${{ github.event.repository.name }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node .github/scripts/render-release-notes.mjs
+
+      - name: Upload release notes artifact
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: release-notes-${{ steps.ctx.outputs.tag }}
+          path: release-notes.md
+          if-no-files-found: error
+
+  publish_release:
+    needs: [build, notes]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Download built assets
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          pattern: release-assets-*-${{ needs.notes.outputs.version }}
+          merge-multiple: true
+          path: dist-assets
+
+      - name: Download release notes
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: release-notes-${{ needs.notes.outputs.tag }}
+          path: release-notes
+
+      - name: Create GitHub App token
+        id: app_token
+        uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+
+      - name: Ensure draft release exists
+        id: ensure_release
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
+        env:
+          TAG_NAME: ${{ needs.notes.outputs.tag }}
+          RELEASE_NAME: ${{ needs.notes.outputs.release_name }}
+          IS_PRERELEASE: ${{ needs.notes.outputs.is_prerelease }}
+        with:
+          github-token: ${{ steps.app_token.outputs.token }}
+          script: |
+            const { owner, repo } = context.repo;
+            const tag = process.env.TAG_NAME;
+            const releaseName = process.env.RELEASE_NAME;
+            const prerelease = process.env.IS_PRERELEASE === "true";
+
+            let existing = null;
+            try {
+              const found = await github.rest.repos.getReleaseByTag({ owner, repo, tag });
+              existing = found.data;
+            } catch (error) {
+              if (error.status !== 404) throw error;
+            }
+
+            if (existing && !existing.draft) {
+              core.setFailed(`Release ${tag} is already published. Immutable rerun policy blocks republish.`);
+              return;
+            }
+
+            let release = existing;
+            if (!release) {
+              const created = await github.rest.repos.createRelease({
+                owner,
+                repo,
+                tag_name: tag,
+                target_commitish: context.sha,
+                name: releaseName,
+                body: "Preparing release assets...",
+                prerelease,
+                draft: true,
+              });
+              release = created.data;
+              core.info(`Created draft release for ${tag}`);
+            } else {
+              const updated = await github.rest.repos.updateRelease({
+                owner,
+                repo,
+                release_id: existing.id,
+                tag_name: tag,
+                name: releaseName,
+                prerelease,
+                draft: true,
+              });
+              release = updated.data;
+              core.info(`Reusing existing draft release for ${tag}`);
+            }
+
+            core.setOutput("release_id", String(release.id));
+
+      - name: Upload all assets to draft release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.app_token.outputs.token }}
+          TAG_NAME: ${{ needs.notes.outputs.tag }}
+        run: |
+          set -euo pipefail
+          mapfile -d '' files < <(find dist-assets -type f -print0)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No assets found in dist-assets"
+            exit 1
+          fi
+
+          UPLOAD_DIR="upload-assets"
+          rm -rf "$UPLOAD_DIR"
+          mkdir -p "$UPLOAD_DIR"
+
+          declare -A counts
+          for file in "${files[@]}"; do
+            base="$(basename "$file")"
+            counts["$base"]=$(( ${counts["$base"]:-0} + 1 ))
+          done
+
+          for file in "${files[@]}"; do
+            base="$(basename "$file")"
+            stem="${base%.*}"
+            if [ "$stem" = "$base" ]; then
+              ext=""
+            else
+              ext=".${base##*.}"
+            fi
+
+            dest="$UPLOAD_DIR/$base"
+            if [ "${counts["$base"]}" -gt 1 ]; then
+              rel="${file#dist-assets/}"
+              suffix="$(printf '%s' "$rel" | sha256sum | cut -c1-8)"
+              dest="$UPLOAD_DIR/${stem}-${suffix}${ext}"
+            fi
+            cp "$file" "$dest"
+          done
+
+          mapfile -d '' upload_files < <(find "$UPLOAD_DIR" -type f -print0)
+          gh release upload "$TAG_NAME" "${upload_files[@]}" --repo "$GITHUB_REPOSITORY" --clobber
+
+      - name: Publish release with final notes
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
+        env:
+          RELEASE_ID: ${{ steps.ensure_release.outputs.release_id }}
+          TAG_NAME: ${{ needs.notes.outputs.tag }}
+          RELEASE_NAME: ${{ needs.notes.outputs.release_name }}
+          IS_PRERELEASE: ${{ needs.notes.outputs.is_prerelease }}
+        with:
+          github-token: ${{ steps.app_token.outputs.token }}
+          script: |
+            const fs = require("node:fs");
+            const { owner, repo } = context.repo;
+            const releaseId = Number(process.env.RELEASE_ID);
+            const tag = process.env.TAG_NAME;
+            const releaseName = process.env.RELEASE_NAME;
+            const prerelease = process.env.IS_PRERELEASE === "true";
+            const body = fs.readFileSync("release-notes/release-notes.md", "utf8");
+
+            await github.rest.repos.updateRelease({
+              owner,
+              repo,
+              release_id: releaseId,
+              tag_name: tag,
+              name: releaseName,
+              body,
+              prerelease,
+              draft: false,
+            });
+            core.info(`Published ${tag} with grouped assets.`);

@@ -1,0 +1,98 @@
+name: Label PR
+
+on:
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - edited
+      - synchronize
+      - ready_for_review
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  add-pr-labels:
+    name: Add PR labels
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
+        with:
+          script: |
+            const pullRequest = context.payload.pull_request;
+            const title = pullRequest.title || "";
+            const match = title.match(
+              /^(feat|fix|chore|docs|refactor|test|perf|build|ci|ui-ux|revert)(?:\(([a-z0-9][a-z0-9-]*)\))?(!)?:\s(.+)$/
+            );
+
+            if (!match) {
+              core.info("PR title does not match semantic format, skipping label sync.");
+              return;
+            }
+
+            const [, type, scope, isBreaking] = match;
+            const typeToLabel = {
+              feat: "type: feature",
+              fix: "type: bug",
+              chore: "type: chore",
+              docs: "type: docs",
+              refactor: "type: refactor",
+              test: "type: test",
+              perf: "type: performance",
+              build: "type: build",
+              ci: "type: ci",
+              "ui-ux": "type: ui-ux",
+              revert: "type: revert",
+            };
+
+            const managedTypeLabels = [
+              "type: feature",
+              "type: bug",
+              "type: chore",
+              "type: docs",
+              "type: refactor",
+              "type: test",
+              "type: performance",
+              "type: build",
+              "type: ci",
+              "type: ui-ux",
+              "type: revert",
+              "type: breaking",
+              "type: dependencies",
+            ];
+
+            const desiredLabels = new Set([typeToLabel[type]]);
+            if (isBreaking) desiredLabels.add("type: breaking");
+            if (scope === "dependencies" || scope === "deps") desiredLabels.add("type: dependencies");
+
+            const currentLabels = (pullRequest.labels || []).map((label) => label.name);
+            const toRemove = managedTypeLabels.filter(
+              (label) => currentLabels.includes(label) && !desiredLabels.has(label)
+            );
+            const toAdd = [...desiredLabels].filter((label) => !currentLabels.includes(label));
+
+            for (const label of toRemove) {
+              try {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: pullRequest.number,
+                  name: label,
+                });
+              } catch (error) {
+                if (error.status !== 404) throw error;
+              }
+            }
+
+            if (toAdd.length > 0) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pullRequest.number,
+                labels: toAdd,
+              });
+            }

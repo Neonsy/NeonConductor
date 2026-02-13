@@ -1,0 +1,99 @@
+@import 'tailwindcss';
+@import './font/outift.css';
+@import './font/roboto-mono.css';
+
+@plugin '@tailwindcss/forms';
+@plugin 'tailwind-clamp';
+
+@theme {
+    --font-display: 'Outfit', 'Trebuchet MS', sans-serif;
+    --font-body: 'Outfit', 'Trebuchet MS', sans-serif;
+    --font-mono: 'Roboto Mono', Consolas, 'Liberation Mono', Menlo, Monaco, monospace;
+
+    --color-charcoal-950: #101112;
+    --color-charcoal-900: #17191b;
+    --color-charcoal-800: #23272c;
+    --color-stone-200: #d3cbc0;
+    --color-stone-100: #ebe4d6;
+    --color-sand-50: #f6f0e4;
+    --color-amber-500: #c48132;
+    --color-amber-400: #d8a05c;
+    --color-steel-500: #4f6f80;
+    --color-moss-500: #617449;
+}
+
+html,
+body,
+#root {
+    min-height: 100%;
+}
+
+body {
+    margin: 0;
+    font-family: var(--font-body);
+    background: #01030a;
+    color: #e8f1ff;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--color-charcoal-900);
+}
+
+::-webkit-scrollbar-thumb {
+    background: #4d545d;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #616b76;
+}
+
+/* Selection styling */
+::selection {
+    background: rgba(96, 217, 255, 0.38);
+    color: #00101a;
+}
+
+@keyframes neon-drift {
+    0%,
+    100% {
+        transform: translate3d(0, 0, 0) scale(1);
+    }
+    50% {
+        transform: translate3d(0.9rem, -1rem, 0) scale(1.03);
+    }
+}
+
+@keyframes neon-pulse {
+    0%,
+    100% {
+        box-shadow:
+            0 36px 96px rgba(2, 7, 18, 0.9),
+            inset 0 0 0 1px rgba(158, 211, 255, 0.18),
+            0 0 42px rgba(38, 166, 255, 0.26),
+            0 0 88px rgba(25, 118, 255, 0.18);
+    }
+    50% {
+        box-shadow:
+            0 44px 108px rgba(2, 10, 24, 0.94),
+            inset 0 0 0 1px rgba(158, 211, 255, 0.24),
+            0 0 56px rgba(42, 198, 255, 0.34),
+            0 0 108px rgba(95, 70, 255, 0.14);
+    }
+}
+
+@keyframes arc-drift {
+    0%,
+    100% {
+        transform: translateX(0);
+    }
+    50% {
+        transform: translateX(2.5%);
+    }
+}
