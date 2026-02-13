@@ -1,0 +1,90 @@
+name: Changeset Version
+
+on:
+  pull_request:
+    types:
+      - closed
+    branches:
+      - main
+    paths:
+      - "Project/.changeset/**"
+
+concurrency:
+  group: changeset-version-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  version:
+    if: github.event.pull_request.merged == true && github.event.pull_request.head.ref == 'prev'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Setup Node
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238
+        with:
+          node-version: 20
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061
+        with:
+          version: 9
+
+      - name: Install
+        run: pnpm -C Project install
+
+      - name: Create version PR
+        uses: changesets/action@c48e67d110a68bc90ccf1098e9646092baacaa87
+        with:
+          cwd: Project
+          version: |
+            pnpm exec changeset version
+            node <<'NODE'
+            const fs = require("node:fs");
+
+            const stableTagline = "The conductor just signed off on a new stable release.";
+            const targetPath = "CHANGELOG.md";
+
+            if (!fs.existsSync(targetPath)) {
+              process.exit(0);
+            }
+
+            const original = fs.readFileSync(targetPath, "utf8");
+            const normalized = original.replace(/\r\n/g, "\n");
+            const lines = normalized.split("\n");
+
+            const firstReleaseHeaderIndex = lines.findIndex((line) => /^##\s+\S+/.test(line));
+            if (firstReleaseHeaderIndex === -1) {
+              process.exit(0);
+            }
+
+            let firstNonEmptyAfterHeader = firstReleaseHeaderIndex + 1;
+            while (
+              firstNonEmptyAfterHeader < lines.length &&
+              lines[firstNonEmptyAfterHeader].trim() === ""
+            ) {
+              firstNonEmptyAfterHeader += 1;
+            }
+
+            if (lines[firstNonEmptyAfterHeader] === stableTagline) {
+              process.exit(0);
+            }
+
+            lines.splice(firstReleaseHeaderIndex + 1, 0, "", stableTagline, "");
+            const updated = `${lines.join("\n")}\n`;
+            if (updated !== normalized) {
+              fs.writeFileSync(targetPath, updated, "utf8");
+            }
+            NODE
+          commit: "chore(release): version"
+          title: "chore(release): version"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

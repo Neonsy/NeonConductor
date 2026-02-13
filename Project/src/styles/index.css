@@ -1,0 +1,66 @@
+@import 'tailwindcss';
+@import './font/outift.css';
+
+@plugin '@tailwindcss/forms';
+@plugin 'tailwind-clamp';
+
+@theme {
+    --font-display: 'Outfit', system-ui, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+
+    --color-obsidian-950: #0a0a0f;
+    --color-obsidian-900: #12121a;
+    --color-obsidian-800: #1a1a25;
+    --color-obsidian-700: #252532;
+    --color-obsidian-600: #35354a;
+
+    --color-electric-400: #60a5fa;
+    --color-electric-500: #3b82f6;
+    --color-electric-600: #2563eb;
+
+    --color-neon-400: #a78bfa;
+    --color-neon-500: #8b5cf6;
+
+    --color-mint-400: #34d399;
+    --color-mint-500: #10b981;
+
+    --color-coral-400: #fb7185;
+    --color-coral-500: #f43f5e;
+}
+
+html,
+body,
+#root {
+    min-height: 100%;
+}
+
+body {
+    margin: 0;
+    background: var(--color-obsidian-950);
+    color: white;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--color-obsidian-900);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--color-obsidian-600);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--color-obsidian-700);
+}
+
+/* Selection styling */
+::selection {
+    background: rgba(139, 92, 246, 0.4);
+    color: white;
+}

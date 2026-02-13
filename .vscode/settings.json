@@ -1,0 +1,15 @@
+{
+    "terminal.integrated.cwd": "${workspaceFolder}/Project",
+    "typescript.tsdk": "Project/node_modules/typescript/lib",
+    "typescript.enablePromptUseWorkspaceTsdk": true,
+    "eslint.workingDirectories": [
+        {
+            "directory": "Project",
+            "changeProcessCWD": true
+        }
+    ],
+    "workbench.editorAssociations": {
+        "*.ndjson": "jsonlViewer.editor",
+        "*.jsonl": "jsonlViewer.editor"
+    }
+}
