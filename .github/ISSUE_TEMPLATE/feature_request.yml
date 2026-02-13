@@ -1,0 +1,145 @@
+name: Feature request
+description: Propose a new feature or improvement for NeonConductor.
+title: "[Feature]: "
+labels:
+  - "type: feature"
+  - "status: needs-triage"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form for new features or product improvements.
+
+        If something is broken right now, open a bug report instead.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Preflight checklist
+      description: Confirm these before submitting.
+      options:
+        - label: I searched existing issues and did not find this request already filed.
+          required: true
+        - label: This is a feature request, not a support question or bug report.
+          required: true
+        - label: I understand this is a free hobby project and roadmap/prioritization is maintainer-driven.
+          required: true
+        - label: I am willing to help test this feature if implemented.
+          required: false
+        - label: I am willing to open a PR for this feature.
+          required: false
+
+  - type: dropdown
+    id: request_type
+    attributes:
+      label: Request type
+      options:
+        - New feature
+        - Enhancement to existing behavior
+        - UX/UI improvement
+        - Developer experience/tooling
+    validations:
+      required: true
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Primary scope
+      description: Pick the closest technical area.
+      options:
+        - Agent core
+        - Orchestration
+        - Tools
+        - Memory
+        - UI
+        - API
+        - Integrations
+        - Infra
+        - Docs
+        - Tests
+        - Dependencies
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: session_mode
+    attributes:
+      label: Session/workspace context
+      description: NeonConductor is a desktop app; where would this feature apply?
+      options:
+        - Local session
+        - Kilo Cloud session
+        - Worktree mode
+        - Not session-specific
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem statement
+      description: What pain point are you trying to solve?
+      placeholder: Describe the current limitation and who it affects.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What behavior or capability should be added?
+      placeholder: Describe the desired behavior clearly.
+    validations:
+      required: true
+
+  - type: textarea
+    id: workflow
+    attributes:
+      label: Intended workflow
+      description: Show how a user would use this end-to-end.
+      placeholder: |
+        1. User does ...
+        2. App shows ...
+        3. User confirms ...
+        4. Result is ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What other approaches did you consider, and why are they worse?
+      placeholder: Optional but strongly recommended.
+    validations:
+      required: false
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: List concrete checks that define done.
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+        - [ ] ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: references
+    attributes:
+      label: References / mockups / examples
+      description: Link related issues, PRs, screenshots, or external references.
+      placeholder: Paste links and attach images if useful.
+    validations:
+      required: false
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Additional context
+      description: Anything else maintainers should know for triage.
+    validations:
+      required: false

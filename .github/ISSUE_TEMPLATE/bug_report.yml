@@ -1,0 +1,157 @@
+name: Bug report
+description: Report a reproducible bug in NeonConductor.
+title: "[Bug]: "
+labels:
+  - "type: bug"
+  - "status: needs-triage"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing this report.
+
+        Before submitting, please make sure you can reproduce the issue reliably.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Preflight checklist
+      description: Please confirm all required items.
+      options:
+        - label: I reproduced this bug at least 3 times.
+          required: true
+        - label: I searched existing issues and did not find a duplicate.
+          required: true
+        - label: I am using the latest available build for my channel (alpha/beta/stable) or local branch.
+          required: true
+        - label: I understand this is a free hobby project and not all third-party providers are available for maintainers to test.
+          required: true
+        - label: I can provide additional logs, traces, or test data if needed.
+          required: false
+        - label: I am willing to open a PR for a fix.
+          required: false
+
+  - type: input
+    id: app_version
+    attributes:
+      label: NeonConductor version
+      description: Exact app version tag or commit SHA (for local builds).
+      placeholder: e.g. v0.8.2-alpha.3, v0.8.2-beta.1, v0.8.2, or 1a2b3c4
+    validations:
+      required: true
+
+  - type: dropdown
+    id: channel
+    attributes:
+      label: Release channel
+      options:
+        - Alpha (dev branch / vX.Y.Z-alpha.N)
+        - Beta (prev branch / vX.Y.Z-beta.N)
+        - Stable (main branch / vX.Y.Z)
+        - Local source build (no release tag)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: deployment_mode
+    attributes:
+      label: Session execution mode
+      description: Select where the affected session/workspace ran.
+      options:
+        - Playground
+        - Local session
+        - Kilo Cloud session
+        - Worktree mode
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - macOS
+        - Linux
+    validations:
+      required: true
+
+  - type: input
+    id: os_version
+    attributes:
+      label: OS version
+      placeholder: e.g. Windows 11 24H2, macOS 15.3, Ubuntu 24.04
+    validations:
+      required: true
+
+  - type: input
+    id: provider
+    attributes:
+      label: Provider/model (if relevant)
+      description: Include provider, model, and API endpoint/base URL if this bug is provider-specific.
+      placeholder: e.g. provider-x model-y via https://api.example.com
+    validations:
+      required: false
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Bug summary
+      description: Clear and concise description of the actual bug.
+      placeholder: What happened? What did you expect instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Include exact steps so someone else can reproduce.
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+        4. Observe error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected_behavior
+    attributes:
+      label: Expected behavior
+      placeholder: What should have happened?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual_behavior
+    attributes:
+      label: Actual behavior
+      placeholder: What happened instead? Include exact error text if possible.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / stack traces / console output
+      description: Paste relevant logs. Redact secrets.
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots or recordings
+      description: Drag-and-drop images/videos here when relevant.
+    validations:
+      required: false
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Additional context
+      description: Mention any broader product direction this bug touches.
+    validations:
+      required: false

@@ -1,0 +1,89 @@
+name: Validate PR title
+
+on:
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - edited
+      - synchronize
+      - ready_for_review
+
+permissions:
+  pull-requests: write
+
+jobs:
+  validate-pr:
+    name: Validate PR title
+    if: ${{ !contains(github.actor, 'dependabot') && github.event.pull_request.base.ref == 'dev' && github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50
+        id: lint_pr_title
+        with:
+          requireScope: false
+          types: |
+            feat
+            fix
+            chore
+            docs
+            refactor
+            test
+            perf
+            build
+            ci
+            ui-ux
+            revert
+          headerPattern: '^([\w-]+)(?:\(([\w$.\-*/ ]*)\))?(?:!)?: (.*)$'
+          headerPatternCorrespondence: type, scope, subject
+          subjectPattern: ^.+$
+          subjectPatternError: |
+            The subject "{subject}" found in pull request title "{title}"
+            didn't match the configured pattern. Please ensure the subject
+            is not empty.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract PR title metadata
+        id: pr_title_meta
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
+        with:
+          script: |
+            const title = context.payload.pull_request?.title || "";
+            const match = title.match(
+              /^(feat|fix|chore|docs|refactor|test|perf|build|ci|ui-ux|revert)(?:\(([a-z0-9][a-z0-9-]*)\))?(!)?:\s(.+)$/
+            );
+
+            core.setOutput("pr_type", match ? match[1] : "unknown");
+            core.setOutput("is_breaking", match?.[3] ? "yes" : "no");
+
+      - uses: marocchino/sticky-pull-request-comment@773744901bac0e8cbb5a0dc842800d45e9b2b405
+        if: always() && (steps.lint_pr_title.outputs.error_message != null)
+        with:
+          header: pr-title-lint-error
+          message: |
+            This title needs a tiny remix before merge.
+
+            Use one of:
+            - `type: short subject`
+            - `type(scope): short subject`
+
+            Allowed types: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `perf`, `build`, `ci`, `ui-ux`, `revert`.
+            Optional scope: lowercase kebab-case (examples: `api`, `frontend`, `backend`, `electron`, `provider`, `agent`, `tools`, `infra`, `deps`).
+
+            - Use `!` before `:` to mark a breaking change (example: `feat(api)!: remove legacy config format`)
+            - `proto` is only for branch names, not PR titles
+
+            ```
+            ${{ steps.lint_pr_title.outputs.error_message }}
+            ```
+
+      - if: ${{ steps.lint_pr_title.outputs.error_message == null }}
+        uses: marocchino/sticky-pull-request-comment@773744901bac0e8cbb5a0dc842800d45e9b2b405
+        with:
+          header: pr-title-lint-error
+          message: |
+            Title check passed.
+            This PR is categorized as `${{ steps.pr_title_meta.outputs.pr_type }}`.
+            Breaking marker: `${{ steps.pr_title_meta.outputs.is_breaking }}`.

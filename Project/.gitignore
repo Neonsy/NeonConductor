@@ -1,0 +1,71 @@
+###############################################################################
+# OS / Editor / Logs
+###############################################################################
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# OS cruft
+.DS_Store
+Thumbs.db
+
+# IDEs
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+###############################################################################
+# Dependencies / Build Artifacts
+###############################################################################
+node_modules/
+dist/
+dist-ssr/
+dist-electron/
+build/
+release/
+
+# Vite / TanStack Router
+**/routeTree.gen.ts
+
+###############################################################################
+# Environment / Secrets
+###############################################################################
+.env
+.env.*
+!.env.example
+!.env.sample
+*.local
+
+###############################################################################
+# Tooling
+###############################################################################
+# TypeScript
+*.tsbuildinfo
+
+# Coverage
+coverage/
+
+# Mac keychain / code signing (if present)
+*.p12
+*.pem
+*.cer
+
+###############################################################################
+# Package manager caches (optional)
+###############################################################################
+.pnpm-store/
+.npm/
+.yarn/
+yarn.lock
+package-lock.json
+/src/generated/prisma

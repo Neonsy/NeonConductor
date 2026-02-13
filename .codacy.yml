@@ -1,0 +1,33 @@
+---
+languages:
+  json:
+    extensions:
+      - ".json5"
+
+engines:
+  metric:
+    config:
+      languages:
+        - "typescript"
+        - "javascript"
+  duplication:
+    config:
+      languages:
+        - "typescript"
+        - "javascript"
+  markdownlint:
+    exclude_paths:
+      - "Markdown/**"
+      - "README.md"
+      - "CONTRIBUTING.md"
+  eslint-9:
+    exclude_paths:
+      - "Project/scripts/publish.ts"
+  semgrep:
+    exclude_paths:
+      - "Project/scripts/publish.ts"
+
+exclude_paths:
+  - "Project/CHANGELOG.md"
+  - "Project/pnpm-lock.yaml"
+  - "Project/electron-builder.json5"

@@ -1,0 +1,5 @@
+**/[Rr][Ee][Ss][Ee][Aa][Rr][Cc][Hh]/
+
+
+#Ignore vscode AI rules
+.github\instructions\codacy.instructions.md

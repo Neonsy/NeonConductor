@@ -1,0 +1,152 @@
+{
+  "labels": [],
+  "comment": "",
+  "fixWithAI": false,
+  "hideFooter": false,
+  "strictness": 3,
+  "statusCheck": true,
+  "commentTypes": [
+    "logic",
+    "syntax",
+    "info"
+  ],
+  "instructions": "Review this repository as a security-critical Electron desktop AI assistant and manager. Prioritize exploitable vulnerabilities, privilege-boundary violations, and data-loss risks over style. Flag any change that weakens Electron security defaults (sandbox, contextIsolation, nodeIntegration, webSecurity), broadens CSP or external navigation/URL allowlists without strict need, expands preload/tRPC/IPC surface without least privilege, executes shell/system actions from model output without explicit user confirmation and allowlisting, mishandles secrets/tokens/API keys or sensitive local files, or weakens update integrity/channel safety/signing assumptions. Also catch correctness issues that could cause crashes, hangs, race conditions, broken updates, or cross-platform packaging regressions. Prefer high-signal, actionable comments with concrete failure paths and remediation guidance.",
+  "disabledLabels": [
+    "ignore-for-release"
+  ],
+  "excludeAuthors": [
+    "github-actions[bot]",
+    "dependabot[bot]",
+    "neonconductor-release-bot",
+    "neonconductor-release-bot[bot]"
+  ],
+  "ignoreKeywords": "",
+  "ignorePatterns": ".greptile/config.json\nProject/pnpm-lock.yaml\nProject/CHANGELOG.md\nProject/**/routeTree.gen.ts\nProject/dist/**\nProject/dist-electron/**\nProject/release/**\n",
+  "includeAuthors": [],
+  "summarySection": {
+    "included": true,
+    "collapsible": true,
+    "defaultOpen": true
+  },
+  "excludeBranches": [],
+  "fileChangeLimit": 150,
+  "includeBranches": [
+    "main",
+    "prev",
+    "dev"
+  ],
+  "includeKeywords": "",
+  "triggerOnUpdates": true,
+  "updateSummaryOnly": false,
+  "issuesTableSection": {
+    "included": true,
+    "collapsible": true,
+    "defaultOpen": true
+  },
+  "statusCommentsEnabled": true,
+  "confidenceScoreSection": {
+    "included": true,
+    "collapsible": true,
+    "defaultOpen": true
+  },
+  "sequenceDiagramSection": {
+    "included": true,
+    "collapsible": true,
+    "defaultOpen": false
+  },
+  "shouldUpdateDescription": false,
+  "customContext": {
+    "other": [
+      {
+        "scope": [],
+        "content": "Architecture baseline: renderer is untrusted UI; privileged operations must stay in the Electron main process and be mediated through a minimal, validated preload/tRPC interface. Any action that can modify files, run commands, or change system state should require explicit user intent and validation."
+      },
+      {
+        "scope": [],
+        "content": "Error-handling strategy: use neverthrow for multi-step async workflows and recoverable operational failures in service/domain layers (network, filesystem, process, update orchestration). Do not force neverthrow in trivial one-step handlers, pass-through orchestration, or presentational UI glue."
+      }
+    ],
+    "rules": [
+      {
+        "scope": [
+          "Project/electron/**/*.ts"
+        ],
+        "rule": "Treat Electron security defaults as invariants. Flag any relaxation of sandboxing, context isolation, navigation restrictions, CSP directives, permission handlers, or window/webContents hardening."
+      },
+      {
+        "scope": [
+          "Project/electron/main/preload/**/*.ts",
+          "Project/electron/backend/trpc/**/*.ts",
+          "Project/src/**/*.ts",
+          "Project/src/**/*.tsx"
+        ],
+        "rule": "Treat preload, tRPC, and IPC as trust boundaries. Flag missing input validation, over-broad method exposure, and flows that let renderer or model output trigger privileged actions without explicit confirmation."
+      },
+      {
+        "scope": [
+          "Project/electron/main/updates/updater.ts",
+          "Project/electron-builder.json5"
+        ],
+        "rule": "Prioritize update safety. Flag insecure update endpoints, channel/version confusion, integrity/signing assumptions regressions, and behavior that could downgrade or strand users on incorrect channels."
+      },
+      {
+        "scope": [
+          "Project/scripts/**",
+          ".github/scripts/**/*.mjs",
+          "Project/.env.example"
+        ],
+        "rule": "Flag secret-handling risks: leaking tokens in logs, unsafe env handling, accidental persistence of sensitive values, or insecure defaults."
+      },
+      {
+        "scope": [
+          "Project/**/__tests__/**/*.ts",
+          "Project/**/__tests__/**/*.tsx",
+          "Project/**/*.test.ts",
+          "Project/**/*.test.tsx",
+          "Project/**/*.test.js",
+          "Project/**/*.test.jsx",
+          "Project/**/*.spec.ts",
+          "Project/**/*.spec.tsx",
+          "Project/**/*.spec.js",
+          "Project/**/*.spec.jsx"
+        ],
+        "rule": "Protect test integrity. Existing tests should not be weakened or disturbed. If tests are modified, ensure changes remain valid and still verify intended logic/behavior; flag edits that only make tests pass (for example by removing assertions, broadening mocks/fixtures to hide regressions, or reducing coverage of important paths)."
+      },
+      {
+        "scope": [
+          "Project/electron/main/updates/**/*.ts",
+          "Project/**/services/**/*.ts",
+          "Project/**/services/**/*.tsx",
+          "Project/**/domain/**/*.ts",
+          "Project/**/domain/**/*.tsx"
+        ],
+        "rule": "In service/domain workflow code, prefer Result/ResultAsync-style error flow (neverthrow) with explicit consumption (match, unwrapOr, etc.). Avoid untyped throw for expected operational failures."
+      },
+      {
+        "scope": [
+          "Project/electron/backend/trpc/**/*.ts"
+        ],
+        "rule": "Treat tRPC routers as boundary translators: convert service/domain Result errors into TRPCError or structured response objects. Do not require neverthrow in trivial router handlers that only orchestrate one simple call."
+      },
+      {
+        "scope": [
+          ".github/workflows/**/*.yml",
+          ".github/scripts/**/*.mjs"
+        ],
+        "rule": "Treat CI and release automation as security boundaries. Flag workflow or script changes that broaden token permissions, bypass branch protections, weaken release provenance/integrity, or allow untrusted inputs to drive privileged publish/update steps."
+      }
+    ],
+    "files": [
+      {
+        "scope": [
+          "Project/electron/**/*.ts",
+          "Project/src/**/*.ts",
+          "Project/src/**/*.tsx"
+        ],
+        "path": "Project/README.md",
+        "description": "Reference architecture, security posture, update channel behavior, and packaging expectations."
+      }
+    ]
+  },
+  "updateExistingSummaryComment": true
+}

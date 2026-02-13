@@ -1,0 +1,405 @@
+name: Build Stable Release
+
+on:
+  pull_request:
+    types:
+      - closed
+    branches:
+      - main
+    paths:
+      - "Project/package.json"
+      - "Project/CHANGELOG.md"
+
+concurrency:
+  group: build-stable-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  build:
+    if: github.event.pull_request.merged == true
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: s
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target_args: --win
+          - os: macos-latest
+            target_args: --mac --arm64 --x64
+          - os: ubuntu-latest
+            target_args: --linux
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0
+          path: s
+
+      - name: Guard release
+        id: guard
+        shell: bash
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only "$PR_BASE_SHA" "$PR_HEAD_SHA")"
+          echo "$changed"
+          if [[ "$PR_HEAD_REF" != "changeset-release/main" ]]; then
+            echo "Not an automation release PR branch. Skipping."
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+          elif echo "$changed" | grep -q "^Project/package.json$" && echo "$changed" | grep -q "^Project/CHANGELOG.md$"; then
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Skip non-release commits
+        if: steps.guard.outputs.should_release != 'true'
+        shell: bash
+        run: echo "No release changes detected. Skipping."
+
+      - name: Setup pnpm
+        if: steps.guard.outputs.should_release == 'true'
+        uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061
+        with:
+          version: 10
+
+      - name: Setup Node
+        if: steps.guard.outputs.should_release == 'true'
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238
+        with:
+          node-version: 24.13.1
+          cache: pnpm
+          cache-dependency-path: s/Project/pnpm-lock.yaml
+
+      - name: Resolve version
+        if: steps.guard.outputs.should_release == 'true'
+        id: version
+        shell: bash
+        run: |
+          VERSION="$(node -p "require('./Project/package.json').version")"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Configure pnpm for Windows
+        if: steps.guard.outputs.should_release == 'true' && runner.os == 'Windows'
+        shell: bash
+        run: |
+          cat > Project/.npmrc <<'EOF'
+          node-linker=hoisted
+          virtual-store-dir=.pnpm
+          EOF
+
+      - name: Install
+        if: steps.guard.outputs.should_release == 'true'
+        run: pnpm -C Project install --frozen-lockfile
+
+      - name: Build package
+        if: steps.guard.outputs.should_release == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: |
+          pnpm -C Project build
+          pnpm -C Project exec electron-builder ${{ matrix.target_args }} -c electron-builder.json5 --publish never --config.publish.channel=latest --config.publish.releaseType=release
+
+      - name: Stage release assets
+        if: steps.guard.outputs.should_release == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+          RELEASE_DIR="Project/release/${VERSION}"
+          STAGE_DIR="Project/release-assets"
+          rm -rf "$STAGE_DIR"
+          mkdir -p "$STAGE_DIR"
+
+          find "$RELEASE_DIR" -maxdepth 1 -type f \
+            \( -name "*.exe" -o -name "*.dmg" -o -name "*.zip" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" -o -name "*.blockmap" -o -name "latest*.yml" -o -name "latest*.yaml" \) \
+            -print0 |
+          while IFS= read -r -d '' file; do
+            cp "$file" "$STAGE_DIR/$(basename "$file")"
+          done
+
+          file_count="$(find "$STAGE_DIR" -type f | wc -l | tr -d ' ')"
+          if [ "$file_count" = "0" ]; then
+            echo "No release assets staged from $RELEASE_DIR"
+            exit 1
+          fi
+
+      - name: Upload release assets
+        if: steps.guard.outputs.should_release == 'true'
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: release-assets-${{ matrix.os }}-${{ steps.version.outputs.version }}
+          path: s/Project/release-assets/**
+          if-no-files-found: error
+
+  notes:
+    if: github.event.pull_request.merged == true
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      should_release: ${{ steps.guard.outputs.should_release }}
+      tag: ${{ steps.ctx.outputs.tag }}
+      version: ${{ steps.ctx.outputs.version }}
+      release_name: ${{ steps.ctx.outputs.release_name }}
+      is_prerelease: ${{ steps.ctx.outputs.is_prerelease }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0
+
+      - name: Guard release
+        id: guard
+        shell: bash
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only "$PR_BASE_SHA" "$PR_HEAD_SHA")"
+          echo "$changed"
+          if [[ "$PR_HEAD_REF" != "changeset-release/main" ]]; then
+            echo "Not an automation release PR branch. Skipping."
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+          elif echo "$changed" | grep -q "^Project/package.json$" && echo "$changed" | grep -q "^Project/CHANGELOG.md$"; then
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Skip non-release notes
+        if: steps.guard.outputs.should_release != 'true'
+        shell: bash
+        run: echo "No release changes detected. Skipping notes update."
+
+      - name: Setup Node
+        if: steps.guard.outputs.should_release == 'true'
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238
+        with:
+          node-version: 24.13.1
+
+      - name: Parse stable release context
+        if: steps.guard.outputs.should_release == 'true'
+        id: ctx
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          VERSION="$(node -p "require('./Project/package.json').version")"
+          TAG="v${VERSION}"
+          RELEASE_NAME="Stable ${VERSION}"
+          STABLE_HEADLINE="The conductor just signed off on a new stable release."
+
+          git fetch --tags --force
+          PREVIOUS_TAG="$(git tag --list 'v*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | grep -Fxv "$TAG" | head -n1 || true)"
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "release_name=$RELEASE_NAME" >> "$GITHUB_OUTPUT"
+          echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+          echo "previous_tag=$PREVIOUS_TAG" >> "$GITHUB_OUTPUT"
+          {
+            echo "headline<<EOF"
+            echo "$STABLE_HEADLINE"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Render stable release notes
+        if: steps.guard.outputs.should_release == 'true'
+        env:
+          CHANNEL: stable
+          TAG_NAME: ${{ steps.ctx.outputs.tag }}
+          RANGE_END_REF: ${{ github.event.pull_request.merge_commit_sha }}
+          VERSION: ${{ steps.ctx.outputs.version }}
+          PREVIOUS_TAG: ${{ steps.ctx.outputs.previous_tag }}
+          CHANNEL_HEADLINE: ${{ steps.ctx.outputs.headline }}
+          REPO_OWNER: ${{ github.repository_owner }}
+          REPO_NAME: ${{ github.event.repository.name }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node .github/scripts/render-release-notes.mjs
+
+      - name: Upload release notes artifact
+        if: steps.guard.outputs.should_release == 'true'
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: release-notes-${{ steps.ctx.outputs.tag }}
+          path: release-notes.md
+          if-no-files-found: error
+
+  publish_release:
+    if: needs.notes.outputs.should_release == 'true'
+    needs: [build, notes]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: stable-release
+      url: https://github.com/${{ github.repository }}/releases/tag/${{ needs.notes.outputs.tag }}
+    steps:
+      - name: Download built assets
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          pattern: release-assets-*-${{ needs.notes.outputs.version }}
+          merge-multiple: true
+          path: dist-assets
+
+      - name: Download release notes
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: release-notes-${{ needs.notes.outputs.tag }}
+          path: release-notes
+
+      - name: Create GitHub App token
+        id: app_token
+        uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+
+      - name: Ensure draft release exists
+        id: ensure_release
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
+        env:
+          TAG_NAME: ${{ needs.notes.outputs.tag }}
+          RELEASE_NAME: ${{ needs.notes.outputs.release_name }}
+          IS_PRERELEASE: ${{ needs.notes.outputs.is_prerelease }}
+        with:
+          github-token: ${{ steps.app_token.outputs.token }}
+          script: |
+            const { owner, repo } = context.repo;
+            const tag = process.env.TAG_NAME;
+            const releaseName = process.env.RELEASE_NAME;
+            const prerelease = process.env.IS_PRERELEASE === "true";
+
+            let existing = null;
+            try {
+              const found = await github.rest.repos.getReleaseByTag({ owner, repo, tag });
+              existing = found.data;
+            } catch (error) {
+              if (error.status !== 404) throw error;
+            }
+
+            if (existing && !existing.draft) {
+              core.setFailed(`Release ${tag} is already published. Immutable rerun policy blocks republish.`);
+              return;
+            }
+
+            let release = existing;
+            if (!release) {
+              const created = await github.rest.repos.createRelease({
+                owner,
+                repo,
+                tag_name: tag,
+                target_commitish: context.sha,
+                name: releaseName,
+                body: "Preparing release assets...",
+                prerelease,
+                draft: true,
+              });
+              release = created.data;
+              core.info(`Created draft release for ${tag}`);
+            } else {
+              const updated = await github.rest.repos.updateRelease({
+                owner,
+                repo,
+                release_id: existing.id,
+                tag_name: tag,
+                name: releaseName,
+                prerelease,
+                draft: true,
+              });
+              release = updated.data;
+              core.info(`Reusing existing draft release for ${tag}`);
+            }
+
+            core.setOutput("release_id", String(release.id));
+
+      - name: Upload all assets to draft release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.app_token.outputs.token }}
+          TAG_NAME: ${{ needs.notes.outputs.tag }}
+        run: |
+          set -euo pipefail
+          mapfile -d '' files < <(find dist-assets -type f -print0)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No assets found in dist-assets"
+            exit 1
+          fi
+
+          UPLOAD_DIR="upload-assets"
+          rm -rf "$UPLOAD_DIR"
+          mkdir -p "$UPLOAD_DIR"
+
+          declare -A counts
+          for file in "${files[@]}"; do
+            base="$(basename "$file")"
+            counts["$base"]=$(( ${counts["$base"]:-0} + 1 ))
+          done
+
+          for file in "${files[@]}"; do
+            base="$(basename "$file")"
+            stem="${base%.*}"
+            if [ "$stem" = "$base" ]; then
+              ext=""
+            else
+              ext=".${base##*.}"
+            fi
+
+            dest="$UPLOAD_DIR/$base"
+            if [ "${counts["$base"]}" -gt 1 ]; then
+              rel="${file#dist-assets/}"
+              suffix="$(printf '%s' "$rel" | sha256sum | cut -c1-8)"
+              dest="$UPLOAD_DIR/${stem}-${suffix}${ext}"
+            fi
+            cp "$file" "$dest"
+          done
+
+          mapfile -d '' upload_files < <(find "$UPLOAD_DIR" -type f -print0)
+          gh release upload "$TAG_NAME" "${upload_files[@]}" --repo "$GITHUB_REPOSITORY" --clobber
+
+      - name: Publish release with final notes
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
+        env:
+          RELEASE_ID: ${{ steps.ensure_release.outputs.release_id }}
+          TAG_NAME: ${{ needs.notes.outputs.tag }}
+          RELEASE_NAME: ${{ needs.notes.outputs.release_name }}
+          IS_PRERELEASE: ${{ needs.notes.outputs.is_prerelease }}
+        with:
+          github-token: ${{ steps.app_token.outputs.token }}
+          script: |
+            const fs = require("node:fs");
+            const { owner, repo } = context.repo;
+            const releaseId = Number(process.env.RELEASE_ID);
+            const tag = process.env.TAG_NAME;
+            const releaseName = process.env.RELEASE_NAME;
+            const prerelease = process.env.IS_PRERELEASE === "true";
+            const body = fs.readFileSync("release-notes/release-notes.md", "utf8");
+
+            await github.rest.repos.updateRelease({
+              owner,
+              repo,
+              release_id: releaseId,
+              tag_name: tag,
+              name: releaseName,
+              body,
+              prerelease,
+              draft: false,
+            });
+            core.info(`Published ${tag} with grouped assets.`);

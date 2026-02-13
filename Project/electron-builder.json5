@@ -1,0 +1,55 @@
+// @see https://www.electron.build/configuration/configuration
+{
+    $schema: 'https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json',
+    appId: 'com.neonsy.neonconductor',
+    productName: 'NeonConductor',
+
+    files: ['dist', 'dist-electron'],
+    asar: true,
+    asarUnpack: [],
+
+    // Single icon source - electron-builder converts to .ico/.icns automatically
+    icon: 'src/assets/appicon.png',
+
+    directories: {
+        output: 'release/${version}',
+        buildResources: '.',
+    },
+    mac: {
+        category: 'public.app-category.developer-tools',
+        target: [
+            { target: 'dmg', arch: ['arm64', 'x64'] },
+            { target: 'zip', arch: ['arm64', 'x64'] },
+        ],
+        artifactName: '${productName}-Mac-${arch}-${version}-Installer.${ext}',
+    },
+    win: {
+        target: [{ target: 'nsis', arch: ['x64'] }],
+        artifactName: '${productName}-Windows-${version}-Setup.${ext}',
+        executableName: 'NeonConductor',
+        signAndEditExecutable: true,
+    },
+    nsis: {
+        oneClick: false,
+        perMachine: false,
+        allowToChangeInstallationDirectory: true,
+        deleteAppDataOnUninstall: true,
+    },
+    linux: {
+        maintainer: 'Neonsy <118444485+Neonsy@users.noreply.github.com>',
+        category: 'Development',
+        target: [
+            { target: 'AppImage', arch: ['x64'] },
+            { target: 'deb', arch: ['x64'] },
+            { target: 'rpm', arch: ['x64'] },
+        ],
+        artifactName: '${productName}-Linux-${arch}-${version}.${ext}',
+    },
+    publish: [
+        {
+            provider: 'github',
+            owner: 'Neonsy',
+            repo: 'NeonConductor',
+        },
+    ],
+}

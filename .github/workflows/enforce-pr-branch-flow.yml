@@ -1,0 +1,161 @@
+name: Enforce PR Branch Flow
+
+on:
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - edited
+      - ready_for_review
+
+concurrency:
+  group: enforce-pr-branch-flow-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  enforce-flow:
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Validate branch flow and close invalid PRs
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const pr = context.payload.pull_request;
+            const prNumber = pr.number;
+            const head = pr.head.ref;
+            const base = pr.base.ref;
+            const marker = "<!-- pr-branch-flow-block -->";
+            const namingMarker = "<!-- pr-branch-name-warning -->";
+            const isChangesetReleasePr = head.startsWith("changeset-release/");
+            const isChangesetSyncPr = head.startsWith("changeset-sync/");
+            const isBotPr =
+              (pr.user?.type || "").toLowerCase() === "bot" ||
+              (pr.user?.login || "").includes("dependabot");
+            const allowedBranchTypes = [
+              "feat",
+              "fix",
+              "chore",
+              "docs",
+              "refactor",
+              "test",
+              "perf",
+              "build",
+              "ci",
+              "ui-ux",
+              "proto",
+            ];
+
+            let violation = null;
+            if (isChangesetSyncPr && !isBotPr) {
+              violation = "`changeset-sync/*` branches are reserved for automation PRs.";
+            } else if (isChangesetReleasePr && !isBotPr) {
+              violation = "`changeset-release/*` branches are reserved for automation PRs.";
+            } else if (head === "main") {
+              violation = "PRs from `main` are not allowed.";
+            } else if (head === "dev" && base !== "prev") {
+              violation = "`dev` can only open PRs to `prev`.";
+            } else if (head === "prev" && base !== "main") {
+              violation = "`prev` can only open PRs to `main`.";
+            } else if (base === "prev" && head !== "dev" && !isChangesetSyncPr) {
+              violation = "Only `dev` (or `changeset-sync/*` for automation) can open PRs to `prev`.";
+            } else if (base === "main" && head !== "prev" && !isChangesetReleasePr) {
+              violation = "Only `prev` (or `changeset-release/*` for automation) can open PRs to `main`.";
+            }
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number: prNumber,
+              per_page: 100,
+            });
+
+            if (!violation) {
+              if (isBotPr) {
+                return;
+              }
+
+              const isFlowBranch =
+                head === "dev" ||
+                head === "prev" ||
+                head === "main" ||
+                isChangesetReleasePr ||
+                isChangesetSyncPr;
+              if (isFlowBranch) {
+                return;
+              }
+
+              const namingPattern = new RegExp(
+                `^[^/]+\\/(${allowedBranchTypes.join("|")})\\/[a-z0-9]+(?:-[a-z0-9]+)*$`
+              );
+              if (namingPattern.test(head)) {
+                return;
+              }
+
+              const namingComment = comments.find((comment) =>
+                (comment.body || "").includes(namingMarker)
+              );
+              const namingBody = [
+                namingMarker,
+                "Branch name format warning.",
+                "",
+                "Expected format: `username/type/short-description`",
+                `Allowed \`type\`: ${allowedBranchTypes.map((type) => `\`${type}\``).join(", ")}`,
+                `Current branch: \`${head}\``,
+                "",
+                "This is currently a warning-only check and will not close your PR.",
+              ].join("\n");
+
+              if (namingComment) {
+                await github.rest.issues.updateComment({
+                  owner,
+                  repo,
+                  comment_id: namingComment.id,
+                  body: namingBody,
+                });
+              } else {
+                await github.rest.issues.createComment({
+                  owner,
+                  repo,
+                  issue_number: prNumber,
+                  body: namingBody,
+                });
+              }
+
+              return;
+            }
+
+            const alreadyCommented = comments.some((comment) =>
+              (comment.body || "").includes(marker)
+            );
+
+            if (!alreadyCommented) {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: prNumber,
+                body: [
+                  marker,
+                  "This PR doesn't match the required branch flow.",
+                  "",
+                  `Violation: ${violation}`,
+                  "Allowed flows: `dev -> prev`, `prev -> main`, `changeset-release/* -> main`, `changeset-sync/* -> prev|dev` (automation only).",
+                  `Current flow: \`${head} -> ${base}\``,
+                ].join("\n"),
+              });
+            }
+
+            await github.rest.pulls.update({
+              owner,
+              repo,
+              pull_number: prNumber,
+              state: "closed",
+            });
