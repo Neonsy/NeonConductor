@@ -29,6 +29,7 @@
     "defaultOpen": true
   },
   "excludeBranches": [],
+  "fileChangeLimit": 150,
   "includeBranches": [
     "main",
     "prev",

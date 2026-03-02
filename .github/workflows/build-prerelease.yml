@@ -228,11 +228,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          fetch-depth: 1
-
       - name: Download built assets
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
         with:
@@ -245,21 +240,6 @@ jobs:
         with:
           name: release-notes-${{ needs.notes.outputs.tag }}
           path: release-notes
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061
-        with:
-          version: 10
-
-      - name: Setup Node
-        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238
-        with:
-          node-version: 24.13.1
-          cache: pnpm
-          cache-dependency-path: Project/pnpm-lock.yaml
-
-      - name: Install workflow script dependencies
-        run: pnpm -C Project install --frozen-lockfile
 
       - name: Create GitHub App token
         id: app_token
@@ -372,35 +352,6 @@ jobs:
           mapfile -d '' upload_files < <(find "$UPLOAD_DIR" -type f -print0)
           gh release upload "$TAG_NAME" "${upload_files[@]}" --repo "$GITHUB_REPOSITORY" --clobber
 
-      - name: Validate updater metadata against uploaded release assets
-        shell: bash
-        env:
-          RELEASE_ID: ${{ steps.ensure_release.outputs.release_id }}
-          TAG_NAME: ${{ needs.notes.outputs.tag }}
-          REPO_OWNER: ${{ github.repository_owner }}
-          REPO_NAME: ${{ github.event.repository.name }}
-          GITHUB_TOKEN: ${{ steps.app_token.outputs.token }}
-        run: |
-          set -euo pipefail
-          python3 - <<'PY' | node .github/scripts/validate-update-metadata.mjs
-          from pathlib import Path
-          import json
-          import sys
-
-          manifests = []
-          for path in sorted(Path("dist-assets").rglob("*")):
-            if path.is_file() and path.suffix.lower() in {".yml", ".yaml"}:
-              manifests.append({
-                "name": path.name,
-                "content": path.read_text(encoding="utf-8"),
-              })
-
-          if not manifests:
-            raise SystemExit("No updater metadata files found in dist-assets.")
-
-          sys.stdout.write(json.dumps(manifests))
-          PY
-
       - name: Publish release with final notes
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
         env:
@@ -430,110 +381,3 @@ jobs:
               draft: false,
             });
             core.info(`Published ${tag} with grouped assets.`);
-
-      - name: Publish updater metadata to GitHub Pages
-        shell: bash
-        env:
-          CHANNEL: ${{ needs.notes.outputs.channel }}
-          TAG_NAME: ${{ needs.notes.outputs.tag }}
-          REPO_OWNER: ${{ github.repository_owner }}
-          REPO_NAME: ${{ github.event.repository.name }}
-          GITHUB_TOKEN: ${{ steps.app_token.outputs.token }}
-          PAGES_BOT_NAME: ${{ vars.PAGES_BOT_NAME }}
-          PAGES_BOT_EMAIL: ${{ vars.PAGES_BOT_EMAIL }}
-        run: |
-          set -euo pipefail
-
-          PAGES_BRANCH="${PAGES_BRANCH:-gh-pages}"
-          REMOTE_URL="https://x-access-token:${GITHUB_TOKEN}@github.com/${REPO_OWNER}/${REPO_NAME}.git"
-          TEMP_ROOT="$(mktemp -d)"
-          SITE_DIR="$TEMP_ROOT/site"
-
-          if git clone --depth 1 --branch "$PAGES_BRANCH" "$REMOTE_URL" "$SITE_DIR"; then
-            :
-          else
-            mkdir -p "$SITE_DIR"
-            git -C "$SITE_DIR" init
-            git -C "$SITE_DIR" checkout -b "$PAGES_BRANCH"
-            git -C "$SITE_DIR" remote add origin "$REMOTE_URL"
-          fi
-
-          git -C "$SITE_DIR" config user.name "$PAGES_BOT_NAME"
-          git -C "$SITE_DIR" config user.email "$PAGES_BOT_EMAIL"
-
-          PUBLISH_PAYLOAD="$(SITE_DIR="$SITE_DIR" CHANNEL="$CHANNEL" REPO_OWNER="$REPO_OWNER" REPO_NAME="$REPO_NAME" TAG_NAME="$TAG_NAME" python3 - <<'PY'
-          from pathlib import Path
-          import json
-          import os
-          import sys
-
-          input_manifests = []
-          for path in sorted(Path("dist-assets").rglob("*")):
-            if path.is_file() and path.suffix.lower() in {".yml", ".yaml"}:
-              input_manifests.append({
-                "name": path.name,
-                "content": path.read_text(encoding="utf-8"),
-              })
-
-          if not input_manifests:
-            raise SystemExit("No updater metadata files found in dist-assets.")
-
-          site_dir = Path(os.environ["SITE_DIR"])
-          existing_channels = {}
-          for lane in ("stable", "beta", "alpha"):
-            manifests = []
-            channel_dir = site_dir / "updates" / lane
-            if channel_dir.exists():
-              for path in sorted(channel_dir.iterdir(), key=lambda item: item.name):
-                if path.is_file() and path.suffix.lower() in {".yml", ".yaml"}:
-                  manifests.append({
-                    "name": path.name,
-                    "content": path.read_text(encoding="utf-8"),
-                  })
-            existing_channels[lane] = manifests
-
-          sys.stdout.write(json.dumps({
-            "channel": os.environ["CHANNEL"],
-            "owner": os.environ["REPO_OWNER"],
-            "repo": os.environ["REPO_NAME"],
-            "tagName": os.environ["TAG_NAME"],
-            "inputManifests": input_manifests,
-            "existingChannels": existing_channels,
-          }))
-          PY
-          )"
-
-          RENDERED_SITE="$(printf '%s' "$PUBLISH_PAYLOAD" | node .github/scripts/publish-update-site.mjs)"
-
-          printf '%s' "$RENDERED_SITE" | SITE_DIR="$SITE_DIR" CHANNEL="$CHANNEL" python3 - <<'PY'
-          from pathlib import Path
-          import json
-          import os
-          import shutil
-          import sys
-
-          payload = json.load(sys.stdin)
-          site_dir = Path(os.environ["SITE_DIR"])
-          channel_dir = site_dir / "updates" / os.environ["CHANNEL"]
-
-          shutil.rmtree(channel_dir, ignore_errors=True)
-          channel_dir.mkdir(parents=True, exist_ok=True)
-
-          for manifest in payload["manifests"]:
-            (channel_dir / manifest["name"]).write_text(manifest["content"], encoding="utf-8")
-
-          for page in payload["pages"]:
-            destination = site_dir / Path(page["path"])
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            destination.write_text(page["content"], encoding="utf-8")
-          PY
-
-          git -C "$SITE_DIR" add .
-          if [ -z "$(git -C "$SITE_DIR" status --short)" ]; then
-            echo "No Pages changes detected for $CHANNEL $TAG_NAME."
-            exit 0
-          fi
-
-          git -C "$SITE_DIR" commit -m "docs(updates): publish $CHANNEL feed for $TAG_NAME"
-          git -C "$SITE_DIR" push origin "$PAGES_BRANCH"
-          echo "Published $CHANNEL updater feed for $TAG_NAME to $PAGES_BRANCH."

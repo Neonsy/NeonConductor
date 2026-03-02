@@ -61,8 +61,6 @@ Expected promotion path: `dev` -> `prev` -> `main`.
 - In local development mode, updater and release-channel switch features are disabled by default.
 - This is expected behavior: update checks and channel downloads are intended for packaged builds.
 - For explicit local updater testing only, set `UPDATER_ENABLED=1` before launching the app.
-- Release automation publishes channel metadata to GitHub Pages from the `gh-pages` branch under `updates/stable/`, `updates/beta/`, and `updates/alpha/`.
-- Before testing packaged auto-updates, enable GitHub Pages to serve from the `gh-pages` branch.
 
 > [!NOTE]
 > The window resize dimension overlay in development is caused by open DevTools, not by app window/title bar logic.

@@ -3,8 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 type UpdateChannel = 'stable' | 'beta' | 'alpha';
 
-const PAGES_FEED_BASE_URL = 'https://neonsy.github.io/NeonConductor/updates';
-
 class MockAutoUpdater extends EventEmitter {
     channel: string | null = null;
     allowPrerelease = false;
@@ -21,36 +19,31 @@ async function flushTasks(): Promise<void> {
     await Promise.resolve();
 }
 
-function expectFeedConfigured(
-    autoUpdater: MockAutoUpdater,
-    channel: UpdateChannel,
-    updaterChannel: 'latest' | 'beta' | 'alpha'
-): void {
-    expect(autoUpdater.setFeedURL).toHaveBeenCalledWith({
-        provider: 'generic',
-        url: `${PAGES_FEED_BASE_URL}/${channel}/`,
-        channel: updaterChannel,
-    });
-}
-
 async function loadUpdaterHarness(options: {
     appVersion: string;
     persistedChannel?: UpdateChannel;
-    withWindow?: boolean;
+    resolverImpl?: (channel: UpdateChannel) => Promise<{ channel: UpdateChannel; tag: string; feedBaseUrl: string }>;
 }) {
     vi.resetModules();
 
     const autoUpdater = new MockAutoUpdater();
     const storeState: { channel?: UpdateChannel } = {};
-    const showMessageBox = vi.fn(() => Promise.resolve({ response: 0 }));
-    const mockWindow = {
-        isDestroyed: vi.fn(() => false),
-        setProgressBar: vi.fn(),
-    };
 
     if (options.persistedChannel) {
         storeState.channel = options.persistedChannel;
     }
+
+    const resolverMock = vi.fn(
+        options.resolverImpl ??
+            ((channel: UpdateChannel) => {
+                const tag = channel === 'alpha' ? 'v1.2.3-alpha.7' : channel === 'beta' ? 'v1.2.3-beta.4' : 'v1.2.3';
+                return Promise.resolve({
+                    channel,
+                    tag,
+                    feedBaseUrl: `https://github.com/Neonsy/NeonConductor/releases/download/${tag}/`,
+                });
+            })
+    );
 
     vi.doMock('electron', () => {
         return {
@@ -60,10 +53,10 @@ async function loadUpdaterHarness(options: {
                 removeAllListeners: vi.fn(),
             },
             BrowserWindow: {
-                getAllWindows: vi.fn(() => (options.withWindow ? [mockWindow] : [])),
+                getAllWindows: vi.fn(() => []),
             },
             dialog: {
-                showMessageBox,
+                showMessageBox: vi.fn(() => Promise.resolve({ response: 0 })),
             },
         };
     });
@@ -98,13 +91,31 @@ async function loadUpdaterHarness(options: {
         };
     });
 
+    vi.doMock('@/app/main/updates/githubReleaseResolver', () => {
+        class MockResolverError extends Error {
+            readonly code: string;
+            readonly statusCode: number | null;
+
+            constructor(code: string, message: string, statusCode?: number) {
+                super(message);
+                this.code = code;
+                this.statusCode = statusCode ?? null;
+            }
+        }
+
+        return {
+            resolveLatestReleaseForChannel: resolverMock,
+            GitHubReleaseResolverError: MockResolverError,
+        };
+    });
+
     const updater = await import('@/app/main/updates/updater');
 
     return {
         updater,
         autoUpdater,
+        resolverMock,
         storeState,
-        showMessageBox,
     };
 }
 
@@ -124,7 +135,7 @@ describe('updater channel switching', () => {
 
         expect(harness.updater.getCurrentChannel()).toBe('alpha');
         expect(harness.storeState.channel).toBe('alpha');
-        expectFeedConfigured(harness.autoUpdater, 'alpha', 'alpha');
+        expect(harness.resolverMock).toHaveBeenCalledWith('alpha');
     });
 
     it('seeds persisted channel from installed suffix on first run', async () => {
@@ -137,10 +148,10 @@ describe('updater channel switching', () => {
 
         expect(harness.updater.getCurrentChannel()).toBe('beta');
         expect(harness.storeState.channel).toBe('beta');
-        expectFeedConfigured(harness.autoUpdater, 'beta', 'beta');
+        expect(harness.resolverMock).toHaveBeenCalledWith('beta');
     });
 
-    it('configures Pages feed before update check when switching channel', async () => {
+    it('resolves feed before update check when switching channel', async () => {
         const harness = await loadUpdaterHarness({
             appVersion: '1.2.0-beta.5',
             persistedChannel: 'beta',
@@ -149,6 +160,7 @@ describe('updater channel switching', () => {
         harness.updater.initAutoUpdater();
         await flushTasks();
 
+        harness.resolverMock.mockClear();
         harness.autoUpdater.setFeedURL.mockClear();
         harness.autoUpdater.checkForUpdates.mockClear();
 
@@ -159,7 +171,7 @@ describe('updater channel switching', () => {
         expect(result.checkStarted).toBe(true);
         expect(harness.updater.getCurrentChannel()).toBe('alpha');
         expect(harness.storeState.channel).toBe('alpha');
-        expectFeedConfigured(harness.autoUpdater, 'alpha', 'alpha');
+        expect(harness.resolverMock).toHaveBeenCalledWith('alpha');
 
         const setFeedOrder = harness.autoUpdater.setFeedURL.mock.invocationCallOrder[0];
         const checkOrder = harness.autoUpdater.checkForUpdates.mock.invocationCallOrder[0];
@@ -169,7 +181,7 @@ describe('updater channel switching', () => {
         expect(setFeedOrder).toBeLessThan(checkOrder);
     });
 
-    it('fails closed when feed configuration throws during channel switch', async () => {
+    it('fails closed when resolver fails during channel switch', async () => {
         const harness = await loadUpdaterHarness({
             appVersion: '2.0.0-beta.1',
             persistedChannel: 'beta',
@@ -178,11 +190,10 @@ describe('updater channel switching', () => {
         harness.updater.initAutoUpdater();
         await flushTasks();
 
+        harness.resolverMock.mockClear();
         harness.autoUpdater.setFeedURL.mockClear();
         harness.autoUpdater.checkForUpdates.mockClear();
-        harness.autoUpdater.setFeedURL.mockImplementationOnce(() => {
-            throw new Error('feed failed');
-        });
+        harness.resolverMock.mockRejectedValueOnce(new Error('resolver failed'));
 
         const result = await harness.updater.switchChannel('alpha');
         await flushTasks();
@@ -191,52 +202,11 @@ describe('updater channel switching', () => {
         expect(result.checkStarted).toBe(false);
         expect(harness.updater.getCurrentChannel()).toBe('beta');
         expect(harness.storeState.channel).toBe('beta');
-        expect(harness.autoUpdater.setFeedURL).toHaveBeenCalledTimes(1);
+        expect(harness.autoUpdater.setFeedURL).not.toHaveBeenCalled();
         expect(harness.autoUpdater.checkForUpdates).not.toHaveBeenCalled();
     });
 
-    it('shows only one error dialog when channel switch check rejects and emits updater error', async () => {
-        const harness = await loadUpdaterHarness({
-            appVersion: '2.0.0-beta.1',
-            persistedChannel: 'beta',
-            withWindow: true,
-        });
-
-        harness.updater.initAutoUpdater();
-        await flushTasks();
-
-        harness.autoUpdater.checkForUpdates.mockImplementationOnce(() => {
-            queueMicrotask(() => {
-                harness.autoUpdater.emit('error', new Error('download failed'));
-            });
-            return Promise.reject(new Error('download failed'));
-        });
-
-        const result = await harness.updater.switchChannel('stable');
-        await flushTasks();
-
-        expect(result.changed).toBe(true);
-        expect(result.checkStarted).toBe(true);
-        expect(harness.showMessageBox).toHaveBeenCalledTimes(2);
-        expect(harness.showMessageBox).toHaveBeenNthCalledWith(
-            1,
-            expect.anything(),
-            expect.objectContaining({
-                title: 'Switch Update Channel',
-            })
-        );
-        expect(harness.showMessageBox).toHaveBeenNthCalledWith(
-            2,
-            expect.anything(),
-            expect.objectContaining({
-                title: 'Channel Switch Failed',
-                message:
-                    'The channel changed, but downloading an update failed. You can retry from the selected channel.',
-            })
-        );
-    });
-
-    it('uses Pages feed for manual checks', async () => {
+    it('uses strict resolver path for manual checks', async () => {
         const harness = await loadUpdaterHarness({
             appVersion: '3.1.0-alpha.3',
             persistedChannel: 'alpha',
@@ -245,6 +215,7 @@ describe('updater channel switching', () => {
         harness.updater.initAutoUpdater();
         await flushTasks();
 
+        harness.resolverMock.mockClear();
         harness.autoUpdater.setFeedURL.mockClear();
         harness.autoUpdater.checkForUpdates.mockClear();
 
@@ -252,20 +223,8 @@ describe('updater channel switching', () => {
         await flushTasks();
 
         expect(result.started).toBe(true);
-        expectFeedConfigured(harness.autoUpdater, 'alpha', 'alpha');
-        expect(harness.autoUpdater.checkForUpdates).toHaveBeenCalledTimes(1);
-    });
-
-    it('uses latest channel metadata for stable checks', async () => {
-        const harness = await loadUpdaterHarness({
-            appVersion: '1.0.0',
-            persistedChannel: 'stable',
-        });
-
-        harness.updater.initAutoUpdater();
-        await flushTasks();
-
+        expect(harness.resolverMock).toHaveBeenCalledWith('alpha');
         expect(harness.autoUpdater.setFeedURL).toHaveBeenCalledTimes(1);
-        expectFeedConfigured(harness.autoUpdater, 'stable', 'latest');
+        expect(harness.autoUpdater.checkForUpdates).toHaveBeenCalledTimes(1);
     });
 });

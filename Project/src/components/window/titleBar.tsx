@@ -146,7 +146,7 @@ export default function TitleBar() {
 
             <div className='flex h-full min-w-0 items-center justify-center text-center'>
                 <span className='pointer-events-none text-[11px] leading-none font-semibold tracking-[0.12em] text-white/75 uppercase'>
-                    NEONCONDUCTOR SHADOW TEST
+                    NEONCONDUCTOR
                 </span>
             </div>
 
