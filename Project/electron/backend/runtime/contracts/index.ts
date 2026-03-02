@@ -97,6 +97,11 @@ export interface McpByServerInput {
     serverId: string;
 }
 
+export interface RuntimeEventsQueryInput {
+    afterSequence?: number;
+    limit?: number;
+}
+
 export const unknownInputSchema = arktype('unknown');
 
 interface RuntimeParser<T> {
@@ -148,6 +153,18 @@ function readEntityId<P extends EntityIdPrefix>(value: unknown, field: string, p
     }
 
     return text as EntityId<P>;
+}
+
+function readOptionalNumber(value: unknown, field: string): number | undefined {
+    if (value === undefined) {
+        return undefined;
+    }
+
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+        throw new Error(`Invalid "${field}": expected number.`);
+    }
+
+    return value;
 }
 
 function readObject(value: unknown, field: string): Record<string, unknown> {
@@ -244,6 +261,29 @@ export function parseMcpByServerInput(input: unknown): McpByServerInput {
     };
 }
 
+export function parseRuntimeEventsQueryInput(input: unknown): RuntimeEventsQueryInput {
+    if (input === undefined) {
+        return {};
+    }
+
+    const source = readObject(input, 'input');
+    const afterSequence = readOptionalNumber(source.afterSequence, 'afterSequence');
+    const limit = readOptionalNumber(source.limit, 'limit');
+
+    if (afterSequence !== undefined && (!Number.isInteger(afterSequence) || afterSequence < 0)) {
+        throw new Error('Invalid "afterSequence": expected non-negative integer.');
+    }
+
+    if (limit !== undefined && (!Number.isInteger(limit) || limit <= 0)) {
+        throw new Error('Invalid "limit": expected positive integer.');
+    }
+
+    return {
+        ...(afterSequence !== undefined ? { afterSequence } : {}),
+        ...(limit !== undefined ? { limit } : {}),
+    };
+}
+
 export const sessionCreateInputSchema = createParser(parseSessionCreateInput);
 export const sessionByIdInputSchema = createParser(parseSessionByIdInput);
 export const sessionPromptInputSchema = createParser(parseSessionPromptInput);
@@ -253,3 +293,4 @@ export const permissionRequestInputSchema = createParser(parsePermissionRequestI
 export const permissionDecisionInputSchema = createParser(parsePermissionDecisionInput);
 export const toolInvokeInputSchema = createParser(parseToolInvokeInput);
 export const mcpByServerInputSchema = createParser(parseMcpByServerInput);
+export const runtimeEventsQueryInputSchema = createParser(parseRuntimeEventsQueryInput);

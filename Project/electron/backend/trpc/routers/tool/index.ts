@@ -1,15 +1,14 @@
 import { toolInvokeInputSchema } from '@/app/backend/runtime/contracts';
-import { getRuntimeState } from '@/app/backend/runtime/state';
+import { toolStore } from '@/app/backend/persistence/stores';
 import { publicProcedure, router } from '@/app/backend/trpc/init';
 
 export const toolRouter = router({
-    list: publicProcedure.query(() => {
-        const state = getRuntimeState();
-        return { tools: state.tools };
+    list: publicProcedure.query(async () => {
+        return { tools: await toolStore.list() };
     }),
-    invoke: publicProcedure.input(toolInvokeInputSchema).mutation(({ input }) => {
-        const state = getRuntimeState();
-        const tool = state.tools.find((item) => item.id === input.toolId);
+    invoke: publicProcedure.input(toolInvokeInputSchema).mutation(async ({ input }) => {
+        const tools = await toolStore.list();
+        const tool = tools.find((item) => item.id === input.toolId);
         if (!tool) {
             return {
                 ok: false as const,
