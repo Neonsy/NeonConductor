@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { resetRuntimeState } from '@/app/backend/runtime/state';
+import { resetPersistenceForTests } from '@/app/backend/persistence/db';
 import { appRouter } from '@/app/backend/trpc/router';
 
 import type { Context } from '@/app/backend/trpc/context';
@@ -15,19 +15,21 @@ function createCaller() {
 }
 
 beforeEach(() => {
-    resetRuntimeState();
+    resetPersistenceForTests();
 });
 
 describe('runtime contracts', () => {
     it('exposes all new runtime domains in root router', async () => {
         const caller = createCaller();
 
+        const snapshot = await caller.runtime.getSnapshot();
         const sessions = await caller.session.list();
         const providers = await caller.provider.listProviders();
         const pendingPermissions = await caller.permission.listPending();
         const tools = await caller.tool.list();
         const mcpServers = await caller.mcp.listServers();
 
+        expect(snapshot.lastSequence).toBeGreaterThanOrEqual(0);
         expect(sessions.sessions).toEqual([]);
         expect(providers.providers.length).toBeGreaterThan(0);
         expect(pendingPermissions.requests).toEqual([]);
@@ -169,5 +171,35 @@ describe('runtime contracts', () => {
         const disconnected = await caller.mcp.disconnect({ serverId: 'github' });
         expect(disconnected.disconnected).toBe(true);
     });
-});
 
+    it('returns runtime events and supports replay query', async () => {
+        const caller = createCaller();
+
+        const created = await caller.session.create({
+            scope: 'detached',
+            kind: 'local',
+        });
+
+        await caller.permission.request({
+            policy: 'ask',
+            resource: 'tool:read_file',
+        });
+
+        const snapshot = await caller.runtime.getSnapshot();
+        expect(snapshot.sessions.some((item) => item.id === created.session.id)).toBe(true);
+        expect(snapshot.lastSequence).toBeGreaterThan(0);
+
+        const firstBatch = await caller.runtime.getEvents({
+            limit: 2,
+        });
+        expect(firstBatch.events.length).toBe(2);
+
+        const afterFirst = firstBatch.events[0]?.sequence ?? 0;
+        const deltaBatch = await caller.runtime.getEvents({
+            afterSequence: afterFirst,
+            limit: 10,
+        });
+        expect(deltaBatch.events.length).toBeGreaterThan(0);
+        expect(deltaBatch.events.every((event) => event.sequence > afterFirst)).toBe(true);
+    });
+});

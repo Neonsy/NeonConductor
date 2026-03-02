@@ -1,40 +1,48 @@
 import { mcpByServerInputSchema } from '@/app/backend/runtime/contracts';
-import { getRuntimeState } from '@/app/backend/runtime/state';
+import { mcpStore } from '@/app/backend/persistence/stores';
+import { runtimeEventLogService } from '@/app/backend/runtime/services/runtimeEventLog';
 import { publicProcedure, router } from '@/app/backend/trpc/init';
 
 export const mcpRouter = router({
-    listServers: publicProcedure.query(() => {
-        const state = getRuntimeState();
-        return { servers: [...state.mcpServers.values()] };
+    listServers: publicProcedure.query(async () => {
+        return { servers: await mcpStore.listServers() };
     }),
-    connect: publicProcedure.input(mcpByServerInputSchema).mutation(({ input }) => {
-        const state = getRuntimeState();
-        const server = state.mcpServers.get(input.serverId);
+    connect: publicProcedure.input(mcpByServerInputSchema).mutation(async ({ input }) => {
+        const server = await mcpStore.connect(input.serverId);
         if (!server) {
             return { connected: false as const, reason: 'not_found' as const };
         }
 
-        server.connectionState = 'connected';
-        if (server.authMode === 'none') {
-            server.authState = 'authenticated';
-        }
+        await runtimeEventLogService.append({
+            entityType: 'mcp',
+            entityId: server.id,
+            eventType: 'mcp.connected',
+            payload: {
+                server,
+            },
+        });
 
         return { connected: true as const, server };
     }),
-    disconnect: publicProcedure.input(mcpByServerInputSchema).mutation(({ input }) => {
-        const state = getRuntimeState();
-        const server = state.mcpServers.get(input.serverId);
+    disconnect: publicProcedure.input(mcpByServerInputSchema).mutation(async ({ input }) => {
+        const server = await mcpStore.disconnect(input.serverId);
         if (!server) {
             return { disconnected: false as const, reason: 'not_found' as const };
         }
 
-        server.connectionState = 'disconnected';
+        await runtimeEventLogService.append({
+            entityType: 'mcp',
+            entityId: server.id,
+            eventType: 'mcp.disconnected',
+            payload: {
+                server,
+            },
+        });
 
         return { disconnected: true as const, server };
     }),
-    authStatus: publicProcedure.input(mcpByServerInputSchema).query(({ input }) => {
-        const state = getRuntimeState();
-        const server = state.mcpServers.get(input.serverId);
+    authStatus: publicProcedure.input(mcpByServerInputSchema).query(async ({ input }) => {
+        const server = await mcpStore.getServer(input.serverId);
         if (!server) {
             return { found: false as const };
         }

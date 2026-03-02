@@ -36,5 +36,18 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
             authState: 'unauthenticated' | 'authenticated';
         }>;
     }>();
-});
 
+    expectTypeOf<Inputs['runtime']['getEvents']>().toMatchTypeOf<{
+        afterSequence?: number;
+        limit?: number;
+    }>();
+
+    expectTypeOf<Outputs['runtime']['getSnapshot']>().toMatchTypeOf<{
+        generatedAt: string;
+        lastSequence: number;
+        sessions: Array<{
+            id: string;
+            runStatus: 'idle' | 'running' | 'completed' | 'aborted' | 'error';
+        }>;
+    }>();
+});

@@ -1,6 +1,8 @@
 import { app, BrowserWindow, Menu } from 'electron';
 import { createIPCHandler, type CreateContextOptions } from 'electron-trpc-experimental/main';
 
+import { closePersistence, initializePersistence } from '@/app/backend/persistence/db';
+import { initializeSecretStore } from '@/app/backend/secrets/store';
 import type { Context } from '@/app/backend/trpc/context';
 import type { AppRouter } from '@/app/backend/trpc/router';
 import { flushAppLogger, initAppLogger } from '@/app/main/logging';
@@ -36,6 +38,11 @@ export function bootstrapMainProcess(deps: BootstrapDeps, importMetaUrl: string)
             version: app.getVersion(),
         });
 
+        initializePersistence({
+            dataDir: app.getPath('userData'),
+        });
+        initializeSecretStore();
+
         // Remove default menu bar (File, Edit, View, Help)
         Menu.setApplicationMenu(null);
 
@@ -59,6 +66,7 @@ export function bootstrapMainProcess(deps: BootstrapDeps, importMetaUrl: string)
     });
 
     app.on('before-quit', () => {
+        closePersistence();
         void flushAppLogger();
     });
 
