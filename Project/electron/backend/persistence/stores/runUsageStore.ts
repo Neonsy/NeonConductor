@@ -4,7 +4,7 @@ import { getPersistence } from '@/app/backend/persistence/db';
 import { nowIso } from '@/app/backend/persistence/stores/utils';
 import type { ProviderUsageSummary, RunUsageRecord } from '@/app/backend/persistence/types';
 import { assertSupportedProviderId } from '@/app/backend/providers/registry';
-import type { EntityId } from '@/app/backend/runtime/contracts';
+import type { EntityId, RuntimeProviderId } from '@/app/backend/runtime/contracts';
 
 function readNumber(value: number | null): number | undefined {
     return value === null ? undefined : value;
@@ -64,7 +64,7 @@ function mapRunUsageRecord(row: {
 
 export interface UpsertRunUsageInput {
     runId: string;
-    providerId: 'kilo' | 'openai';
+    providerId: RuntimeProviderId;
     modelId: string;
     inputTokens?: number;
     outputTokens?: number;

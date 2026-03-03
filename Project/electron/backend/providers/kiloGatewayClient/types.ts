@@ -4,6 +4,9 @@ export interface KiloGatewayModel {
     upstreamProvider?: string;
     contextLength?: number;
     supportedParameters: string[];
+    inputModalities: string[];
+    outputModalities: string[];
+    promptFamily?: string;
     pricing: Record<string, unknown>;
     raw: Record<string, unknown>;
 }

@@ -2,6 +2,7 @@ import { getPersistence } from '@/app/backend/persistence/db';
 import { nowIso } from '@/app/backend/persistence/stores/utils';
 import type { MessagePartRecord, MessageRecord } from '@/app/backend/persistence/types';
 import { createEntityId } from '@/app/backend/runtime/contracts';
+import { runtimeMessagePartTypes } from '@/app/backend/runtime/contracts';
 import type { EntityId } from '@/app/backend/runtime/contracts';
 
 const messageRoles = ['user', 'assistant', 'system', 'tool'] as const;
@@ -17,6 +18,14 @@ function parseMessageRole(value: string): MessageRole {
     }
 
     throw new Error(`Invalid message role in persistence row: "${value}".`);
+}
+
+function parsePartType(value: string): (typeof runtimeMessagePartTypes)[number] {
+    if (isOneOf(value, runtimeMessagePartTypes)) {
+        return value;
+    }
+
+    throw new Error(`Invalid message part type in persistence row: "${value}".`);
 }
 
 function parsePayload(value: string): Record<string, unknown> {
@@ -64,7 +73,7 @@ function mapMessagePartRecord(row: {
         id: row.id as EntityId<'part'>,
         messageId: row.message_id as EntityId<'msg'>,
         sequence: row.sequence,
-        partType: row.part_type,
+        partType: parsePartType(row.part_type),
         payload: parsePayload(row.payload_json),
         createdAt: row.created_at,
     };
@@ -101,7 +110,7 @@ export class MessageStore {
 
     async appendPart(input: {
         messageId: string;
-        partType: string;
+        partType: (typeof runtimeMessagePartTypes)[number];
         payload: Record<string, unknown>;
     }): Promise<MessagePartRecord> {
         const { db } = getPersistence();

@@ -32,12 +32,24 @@ const PROVIDER_SEED = [
     { id: 'openai', label: 'OpenAI', supportsByok: 1 },
 ] as const;
 
-const MODEL_SEED = [
-    { id: 'kilo/auto', providerId: 'kilo', label: 'Kilo Auto' },
-    { id: 'kilo/code', providerId: 'kilo', label: 'Kilo Code' },
-    { id: 'openai/gpt-5', providerId: 'openai', label: 'GPT-5' },
-    { id: 'openai/gpt-5-mini', providerId: 'openai', label: 'GPT-5 Mini' },
-] as const;
+const MODEL_SEED: Array<{
+    id: string;
+    providerId: 'kilo' | 'openai';
+    label: string;
+    supportsTools: boolean;
+    supportsReasoning: boolean;
+}> = [
+    { id: 'kilo/auto', providerId: 'kilo', label: 'Kilo Auto', supportsTools: true, supportsReasoning: true },
+    { id: 'kilo/code', providerId: 'kilo', label: 'Kilo Code', supportsTools: true, supportsReasoning: true },
+    { id: 'openai/gpt-5', providerId: 'openai', label: 'GPT-5', supportsTools: true, supportsReasoning: true },
+    {
+        id: 'openai/gpt-5-mini',
+        providerId: 'openai',
+        label: 'GPT-5 Mini',
+        supportsTools: true,
+        supportsReasoning: true,
+    },
+];
 
 const TOOL_SEED = [
     {
@@ -364,8 +376,8 @@ function seedRuntimeData(sqlite: BetterSqliteDatabase): void {
             model.label,
             model.providerId,
             0,
-            0,
-            0,
+            model.supportsTools ? 1 : 0,
+            model.supportsReasoning ? 1 : 0,
             null,
             '{}',
             '{}',

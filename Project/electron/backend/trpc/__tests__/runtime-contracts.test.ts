@@ -42,6 +42,19 @@ afterEach(() => {
 
 describe('runtime contracts', () => {
     const profileId = getDefaultProfileId();
+    const defaultRuntimeOptions = {
+        reasoning: {
+            effort: 'medium' as const,
+            summary: 'auto' as const,
+            includeEncrypted: true,
+        },
+        cache: {
+            strategy: 'auto' as const,
+        },
+        transport: {
+            openai: 'auto' as const,
+        },
+    };
 
     it('exposes all new runtime domains in root router', async () => {
         const caller = createCaller();
@@ -132,6 +145,7 @@ describe('runtime contracts', () => {
             profileId,
             sessionId,
             prompt: 'First prompt',
+            runtimeOptions: defaultRuntimeOptions,
             providerId: 'openai',
             modelId: 'openai/gpt-5',
         });
@@ -161,6 +175,7 @@ describe('runtime contracts', () => {
             profileId,
             sessionId,
             prompt: 'Second prompt',
+            runtimeOptions: defaultRuntimeOptions,
             providerId: 'openai',
             modelId: 'openai/gpt-5',
         });
@@ -188,6 +203,45 @@ describe('runtime contracts', () => {
         }
         expect(reverted.session.turnCount).toBe(1);
         expect(reverted.session.runStatus).toBe('completed');
+    });
+
+    it('fails closed on invalid runtime options combinations', async () => {
+        const caller = createCaller();
+        const configured = await caller.provider.setApiKey({
+            profileId,
+            providerId: 'openai',
+            apiKey: 'openai-test-key',
+        });
+        expect(configured.success).toBe(true);
+
+        const created = await caller.session.create({
+            profileId,
+            scope: 'detached',
+            kind: 'local',
+        });
+
+        await expect(
+            caller.session.startRun({
+                profileId,
+                sessionId: created.session.id,
+                prompt: 'Invalid manual cache',
+                runtimeOptions: {
+                    reasoning: {
+                        effort: 'none',
+                        summary: 'none',
+                        includeEncrypted: false,
+                    },
+                    cache: {
+                        strategy: 'manual',
+                    },
+                    transport: {
+                        openai: 'auto',
+                    },
+                },
+                providerId: 'openai',
+                modelId: 'openai/gpt-5',
+            })
+        ).rejects.toThrow('runtimeOptions.cache.key');
     });
 
     it('handles permission request, grant, deny, and idempotency', async () => {
@@ -224,6 +278,15 @@ describe('runtime contracts', () => {
         const providersBefore = await caller.provider.listProviders({ profileId });
         const models = await caller.provider.listModels({ profileId, providerId: 'openai' });
         expect(models.models.length).toBeGreaterThan(0);
+        const firstModel = models.models.at(0);
+        expect(firstModel).toBeDefined();
+        if (!firstModel) {
+            throw new Error('Expected openai model listing to include at least one model.');
+        }
+        expect(firstModel.supportsTools).toBeTypeOf('boolean');
+        expect(firstModel.supportsReasoning).toBeTypeOf('boolean');
+        expect(firstModel.inputModalities.includes('text')).toBe(true);
+        expect(firstModel.outputModalities.includes('text')).toBe(true);
 
         const changed = await caller.provider.setDefault({
             profileId,
@@ -282,6 +345,130 @@ describe('runtime contracts', () => {
 
         const snapshotAfterClear = await caller.runtime.getSnapshot({ profileId });
         expect(snapshotAfterClear.secretReferences.some((ref) => ref.providerId === 'openai')).toBe(false);
+    });
+
+    it('syncs openai api catalog and keeps codex model ids', async () => {
+        const caller = createCaller();
+        vi.stubGlobal(
+            'fetch',
+            vi.fn().mockResolvedValue({
+                ok: true,
+                status: 200,
+                statusText: 'OK',
+                json: () => ({
+                    data: [{ id: 'gpt-5-codex' }, { id: 'gpt-5' }, { id: 'gpt-4o' }],
+                }),
+            })
+        );
+
+        const configured = await caller.provider.setApiKey({
+            profileId,
+            providerId: 'openai',
+            apiKey: 'openai-api-key',
+        });
+        expect(configured.success).toBe(true);
+
+        const syncResult = await caller.provider.syncCatalog({
+            profileId,
+            providerId: 'openai',
+        });
+        expect(syncResult.ok).toBe(true);
+        expect(syncResult.modelCount).toBe(3);
+
+        const models = await caller.provider.listModels({ profileId, providerId: 'openai' });
+        expect(models.models.some((model) => model.id === 'openai/gpt-5-codex')).toBe(true);
+        const codex = models.models.find((model) => model.id === 'openai/gpt-5-codex');
+        expect(codex?.promptFamily).toBe('codex');
+    });
+
+    it('syncs kilo catalog with dynamic capability metadata from gateway discovery', async () => {
+        const caller = createCaller();
+        vi.stubGlobal(
+            'fetch',
+            vi.fn((url: string) => {
+                if (url.endsWith('/models')) {
+                    return Promise.resolve({
+                        ok: true,
+                        status: 200,
+                        statusText: 'OK',
+                        json: () => ({
+                            data: [
+                                {
+                                    id: 'kilo/auto',
+                                    name: 'Kilo Auto',
+                                    owned_by: 'kilo',
+                                    context_length: 200000,
+                                    supported_parameters: ['tools', 'reasoning'],
+                                    architecture: {
+                                        input_modalities: ['text', 'image'],
+                                        output_modalities: ['text'],
+                                    },
+                                    opencode: {
+                                        prompt: 'codex',
+                                    },
+                                    pricing: {},
+                                },
+                            ],
+                        }),
+                    });
+                }
+
+                if (url.endsWith('/providers')) {
+                    return Promise.resolve({
+                        ok: true,
+                        status: 200,
+                        statusText: 'OK',
+                        json: () => ({
+                            data: [{ id: 'openai', label: 'OpenAI' }],
+                        }),
+                    });
+                }
+
+                if (url.endsWith('/models-by-provider')) {
+                    return Promise.resolve({
+                        ok: true,
+                        status: 200,
+                        statusText: 'OK',
+                        json: () => ({
+                            data: [{ provider: 'openai', models: ['openai/gpt-5-codex'] }],
+                        }),
+                    });
+                }
+
+                return Promise.resolve({
+                    ok: false,
+                    status: 404,
+                    statusText: 'Not Found',
+                    json: () => ({}),
+                });
+            })
+        );
+
+        const configured = await caller.provider.setApiKey({
+            profileId,
+            providerId: 'kilo',
+            apiKey: 'kilo-api-key',
+        });
+        expect(configured.success).toBe(true);
+
+        const syncResult = await caller.provider.syncCatalog({
+            profileId,
+            providerId: 'kilo',
+        });
+        expect(syncResult.ok).toBe(true);
+        expect(syncResult.modelCount).toBe(1);
+
+        const models = await caller.provider.listModels({ profileId, providerId: 'kilo' });
+        const kiloAuto = models.models.find((model) => model.id === 'kilo/auto');
+        expect(kiloAuto).toBeDefined();
+        if (!kiloAuto) {
+            throw new Error('Expected kilo/auto model in synced catalog.');
+        }
+        expect(kiloAuto.supportsTools).toBe(true);
+        expect(kiloAuto.supportsReasoning).toBe(true);
+        expect(kiloAuto.supportsVision).toBe(true);
+        expect(kiloAuto.inputModalities.includes('image')).toBe(true);
+        expect(kiloAuto.promptFamily).toBe('codex');
     });
 
     it('supports openai oauth device auth start and pending polling', async () => {
@@ -372,6 +559,14 @@ describe('runtime contracts', () => {
             providerId: 'openai',
         });
         expect(refreshed.state.authState).toBe('authenticated');
+
+        const syncResult = await caller.provider.syncCatalog({
+            profileId,
+            providerId: 'openai',
+        });
+        expect(syncResult.ok).toBe(true);
+        const models = await caller.provider.listModels({ profileId, providerId: 'openai' });
+        expect(models.models.some((model) => model.id === 'openai/gpt-5-codex')).toBe(true);
     });
 
     it('rejects unsupported provider ids at contract boundaries and allows anthropic models through supported providers', async () => {

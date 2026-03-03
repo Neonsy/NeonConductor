@@ -1,10 +1,21 @@
-import { messageStore, runStore, runUsageStore, sessionStore } from '@/app/backend/persistence/stores';
-import { getProviderAdapter } from '@/app/backend/providers/adapters';
-import type { ProviderAuthMethod } from '@/app/backend/runtime/contracts';
-import type { EntityId } from '@/app/backend/runtime/contracts';
+import { messageStore, providerStore, runStore, sessionStore } from '@/app/backend/persistence/stores';
+import type { ProviderRuntimeTransportSelection } from '@/app/backend/providers/types';
+import type { EntityId, ProviderAuthMethod, RuntimeProviderId } from '@/app/backend/runtime/contracts';
+import { resolveRunCache } from '@/app/backend/runtime/services/runExecution/cacheKey';
+import { validateRunCapabilities } from '@/app/backend/runtime/services/runExecution/capabilities';
+import {
+    emitCacheResolutionEvent,
+    emitTransportSelectionEvent,
+} from '@/app/backend/runtime/services/runExecution/eventing';
+import { executeRun, isAbortError } from '@/app/backend/runtime/services/runExecution/executeRun';
 import { resolveRunAuth } from '@/app/backend/runtime/services/runExecution/resolveRunAuth';
 import { resolveRunTarget } from '@/app/backend/runtime/services/runExecution/resolveRunTarget';
-import type { StartRunInput, StartRunResult } from '@/app/backend/runtime/services/runExecution/types';
+import { resolveInitialRunTransport } from '@/app/backend/runtime/services/runExecution/transport';
+import type {
+    RunCacheResolution,
+    StartRunInput,
+    StartRunResult,
+} from '@/app/backend/runtime/services/runExecution/types';
 import { runtimeEventLogService } from '@/app/backend/runtime/services/runtimeEventLog';
 
 interface ActiveRun {
@@ -17,89 +28,6 @@ interface ActiveRun {
 
 function createSessionKey(profileId: string, sessionId: string): string {
     return `${profileId}:${sessionId}`;
-}
-
-function isAbortError(error: unknown): boolean {
-    return error instanceof Error && error.name === 'AbortError';
-}
-
-interface UsageAccumulator {
-    inputTokens?: number;
-    outputTokens?: number;
-    cachedTokens?: number;
-    reasoningTokens?: number;
-    totalTokens?: number;
-    latencyMs?: number;
-    costMicrounits?: number;
-}
-
-interface RunUsageWriteInput {
-    runId: string;
-    providerId: 'kilo' | 'openai';
-    modelId: string;
-    inputTokens?: number;
-    outputTokens?: number;
-    cachedTokens?: number;
-    reasoningTokens?: number;
-    totalTokens?: number;
-    latencyMs?: number;
-    costMicrounits?: number;
-    billedVia: 'kilo_gateway' | 'openai_api' | 'openai_subscription';
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-    return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
-
-function readOptionalFiniteNumber(value: unknown): number | undefined {
-    return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
-}
-
-function mergeUsage(current: UsageAccumulator, next: unknown): UsageAccumulator {
-    const merged: UsageAccumulator = {};
-
-    if (current.inputTokens !== undefined) merged.inputTokens = current.inputTokens;
-    if (current.outputTokens !== undefined) merged.outputTokens = current.outputTokens;
-    if (current.cachedTokens !== undefined) merged.cachedTokens = current.cachedTokens;
-    if (current.reasoningTokens !== undefined) merged.reasoningTokens = current.reasoningTokens;
-    if (current.totalTokens !== undefined) merged.totalTokens = current.totalTokens;
-    if (current.latencyMs !== undefined) merged.latencyMs = current.latencyMs;
-    if (current.costMicrounits !== undefined) merged.costMicrounits = current.costMicrounits;
-
-    if (isRecord(next)) {
-        const inputTokens = readOptionalFiniteNumber(next['inputTokens']);
-        const outputTokens = readOptionalFiniteNumber(next['outputTokens']);
-        const cachedTokens = readOptionalFiniteNumber(next['cachedTokens']);
-        const reasoningTokens = readOptionalFiniteNumber(next['reasoningTokens']);
-        const totalTokens = readOptionalFiniteNumber(next['totalTokens']);
-        const latencyMs = readOptionalFiniteNumber(next['latencyMs']);
-        const costMicrounits = readOptionalFiniteNumber(next['costMicrounits']);
-
-        if (inputTokens !== undefined) merged.inputTokens = inputTokens;
-        if (outputTokens !== undefined) merged.outputTokens = outputTokens;
-        if (cachedTokens !== undefined) merged.cachedTokens = cachedTokens;
-        if (reasoningTokens !== undefined) merged.reasoningTokens = reasoningTokens;
-        if (totalTokens !== undefined) merged.totalTokens = totalTokens;
-        if (latencyMs !== undefined) merged.latencyMs = latencyMs;
-        if (costMicrounits !== undefined) merged.costMicrounits = costMicrounits;
-    }
-
-    return merged;
-}
-
-function resolveBilledVia(input: {
-    providerId: 'kilo' | 'openai';
-    authMethod: string;
-}): 'kilo_gateway' | 'openai_api' | 'openai_subscription' {
-    if (input.providerId === 'kilo') {
-        return 'kilo_gateway';
-    }
-
-    if (input.authMethod === 'api_key') {
-        return 'openai_api';
-    }
-
-    return 'openai_subscription';
 }
 
 export class RunExecutionService {
@@ -124,6 +52,33 @@ export class RunExecutionService {
             profileId: input.profileId,
             providerId: resolvedTarget.providerId,
         });
+        const modelCapabilities = await providerStore.getModelCapabilities(
+            input.profileId,
+            resolvedTarget.providerId,
+            resolvedTarget.modelId
+        );
+        if (!modelCapabilities) {
+            throw new Error(`Model "${resolvedTarget.modelId}" is missing runtime capabilities.`);
+        }
+
+        validateRunCapabilities({
+            providerId: resolvedTarget.providerId,
+            modelId: resolvedTarget.modelId,
+            modelCapabilities,
+            runtimeOptions: input.runtimeOptions,
+        });
+
+        const initialTransport = resolveInitialRunTransport({
+            providerId: resolvedTarget.providerId,
+            runtimeOptions: input.runtimeOptions,
+        });
+        const resolvedCache = resolveRunCache({
+            profileId: input.profileId,
+            sessionId: input.sessionId,
+            providerId: resolvedTarget.providerId,
+            modelId: resolvedTarget.modelId,
+            runtimeOptions: input.runtimeOptions,
+        });
 
         const run = await runStore.create({
             profileId: input.profileId,
@@ -132,6 +87,16 @@ export class RunExecutionService {
             providerId: resolvedTarget.providerId,
             modelId: resolvedTarget.modelId,
             authMethod: resolvedAuth.authMethod,
+            runtimeOptions: input.runtimeOptions,
+            cache: resolvedCache,
+            transport: {
+                selected: initialTransport.selected,
+                ...(initialTransport.degraded
+                    ? {
+                          degradedReason: initialTransport.degradedReason,
+                      }
+                    : {}),
+            },
         });
 
         await sessionStore.markRunPending(input.profileId, input.sessionId, run.id);
@@ -168,8 +133,26 @@ export class RunExecutionService {
             },
         });
 
+        await emitCacheResolutionEvent({
+            runId: run.id,
+            profileId: input.profileId,
+            sessionId: input.sessionId,
+            cache: resolvedCache,
+        });
+        await emitTransportSelectionEvent({
+            runId: run.id,
+            profileId: input.profileId,
+            sessionId: input.sessionId,
+            selection: {
+                selected: initialTransport.selected,
+                requested: initialTransport.requested,
+                degraded: initialTransport.degraded,
+                ...(initialTransport.degradedReason ? { degradedReason: initialTransport.degradedReason } : {}),
+            },
+        });
+
         const controller = new AbortController();
-        const completion = this.executeRun({
+        const completion = this.runToTerminalState({
             profileId: input.profileId,
             sessionId: input.sessionId,
             runId: run.id,
@@ -177,6 +160,14 @@ export class RunExecutionService {
             providerId: resolvedTarget.providerId,
             modelId: resolvedTarget.modelId,
             authMethod: resolvedAuth.authMethod,
+            runtimeOptions: input.runtimeOptions,
+            cache: resolvedCache,
+            transportSelection: {
+                selected: initialTransport.selected,
+                requested: initialTransport.requested,
+                degraded: initialTransport.degraded,
+                ...(initialTransport.degradedReason ? { degradedReason: initialTransport.degradedReason } : {}),
+            },
             ...(resolvedAuth.apiKey ? { apiKey: resolvedAuth.apiKey } : {}),
             ...(resolvedAuth.accessToken ? { accessToken: resolvedAuth.accessToken } : {}),
             ...(resolvedAuth.organizationId ? { organizationId: resolvedAuth.organizationId } : {}),
@@ -248,101 +239,25 @@ export class RunExecutionService {
         };
     }
 
-    private async executeRun(input: {
+    private async runToTerminalState(input: {
         profileId: string;
         sessionId: string;
         runId: string;
         prompt: string;
-        providerId: 'kilo' | 'openai';
+        providerId: RuntimeProviderId;
         modelId: string;
         authMethod: ProviderAuthMethod | 'none';
+        runtimeOptions: StartRunInput['runtimeOptions'];
+        cache: RunCacheResolution;
+        transportSelection: ProviderRuntimeTransportSelection;
         apiKey?: string;
         accessToken?: string;
         organizationId?: string;
         assistantMessageId: string;
         signal: AbortSignal;
     }): Promise<void> {
-        const adapter = getProviderAdapter(input.providerId);
-        let usage: UsageAccumulator = {};
-
         try {
-            await adapter.streamCompletion(
-                {
-                    profileId: input.profileId,
-                    modelId: input.modelId,
-                    prompt: input.prompt,
-                    authMethod: input.authMethod,
-                    ...(input.apiKey ? { apiKey: input.apiKey } : {}),
-                    ...(input.accessToken ? { accessToken: input.accessToken } : {}),
-                    ...(input.organizationId ? { organizationId: input.organizationId } : {}),
-                    signal: input.signal,
-                },
-                {
-                    onPart: async (part) => {
-                        const appended = await messageStore.appendPart({
-                            messageId: input.assistantMessageId,
-                            partType: part.partType,
-                            payload: part.payload,
-                        });
-                        await runtimeEventLogService.append({
-                            entityType: 'run',
-                            entityId: input.runId,
-                            eventType: 'run.part.appended',
-                            payload: {
-                                runId: input.runId,
-                                messageId: input.assistantMessageId,
-                                part: appended,
-                            },
-                        });
-                    },
-                    onUsage: (nextUsage) => {
-                        usage = mergeUsage(usage, nextUsage);
-                    },
-                }
-            );
-
-            await runStore.finalize(input.runId, {
-                status: 'completed',
-            });
-            await sessionStore.markRunTerminal(input.profileId, input.sessionId, 'completed');
-
-            await runtimeEventLogService.append({
-                entityType: 'run',
-                entityId: input.runId,
-                eventType: 'run.completed',
-                payload: {
-                    runId: input.runId,
-                    sessionId: input.sessionId,
-                    profileId: input.profileId,
-                },
-            });
-
-            const usageRecordInput: RunUsageWriteInput = {
-                runId: input.runId,
-                providerId: input.providerId,
-                modelId: input.modelId,
-                billedVia: resolveBilledVia({ providerId: input.providerId, authMethod: input.authMethod }),
-            };
-
-            if (usage.inputTokens !== undefined) usageRecordInput.inputTokens = usage.inputTokens;
-            if (usage.outputTokens !== undefined) usageRecordInput.outputTokens = usage.outputTokens;
-            if (usage.cachedTokens !== undefined) usageRecordInput.cachedTokens = usage.cachedTokens;
-            if (usage.reasoningTokens !== undefined) usageRecordInput.reasoningTokens = usage.reasoningTokens;
-            if (usage.totalTokens !== undefined) usageRecordInput.totalTokens = usage.totalTokens;
-            if (usage.latencyMs !== undefined) usageRecordInput.latencyMs = usage.latencyMs;
-            if (usage.costMicrounits !== undefined) usageRecordInput.costMicrounits = usage.costMicrounits;
-
-            const recordedUsage = await runUsageStore.upsert(usageRecordInput);
-
-            await runtimeEventLogService.append({
-                entityType: 'run',
-                entityId: input.runId,
-                eventType: 'run.usage.recorded',
-                payload: {
-                    runId: input.runId,
-                    usage: recordedUsage,
-                },
-            });
+            await executeRun(input);
         } catch (error) {
             if (isAbortError(error) || input.signal.aborted) {
                 await runStore.finalize(input.runId, {

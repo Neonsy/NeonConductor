@@ -8,6 +8,10 @@ import type {
     ProviderAuthMethod,
     ProviderAuthState,
     PermissionPolicy,
+    RuntimeOpenAITransport,
+    RuntimeMessagePartType,
+    RuntimeReasoningEffort,
+    RuntimeReasoningSummary,
     RuntimeProviderId,
     RulesetDefinition,
     RunStatus,
@@ -47,6 +51,14 @@ export interface ProviderModelRecord {
     id: string;
     providerId: RuntimeProviderId;
     label: string;
+    supportsTools: boolean;
+    supportsReasoning: boolean;
+    supportsVision: boolean;
+    supportsAudioInput: boolean;
+    supportsAudioOutput: boolean;
+    inputModalities: Array<'text' | 'audio' | 'image' | 'video' | 'pdf'>;
+    outputModalities: Array<'text' | 'audio' | 'image' | 'video' | 'pdf'>;
+    promptFamily?: string;
 }
 
 export interface ProviderAuthStateRecord {
@@ -182,6 +194,22 @@ export interface RunRecord {
     providerId?: RuntimeProviderId;
     modelId?: string;
     authMethod?: ProviderAuthMethod | 'none';
+    reasoning?: {
+        effort: RuntimeReasoningEffort;
+        summary: RuntimeReasoningSummary;
+        includeEncrypted: boolean;
+    };
+    cache?: {
+        strategy: 'auto' | 'manual';
+        key?: string;
+        applied: boolean;
+        reason?: string;
+    };
+    transport?: {
+        openaiPreference: RuntimeOpenAITransport;
+        selected?: 'responses' | 'chat_completions';
+        degradedReason?: string;
+    };
     startedAt?: string;
     completedAt?: string;
     abortedAt?: string;
@@ -205,7 +233,7 @@ export interface MessagePartRecord {
     id: EntityId<'part'>;
     messageId: EntityId<'msg'>;
     sequence: number;
-    partType: string;
+    partType: RuntimeMessagePartType;
     payload: Record<string, unknown>;
     createdAt: string;
 }

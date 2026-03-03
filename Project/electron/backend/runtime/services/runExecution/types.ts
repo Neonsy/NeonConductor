@@ -1,9 +1,16 @@
-import type { EntityId, ProviderAuthMethod, RuntimeProviderId, RunStatus } from '@/app/backend/runtime/contracts';
+import type {
+    EntityId,
+    ProviderAuthMethod,
+    RuntimeProviderId,
+    RuntimeRunOptions,
+    RunStatus,
+} from '@/app/backend/runtime/contracts';
 
 export interface StartRunInput {
     profileId: string;
     sessionId: EntityId<'sess'>;
     prompt: string;
+    runtimeOptions: RuntimeRunOptions;
     providerId?: RuntimeProviderId;
     modelId?: string;
 }
@@ -18,6 +25,20 @@ export interface ResolvedRunAuth {
     apiKey?: string;
     accessToken?: string;
     organizationId?: string;
+}
+
+export interface RunCacheResolution {
+    strategy: RuntimeRunOptions['cache']['strategy'];
+    key?: string;
+    applied: boolean;
+    reason?: string;
+}
+
+export interface RunTransportResolution {
+    requested: RuntimeRunOptions['transport']['openai'];
+    selected: 'responses' | 'chat_completions';
+    degraded: boolean;
+    degradedReason?: string;
 }
 
 export type StartRunResult =

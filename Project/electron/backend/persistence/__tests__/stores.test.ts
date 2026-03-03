@@ -35,6 +35,27 @@ describe('persistence stores', () => {
             providerId: 'openai',
             modelId: 'openai/gpt-5',
             authMethod: 'api_key',
+            runtimeOptions: {
+                reasoning: {
+                    effort: 'none',
+                    summary: 'none',
+                    includeEncrypted: false,
+                },
+                cache: {
+                    strategy: 'auto',
+                },
+                transport: {
+                    openai: 'auto',
+                },
+            },
+            cache: {
+                applied: false,
+                key: 'store-test',
+                reason: 'unsupported_transport',
+            },
+            transport: {
+                selected: 'responses',
+            },
         });
         await sessionStore.markRunPending(profileId, session.id, run.id);
         await runStore.finalize(run.id, { status: 'completed' });
@@ -71,6 +92,15 @@ describe('persistence stores', () => {
         const models = await providerStore.listModels(profileId, 'openai');
         expect(providers.length).toBeGreaterThan(0);
         expect(models.length).toBeGreaterThan(0);
+        const firstModel = models.at(0);
+        expect(firstModel).toBeDefined();
+        if (!firstModel) {
+            throw new Error('Expected at least one model in provider catalog.');
+        }
+        expect(firstModel.supportsTools).toBeTypeOf('boolean');
+        expect(firstModel.supportsReasoning).toBeTypeOf('boolean');
+        expect(firstModel.inputModalities.includes('text')).toBe(true);
+        expect(firstModel.outputModalities.includes('text')).toBe(true);
 
         await providerStore.setDefaults(profileId, 'openai', 'openai/gpt-5');
         const defaults = await providerStore.getDefaults(profileId);
@@ -127,6 +157,27 @@ describe('persistence stores', () => {
             providerId: 'openai',
             modelId: 'openai/gpt-5',
             authMethod: 'api_key',
+            runtimeOptions: {
+                reasoning: {
+                    effort: 'none',
+                    summary: 'none',
+                    includeEncrypted: false,
+                },
+                cache: {
+                    strategy: 'auto',
+                },
+                transport: {
+                    openai: 'auto',
+                },
+            },
+            cache: {
+                applied: false,
+                key: 'store-test',
+                reason: 'unsupported_transport',
+            },
+            transport: {
+                selected: 'responses',
+            },
         });
         await sessionStore.markRunPending(profileId, session.id, run.id);
         await runStore.finalize(run.id, { status: 'completed' });
