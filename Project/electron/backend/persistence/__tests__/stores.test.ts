@@ -10,6 +10,7 @@ import {
     modeStore,
     permissionStore,
     providerStore,
+    runStore,
     secretReferenceStore,
     sessionStore,
     skillfileStore,
@@ -23,20 +24,30 @@ describe('persistence stores', () => {
     });
 
     it('supports session store lifecycle CRUD-style flows', async () => {
-        const session = await sessionStore.create('detached', 'local');
+        const profileId = getDefaultProfileId();
+        const session = await sessionStore.create(profileId, 'detached', 'local');
         expect(session.turnCount).toBe(0);
 
-        const promptResult = await sessionStore.prompt(session.id, 'hello');
-        expect(promptResult.accepted).toBe(true);
+        const run = await runStore.create({
+            profileId,
+            sessionId: session.id,
+            prompt: 'hello',
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
+            authMethod: 'api_key',
+        });
+        await sessionStore.markRunPending(profileId, session.id, run.id);
+        await runStore.finalize(run.id, { status: 'completed' });
+        await sessionStore.markRunTerminal(profileId, session.id, 'completed');
 
-        const status = await sessionStore.status(session.id);
+        const status = await sessionStore.status(profileId, session.id);
         expect(status.found).toBe(true);
         if (!status.found) {
             throw new Error('Expected session to exist.');
         }
         expect(status.session.runStatus).toBe('completed');
 
-        const reverted = await sessionStore.revert(session.id);
+        const reverted = await sessionStore.revert(profileId, session.id);
         expect(reverted.reverted).toBe(true);
     });
 
@@ -107,15 +118,23 @@ describe('persistence stores', () => {
         const tag = await tagStore.create('backend');
         const linked = await tagStore.attachToThread(thread.id, tag.id);
 
-        const session = await sessionStore.create('workspace', 'local', 'wsf_workspace_a');
-        const prompt = await sessionStore.prompt(session.id, 'first');
-        if (!prompt.accepted) {
-            throw new Error('Expected prompt to be accepted.');
-        }
+        const profileId = getDefaultProfileId();
+        const session = await sessionStore.create(profileId, 'workspace', 'local', 'wsf_workspace_a');
+        const run = await runStore.create({
+            profileId,
+            sessionId: session.id,
+            prompt: 'first',
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
+            authMethod: 'api_key',
+        });
+        await sessionStore.markRunPending(profileId, session.id, run.id);
+        await runStore.finalize(run.id, { status: 'completed' });
+        await sessionStore.markRunTerminal(profileId, session.id, 'completed');
 
         const diff = await diffStore.create({
             sessionId: session.id,
-            runId: prompt.runId,
+            runId: run.id,
             summary: 'created patch',
             payload: { files: ['README.md'] },
         });

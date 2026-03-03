@@ -1,6 +1,17 @@
-import type { ProviderAdapter, ProviderCatalogModel, ProviderCatalogSyncResult } from '@/app/backend/providers/types';
+import { parseChatCompletionsPayload, parseResponsesPayload } from '@/app/backend/providers/adapters/runtimePayload';
+import type {
+    ProviderAdapter,
+    ProviderCatalogModel,
+    ProviderCatalogSyncResult,
+    ProviderRuntimeHandlers,
+    ProviderRuntimeInput,
+} from '@/app/backend/providers/types';
 
 const OPENAI_MODELS_ENDPOINT = process.env['OPENAI_MODELS_ENDPOINT']?.trim() || 'https://api.openai.com/v1/models';
+const OPENAI_CHAT_COMPLETIONS_ENDPOINT =
+    process.env['OPENAI_CHAT_COMPLETIONS_ENDPOINT']?.trim() || 'https://api.openai.com/v1/chat/completions';
+const OPENAI_RESPONSES_ENDPOINT =
+    process.env['OPENAI_RESPONSES_ENDPOINT']?.trim() || 'https://api.openai.com/v1/responses';
 
 const CURATED_SUBSCRIPTION_MODELS: ProviderCatalogModel[] = [
     {
@@ -44,6 +55,41 @@ function readOptionalString(value: unknown): string | undefined {
 
 function normalizeOpenAIId(rawId: string): string {
     return rawId.startsWith('openai/') ? rawId : `openai/${rawId}`;
+}
+
+function toUpstreamModelId(modelId: string): string {
+    return modelId.startsWith('openai/') ? modelId.slice('openai/'.length) : modelId;
+}
+
+function resolveAuthToken(input: ProviderRuntimeInput): string {
+    const token = input.accessToken ?? input.apiKey;
+    if (!token) {
+        throw new Error('OpenAI runtime execution requires API key or OAuth access token.');
+    }
+
+    return token;
+}
+
+async function emitCompletion(
+    parsed: { text: string; usage: Record<string, number | undefined> },
+    handlers: ProviderRuntimeHandlers,
+    startedAt: number
+): Promise<void> {
+    if (parsed.text.length > 0) {
+        await handlers.onPart({
+            partType: 'text',
+            payload: {
+                text: parsed.text,
+            },
+        });
+    }
+
+    if (handlers.onUsage) {
+        await handlers.onUsage({
+            ...parsed.usage,
+            latencyMs: Date.now() - startedAt,
+        });
+    }
 }
 
 export class OpenAIProviderAdapter implements ProviderAdapter {
@@ -148,6 +194,75 @@ export class OpenAIProviderAdapter implements ProviderAdapter {
                 detail: error instanceof Error ? error.message : String(error),
             };
         }
+    }
+
+    async streamCompletion(input: ProviderRuntimeInput, handlers: ProviderRuntimeHandlers): Promise<void> {
+        const token = resolveAuthToken(input);
+        const startedAt = Date.now();
+        const model = toUpstreamModelId(input.modelId);
+
+        const chatResponse = await fetch(OPENAI_CHAT_COMPLETIONS_ENDPOINT, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                Accept: 'application/json',
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                model,
+                messages: [
+                    {
+                        role: 'user',
+                        content: input.prompt,
+                    },
+                ],
+                stream: false,
+                stream_options: {
+                    include_usage: true,
+                },
+            }),
+            signal: input.signal,
+        });
+
+        if (chatResponse.ok) {
+            const payload: unknown = await chatResponse.json();
+            const parsed = parseChatCompletionsPayload(payload);
+            await emitCompletion(parsed, handlers, startedAt);
+            return;
+        }
+
+        if (chatResponse.status !== 404) {
+            throw new Error(`OpenAI chat completion failed: ${String(chatResponse.status)} ${chatResponse.statusText}`);
+        }
+
+        const responsesResult = await fetch(OPENAI_RESPONSES_ENDPOINT, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                Accept: 'application/json',
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                model,
+                input: [
+                    {
+                        role: 'user',
+                        content: input.prompt,
+                    },
+                ],
+            }),
+            signal: input.signal,
+        });
+
+        if (!responsesResult.ok) {
+            throw new Error(
+                `OpenAI responses completion failed: ${String(responsesResult.status)} ${responsesResult.statusText}`
+            );
+        }
+
+        const payload: unknown = await responsesResult.json();
+        const parsed = parseResponsesPayload(payload);
+        await emitCompletion(parsed, handlers, startedAt);
     }
 }
 

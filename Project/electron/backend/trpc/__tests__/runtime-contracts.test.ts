@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getDefaultProfileId, getPersistence, resetPersistenceForTests } from '@/app/backend/persistence/db';
+import type { EntityId } from '@/app/backend/runtime/contracts';
 import type { Context } from '@/app/backend/trpc/context';
 import { appRouter } from '@/app/backend/trpc/router';
 
@@ -11,6 +12,24 @@ function createCaller() {
     };
 
     return appRouter.createCaller(context);
+}
+
+async function waitForRunStatus(
+    caller: ReturnType<typeof createCaller>,
+    profileId: string,
+    sessionId: EntityId<'sess'>,
+    expected: 'completed' | 'aborted' | 'error'
+): Promise<void> {
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+        const status = await caller.session.status({ profileId, sessionId });
+        if (status.found && status.session.runStatus === expected) {
+            return;
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+
+    throw new Error(`Timed out waiting for session ${sessionId} to reach status "${expected}".`);
 }
 
 beforeEach(() => {
@@ -28,7 +47,7 @@ describe('runtime contracts', () => {
         const caller = createCaller();
 
         const snapshot = await caller.runtime.getSnapshot({ profileId });
-        const sessions = await caller.session.list();
+        const sessions = await caller.session.list({ profileId });
         const providers = await caller.provider.listProviders({ profileId });
         const pendingPermissions = await caller.permission.listPending();
         const tools = await caller.tool.list();
@@ -53,29 +72,76 @@ describe('runtime contracts', () => {
         expect(mcpServers.servers.length).toBeGreaterThan(0);
     });
 
-    it('supports session lifecycle including completion, abort, and revert', async () => {
+    it('supports session lifecycle with run execution, abort, and revert', async () => {
         const caller = createCaller();
+        const completionFetchMock = vi
+            .fn()
+            .mockResolvedValueOnce({
+                ok: true,
+                status: 200,
+                statusText: 'OK',
+                json: () => ({
+                    choices: [
+                        {
+                            message: {
+                                content: 'First completion response',
+                            },
+                        },
+                    ],
+                    usage: {
+                        prompt_tokens: 10,
+                        completion_tokens: 20,
+                        total_tokens: 30,
+                    },
+                }),
+            })
+            .mockImplementationOnce((_url: string, init?: RequestInit) => {
+                const signal = init?.signal;
+                return new Promise((_, reject) => {
+                    const onAbort = () => {
+                        reject(Object.assign(new Error('Aborted'), { name: 'AbortError' }));
+                    };
+
+                    signal?.addEventListener('abort', onAbort, { once: true });
+                });
+            });
+        vi.stubGlobal('fetch', completionFetchMock);
+
+        const configured = await caller.provider.setApiKey({
+            profileId,
+            providerId: 'openai',
+            apiKey: 'openai-test-key',
+        });
+        expect(configured.success).toBe(true);
 
         const created = await caller.session.create({
+            profileId,
             scope: 'detached',
             kind: 'local',
         });
         const sessionId = created.session.id;
 
-        const initialStatus = await caller.session.status({ sessionId });
+        const initialStatus = await caller.session.status({ profileId, sessionId });
         expect(initialStatus.found).toBe(true);
         if (!initialStatus.found) {
             throw new Error('Expected session to exist.');
         }
         expect(initialStatus.session.runStatus).toBe('idle');
 
-        const firstPrompt = await caller.session.prompt({
+        const firstRun = await caller.session.startRun({
+            profileId,
             sessionId,
             prompt: 'First prompt',
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
         });
-        expect(firstPrompt.accepted).toBe(true);
+        expect(firstRun.accepted).toBe(true);
+        if (!firstRun.accepted) {
+            throw new Error('Expected first run start to succeed.');
+        }
+        await waitForRunStatus(caller, profileId, sessionId, 'completed');
 
-        const completedStatus = await caller.session.status({ sessionId });
+        const completedStatus = await caller.session.status({ profileId, sessionId });
         expect(completedStatus.found).toBe(true);
         if (!completedStatus.found) {
             throw new Error('Expected session to exist after prompt.');
@@ -83,16 +149,31 @@ describe('runtime contracts', () => {
         expect(completedStatus.session.runStatus).toBe('completed');
         expect(completedStatus.session.turnCount).toBe(1);
 
-        const secondPrompt = await caller.session.prompt({
+        const messages = await caller.session.listMessages({
+            profileId,
+            sessionId,
+            runId: firstRun.runId,
+        });
+        expect(messages.messages.length).toBe(2);
+        expect(messages.messageParts.some((part) => part.partType === 'text')).toBe(true);
+
+        const secondRun = await caller.session.startRun({
+            profileId,
             sessionId,
             prompt: 'Second prompt',
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
         });
-        expect(secondPrompt.accepted).toBe(true);
+        expect(secondRun.accepted).toBe(true);
+        if (!secondRun.accepted) {
+            throw new Error('Expected second run start to succeed.');
+        }
 
-        const aborted = await caller.session.abort({ sessionId });
+        const aborted = await caller.session.abort({ profileId, sessionId });
         expect(aborted.aborted).toBe(true);
 
-        const afterAbort = await caller.session.status({ sessionId });
+        await waitForRunStatus(caller, profileId, sessionId, 'aborted');
+        const afterAbort = await caller.session.status({ profileId, sessionId });
         expect(afterAbort.found).toBe(true);
         if (!afterAbort.found) {
             throw new Error('Expected session to exist after abort.');
@@ -100,7 +181,7 @@ describe('runtime contracts', () => {
         expect(afterAbort.session.runStatus).toBe('aborted');
         expect(afterAbort.session.turnCount).toBe(2);
 
-        const reverted = await caller.session.revert({ sessionId });
+        const reverted = await caller.session.revert({ profileId, sessionId });
         expect(reverted.reverted).toBe(true);
         if (!reverted.reverted) {
             throw new Error('Expected revert to succeed.');
@@ -377,6 +458,7 @@ describe('runtime contracts', () => {
         const now = new Date().toISOString();
 
         const created = await caller.session.create({
+            profileId,
             scope: 'workspace',
             kind: 'local',
             workspaceFingerprint: 'wsf_runtime_contracts',
@@ -457,7 +539,7 @@ describe('runtime contracts', () => {
         expect(applied.applied).toBe(true);
         expect(applied.counts.sessions).toBe(1);
 
-        const sessions = await caller.session.list();
+        const sessions = await caller.session.list({ profileId });
         expect(sessions.sessions.some((item) => item.id === created.session.id)).toBe(false);
 
         const snapshot = await caller.runtime.getSnapshot({ profileId });

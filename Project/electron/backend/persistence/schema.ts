@@ -25,6 +25,7 @@ export interface ProviderModelsTable {
 
 export interface SessionsTable {
     id: string;
+    profile_id: string;
     scope: string;
     kind: string;
     workspace_fingerprint: string | null;
@@ -37,10 +38,53 @@ export interface SessionsTable {
 export interface RunsTable {
     id: string;
     session_id: string;
+    profile_id: string;
     prompt: string;
     status: string;
+    provider_id: string | null;
+    model_id: string | null;
+    auth_method: string | null;
+    started_at: string | null;
+    completed_at: string | null;
+    aborted_at: string | null;
+    error_code: string | null;
+    error_message: string | null;
     created_at: string;
     updated_at: string;
+}
+
+export interface MessagesTable {
+    id: string;
+    profile_id: string;
+    session_id: string;
+    run_id: string;
+    role: string;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface MessagePartsTable {
+    id: string;
+    message_id: string;
+    sequence: number;
+    part_type: string;
+    payload_json: string;
+    created_at: string;
+}
+
+export interface RunUsageTable {
+    run_id: string;
+    provider_id: string;
+    model_id: string;
+    input_tokens: number | null;
+    output_tokens: number | null;
+    cached_tokens: number | null;
+    reasoning_tokens: number | null;
+    total_tokens: number | null;
+    latency_ms: number | null;
+    cost_microunits: number | null;
+    billed_via: string;
+    recorded_at: string;
 }
 
 export interface PermissionsTable {
@@ -292,6 +336,9 @@ export interface DatabaseSchema {
     provider_models: ProviderModelsTable;
     sessions: SessionsTable;
     runs: RunsTable;
+    messages: MessagesTable;
+    message_parts: MessagePartsTable;
+    run_usage: RunUsageTable;
     permissions: PermissionsTable;
     settings: SettingsTable;
     runtime_events: RuntimeEventsTable;

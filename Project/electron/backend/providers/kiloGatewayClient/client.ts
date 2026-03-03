@@ -17,8 +17,12 @@ import {
     parseDefaultsPayload,
     parseProfilePayload,
 } from '@/app/backend/providers/kiloGatewayClient/parse/profile';
-import { executeJsonRequest } from '@/app/backend/providers/kiloGatewayClient/requestExecutor';
-import type { RequestHeadersInput } from '@/app/backend/providers/kiloGatewayClient/requestExecutor';
+import {
+    executeJsonRequest,
+    KiloGatewayError,
+    type GatewayErrorCategory,
+    type RequestHeadersInput,
+} from '@/app/backend/providers/kiloGatewayClient/requestExecutor';
 import type {
     KiloDefaultsResponse,
     KiloDeviceCodeResponse,
@@ -120,3 +124,5 @@ export class KiloGatewayClient {
 }
 
 export const kiloGatewayClient = new KiloGatewayClient();
+export { KiloGatewayError };
+export type { GatewayErrorCategory };

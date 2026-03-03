@@ -11,6 +11,9 @@ const EMPTY_COUNTS: RuntimeResetCounts = {
     runtimeEvents: 0,
     sessions: 0,
     runs: 0,
+    messages: 0,
+    messageParts: 0,
+    runUsage: 0,
     permissions: 0,
     conversations: 0,
     threads: 0,
@@ -127,6 +130,49 @@ async function listDiffIds(db: Kysely<DatabaseSchema>, sessionIds: string[]): Pr
     return rows.map((row) => row.id);
 }
 
+async function countMessagesBySessionIds(db: Kysely<DatabaseSchema>, sessionIds: string[]): Promise<number> {
+    if (sessionIds.length === 0) {
+        return 0;
+    }
+
+    const row = await db
+        .selectFrom('messages')
+        .select((eb) => eb.fn.count<number>('id').as('count'))
+        .where('session_id', 'in', sessionIds)
+        .executeTakeFirst();
+
+    return row?.count ?? 0;
+}
+
+async function countMessagePartsBySessionIds(db: Kysely<DatabaseSchema>, sessionIds: string[]): Promise<number> {
+    if (sessionIds.length === 0) {
+        return 0;
+    }
+
+    const row = await db
+        .selectFrom('message_parts')
+        .innerJoin('messages', 'messages.id', 'message_parts.message_id')
+        .select((eb) => eb.fn.count<number>('message_parts.id').as('count'))
+        .where('messages.session_id', 'in', sessionIds)
+        .executeTakeFirst();
+
+    return row?.count ?? 0;
+}
+
+async function countRunUsageByRunIds(db: Kysely<DatabaseSchema>, runIds: string[]): Promise<number> {
+    if (runIds.length === 0) {
+        return 0;
+    }
+
+    const row = await db
+        .selectFrom('run_usage')
+        .select((eb) => eb.fn.count<number>('run_id').as('count'))
+        .where('run_id', 'in', runIds)
+        .executeTakeFirst();
+
+    return row?.count ?? 0;
+}
+
 async function listThreadTagIdsToDelete(db: Kysely<DatabaseSchema>, threadIds: string[]): Promise<string[]> {
     if (threadIds.length === 0) {
         return [];
@@ -220,6 +266,9 @@ async function resolveWorkspaceCounts(
             runtimeEvents: await countRuntimeEventsForEntityIds(db, entityIds),
             sessions: sessionIds.length,
             runs: runIds.length,
+            messages: await countMessagesBySessionIds(db, sessionIds),
+            messageParts: await countMessagePartsBySessionIds(db, sessionIds),
+            runUsage: await countRunUsageByRunIds(db, runIds),
             conversations: conversationIds.length,
             threads: threadIds.length,
             threadTags: threadTagRows.length,
@@ -359,6 +408,9 @@ async function resolveFullCounts(db: Kysely<DatabaseSchema>): Promise<RuntimeRes
         runtimeEvents,
         sessions,
         runs,
+        messages,
+        messageParts,
+        runUsage,
         permissions,
         conversations,
         threads,
@@ -393,6 +445,18 @@ async function resolveFullCounts(db: Kysely<DatabaseSchema>): Promise<RuntimeRes
         db
             .selectFrom('runs')
             .select((eb) => eb.fn.count<number>('id').as('count'))
+            .executeTakeFirst(),
+        db
+            .selectFrom('messages')
+            .select((eb) => eb.fn.count<number>('id').as('count'))
+            .executeTakeFirst(),
+        db
+            .selectFrom('message_parts')
+            .select((eb) => eb.fn.count<number>('id').as('count'))
+            .executeTakeFirst(),
+        db
+            .selectFrom('run_usage')
+            .select((eb) => eb.fn.count<number>('run_id').as('count'))
             .executeTakeFirst(),
         db
             .selectFrom('permissions')
@@ -473,6 +537,9 @@ async function resolveFullCounts(db: Kysely<DatabaseSchema>): Promise<RuntimeRes
         runtimeEvents: runtimeEvents?.count ?? 0,
         sessions: sessions?.count ?? 0,
         runs: runs?.count ?? 0,
+        messages: messages?.count ?? 0,
+        messageParts: messageParts?.count ?? 0,
+        runUsage: runUsage?.count ?? 0,
         permissions: permissions?.count ?? 0,
         conversations: conversations?.count ?? 0,
         threads: threads?.count ?? 0,

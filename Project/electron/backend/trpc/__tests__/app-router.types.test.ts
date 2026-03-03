@@ -9,14 +9,22 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
     type Outputs = inferRouterOutputs<AppRouter>;
 
     expectTypeOf<Inputs['session']['create']>().toExtend<{
+        profileId: string;
         scope: 'detached' | 'workspace';
         kind: 'local' | 'worktree' | 'cloud';
         workspaceFingerprint?: string;
     }>();
 
-    expectTypeOf<Inputs['session']['prompt']>().toExtend<{
+    expectTypeOf<Inputs['session']['startRun']>().toExtend<{
+        profileId: string;
         sessionId: string;
         prompt: string;
+        providerId?: 'kilo' | 'openai';
+        modelId?: string;
+    }>();
+
+    expectTypeOf<Inputs['session']['list']>().toExtend<{
+        profileId: string;
     }>();
 
     expectTypeOf<Inputs['provider']['setDefault']>().toExtend<{

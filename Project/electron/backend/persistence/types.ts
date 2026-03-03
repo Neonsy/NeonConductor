@@ -17,6 +17,7 @@ import type {
 
 export interface SessionSummaryRecord {
     id: EntityId<'sess'>;
+    profileId: string;
     scope: 'detached' | 'workspace';
     kind: 'local' | 'worktree' | 'cloud';
     workspaceFingerprint?: string;
@@ -172,6 +173,65 @@ export interface DiffRecord {
     updatedAt: string;
 }
 
+export interface RunRecord {
+    id: EntityId<'run'>;
+    sessionId: EntityId<'sess'>;
+    profileId: string;
+    prompt: string;
+    status: RunStatus;
+    providerId?: RuntimeProviderId;
+    modelId?: string;
+    authMethod?: ProviderAuthMethod | 'none';
+    startedAt?: string;
+    completedAt?: string;
+    abortedAt?: string;
+    errorCode?: string;
+    errorMessage?: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface MessageRecord {
+    id: EntityId<'msg'>;
+    profileId: string;
+    sessionId: EntityId<'sess'>;
+    runId: EntityId<'run'>;
+    role: 'user' | 'assistant' | 'system' | 'tool';
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface MessagePartRecord {
+    id: EntityId<'part'>;
+    messageId: EntityId<'msg'>;
+    sequence: number;
+    partType: string;
+    payload: Record<string, unknown>;
+    createdAt: string;
+}
+
+export interface RunUsageRecord {
+    runId: EntityId<'run'>;
+    providerId: RuntimeProviderId;
+    modelId: string;
+    inputTokens?: number;
+    outputTokens?: number;
+    cachedTokens?: number;
+    reasoningTokens?: number;
+    totalTokens?: number;
+    latencyMs?: number;
+    costMicrounits?: number;
+    billedVia: 'kilo_gateway' | 'openai_api' | 'openai_subscription';
+    recordedAt: string;
+}
+
+export interface ProviderUsageSummary {
+    providerId: RuntimeProviderId;
+    runCount: number;
+    totalTokens: number;
+    totalCostMicrounits: number;
+}
+
 export type ModeDefinitionRecord = ModeDefinition;
 
 export type RulesetDefinitionRecord = RulesetDefinition;
@@ -188,6 +248,11 @@ export interface RuntimeSnapshotV1 {
     generatedAt: string;
     lastSequence: number;
     sessions: SessionSummaryRecord[];
+    runs: RunRecord[];
+    messages: MessageRecord[];
+    messageParts: MessagePartRecord[];
+    runUsage: RunUsageRecord[];
+    providerUsageSummaries: ProviderUsageSummary[];
     permissions: PermissionRecord[];
     providers: Array<ProviderRecord & { isDefault: boolean }>;
     providerModels: ProviderModelRecord[];

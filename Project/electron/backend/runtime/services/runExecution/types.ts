@@ -1,0 +1,32 @@
+import type { EntityId, ProviderAuthMethod, RuntimeProviderId, RunStatus } from '@/app/backend/runtime/contracts';
+
+export interface StartRunInput {
+    profileId: string;
+    sessionId: EntityId<'sess'>;
+    prompt: string;
+    providerId?: RuntimeProviderId;
+    modelId?: string;
+}
+
+export interface ResolvedRunTarget {
+    providerId: RuntimeProviderId;
+    modelId: string;
+}
+
+export interface ResolvedRunAuth {
+    authMethod: ProviderAuthMethod | 'none';
+    apiKey?: string;
+    accessToken?: string;
+    organizationId?: string;
+}
+
+export type StartRunResult =
+    | {
+          accepted: false;
+          reason: 'not_found' | 'already_running';
+      }
+    | {
+          accepted: true;
+          runId: EntityId<'run'>;
+          runStatus: RunStatus;
+      };

@@ -35,6 +35,9 @@ export const providerRouter = router({
     listProviders: publicProcedure.input(providerListProvidersInputSchema).query(async ({ input }) => {
         return { providers: await providerManagementService.listProviders(input.profileId) };
     }),
+    getUsageSummary: publicProcedure.input(providerListProvidersInputSchema).query(async ({ input }) => {
+        return { summaries: await providerManagementService.listUsageSummaries(input.profileId) };
+    }),
     listModels: publicProcedure.input(providerListModelsInputSchema).query(async ({ input }) => {
         try {
             return {

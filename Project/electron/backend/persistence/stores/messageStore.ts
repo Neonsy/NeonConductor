@@ -1,0 +1,216 @@
+import { getPersistence } from '@/app/backend/persistence/db';
+import { nowIso } from '@/app/backend/persistence/stores/utils';
+import type { MessagePartRecord, MessageRecord } from '@/app/backend/persistence/types';
+import { createEntityId } from '@/app/backend/runtime/contracts';
+import type { EntityId } from '@/app/backend/runtime/contracts';
+
+const messageRoles = ['user', 'assistant', 'system', 'tool'] as const;
+type MessageRole = (typeof messageRoles)[number];
+
+function isOneOf<T extends string>(value: string, allowed: readonly T[]): value is T {
+    return allowed.some((candidate) => candidate === value);
+}
+
+function parseMessageRole(value: string): MessageRole {
+    if (isOneOf(value, messageRoles)) {
+        return value;
+    }
+
+    throw new Error(`Invalid message role in persistence row: "${value}".`);
+}
+
+function parsePayload(value: string): Record<string, unknown> {
+    try {
+        const parsed = JSON.parse(value) as unknown;
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            return parsed as Record<string, unknown>;
+        }
+
+        return {};
+    } catch {
+        return {};
+    }
+}
+
+function mapMessageRecord(row: {
+    id: string;
+    profile_id: string;
+    session_id: string;
+    run_id: string;
+    role: string;
+    created_at: string;
+    updated_at: string;
+}): MessageRecord {
+    return {
+        id: row.id as EntityId<'msg'>,
+        profileId: row.profile_id,
+        sessionId: row.session_id as EntityId<'sess'>,
+        runId: row.run_id as EntityId<'run'>,
+        role: parseMessageRole(row.role),
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+    };
+}
+
+function mapMessagePartRecord(row: {
+    id: string;
+    message_id: string;
+    sequence: number;
+    part_type: string;
+    payload_json: string;
+    created_at: string;
+}): MessagePartRecord {
+    return {
+        id: row.id as EntityId<'part'>,
+        messageId: row.message_id as EntityId<'msg'>,
+        sequence: row.sequence,
+        partType: row.part_type,
+        payload: parsePayload(row.payload_json),
+        createdAt: row.created_at,
+    };
+}
+
+export class MessageStore {
+    async createMessage(input: {
+        profileId: string;
+        sessionId: string;
+        runId: string;
+        role: MessageRole;
+    }): Promise<MessageRecord> {
+        const { db } = getPersistence();
+        const messageId = createEntityId('msg');
+        const now = nowIso();
+
+        await db
+            .insertInto('messages')
+            .values({
+                id: messageId,
+                profile_id: input.profileId,
+                session_id: input.sessionId,
+                run_id: input.runId,
+                role: input.role,
+                created_at: now,
+                updated_at: now,
+            })
+            .execute();
+
+        const row = await db.selectFrom('messages').selectAll().where('id', '=', messageId).executeTakeFirstOrThrow();
+
+        return mapMessageRecord(row);
+    }
+
+    async appendPart(input: {
+        messageId: string;
+        partType: string;
+        payload: Record<string, unknown>;
+    }): Promise<MessagePartRecord> {
+        const { db } = getPersistence();
+        const partId = createEntityId('part');
+        const now = nowIso();
+
+        const last = await db
+            .selectFrom('message_parts')
+            .select('sequence')
+            .where('message_id', '=', input.messageId)
+            .orderBy('sequence', 'desc')
+            .executeTakeFirst();
+
+        const sequence = (last?.sequence ?? -1) + 1;
+
+        await db
+            .insertInto('message_parts')
+            .values({
+                id: partId,
+                message_id: input.messageId,
+                sequence,
+                part_type: input.partType,
+                payload_json: JSON.stringify(input.payload),
+                created_at: now,
+            })
+            .execute();
+
+        const row = await db.selectFrom('message_parts').selectAll().where('id', '=', partId).executeTakeFirstOrThrow();
+
+        return mapMessagePartRecord(row);
+    }
+
+    async listMessagesBySession(profileId: string, sessionId: string, runId?: string): Promise<MessageRecord[]> {
+        const { db } = getPersistence();
+        let query = db
+            .selectFrom('messages')
+            .selectAll()
+            .where('profile_id', '=', profileId)
+            .where('session_id', '=', sessionId)
+            .orderBy('created_at', 'asc')
+            .orderBy('id', 'asc');
+
+        if (runId) {
+            query = query.where('run_id', '=', runId);
+        }
+
+        const rows = await query.execute();
+        return rows.map(mapMessageRecord);
+    }
+
+    async listPartsBySession(profileId: string, sessionId: string, runId?: string): Promise<MessagePartRecord[]> {
+        const { db } = getPersistence();
+        let query = db
+            .selectFrom('message_parts')
+            .innerJoin('messages', 'messages.id', 'message_parts.message_id')
+            .select([
+                'message_parts.id as id',
+                'message_parts.message_id as message_id',
+                'message_parts.sequence as sequence',
+                'message_parts.part_type as part_type',
+                'message_parts.payload_json as payload_json',
+                'message_parts.created_at as created_at',
+            ])
+            .where('messages.profile_id', '=', profileId)
+            .where('messages.session_id', '=', sessionId)
+            .orderBy('messages.created_at', 'asc')
+            .orderBy('message_parts.sequence', 'asc');
+
+        if (runId) {
+            query = query.where('messages.run_id', '=', runId);
+        }
+
+        const rows = await query.execute();
+        return rows.map(mapMessagePartRecord);
+    }
+
+    async listMessagesByProfile(profileId: string): Promise<MessageRecord[]> {
+        const { db } = getPersistence();
+        const rows = await db
+            .selectFrom('messages')
+            .selectAll()
+            .where('profile_id', '=', profileId)
+            .orderBy('created_at', 'asc')
+            .orderBy('id', 'asc')
+            .execute();
+
+        return rows.map(mapMessageRecord);
+    }
+
+    async listPartsByProfile(profileId: string): Promise<MessagePartRecord[]> {
+        const { db } = getPersistence();
+        const rows = await db
+            .selectFrom('message_parts')
+            .innerJoin('messages', 'messages.id', 'message_parts.message_id')
+            .select([
+                'message_parts.id as id',
+                'message_parts.message_id as message_id',
+                'message_parts.sequence as sequence',
+                'message_parts.part_type as part_type',
+                'message_parts.payload_json as payload_json',
+                'message_parts.created_at as created_at',
+            ])
+            .where('messages.profile_id', '=', profileId)
+            .orderBy('messages.created_at', 'asc')
+            .orderBy('message_parts.sequence', 'asc')
+            .execute();
+
+        return rows.map(mapMessagePartRecord);
+    }
+}
+
+export const messageStore = new MessageStore();
