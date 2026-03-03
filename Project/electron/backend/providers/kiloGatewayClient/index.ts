@@ -1,6 +1,9 @@
-export { KiloGatewayClient, kiloGatewayClient } from './client';
-export { KiloGatewayError } from './requestExecutor';
-export type { GatewayErrorCategory } from './requestExecutor';
+export {
+    KiloGatewayClient,
+    kiloGatewayClient,
+    KiloGatewayError,
+    type GatewayErrorCategory,
+} from '@/app/backend/providers/kiloGatewayClient/client';
 export type {
     KiloDefaultsResponse,
     KiloDeviceCodeResponse,
@@ -11,4 +14,4 @@ export type {
     KiloProfileBalanceResponse,
     KiloProfileOrganization,
     KiloProfileResponse,
-} from './types';
+} from '@/app/backend/providers/kiloGatewayClient/types';

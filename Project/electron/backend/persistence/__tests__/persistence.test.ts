@@ -108,7 +108,9 @@ describe('persistence bootstrap and durability', () => {
         });
 
         const caller = createCaller();
+        const profileId = getDefaultProfileId();
         const created = await caller.session.create({
+            profileId,
             scope: 'detached',
             kind: 'local',
         });
@@ -121,7 +123,7 @@ describe('persistence bootstrap and durability', () => {
         });
 
         const nextCaller = createCaller();
-        const listed = await nextCaller.session.list();
+        const listed = await nextCaller.session.list({ profileId });
 
         expect(listed.sessions.some((item) => item.id === created.session.id)).toBe(true);
     });

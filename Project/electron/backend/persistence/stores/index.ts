@@ -2,6 +2,7 @@ export { accountSnapshotStore } from '@/app/backend/persistence/stores/accountSn
 export { conversationStore } from '@/app/backend/persistence/stores/conversationStore';
 export { diffStore } from '@/app/backend/persistence/stores/diffStore';
 export { marketplaceStore } from '@/app/backend/persistence/stores/marketplaceStore';
+export { messageStore } from '@/app/backend/persistence/stores/messageStore';
 export { mcpStore } from '@/app/backend/persistence/stores/mcpStore';
 export { modeStore } from '@/app/backend/persistence/stores/modeStore';
 export { permissionStore } from '@/app/backend/persistence/stores/permissionStore';
@@ -10,6 +11,7 @@ export { providerAuthFlowStore } from '@/app/backend/persistence/stores/provider
 export { providerCatalogStore } from '@/app/backend/persistence/stores/providerCatalogStore';
 export { providerStore } from '@/app/backend/persistence/stores/providerStore';
 export { runStore } from '@/app/backend/persistence/stores/runStore';
+export { runUsageStore } from '@/app/backend/persistence/stores/runUsageStore';
 export { rulesetStore } from '@/app/backend/persistence/stores/rulesetStore';
 export { runtimeEventStore } from '@/app/backend/persistence/stores/runtimeEventStore';
 export { secretReferenceStore } from '@/app/backend/persistence/stores/secretReferenceStore';

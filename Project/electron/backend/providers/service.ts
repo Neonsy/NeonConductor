@@ -8,6 +8,7 @@ import {
     getDefaults,
     listModels,
     listProviders,
+    listUsageSummaries,
     setDefault,
 } from '@/app/backend/providers/service/readService';
 import type { ProviderListItem, ProviderSyncResult } from '@/app/backend/providers/service/types';
@@ -44,6 +45,10 @@ class ProviderManagementService {
 
     async listDiscoverySnapshots(profileId: string) {
         return listDiscoverySnapshots(profileId);
+    }
+
+    async listUsageSummaries(profileId: string) {
+        return listUsageSummaries(profileId);
     }
 
     listAuthMethods(profileId: string) {

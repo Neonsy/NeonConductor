@@ -91,7 +91,12 @@ const importOrderRule = [
     },
 ];
 
-const noRestrictedImportsRule = ['error', { patterns: ['../*', '../../*', '../../../*', '../../../../*'] }];
+const noRestrictedImportsRule = [
+    'error',
+    {
+        patterns: ['./*', '../*', '../../*', '../../../*', '../../../../*'],
+    },
+];
 const noSecretsRule = [
     'warn',
     {

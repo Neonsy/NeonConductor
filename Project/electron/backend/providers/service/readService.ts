@@ -1,10 +1,17 @@
-import { providerAuthStore, providerCatalogStore, providerStore } from '@/app/backend/persistence/stores';
-import type { ProviderAuthStateRecord, ProviderModelRecord } from '@/app/backend/persistence/types';
+import {
+    providerAuthStore,
+    providerCatalogStore,
+    providerStore,
+    runUsageStore,
+} from '@/app/backend/persistence/stores';
+import type {
+    ProviderAuthStateRecord,
+    ProviderModelRecord,
+    ProviderUsageSummary,
+} from '@/app/backend/persistence/types';
+import { defaultAuthState, ensureSupportedProvider } from '@/app/backend/providers/service/helpers';
+import type { ProviderListItem } from '@/app/backend/providers/service/types';
 import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
-
-import { defaultAuthState, ensureSupportedProvider } from './helpers';
-
-import type { ProviderListItem } from './types';
 
 export async function listProviders(profileId: string): Promise<ProviderListItem[]> {
     const [providers, defaults, authStates] = await Promise.all([
@@ -87,4 +94,8 @@ export async function listAuthStates(profileId: string): Promise<ProviderAuthSta
 
 export async function listDiscoverySnapshots(profileId: string) {
     return providerCatalogStore.listDiscoverySnapshotsByProfile(profileId);
+}
+
+export async function listUsageSummaries(profileId: string): Promise<ProviderUsageSummary[]> {
+    return runUsageStore.summarizeByProfile(profileId);
 }

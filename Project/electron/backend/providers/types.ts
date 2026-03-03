@@ -32,7 +32,7 @@ export interface ProviderCatalogSyncFailure {
 
 export type ProviderCatalogSyncResult = ProviderCatalogSyncSuccess | ProviderCatalogSyncFailure;
 
-export interface ProviderAdapter {
+export interface ProviderCatalogAdapter {
     readonly id: FirstPartyProviderId;
     syncCatalog(input: {
         profileId: string;
@@ -43,3 +43,40 @@ export interface ProviderAdapter {
         force?: boolean;
     }): Promise<ProviderCatalogSyncResult>;
 }
+
+export interface ProviderRuntimeUsage {
+    inputTokens?: number;
+    outputTokens?: number;
+    cachedTokens?: number;
+    reasoningTokens?: number;
+    totalTokens?: number;
+    latencyMs?: number;
+    costMicrounits?: number;
+}
+
+export interface ProviderRuntimePart {
+    partType: 'text' | 'tool_call' | 'error' | 'status';
+    payload: Record<string, unknown>;
+}
+
+export interface ProviderRuntimeHandlers {
+    onPart: (part: ProviderRuntimePart) => Promise<void> | void;
+    onUsage?: (usage: ProviderRuntimeUsage) => Promise<void> | void;
+}
+
+export interface ProviderRuntimeInput {
+    profileId: string;
+    modelId: string;
+    prompt: string;
+    authMethod: ProviderAuthMethod | 'none';
+    apiKey?: string;
+    accessToken?: string;
+    organizationId?: string;
+    signal: AbortSignal;
+}
+
+export interface ProviderRuntimeAdapter {
+    streamCompletion(input: ProviderRuntimeInput, handlers: ProviderRuntimeHandlers): Promise<void>;
+}
+
+export interface ProviderAdapter extends ProviderCatalogAdapter, ProviderRuntimeAdapter {}

@@ -167,18 +167,26 @@ export interface ProfileInput {
     profileId: string;
 }
 
-export interface SessionCreateInput {
+export interface SessionCreateInput extends ProfileInput {
     scope: ConversationScope;
     kind: SessionKind;
     workspaceFingerprint?: string;
 }
 
-export interface SessionByIdInput {
+export interface SessionByIdInput extends ProfileInput {
     sessionId: EntityId<'sess'>;
 }
 
-export interface SessionPromptInput extends SessionByIdInput {
+export interface SessionStartRunInput extends SessionByIdInput {
     prompt: string;
+    providerId?: RuntimeProviderId;
+    modelId?: string;
+}
+
+export type SessionListRunsInput = SessionByIdInput;
+
+export interface SessionListMessagesInput extends SessionByIdInput {
+    runId?: EntityId<'run'>;
 }
 
 export interface ProviderSetDefaultInput extends ProfileInput {
@@ -270,6 +278,9 @@ export interface RuntimeResetCounts {
     runtimeEvents: number;
     sessions: number;
     runs: number;
+    messages: number;
+    messageParts: number;
+    runUsage: number;
     permissions: number;
     conversations: number;
     threads: number;
@@ -408,6 +419,7 @@ export function parseProfileInput(input: unknown): ProfileInput {
 export function parseSessionCreateInput(input: unknown): SessionCreateInput {
     const source = readObject(input, 'input');
 
+    const profileId = readProfileId(source);
     const scope = readEnumValue(source.scope, 'scope', conversationScopes);
     const kind = readEnumValue(source.kind, 'kind', sessionKinds);
     const workspaceFingerprint = readOptionalString(source.workspaceFingerprint, 'workspaceFingerprint');
@@ -421,6 +433,7 @@ export function parseSessionCreateInput(input: unknown): SessionCreateInput {
     }
 
     return {
+        profileId,
         scope,
         kind,
         ...(workspaceFingerprint ? { workspaceFingerprint } : {}),
@@ -431,16 +444,37 @@ export function parseSessionByIdInput(input: unknown): SessionByIdInput {
     const source = readObject(input, 'input');
 
     return {
+        profileId: readProfileId(source),
         sessionId: readEntityId(source.sessionId, 'sessionId', 'sess'),
     };
 }
 
-export function parseSessionPromptInput(input: unknown): SessionPromptInput {
+export function parseSessionStartRunInput(input: unknown): SessionStartRunInput {
     const source = readObject(input, 'input');
+    const providerId = source.providerId !== undefined ? readProviderId(source.providerId, 'providerId') : undefined;
+    const modelId = readOptionalString(source.modelId, 'modelId');
 
     return {
+        profileId: readProfileId(source),
         sessionId: readEntityId(source.sessionId, 'sessionId', 'sess'),
         prompt: readString(source.prompt, 'prompt'),
+        ...(providerId ? { providerId } : {}),
+        ...(modelId ? { modelId } : {}),
+    };
+}
+
+export function parseSessionListRunsInput(input: unknown): SessionListRunsInput {
+    return parseSessionByIdInput(input);
+}
+
+export function parseSessionListMessagesInput(input: unknown): SessionListMessagesInput {
+    const source = readObject(input, 'input');
+    const runId = source.runId !== undefined ? readEntityId(source.runId, 'runId', 'run') : undefined;
+
+    return {
+        profileId: readProfileId(source),
+        sessionId: readEntityId(source.sessionId, 'sessionId', 'sess'),
+        ...(runId ? { runId } : {}),
     };
 }
 
@@ -662,7 +696,9 @@ export function parseContextBudgetInput(input: unknown): ContextBudgetInput {
 export const profileInputSchema = createParser(parseProfileInput);
 export const sessionCreateInputSchema = createParser(parseSessionCreateInput);
 export const sessionByIdInputSchema = createParser(parseSessionByIdInput);
-export const sessionPromptInputSchema = createParser(parseSessionPromptInput);
+export const sessionStartRunInputSchema = createParser(parseSessionStartRunInput);
+export const sessionListRunsInputSchema = createParser(parseSessionListRunsInput);
+export const sessionListMessagesInputSchema = createParser(parseSessionListMessagesInput);
 export const providerSetDefaultInputSchema = createParser(parseProviderSetDefaultInput);
 export const providerListProvidersInputSchema = createParser(parseProviderListProvidersInput);
 export const providerListModelsInputSchema = createParser(parseProviderListModelsInput);

@@ -1,11 +1,9 @@
 import { providerCatalogStore } from '@/app/backend/persistence/stores';
 import { getProviderAdapter } from '@/app/backend/providers/adapters';
 import { providerAuthExecutionService } from '@/app/backend/providers/providerAuthExecutionService';
+import { ensureSupportedProvider, resolveSecret } from '@/app/backend/providers/service/helpers';
+import type { ProviderSyncResult } from '@/app/backend/providers/service/types';
 import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
-
-import { ensureSupportedProvider, resolveSecret } from './helpers';
-
-import type { ProviderSyncResult } from './types';
 
 export async function syncCatalog(
     profileId: string,
