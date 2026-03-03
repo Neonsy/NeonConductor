@@ -9,6 +9,7 @@ export const KILO_GATEWAY_TIMEOUT_MS = 15_000;
 export const HEADER_ORGANIZATION_ID = 'X-KiloCode-OrganizationId';
 export const HEADER_MODE = 'x-kilocode-mode';
 export const HEADER_EDITOR_NAME = 'X-KILOCODE-EDITORNAME';
+export const HEADER_TASK_ID = 'X-KiloCode-TaskId';
 
 export const DEFAULT_EDITOR_NAME = 'NeonConductor';
 export const DEFAULT_CLIENT_VERSION = 'p2b';

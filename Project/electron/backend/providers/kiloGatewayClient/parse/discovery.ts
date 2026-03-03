@@ -30,6 +30,18 @@ export function parseModelsPayload(payload: Record<string, unknown>): KiloGatewa
             );
             const upstreamProvider = readOptionalString(entry['owned_by']);
             const contextLength = readOptionalNumber(entry['context_length']);
+            const architecture = isRecord(entry['architecture']) ? entry['architecture'] : null;
+            const inputModalities = readArray(architecture?.['input_modalities']).filter(
+                (value): value is string => typeof value === 'string'
+            );
+            const outputModalities = readArray(architecture?.['output_modalities']).filter(
+                (value): value is string => typeof value === 'string'
+            );
+            const opencode = isRecord(entry['opencode']) ? entry['opencode'] : null;
+            const promptFamily =
+                readOptionalString(opencode?.['prompt']) ??
+                readOptionalString(entry['prompt']) ??
+                readOptionalString(entry['prompt_family']);
 
             return {
                 id,
@@ -37,6 +49,9 @@ export function parseModelsPayload(payload: Record<string, unknown>): KiloGatewa
                 ...(upstreamProvider ? { upstreamProvider } : {}),
                 ...(contextLength !== undefined ? { contextLength } : {}),
                 supportedParameters,
+                inputModalities,
+                outputModalities,
+                ...(promptFamily ? { promptFamily } : {}),
                 pricing: isRecord(entry['pricing']) ? entry['pricing'] : {},
                 raw: entry,
             };

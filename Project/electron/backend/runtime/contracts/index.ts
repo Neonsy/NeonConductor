@@ -49,6 +49,29 @@ export type ContextBudget = (typeof contextBudgets)[number];
 export const runStatuses = ['idle', 'running', 'completed', 'aborted', 'error'] as const;
 export type RunStatus = (typeof runStatuses)[number];
 
+export const runtimeReasoningEfforts = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'] as const;
+export type RuntimeReasoningEffort = (typeof runtimeReasoningEfforts)[number];
+
+export const runtimeReasoningSummaries = ['auto', 'none'] as const;
+export type RuntimeReasoningSummary = (typeof runtimeReasoningSummaries)[number];
+
+export const runtimeCacheStrategies = ['auto', 'manual'] as const;
+export type RuntimeCacheStrategy = (typeof runtimeCacheStrategies)[number];
+
+export const runtimeOpenAITransports = ['responses', 'chat', 'auto'] as const;
+export type RuntimeOpenAITransport = (typeof runtimeOpenAITransports)[number];
+
+export const runtimeMessagePartTypes = [
+    'text',
+    'reasoning',
+    'reasoning_summary',
+    'reasoning_encrypted',
+    'tool_call',
+    'error',
+    'status',
+] as const;
+export type RuntimeMessagePartType = (typeof runtimeMessagePartTypes)[number];
+
 export const streamEventTypes = ['status', 'message-part', 'tool-call', 'error'] as const;
 export type StreamEventType = (typeof streamEventTypes)[number];
 
@@ -181,6 +204,28 @@ export interface SessionStartRunInput extends SessionByIdInput {
     prompt: string;
     providerId?: RuntimeProviderId;
     modelId?: string;
+    runtimeOptions: RuntimeRunOptions;
+}
+
+export interface RuntimeReasoningOptions {
+    effort: RuntimeReasoningEffort;
+    summary: RuntimeReasoningSummary;
+    includeEncrypted: boolean;
+}
+
+export interface RuntimeCacheOptions {
+    strategy: RuntimeCacheStrategy;
+    key?: string;
+}
+
+export interface RuntimeTransportOptions {
+    openai: RuntimeOpenAITransport;
+}
+
+export interface RuntimeRunOptions {
+    reasoning: RuntimeReasoningOptions;
+    cache: RuntimeCacheOptions;
+    transport: RuntimeTransportOptions;
 }
 
 export type SessionListRunsInput = SessionByIdInput;
@@ -409,6 +454,50 @@ function readProviderAuthMethod(value: unknown, field: string): ProviderAuthMeth
     return readEnumValue(value, field, providerAuthMethods);
 }
 
+function parseRuntimeRunOptions(value: unknown): RuntimeRunOptions {
+    const source = readObject(value, 'runtimeOptions');
+    const reasoningSource = readObject(source.reasoning, 'runtimeOptions.reasoning');
+    const cacheSource = readObject(source.cache, 'runtimeOptions.cache');
+    const transportSource = readObject(source.transport, 'runtimeOptions.transport');
+
+    const cacheStrategy = readEnumValue(cacheSource.strategy, 'runtimeOptions.cache.strategy', runtimeCacheStrategies);
+    const cacheKey = readOptionalString(cacheSource.key, 'runtimeOptions.cache.key');
+    if (cacheStrategy === 'manual' && !cacheKey) {
+        throw new Error('Invalid "runtimeOptions.cache.key": required when strategy is "manual".');
+    }
+    if (cacheStrategy === 'auto' && cacheKey) {
+        throw new Error('Invalid "runtimeOptions.cache.key": not allowed when strategy is "auto".');
+    }
+    const resolvedManualCacheKey = cacheStrategy === 'manual' ? cacheKey : undefined;
+
+    return {
+        reasoning: {
+            effort: readEnumValue(reasoningSource.effort, 'runtimeOptions.reasoning.effort', runtimeReasoningEfforts),
+            summary: readEnumValue(
+                reasoningSource.summary,
+                'runtimeOptions.reasoning.summary',
+                runtimeReasoningSummaries
+            ),
+            includeEncrypted: readBoolean(
+                reasoningSource.includeEncrypted,
+                'runtimeOptions.reasoning.includeEncrypted'
+            ),
+        },
+        cache:
+            cacheStrategy === 'manual' && resolvedManualCacheKey
+                ? {
+                      strategy: cacheStrategy,
+                      key: resolvedManualCacheKey,
+                  }
+                : {
+                      strategy: cacheStrategy,
+                  },
+        transport: {
+            openai: readEnumValue(transportSource.openai, 'runtimeOptions.transport.openai', runtimeOpenAITransports),
+        },
+    };
+}
+
 export function parseProfileInput(input: unknown): ProfileInput {
     const source = readObject(input, 'input');
     return {
@@ -453,11 +542,13 @@ export function parseSessionStartRunInput(input: unknown): SessionStartRunInput 
     const source = readObject(input, 'input');
     const providerId = source.providerId !== undefined ? readProviderId(source.providerId, 'providerId') : undefined;
     const modelId = readOptionalString(source.modelId, 'modelId');
+    const runtimeOptions = parseRuntimeRunOptions(source.runtimeOptions);
 
     return {
         profileId: readProfileId(source),
         sessionId: readEntityId(source.sessionId, 'sessionId', 'sess'),
         prompt: readString(source.prompt, 'prompt'),
+        runtimeOptions,
         ...(providerId ? { providerId } : {}),
         ...(modelId ? { modelId } : {}),
     };

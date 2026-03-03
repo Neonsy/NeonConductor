@@ -19,6 +19,20 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
         profileId: string;
         sessionId: string;
         prompt: string;
+        runtimeOptions: {
+            reasoning: {
+                effort: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
+                summary: 'auto' | 'none';
+                includeEncrypted: boolean;
+            };
+            cache: {
+                strategy: 'auto' | 'manual';
+                key?: string;
+            };
+            transport: {
+                openai: 'responses' | 'chat' | 'auto';
+            };
+        };
         providerId?: 'kilo' | 'openai';
         modelId?: string;
     }>();
@@ -36,6 +50,18 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
     expectTypeOf<Inputs['provider']['listModels']>().toExtend<{
         profileId: string;
         providerId: string;
+    }>();
+    expectTypeOf<Outputs['provider']['listModels']>().toExtend<{
+        models: Array<{
+            id: string;
+            providerId: 'kilo' | 'openai';
+            supportsTools: boolean;
+            supportsReasoning: boolean;
+            supportsVision: boolean;
+            inputModalities: Array<'text' | 'audio' | 'image' | 'video' | 'pdf'>;
+            outputModalities: Array<'text' | 'audio' | 'image' | 'video' | 'pdf'>;
+            promptFamily?: string;
+        }>;
     }>();
 
     expectTypeOf<Inputs['provider']['setApiKey']>().toExtend<{

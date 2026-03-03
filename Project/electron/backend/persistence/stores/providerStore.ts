@@ -58,6 +58,10 @@ export class ProviderStore {
     async modelExists(profileId: string, providerId: RuntimeProviderId, modelId: string): Promise<boolean> {
         return providerCatalogStore.modelExists(profileId, providerId, modelId);
     }
+
+    async getModelCapabilities(profileId: string, providerId: RuntimeProviderId, modelId: string) {
+        return providerCatalogStore.getModelCapabilities(profileId, providerId, modelId);
+    }
 }
 
 export const providerStore = new ProviderStore();

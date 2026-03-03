@@ -13,6 +13,8 @@ describe('generated migrations', () => {
             '005_p2a_provider_auth_foundation.sql',
             '006_p2b_auth_flow_rebuild.sql',
             '007_p2c_runtime_transport_and_usage.sql',
+            '008_p2_5_reasoning_and_cache_controls.sql',
+            '009_p2_6_provider_capability_parity.sql',
         ]);
     });
 });

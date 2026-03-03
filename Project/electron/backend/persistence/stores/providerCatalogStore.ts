@@ -1,6 +1,7 @@
 import { getPersistence } from '@/app/backend/persistence/db';
 import { nowIso, parseJsonValue } from '@/app/backend/persistence/stores/utils';
 import type { ProviderDiscoverySnapshotRecord, ProviderModelRecord } from '@/app/backend/persistence/types';
+import type { ProviderModelCapabilities, ProviderModelModality } from '@/app/backend/providers/types';
 import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
 
 export interface ProviderCatalogModelUpsert {
@@ -10,6 +11,12 @@ export interface ProviderCatalogModelUpsert {
     isFree?: boolean;
     supportsTools?: boolean;
     supportsReasoning?: boolean;
+    supportsVision?: boolean;
+    supportsAudioInput?: boolean;
+    supportsAudioOutput?: boolean;
+    inputModalities?: ProviderModelModality[];
+    outputModalities?: ProviderModelModality[];
+    promptFamily?: string;
     contextLength?: number;
     pricing?: Record<string, unknown>;
     raw?: Record<string, unknown>;
@@ -23,6 +30,12 @@ interface ComparableCatalogModel {
     isFree: boolean;
     supportsTools: boolean;
     supportsReasoning: boolean;
+    supportsVision: boolean;
+    supportsAudioInput: boolean;
+    supportsAudioOutput: boolean;
+    inputModalities: ProviderModelModality[];
+    outputModalities: ProviderModelModality[];
+    promptFamily: string | null;
     contextLength: number | null;
     pricing: Record<string, unknown>;
     raw: Record<string, unknown>;
@@ -34,11 +47,73 @@ export interface ReplaceCatalogModelsResult {
     changed: boolean;
 }
 
-function mapModel(row: { model_id: string; provider_id: string; label: string }): ProviderModelRecord {
+const modelModalities: readonly ProviderModelModality[] = ['text', 'audio', 'image', 'video', 'pdf'];
+
+function isModelModality(value: unknown): value is ProviderModelModality {
+    return typeof value === 'string' && modelModalities.includes(value as ProviderModelModality);
+}
+
+function normalizeModalities(input?: ProviderModelModality[]): ProviderModelModality[] {
+    if (!input || input.length === 0) {
+        return ['text'];
+    }
+
+    const normalized = input.filter((modality) => modelModalities.includes(modality));
+    if (!normalized.includes('text')) {
+        normalized.unshift('text');
+    }
+
+    return Array.from(new Set(normalized));
+}
+
+function parseModalities(value: string | null): ProviderModelModality[] {
+    if (value === null) {
+        return ['text'];
+    }
+
+    const parsed = parseJsonValue<unknown[]>(value, []);
+    if (!Array.isArray(parsed)) {
+        return ['text'];
+    }
+
+    const normalized = parsed.filter(isModelModality);
+    if (!normalized.includes('text')) {
+        normalized.unshift('text');
+    }
+
+    return Array.from(new Set(normalized));
+}
+
+function mapModel(row: {
+    model_id: string;
+    provider_id: string;
+    label: string;
+    supports_tools: 0 | 1;
+    supports_reasoning: 0 | 1;
+    supports_vision: 0 | 1 | null;
+    supports_audio_input: 0 | 1 | null;
+    supports_audio_output: 0 | 1 | null;
+    input_modalities_json: string | null;
+    output_modalities_json: string | null;
+    prompt_family: string | null;
+}): ProviderModelRecord {
+    const inputModalities = parseModalities(row.input_modalities_json);
+    const outputModalities = parseModalities(row.output_modalities_json);
+
     return {
         id: row.model_id,
         providerId: row.provider_id as RuntimeProviderId,
         label: row.label,
+        supportsTools: row.supports_tools === 1,
+        supportsReasoning: row.supports_reasoning === 1,
+        supportsVision: row.supports_vision === null ? inputModalities.includes('image') : row.supports_vision === 1,
+        supportsAudioInput:
+            row.supports_audio_input === null ? inputModalities.includes('audio') : row.supports_audio_input === 1,
+        supportsAudioOutput:
+            row.supports_audio_output === null ? outputModalities.includes('audio') : row.supports_audio_output === 1,
+        inputModalities,
+        outputModalities,
+        ...(row.prompt_family ? { promptFamily: row.prompt_family } : {}),
     };
 }
 
@@ -70,6 +145,12 @@ function normalizeComparableModel(model: ProviderCatalogModelUpsert): Comparable
         isFree: model.isFree ?? false,
         supportsTools: model.supportsTools ?? false,
         supportsReasoning: model.supportsReasoning ?? false,
+        supportsVision: model.supportsVision ?? false,
+        supportsAudioInput: model.supportsAudioInput ?? false,
+        supportsAudioOutput: model.supportsAudioOutput ?? false,
+        inputModalities: normalizeModalities(model.inputModalities),
+        outputModalities: normalizeModalities(model.outputModalities),
+        promptFamily: model.promptFamily ?? null,
         contextLength: model.contextLength ?? null,
         pricing: model.pricing ?? {},
         raw: model.raw ?? {},
@@ -100,7 +181,19 @@ export class ProviderCatalogStore {
 
         const rows = await db
             .selectFrom('provider_model_catalog')
-            .select(['model_id', 'provider_id', 'label'])
+            .select([
+                'model_id',
+                'provider_id',
+                'label',
+                'supports_tools',
+                'supports_reasoning',
+                'supports_vision',
+                'supports_audio_input',
+                'supports_audio_output',
+                'input_modalities_json',
+                'output_modalities_json',
+                'prompt_family',
+            ])
             .where('profile_id', '=', profileId)
             .where('provider_id', '=', providerId)
             .orderBy('label', 'asc')
@@ -114,7 +207,19 @@ export class ProviderCatalogStore {
 
         const rows = await db
             .selectFrom('provider_model_catalog')
-            .select(['model_id', 'provider_id', 'label'])
+            .select([
+                'model_id',
+                'provider_id',
+                'label',
+                'supports_tools',
+                'supports_reasoning',
+                'supports_vision',
+                'supports_audio_input',
+                'supports_audio_output',
+                'input_modalities_json',
+                'output_modalities_json',
+                'prompt_family',
+            ])
             .where('profile_id', '=', profileId)
             .orderBy('provider_id', 'asc')
             .orderBy('label', 'asc')
@@ -136,6 +241,53 @@ export class ProviderCatalogStore {
         return Boolean(row);
     }
 
+    async getModelCapabilities(
+        profileId: string,
+        providerId: RuntimeProviderId,
+        modelId: string
+    ): Promise<ProviderModelCapabilities | null> {
+        const { db } = getPersistence();
+        const row = await db
+            .selectFrom('provider_model_catalog')
+            .select([
+                'supports_tools',
+                'supports_reasoning',
+                'supports_vision',
+                'supports_audio_input',
+                'supports_audio_output',
+                'input_modalities_json',
+                'output_modalities_json',
+                'prompt_family',
+            ])
+            .where('profile_id', '=', profileId)
+            .where('provider_id', '=', providerId)
+            .where('model_id', '=', modelId)
+            .executeTakeFirst();
+
+        if (!row) {
+            return null;
+        }
+
+        const inputModalities = parseModalities(row.input_modalities_json);
+        const outputModalities = parseModalities(row.output_modalities_json);
+
+        return {
+            supportsTools: row.supports_tools === 1,
+            supportsReasoning: row.supports_reasoning === 1,
+            supportsVision:
+                row.supports_vision === null ? inputModalities.includes('image') : row.supports_vision === 1,
+            supportsAudioInput:
+                row.supports_audio_input === null ? inputModalities.includes('audio') : row.supports_audio_input === 1,
+            supportsAudioOutput:
+                row.supports_audio_output === null
+                    ? outputModalities.includes('audio')
+                    : row.supports_audio_output === 1,
+            inputModalities,
+            outputModalities,
+            ...(row.prompt_family ? { promptFamily: row.prompt_family } : {}),
+        };
+    }
+
     async replaceModels(
         profileId: string,
         providerId: RuntimeProviderId,
@@ -154,6 +306,12 @@ export class ProviderCatalogStore {
                 'is_free',
                 'supports_tools',
                 'supports_reasoning',
+                'supports_vision',
+                'supports_audio_input',
+                'supports_audio_output',
+                'input_modalities_json',
+                'output_modalities_json',
+                'prompt_family',
                 'context_length',
                 'pricing_json',
                 'raw_json',
@@ -171,6 +329,12 @@ export class ProviderCatalogStore {
                 isFree: row.is_free === 1,
                 supportsTools: row.supports_tools === 1,
                 supportsReasoning: row.supports_reasoning === 1,
+                supportsVision: row.supports_vision === null ? false : row.supports_vision === 1,
+                supportsAudioInput: row.supports_audio_input === null ? false : row.supports_audio_input === 1,
+                supportsAudioOutput: row.supports_audio_output === null ? false : row.supports_audio_output === 1,
+                inputModalities: parseModalities(row.input_modalities_json),
+                outputModalities: parseModalities(row.output_modalities_json),
+                promptFamily: row.prompt_family,
                 contextLength: row.context_length,
                 pricing: parseJsonValue(row.pricing_json, {}),
                 raw: parseJsonValue(row.raw_json, {}),
@@ -211,6 +375,12 @@ export class ProviderCatalogStore {
                     is_free: model.isFree ? 1 : 0,
                     supports_tools: model.supportsTools ? 1 : 0,
                     supports_reasoning: model.supportsReasoning ? 1 : 0,
+                    supports_vision: model.supportsVision ? 1 : 0,
+                    supports_audio_input: model.supportsAudioInput ? 1 : 0,
+                    supports_audio_output: model.supportsAudioOutput ? 1 : 0,
+                    input_modalities_json: JSON.stringify(model.inputModalities),
+                    output_modalities_json: JSON.stringify(model.outputModalities),
+                    prompt_family: model.promptFamily,
                     context_length: model.contextLength,
                     pricing_json: JSON.stringify(model.pricing),
                     raw_json: JSON.stringify(model.raw),

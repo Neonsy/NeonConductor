@@ -1,5 +1,6 @@
 import { providerAuthStore } from '@/app/backend/persistence/stores';
 import { readSecretValue } from '@/app/backend/providers/auth/secretRefs';
+import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
 import type { ResolvedRunAuth } from '@/app/backend/runtime/services/runExecution/types';
 
 function isOauthMethod(method: string): method is 'device_code' | 'oauth_pkce' | 'oauth_device' {
@@ -8,7 +9,7 @@ function isOauthMethod(method: string): method is 'device_code' | 'oauth_pkce' |
 
 export async function resolveRunAuth(input: {
     profileId: string;
-    providerId: 'kilo' | 'openai';
+    providerId: RuntimeProviderId;
 }): Promise<ResolvedRunAuth> {
     const state = await providerAuthStore.getByProfileAndProvider(input.profileId, input.providerId);
     if (!state || state.authMethod === 'none' || state.authState === 'logged_out') {

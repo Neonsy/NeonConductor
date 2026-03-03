@@ -1,85 +1,14 @@
 import { getPersistence } from '@/app/backend/persistence/db';
+import { mapRunRecord } from '@/app/backend/persistence/stores/runStoreMapper';
 import { nowIso } from '@/app/backend/persistence/stores/utils';
 import type { RunRecord } from '@/app/backend/persistence/types';
-import { assertSupportedProviderId } from '@/app/backend/providers/registry';
-import { providerAuthMethods, runStatuses } from '@/app/backend/runtime/contracts';
 import { createEntityId } from '@/app/backend/runtime/contracts';
-import type { EntityId, ProviderAuthMethod, RunStatus, RuntimeProviderId } from '@/app/backend/runtime/contracts';
-
-function isOneOf<T extends string>(value: string, allowed: readonly T[]): value is T {
-    return allowed.some((candidate) => candidate === value);
-}
-
-function parseRunStatus(value: string): RunStatus {
-    if (isOneOf(value, runStatuses)) {
-        return value;
-    }
-
-    throw new Error(`Invalid run status in persistence row: "${value}".`);
-}
-
-function parseAuthMethod(value: string | null): ProviderAuthMethod | 'none' | undefined {
-    if (!value) {
-        return undefined;
-    }
-
-    if (value === 'none') {
-        return 'none';
-    }
-
-    if (isOneOf(value, providerAuthMethods)) {
-        return value;
-    }
-
-    throw new Error(`Invalid run auth method in persistence row: "${value}".`);
-}
-
-function parseProviderId(value: string | null): RuntimeProviderId | undefined {
-    if (!value) {
-        return undefined;
-    }
-
-    return assertSupportedProviderId(value);
-}
-
-function mapRunRecord(row: {
-    id: string;
-    session_id: string;
-    profile_id: string;
-    prompt: string;
-    status: string;
-    provider_id: string | null;
-    model_id: string | null;
-    auth_method: string | null;
-    started_at: string | null;
-    completed_at: string | null;
-    aborted_at: string | null;
-    error_code: string | null;
-    error_message: string | null;
-    created_at: string;
-    updated_at: string;
-}): RunRecord {
-    const providerId = parseProviderId(row.provider_id);
-    const authMethod = parseAuthMethod(row.auth_method);
-
-    return {
-        id: row.id as EntityId<'run'>,
-        sessionId: row.session_id as EntityId<'sess'>,
-        profileId: row.profile_id,
-        prompt: row.prompt,
-        status: parseRunStatus(row.status),
-        ...(providerId ? { providerId } : {}),
-        ...(row.model_id ? { modelId: row.model_id } : {}),
-        ...(authMethod ? { authMethod } : {}),
-        ...(row.started_at ? { startedAt: row.started_at } : {}),
-        ...(row.completed_at ? { completedAt: row.completed_at } : {}),
-        ...(row.aborted_at ? { abortedAt: row.aborted_at } : {}),
-        ...(row.error_code ? { errorCode: row.error_code } : {}),
-        ...(row.error_message ? { errorMessage: row.error_message } : {}),
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
-    };
-}
+import type {
+    ProviderAuthMethod,
+    RunStatus,
+    RuntimeProviderId,
+    RuntimeRunOptions,
+} from '@/app/backend/runtime/contracts';
 
 export interface CreateRunInput {
     profileId: string;
@@ -88,12 +17,29 @@ export interface CreateRunInput {
     providerId: RuntimeProviderId;
     modelId: string;
     authMethod: ProviderAuthMethod | 'none';
+    runtimeOptions: RuntimeRunOptions;
+    cache: {
+        applied: boolean;
+        key?: string;
+        reason?: string;
+    };
+    transport: {
+        selected?: 'responses' | 'chat_completions';
+        degradedReason?: string;
+    };
 }
 
 export interface FinalizeRunInput {
     status: Extract<RunStatus, 'completed' | 'aborted' | 'error'>;
     errorCode?: string;
     errorMessage?: string;
+}
+
+export interface UpdateRunRuntimeMetadataInput {
+    cacheApplied?: boolean;
+    cacheSkipReason?: string;
+    transportSelected?: 'responses' | 'chat_completions';
+    transportDegradedReason?: string;
 }
 
 export class RunStore {
@@ -113,6 +59,16 @@ export class RunStore {
                 provider_id: input.providerId,
                 model_id: input.modelId,
                 auth_method: input.authMethod,
+                reasoning_effort: input.runtimeOptions.reasoning.effort,
+                reasoning_summary: input.runtimeOptions.reasoning.summary,
+                reasoning_include_encrypted: input.runtimeOptions.reasoning.includeEncrypted ? 1 : 0,
+                cache_strategy: input.runtimeOptions.cache.strategy,
+                cache_key: input.cache.key ?? null,
+                cache_applied: input.cache.applied ? 1 : 0,
+                cache_skip_reason: input.cache.reason ?? null,
+                transport_openai_preference: input.runtimeOptions.transport.openai,
+                transport_selected: input.transport.selected ?? null,
+                transport_degraded_reason: input.transport.degradedReason ?? null,
                 started_at: now,
                 completed_at: null,
                 aborted_at: null,
@@ -124,15 +80,12 @@ export class RunStore {
             .execute();
 
         const row = await db.selectFrom('runs').selectAll().where('id', '=', runId).executeTakeFirstOrThrow();
-
         return mapRunRecord(row);
     }
 
     async getById(runId: string): Promise<RunRecord | null> {
         const { db } = getPersistence();
-
         const row = await db.selectFrom('runs').selectAll().where('id', '=', runId).executeTakeFirst();
-
         return row ? mapRunRecord(row) : null;
     }
 
@@ -161,19 +114,54 @@ export class RunStore {
         return rows.map(mapRunRecord);
     }
 
+    async updateRuntimeMetadata(runId: string, input: UpdateRunRuntimeMetadataInput): Promise<RunRecord | null> {
+        const { db } = getPersistence();
+        const now = nowIso();
+
+        const values: {
+            updated_at: string;
+            cache_applied?: 0 | 1;
+            cache_skip_reason?: string | null;
+            transport_selected?: 'responses' | 'chat_completions' | null;
+            transport_degraded_reason?: string | null;
+        } = {
+            updated_at: now,
+        };
+
+        if (input.cacheApplied !== undefined) {
+            values.cache_applied = input.cacheApplied ? 1 : 0;
+        }
+        if (input.cacheSkipReason !== undefined) {
+            values.cache_skip_reason = input.cacheSkipReason;
+        }
+        if (input.transportSelected !== undefined) {
+            values.transport_selected = input.transportSelected;
+        }
+        if (input.transportDegradedReason !== undefined) {
+            values.transport_degraded_reason = input.transportDegradedReason;
+        }
+
+        const row = await db.updateTable('runs').set(values).where('id', '=', runId).returningAll().executeTakeFirst();
+        return row ? mapRunRecord(row) : null;
+    }
+
     async finalize(runId: string, input: FinalizeRunInput): Promise<RunRecord | null> {
         const { db } = getPersistence();
         const now = nowIso();
-        const values = {
-            status: input.status,
-            updated_at: now,
-            completed_at: input.status === 'completed' ? now : null,
-            aborted_at: input.status === 'aborted' ? now : null,
-            error_code: input.errorCode ?? null,
-            error_message: input.errorMessage ?? null,
-        };
 
-        const row = await db.updateTable('runs').set(values).where('id', '=', runId).returningAll().executeTakeFirst();
+        const row = await db
+            .updateTable('runs')
+            .set({
+                status: input.status,
+                updated_at: now,
+                completed_at: input.status === 'completed' ? now : null,
+                aborted_at: input.status === 'aborted' ? now : null,
+                error_code: input.errorCode ?? null,
+                error_message: input.errorMessage ?? null,
+            })
+            .where('id', '=', runId)
+            .returningAll()
+            .executeTakeFirst();
 
         return row ? mapRunRecord(row) : null;
     }

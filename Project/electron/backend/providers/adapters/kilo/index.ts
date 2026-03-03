@@ -1,5 +1,5 @@
-import { syncOpenAICatalog } from '@/app/backend/providers/adapters/openai/catalog';
-import { streamOpenAIRuntime } from '@/app/backend/providers/adapters/openai/runtime';
+import { syncKiloCatalog } from '@/app/backend/providers/adapters/kilo/catalog';
+import { streamKiloRuntime } from '@/app/backend/providers/adapters/kilo/runtime';
 import type {
     ProviderAdapter,
     ProviderCatalogSyncResult,
@@ -7,8 +7,8 @@ import type {
     ProviderRuntimeInput,
 } from '@/app/backend/providers/types';
 
-export class OpenAIProviderAdapter implements ProviderAdapter {
-    readonly id = 'openai' as const;
+export class KiloProviderAdapter implements ProviderAdapter {
+    readonly id = 'kilo' as const;
 
     async syncCatalog(input: {
         profileId: string;
@@ -18,15 +18,12 @@ export class OpenAIProviderAdapter implements ProviderAdapter {
         organizationId?: string;
         force?: boolean;
     }): Promise<ProviderCatalogSyncResult> {
-        return syncOpenAICatalog({
-            authMethod: input.authMethod,
-            ...(input.apiKey ? { apiKey: input.apiKey } : {}),
-        });
+        return syncKiloCatalog(input);
     }
 
     async streamCompletion(input: ProviderRuntimeInput, handlers: ProviderRuntimeHandlers): Promise<void> {
-        await streamOpenAIRuntime(input, handlers);
+        await streamKiloRuntime(input, handlers);
     }
 }
 
-export const openAIProviderAdapter = new OpenAIProviderAdapter();
+export const kiloProviderAdapter = new KiloProviderAdapter();

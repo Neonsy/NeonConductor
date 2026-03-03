@@ -1,13 +1,32 @@
 import type { FirstPartyProviderId } from '@/app/backend/providers/registry';
-import type { ProviderAuthMethod } from '@/app/backend/runtime/contracts';
+import type {
+    ProviderAuthMethod,
+    RuntimeMessagePartType,
+    RuntimeOpenAITransport,
+    RuntimeReasoningEffort,
+    RuntimeReasoningSummary,
+    RuntimeRunOptions,
+} from '@/app/backend/runtime/contracts';
+
+export type ProviderModelModality = 'text' | 'audio' | 'image' | 'video' | 'pdf';
+
+export interface ProviderModelCapabilities {
+    supportsTools: boolean;
+    supportsReasoning: boolean;
+    supportsVision: boolean;
+    supportsAudioInput: boolean;
+    supportsAudioOutput: boolean;
+    inputModalities: ProviderModelModality[];
+    outputModalities: ProviderModelModality[];
+    promptFamily?: string;
+}
 
 export interface ProviderCatalogModel {
     modelId: string;
     label: string;
     upstreamProvider?: string;
     isFree: boolean;
-    supportsTools: boolean;
-    supportsReasoning: boolean;
+    capabilities: ProviderModelCapabilities;
     contextLength?: number;
     pricing: Record<string, unknown>;
     raw: Record<string, unknown>;
@@ -55,19 +74,59 @@ export interface ProviderRuntimeUsage {
 }
 
 export interface ProviderRuntimePart {
-    partType: 'text' | 'tool_call' | 'error' | 'status';
+    partType: RuntimeMessagePartType;
     payload: Record<string, unknown>;
+}
+
+export interface ProviderRuntimeTransportSelection {
+    selected: 'responses' | 'chat_completions';
+    requested: RuntimeOpenAITransport;
+    degraded: boolean;
+    degradedReason?: string;
+}
+
+export interface ProviderRuntimeCacheApplication {
+    strategy: RuntimeRunOptions['cache']['strategy'];
+    key?: string;
+    applied: boolean;
+    reason?: string;
 }
 
 export interface ProviderRuntimeHandlers {
     onPart: (part: ProviderRuntimePart) => Promise<void> | void;
     onUsage?: (usage: ProviderRuntimeUsage) => Promise<void> | void;
+    onTransportSelected?: (selection: ProviderRuntimeTransportSelection) => Promise<void> | void;
+    onCacheResolved?: (result: ProviderRuntimeCacheApplication) => Promise<void> | void;
+}
+
+export interface ProviderRuntimeReasoningOptions {
+    effort: RuntimeReasoningEffort;
+    summary: RuntimeReasoningSummary;
+    includeEncrypted: boolean;
+}
+
+export interface ProviderRuntimeCacheOptions {
+    strategy: RuntimeRunOptions['cache']['strategy'];
+    key?: string;
+}
+
+export interface ProviderRuntimeTransportOptions {
+    openai: RuntimeOpenAITransport;
 }
 
 export interface ProviderRuntimeInput {
     profileId: string;
+    sessionId: string;
+    runId: string;
+    providerId: FirstPartyProviderId;
     modelId: string;
-    prompt: string;
+    promptText: string;
+    runtimeOptions: {
+        reasoning: ProviderRuntimeReasoningOptions;
+        cache: ProviderRuntimeCacheOptions;
+        transport: ProviderRuntimeTransportOptions;
+    };
+    cache: ProviderRuntimeCacheApplication;
     authMethod: ProviderAuthMethod | 'none';
     apiKey?: string;
     accessToken?: string;
