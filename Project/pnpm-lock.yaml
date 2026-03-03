@@ -10,6 +10,9 @@ overrides:
 importers:
     .:
         dependencies:
+            '@radix-ui/react-slot':
+                specifier: ^1.2.4
+                version: 1.2.4(@types/react@19.2.14)(react@19.2.4)
             '@tanstack/ai':
                 specifier: ^0.5.1
                 version: 0.5.1
@@ -46,6 +49,12 @@ importers:
             better-sqlite3:
                 specifier: ^12.6.2
                 version: 12.6.2
+            class-variance-authority:
+                specifier: ^0.7.1
+                version: 0.7.1
+            clsx:
+                specifier: ^2.1.1
+                version: 2.1.1
             electron-store:
                 specifier: ^11.0.2
                 version: 11.0.2
@@ -61,6 +70,9 @@ importers:
             kysely:
                 specifier: ^0.28.11
                 version: 0.28.11
+            lucide-react:
+                specifier: ^0.576.0
+                version: 0.576.0(react@19.2.4)
             mutative:
                 specifier: ^1.3.0
                 version: 1.3.0
@@ -73,6 +85,9 @@ importers:
             react-dom:
                 specifier: ^19.2.4
                 version: 19.2.4(react@19.2.4)
+            tailwind-merge:
+                specifier: ^3.5.0
+                version: 3.5.0
             zustand:
                 specifier: ^5.0.11
                 version: 5.0.11(@types/react@19.2.14)(react@19.2.4)(use-sync-external-store@1.6.0(react@19.2.4))
@@ -1106,6 +1121,30 @@ packages:
                 integrity: sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg==,
             }
         engines: { node: '>=14' }
+
+    '@radix-ui/react-compose-refs@1.1.2':
+        resolution:
+            {
+                integrity: sha512-z4eqJvfiNnFMHIIvXP3CY57y2WJs5g2v3X0zm9mEJkrkNv4rDxu+sg9Jh8EkXyeqBkB7SOcboo9dMVqhyrACIg==,
+            }
+        peerDependencies:
+            '@types/react': '*'
+            react: ^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc
+        peerDependenciesMeta:
+            '@types/react':
+                optional: true
+
+    '@radix-ui/react-slot@1.2.4':
+        resolution:
+            {
+                integrity: sha512-Jl+bCv8HxKnlTLVrcDE8zTMJ09R9/ukw4qBs/oZClOfoQk/cOTbDn+NceXfV7j09YPVQUryJPHurafcSg6EVKA==,
+            }
+        peerDependencies:
+            '@types/react': '*'
+            react: ^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc
+        peerDependenciesMeta:
+            '@types/react':
+                optional: true
 
     '@rolldown/pluginutils@1.0.0-rc.3':
         resolution:
@@ -3004,6 +3043,12 @@ packages:
                 integrity: sha512-77PSwercCZU2Fc4sX94eF8k8Pxte6JAwL4/ICZLFjJLqegs7kCuAsqqj/70NQF6TvDpgFjkubQB2FW2ZZddvQg==,
             }
         engines: { node: '>=8' }
+
+    class-variance-authority@0.7.1:
+        resolution:
+            {
+                integrity: sha512-Ka+9Trutv7G8M6WT6SeiRWz792K5qEqIGEGzXKhAE6xOWAY6pPH8U+9IY3oCMv6kqTmLsv7Xh/2w2RigkePMsg==,
+            }
 
     cli-cursor@3.1.0:
         resolution:
@@ -5095,6 +5140,14 @@ packages:
             }
         engines: { node: '>=10' }
 
+    lucide-react@0.576.0:
+        resolution:
+            {
+                integrity: sha512-koNxU14BXrxUfZQ9cUaP0ES1uyPZKYDjk31FQZB6dQ/x+tXk979sVAn9ppZ/pVeJJyOxVM8j1E+8QEuSc02Vug==,
+            }
+        peerDependencies:
+            react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0
+
     magic-string@0.30.21:
         resolution:
             {
@@ -6596,6 +6649,12 @@ packages:
         peerDependencies:
             tailwindcss: ^4.0.0
 
+    tailwind-merge@3.5.0:
+        resolution:
+            {
+                integrity: sha512-I8K9wewnVDkL1NTGoqWmVEIlUcB9gFriAEkXkfCjX5ib8ezGxtR3xD7iZIxrfArjEsH7F1CHD4RFUtxefdqV/A==,
+            }
+
     tailwindcss@4.2.0:
         resolution:
             {
@@ -7960,6 +8019,19 @@ snapshots:
     '@pkgjs/parseargs@0.11.0':
         optional: true
 
+    '@radix-ui/react-compose-refs@1.1.2(@types/react@19.2.14)(react@19.2.4)':
+        dependencies:
+            react: 19.2.4
+        optionalDependencies:
+            '@types/react': 19.2.14
+
+    '@radix-ui/react-slot@1.2.4(@types/react@19.2.14)(react@19.2.4)':
+        dependencies:
+            '@radix-ui/react-compose-refs': 1.1.2(@types/react@19.2.14)(react@19.2.4)
+            react: 19.2.4
+        optionalDependencies:
+            '@types/react': 19.2.14
+
     '@rolldown/pluginutils@1.0.0-rc.3': {}
 
     '@rollup/rollup-android-arm-eabi@4.57.1':
@@ -9212,6 +9284,10 @@ snapshots:
     ci-info@4.3.1: {}
 
     ci-info@4.4.0: {}
+
+    class-variance-authority@0.7.1:
+        dependencies:
+            clsx: 2.1.1
 
     cli-cursor@3.1.0:
         dependencies:
@@ -10619,6 +10695,10 @@ snapshots:
         dependencies:
             yallist: 4.0.0
 
+    lucide-react@0.576.0(react@19.2.4):
+        dependencies:
+            react: 19.2.4
+
     magic-string@0.30.21:
         dependencies:
             '@jridgewell/sourcemap-codec': 1.5.5
@@ -11495,6 +11575,8 @@ snapshots:
     tailwind-clamp@4.2.1(tailwindcss@4.2.0):
         dependencies:
             tailwindcss: 4.2.0
+
+    tailwind-merge@3.5.0: {}
 
     tailwindcss@4.2.0: {}
 
