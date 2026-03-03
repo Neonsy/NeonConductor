@@ -1,5 +1,7 @@
+import { Copy, Minus, Square, X } from 'lucide-react';
 import { useEffect } from 'react';
 
+import ThemeToggle from '@/web/components/window/themeToggle';
 import { trpc } from '@/web/trpc/client';
 
 import type { MouseEvent as ReactMouseEvent } from 'react';
@@ -86,14 +88,14 @@ export default function TitleBar() {
     }
 
     const windowButtonBase =
-        'inline-flex h-full w-[46px] items-center justify-center border-0 bg-transparent text-white/85 transition-colors hover:bg-white/8 focus-visible:ring-2 focus-visible:ring-[rgba(96,165,250,0.9)] focus-visible:ring-inset focus-visible:outline-none disabled:cursor-default disabled:opacity-50 disabled:hover:bg-transparent';
-    const closeWindowButtonClass = `${windowButtonBase} hover:bg-[#e81123] hover:text-white`;
+        'inline-flex h-full w-[46px] items-center justify-center border-0 bg-transparent text-foreground/70 transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset focus-visible:outline-none disabled:cursor-default disabled:opacity-50 disabled:hover:bg-transparent';
+    const closeWindowButtonClass = `${windowButtonBase} hover:bg-destructive/85 hover:text-destructive-foreground`;
     const macButtonBase =
         'inline-flex h-3 w-3 items-center justify-center rounded-full border-0 p-0 transition-[filter] hover:brightness-95 disabled:cursor-default disabled:opacity-50';
 
     return (
         <header
-            className='relative z-10 grid h-9 grid-cols-[1fr_auto_1fr] items-center border-b border-white/8 bg-[rgba(10,10,15,0.92)] text-white backdrop-blur-sm select-none [-webkit-app-region:drag]'
+            className='border-border bg-background/95 text-foreground relative z-10 grid h-9 grid-cols-[1fr_auto_1fr] items-center border-b backdrop-blur-sm select-none [-webkit-app-region:drag]'
             onDoubleClick={handleHeaderDoubleClick}
             onContextMenu={handleHeaderContextMenu}>
             <div className='flex h-full min-w-0 items-center justify-start gap-2 pl-2.5'>
@@ -137,15 +139,16 @@ export default function TitleBar() {
                 <button
                     type='button'
                     data-no-drag='true'
-                    className='h-6 rounded px-2 text-[12px] font-medium text-white/78 transition-colors [-webkit-app-region:no-drag] hover:bg-white/8 hover:text-white focus-visible:ring-2 focus-visible:ring-[rgba(96,165,250,0.9)] focus-visible:outline-none focus-visible:ring-inset disabled:opacity-55'
+                    className='text-foreground/75 hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring h-7 rounded-md px-2 text-[12px] font-medium transition-colors [-webkit-app-region:no-drag] focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset disabled:opacity-55'
                     onClick={handleHelpMenuClick}
                     disabled={menuControlsDisabled}>
                     Help
                 </button>
+                <ThemeToggle />
             </div>
 
             <div className='flex h-full min-w-0 items-center justify-center text-center'>
-                <span className='pointer-events-none text-[11px] leading-none font-semibold tracking-[0.12em] text-white/75 uppercase'>
+                <span className='text-foreground/70 pointer-events-none text-[11px] leading-none font-semibold tracking-[0.12em] uppercase'>
                     NEONCONDUCTOR
                 </span>
             </div>
@@ -162,7 +165,7 @@ export default function TitleBar() {
                                 minimizeMutation.mutate();
                             }}
                             disabled={controlsDisabled || !canMinimize}>
-                            <MinimizeIcon />
+                            <Minus className='h-3.5 w-3.5' />
                         </button>
                         <button
                             type='button'
@@ -173,7 +176,7 @@ export default function TitleBar() {
                                 toggleMaximizeMutation.mutate();
                             }}
                             disabled={controlsDisabled || !canMaximize}>
-                            {isMaximized ? <RestoreIcon /> : <MaximizeIcon />}
+                            {isMaximized ? <Copy className='h-3.5 w-3.5' /> : <Square className='h-3.5 w-3.5' />}
                         </button>
                         <button
                             type='button'
@@ -184,57 +187,11 @@ export default function TitleBar() {
                                 closeMutation.mutate();
                             }}
                             disabled={controlsDisabled}>
-                            <CloseIcon />
+                            <X className='h-3.5 w-3.5' />
                         </button>
                     </div>
                 ) : null}
             </div>
         </header>
-    );
-}
-
-function MinimizeIcon() {
-    return (
-        <svg
-            viewBox='0 0 16 16'
-            aria-hidden='true'
-            className='h-2.75 w-2.75 fill-none stroke-current stroke-[1.4] [stroke-linecap:round] [stroke-linejoin:round]'>
-            <path d='M3 8.5h10' />
-        </svg>
-    );
-}
-
-function MaximizeIcon() {
-    return (
-        <svg
-            viewBox='0 0 16 16'
-            aria-hidden='true'
-            className='h-2.75 w-2.75 fill-none stroke-current stroke-[1.4] [stroke-linecap:round] [stroke-linejoin:round]'>
-            <rect x='3.5' y='3.5' width='9' height='9' />
-        </svg>
-    );
-}
-
-function RestoreIcon() {
-    return (
-        <svg
-            viewBox='0 0 16 16'
-            aria-hidden='true'
-            className='h-2.75 w-2.75 fill-none stroke-current stroke-[1.4] [stroke-linecap:round] [stroke-linejoin:round]'>
-            <rect x='5.5' y='3.5' width='7' height='7' />
-            <path d='M10.5 5.5v6h-6' />
-            <path d='M3.5 5.5v7h7' />
-        </svg>
-    );
-}
-
-function CloseIcon() {
-    return (
-        <svg
-            viewBox='0 0 16 16'
-            aria-hidden='true'
-            className='h-2.75 w-2.75 fill-none stroke-current stroke-[1.4] [stroke-linecap:round] [stroke-linejoin:round]'>
-            <path d='M4 4l8 8M12 4L4 12' />
-        </svg>
     );
 }

@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 
 import DevTools from '@/web/components/utils/devtools';
 import Providers from '@/web/lib/providers';
+import { initializeThemeClass } from '@/web/lib/theme/theme';
 import { trpcClient } from '@/web/lib/trpcClient';
 import { router } from '@/web/router';
 import '@/web/styles/index.css';
@@ -11,6 +12,7 @@ import '@/web/styles/index.css';
 const isDev = import.meta.env.DEV;
 
 const rootElement = document.getElementById('root');
+initializeThemeClass();
 
 function waitForFirstPaint(): Promise<void> {
     return new Promise((resolve) => {

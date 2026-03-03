@@ -5,95 +5,90 @@
 @plugin '@tailwindcss/forms';
 @plugin 'tailwind-clamp';
 
-@theme {
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+    --background: 0 0% 100%;
+    --foreground: 224 71% 4%;
+    --card: 0 0% 100%;
+    --card-foreground: 224 71% 4%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 224 71% 4%;
+    --primary: 221 83% 53%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 224 71% 4%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 220 14% 93%;
+    --accent-foreground: 224 71% 4%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 220 13% 89%;
+    --input: 220 13% 89%;
+    --ring: 221 83% 53%;
+    --radius: 0.625rem;
+}
+
+.dark {
+    --background: 224 36% 7%;
+    --foreground: 210 40% 98%;
+    --card: 224 33% 10%;
+    --card-foreground: 210 40% 98%;
+    --popover: 224 33% 10%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 217 91% 60%;
+    --primary-foreground: 224 71% 4%;
+    --secondary: 223 27% 16%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 223 27% 16%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 223 24% 20%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 63% 44%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 223 20% 22%;
+    --input: 223 20% 22%;
+    --ring: 217 91% 60%;
+}
+
+@theme inline {
     --font-display: 'Outfit', 'Trebuchet MS', sans-serif;
     --font-body: 'Outfit', 'Trebuchet MS', sans-serif;
     --font-mono: 'Roboto Mono', Consolas, 'Liberation Mono', Menlo, Monaco, monospace;
-
-    --color-charcoal-950: #101112;
-    --color-charcoal-900: #17191b;
-    --color-charcoal-800: #23272c;
-    --color-stone-200: #d3cbc0;
-    --color-stone-100: #ebe4d6;
-    --color-sand-50: #f6f0e4;
-    --color-amber-500: #c48132;
-    --color-amber-400: #d8a05c;
-    --color-steel-500: #4f6f80;
-    --color-moss-500: #617449;
+    --color-background: hsl(var(--background));
+    --color-foreground: hsl(var(--foreground));
+    --color-card: hsl(var(--card));
+    --color-card-foreground: hsl(var(--card-foreground));
+    --color-popover: hsl(var(--popover));
+    --color-popover-foreground: hsl(var(--popover-foreground));
+    --color-primary: hsl(var(--primary));
+    --color-primary-foreground: hsl(var(--primary-foreground));
+    --color-secondary: hsl(var(--secondary));
+    --color-secondary-foreground: hsl(var(--secondary-foreground));
+    --color-muted: hsl(var(--muted));
+    --color-muted-foreground: hsl(var(--muted-foreground));
+    --color-accent: hsl(var(--accent));
+    --color-accent-foreground: hsl(var(--accent-foreground));
+    --color-destructive: hsl(var(--destructive));
+    --color-destructive-foreground: hsl(var(--destructive-foreground));
+    --color-border: hsl(var(--border));
+    --color-input: hsl(var(--input));
+    --color-ring: hsl(var(--ring));
+    --radius-sm: calc(var(--radius) - 4px);
+    --radius-md: calc(var(--radius) - 2px);
+    --radius-lg: var(--radius);
 }
 
 html,
 body,
 #root {
-    min-height: 100%;
+    min-height: 100vh;
 }
 
 body {
     margin: 0;
     font-family: var(--font-body);
-    background: #01030a;
-    color: #e8f1ff;
-}
-
-/* Scrollbar styling */
-::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-}
-
-::-webkit-scrollbar-track {
-    background: var(--color-charcoal-900);
-}
-
-::-webkit-scrollbar-thumb {
-    background: #4d545d;
-    border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-    background: #616b76;
-}
-
-/* Selection styling */
-::selection {
-    background: rgba(96, 217, 255, 0.38);
-    color: #00101a;
-}
-
-@keyframes neon-drift {
-    0%,
-    100% {
-        transform: translate3d(0, 0, 0) scale(1);
-    }
-    50% {
-        transform: translate3d(0.9rem, -1rem, 0) scale(1.03);
-    }
-}
-
-@keyframes neon-pulse {
-    0%,
-    100% {
-        box-shadow:
-            0 36px 96px rgba(2, 7, 18, 0.9),
-            inset 0 0 0 1px rgba(158, 211, 255, 0.18),
-            0 0 42px rgba(38, 166, 255, 0.26),
-            0 0 88px rgba(25, 118, 255, 0.18);
-    }
-    50% {
-        box-shadow:
-            0 44px 108px rgba(2, 10, 24, 0.94),
-            inset 0 0 0 1px rgba(158, 211, 255, 0.24),
-            0 0 56px rgba(42, 198, 255, 0.34),
-            0 0 108px rgba(95, 70, 255, 0.14);
-    }
-}
-
-@keyframes arc-drift {
-    0%,
-    100% {
-        transform: translateX(0);
-    }
-    50% {
-        transform: translateX(2.5%);
-    }
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
 }
