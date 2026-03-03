@@ -109,9 +109,14 @@ describe('persistence bootstrap and durability', () => {
 
         const caller = createCaller();
         const profileId = getDefaultProfileId();
-        const created = await caller.session.create({
+        const thread = await caller.conversation.createThread({
             profileId,
             scope: 'detached',
+            title: 'Durability Thread',
+        });
+        const created = await caller.session.create({
+            profileId,
+            threadId: thread.thread.id as `thr_${string}`,
             kind: 'local',
         });
 

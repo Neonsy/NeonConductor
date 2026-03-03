@@ -26,9 +26,9 @@ export interface ProviderModelsTable {
 export interface SessionsTable {
     id: string;
     profile_id: string;
-    scope: string;
+    conversation_id: string;
+    thread_id: string;
     kind: string;
-    workspace_fingerprint: string | null;
     run_status: string;
     pending_completion_run_id: string | null;
     created_at: string;
@@ -151,6 +151,7 @@ export interface SchemaMigrationsTable {
 
 export interface ConversationsTable {
     id: string;
+    profile_id: string;
     scope: string;
     workspace_fingerprint: string | null;
     title: string;
@@ -160,6 +161,7 @@ export interface ConversationsTable {
 
 export interface ThreadsTable {
     id: string;
+    profile_id: string;
     conversation_id: string;
     title: string;
     created_at: string;
@@ -168,12 +170,14 @@ export interface ThreadsTable {
 
 export interface TagsTable {
     id: string;
+    profile_id: string;
     label: string;
     created_at: string;
     updated_at: string;
 }
 
 export interface ThreadTagsTable {
+    profile_id: string;
     thread_id: string;
     tag_id: string;
     created_at: string;
@@ -181,6 +185,7 @@ export interface ThreadTagsTable {
 
 export interface DiffsTable {
     id: string;
+    profile_id: string;
     session_id: string;
     run_id: string | null;
     summary: string;

@@ -15,6 +15,7 @@ describe('generated migrations', () => {
             '007_p2c_runtime_transport_and_usage.sql',
             '008_p2_5_reasoning_and_cache_controls.sql',
             '009_p2_6_provider_capability_parity.sql',
+            '010_p3b_conversation_graph.sql',
         ]);
     });
 });

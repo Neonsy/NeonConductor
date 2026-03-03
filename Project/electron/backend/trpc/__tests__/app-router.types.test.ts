@@ -10,9 +10,26 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
 
     expectTypeOf<Inputs['session']['create']>().toExtend<{
         profileId: string;
-        scope: 'detached' | 'workspace';
+        threadId: string;
         kind: 'local' | 'worktree' | 'cloud';
+    }>();
+
+    expectTypeOf<Inputs['conversation']['listBuckets']>().toExtend<{
+        profileId: string;
+    }>();
+
+    expectTypeOf<Inputs['conversation']['listThreads']>().toExtend<{
+        profileId: string;
+        scope?: 'detached' | 'workspace';
         workspaceFingerprint?: string;
+        sort?: 'latest' | 'alphabetical';
+    }>();
+
+    expectTypeOf<Inputs['conversation']['createThread']>().toExtend<{
+        profileId: string;
+        scope: 'detached' | 'workspace';
+        workspaceFingerprint?: string;
+        title: string;
     }>();
 
     expectTypeOf<Inputs['session']['startRun']>().toExtend<{

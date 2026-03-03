@@ -14,6 +14,35 @@ function createCaller() {
     return appRouter.createCaller(context);
 }
 
+async function createSessionInScope(
+    caller: ReturnType<typeof createCaller>,
+    profileId: string,
+    input: {
+        scope: 'detached' | 'workspace';
+        workspaceFingerprint?: string;
+        title: string;
+        kind: 'local' | 'worktree' | 'cloud';
+    }
+) {
+    const threadResult = await caller.conversation.createThread({
+        profileId,
+        scope: input.scope,
+        ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
+        title: input.title,
+    });
+
+    const sessionResult = await caller.session.create({
+        profileId,
+        threadId: threadResult.thread.id as EntityId<'thr'>,
+        kind: input.kind,
+    });
+
+    return {
+        thread: threadResult.thread,
+        session: sessionResult.session,
+    };
+}
+
 async function waitForRunStatus(
     caller: ReturnType<typeof createCaller>,
     profileId: string,
@@ -127,9 +156,9 @@ describe('runtime contracts', () => {
         });
         expect(configured.success).toBe(true);
 
-        const created = await caller.session.create({
-            profileId,
+        const created = await createSessionInScope(caller, profileId, {
             scope: 'detached',
+            title: 'Lifecycle Thread',
             kind: 'local',
         });
         const sessionId = created.session.id;
@@ -214,9 +243,9 @@ describe('runtime contracts', () => {
         });
         expect(configured.success).toBe(true);
 
-        const created = await caller.session.create({
-            profileId,
+        const created = await createSessionInScope(caller, profileId, {
             scope: 'detached',
+            title: 'Invalid Runtime Options Thread',
             kind: 'local',
         });
 
@@ -652,9 +681,9 @@ describe('runtime contracts', () => {
         const { sqlite } = getPersistence();
         const now = new Date().toISOString();
 
-        const created = await caller.session.create({
-            profileId,
+        const created = await createSessionInScope(caller, profileId, {
             scope: 'workspace',
+            title: 'Workspace Reset Thread',
             kind: 'local',
             workspaceFingerprint: 'wsf_runtime_contracts',
         });

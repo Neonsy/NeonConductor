@@ -48,19 +48,12 @@ function unique(values: string[]): string[] {
     return [...new Set(values)];
 }
 
-async function listWorkspaceSessionIds(
-    db: Kysely<DatabaseSchema>,
-    target: RuntimeResetInput['target'],
-    workspaceFingerprint?: string
-): Promise<string[]> {
-    let query = db.selectFrom('sessions').select('id');
-
-    if (target === 'workspace') {
-        query = query.where('workspace_fingerprint', '=', workspaceFingerprint ?? '');
-    } else {
-        query = query.where('scope', '=', 'workspace');
+async function listWorkspaceSessionIds(db: Kysely<DatabaseSchema>, conversationIds: string[]): Promise<string[]> {
+    if (conversationIds.length === 0) {
+        return [];
     }
 
+    const query = db.selectFrom('sessions').select('id').where('conversation_id', 'in', conversationIds);
     const rows = await query.execute();
     return rows.map((row) => row.id);
 }
@@ -232,8 +225,8 @@ async function resolveWorkspaceCounts(
     target: 'workspace' | 'workspace_all',
     workspaceFingerprint?: string
 ): Promise<WorkspaceResolvedCounts> {
-    const sessionIds = await listWorkspaceSessionIds(db, target, workspaceFingerprint);
     const conversationIds = await listWorkspaceConversationIds(db, target, workspaceFingerprint);
+    const sessionIds = await listWorkspaceSessionIds(db, conversationIds);
     const threadIds = await listThreadIds(db, conversationIds);
     const runIds = await listRunIds(db, sessionIds);
     const diffIds = await listDiffIds(db, sessionIds);

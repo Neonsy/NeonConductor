@@ -4,6 +4,7 @@
  */
 
 import { router } from '@/app/backend/trpc/init';
+import { conversationRouter } from '@/app/backend/trpc/routers/conversation';
 import { mcpRouter } from '@/app/backend/trpc/routers/mcp';
 import { permissionRouter } from '@/app/backend/trpc/routers/permission';
 import { providerRouter } from '@/app/backend/trpc/routers/provider';
@@ -15,6 +16,7 @@ import { updatesRouter } from '@/app/backend/trpc/routers/updates';
 
 export const appRouter = router({
     runtime: runtimeRouter,
+    conversation: conversationRouter,
     session: sessionRouter,
     provider: providerRouter,
     permission: permissionRouter,

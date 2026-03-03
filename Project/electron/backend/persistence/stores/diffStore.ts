@@ -11,6 +11,7 @@ function createDiffId(): string {
 
 function mapDiffRecord(row: {
     id: string;
+    profile_id: string;
     session_id: string;
     run_id: string | null;
     summary: string;
@@ -20,6 +21,7 @@ function mapDiffRecord(row: {
 }): DiffRecord {
     return {
         id: row.id,
+        profileId: row.profile_id,
         sessionId: row.session_id,
         runId: row.run_id,
         summary: row.summary,
@@ -31,6 +33,7 @@ function mapDiffRecord(row: {
 
 export class DiffStore {
     async create(input: {
+        profileId: string;
         sessionId: EntityId<'sess'>;
         runId: EntityId<'run'> | null;
         summary: string;
@@ -43,6 +46,7 @@ export class DiffStore {
             .insertInto('diffs')
             .values({
                 id: createDiffId(),
+                profile_id: input.profileId,
                 session_id: input.sessionId,
                 run_id: input.runId,
                 summary: input.summary,
@@ -50,17 +54,27 @@ export class DiffStore {
                 created_at: now,
                 updated_at: now,
             })
-            .returning(['id', 'session_id', 'run_id', 'summary', 'payload_json', 'created_at', 'updated_at'])
+            .returning([
+                'id',
+                'profile_id',
+                'session_id',
+                'run_id',
+                'summary',
+                'payload_json',
+                'created_at',
+                'updated_at',
+            ])
             .executeTakeFirstOrThrow();
 
         return mapDiffRecord(inserted);
     }
 
-    async listBySession(sessionId: EntityId<'sess'>): Promise<DiffRecord[]> {
+    async listBySession(profileId: string, sessionId: EntityId<'sess'>): Promise<DiffRecord[]> {
         const { db } = getPersistence();
         const rows = await db
             .selectFrom('diffs')
-            .select(['id', 'session_id', 'run_id', 'summary', 'payload_json', 'created_at', 'updated_at'])
+            .select(['id', 'profile_id', 'session_id', 'run_id', 'summary', 'payload_json', 'created_at', 'updated_at'])
+            .where('profile_id', '=', profileId)
             .where('session_id', '=', sessionId)
             .orderBy('created_at', 'asc')
             .orderBy('id', 'asc')
@@ -69,11 +83,12 @@ export class DiffStore {
         return rows.map(mapDiffRecord);
     }
 
-    async list(): Promise<DiffRecord[]> {
+    async listByProfile(profileId: string): Promise<DiffRecord[]> {
         const { db } = getPersistence();
         const rows = await db
             .selectFrom('diffs')
-            .select(['id', 'session_id', 'run_id', 'summary', 'payload_json', 'created_at', 'updated_at'])
+            .select(['id', 'profile_id', 'session_id', 'run_id', 'summary', 'payload_json', 'created_at', 'updated_at'])
+            .where('profile_id', '=', profileId)
             .orderBy('created_at', 'asc')
             .orderBy('id', 'asc')
             .execute();

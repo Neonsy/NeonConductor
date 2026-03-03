@@ -13,7 +13,7 @@ import { publicProcedure, router } from '@/app/backend/trpc/init';
 
 export const sessionRouter = router({
     create: publicProcedure.input(sessionCreateInputSchema).mutation(async ({ input }) => {
-        const session = await sessionStore.create(input.profileId, input.scope, input.kind, input.workspaceFingerprint);
+        const session = await sessionStore.create(input.profileId, input.threadId, input.kind);
         await runtimeEventLogService.append({
             entityType: 'session',
             entityId: session.id,

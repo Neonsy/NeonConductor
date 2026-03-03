@@ -16,6 +16,7 @@ import {
     sessionStore,
     skillfileStore,
     tagStore,
+    threadStore,
     toolStore,
 } from '@/app/backend/persistence/stores';
 import type { RuntimeSnapshotV1 } from '@/app/backend/persistence/types';
@@ -72,11 +73,14 @@ class RuntimeSnapshotServiceImpl implements RuntimeSnapshotService {
             mcpStore.listServers(),
             providerManagementService.getDefaults(profileId),
             runtimeEventStore.getLastSequence(),
-            conversationStore.listConversations(),
-            conversationStore.listThreads(),
-            tagStore.list(),
-            tagStore.listThreadTags(),
-            diffStore.list(),
+            conversationStore.listBuckets(profileId),
+            threadStore.list({
+                profileId,
+                sort: 'latest',
+            }),
+            tagStore.listByProfile(profileId),
+            tagStore.listThreadTagsByProfile(profileId),
+            diffStore.listByProfile(profileId),
             modeStore.listByProfile(profileId),
             rulesetStore.listByProfile(profileId),
             skillfileStore.listByProfile(profileId),

@@ -22,9 +22,9 @@ import type {
 export interface SessionSummaryRecord {
     id: EntityId<'sess'>;
     profileId: string;
-    scope: 'detached' | 'workspace';
+    conversationId: string;
+    threadId: string;
     kind: 'local' | 'worktree' | 'cloud';
-    workspaceFingerprint?: string;
     runStatus: RunStatus;
     turnCount: number;
     createdAt: string;
@@ -147,6 +147,7 @@ export interface RuntimeEventRecordV1 {
 
 export interface ConversationRecord {
     id: string;
+    profileId: string;
     scope: 'detached' | 'workspace';
     workspaceFingerprint?: string;
     title: string;
@@ -156,20 +157,30 @@ export interface ConversationRecord {
 
 export interface ThreadRecord {
     id: string;
+    profileId: string;
     conversationId: string;
     title: string;
     createdAt: string;
     updatedAt: string;
 }
 
+export interface ThreadListRecord extends ThreadRecord {
+    scope: 'detached' | 'workspace';
+    workspaceFingerprint?: string;
+    sessionCount: number;
+    latestSessionUpdatedAt?: string;
+}
+
 export interface TagRecord {
     id: string;
+    profileId: string;
     label: string;
     createdAt: string;
     updatedAt: string;
 }
 
 export interface ThreadTagRecord {
+    profileId: string;
     threadId: string;
     tagId: string;
     createdAt: string;
@@ -177,6 +188,7 @@ export interface ThreadTagRecord {
 
 export interface DiffRecord {
     id: string;
+    profileId: string;
     sessionId: string;
     runId: string | null;
     summary: string;

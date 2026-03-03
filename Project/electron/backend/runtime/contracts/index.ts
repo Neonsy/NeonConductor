@@ -31,6 +31,9 @@ export type ConversationScope = (typeof conversationScopes)[number];
 export const sessionKinds = ['local', 'worktree', 'cloud'] as const;
 export type SessionKind = (typeof sessionKinds)[number];
 
+export const conversationThreadSorts = ['latest', 'alphabetical'] as const;
+export type ConversationThreadSort = (typeof conversationThreadSorts)[number];
+
 export const topLevelTabs = ['chat', 'agent', 'orchestrator'] as const;
 export type TopLevelTab = (typeof topLevelTabs)[number];
 
@@ -191,9 +194,8 @@ export interface ProfileInput {
 }
 
 export interface SessionCreateInput extends ProfileInput {
-    scope: ConversationScope;
+    threadId: EntityId<'thr'>;
     kind: SessionKind;
-    workspaceFingerprint?: string;
 }
 
 export interface SessionByIdInput extends ProfileInput {
@@ -232,6 +234,36 @@ export type SessionListRunsInput = SessionByIdInput;
 
 export interface SessionListMessagesInput extends SessionByIdInput {
     runId?: EntityId<'run'>;
+}
+
+export type ConversationListBucketsInput = ProfileInput;
+
+export interface ConversationListThreadsInput extends ProfileInput {
+    scope?: ConversationScope;
+    workspaceFingerprint?: string;
+    sort?: ConversationThreadSort;
+}
+
+export interface ConversationCreateThreadInput extends ProfileInput {
+    scope: ConversationScope;
+    workspaceFingerprint?: string;
+    title: string;
+}
+
+export interface ConversationRenameThreadInput extends ProfileInput {
+    threadId: EntityId<'thr'>;
+    title: string;
+}
+
+export type ConversationListTagsInput = ProfileInput;
+
+export interface ConversationUpsertTagInput extends ProfileInput {
+    label: string;
+}
+
+export interface ConversationSetThreadTagsInput extends ProfileInput {
+    threadId: EntityId<'thr'>;
+    tagIds: string[];
 }
 
 export interface ProviderSetDefaultInput extends ProfileInput {
@@ -434,6 +466,14 @@ function readOptionalNumber(value: unknown, field: string): number | undefined {
     return value;
 }
 
+function readStringArray(value: unknown, field: string): string[] {
+    if (!Array.isArray(value)) {
+        throw new Error(`Invalid "${field}": expected array of strings.`);
+    }
+
+    return value.map((item, index) => readString(item, `${field}[${String(index)}]`));
+}
+
 function readObject(value: unknown, field: string): Record<string, unknown> {
     if (!isRecord(value)) {
         throw new Error(`Invalid "${field}": expected object.`);
@@ -508,24 +548,10 @@ export function parseProfileInput(input: unknown): ProfileInput {
 export function parseSessionCreateInput(input: unknown): SessionCreateInput {
     const source = readObject(input, 'input');
 
-    const profileId = readProfileId(source);
-    const scope = readEnumValue(source.scope, 'scope', conversationScopes);
-    const kind = readEnumValue(source.kind, 'kind', sessionKinds);
-    const workspaceFingerprint = readOptionalString(source.workspaceFingerprint, 'workspaceFingerprint');
-
-    if (scope === 'workspace' && !workspaceFingerprint) {
-        throw new Error('Invalid "workspaceFingerprint": required when scope is "workspace".');
-    }
-
-    if (scope !== 'workspace' && workspaceFingerprint) {
-        throw new Error('Invalid "workspaceFingerprint": allowed only when scope is "workspace".');
-    }
-
     return {
-        profileId,
-        scope,
-        kind,
-        ...(workspaceFingerprint ? { workspaceFingerprint } : {}),
+        profileId: readProfileId(source),
+        threadId: readEntityId(source.threadId, 'threadId', 'thr'),
+        kind: readEnumValue(source.kind, 'kind', sessionKinds),
     };
 }
 
@@ -566,6 +592,82 @@ export function parseSessionListMessagesInput(input: unknown): SessionListMessag
         profileId: readProfileId(source),
         sessionId: readEntityId(source.sessionId, 'sessionId', 'sess'),
         ...(runId ? { runId } : {}),
+    };
+}
+
+export function parseConversationListBucketsInput(input: unknown): ConversationListBucketsInput {
+    return parseProfileInput(input);
+}
+
+export function parseConversationListThreadsInput(input: unknown): ConversationListThreadsInput {
+    const source = readObject(input, 'input');
+    const scope = source.scope !== undefined ? readEnumValue(source.scope, 'scope', conversationScopes) : undefined;
+    const workspaceFingerprint = readOptionalString(source.workspaceFingerprint, 'workspaceFingerprint');
+
+    if (workspaceFingerprint && scope !== 'workspace') {
+        throw new Error('Invalid "workspaceFingerprint": allowed only when scope is "workspace".');
+    }
+
+    return {
+        profileId: readProfileId(source),
+        ...(scope ? { scope } : {}),
+        ...(workspaceFingerprint ? { workspaceFingerprint } : {}),
+        ...(source.sort !== undefined ? { sort: readEnumValue(source.sort, 'sort', conversationThreadSorts) } : {}),
+    };
+}
+
+export function parseConversationCreateThreadInput(input: unknown): ConversationCreateThreadInput {
+    const source = readObject(input, 'input');
+    const scope = readEnumValue(source.scope, 'scope', conversationScopes);
+    const workspaceFingerprint = readOptionalString(source.workspaceFingerprint, 'workspaceFingerprint');
+
+    if (scope === 'workspace' && !workspaceFingerprint) {
+        throw new Error('Invalid "workspaceFingerprint": required when scope is "workspace".');
+    }
+
+    if (scope !== 'workspace' && workspaceFingerprint) {
+        throw new Error('Invalid "workspaceFingerprint": allowed only when scope is "workspace".');
+    }
+
+    return {
+        profileId: readProfileId(source),
+        scope,
+        ...(workspaceFingerprint ? { workspaceFingerprint } : {}),
+        title: readString(source.title, 'title'),
+    };
+}
+
+export function parseConversationRenameThreadInput(input: unknown): ConversationRenameThreadInput {
+    const source = readObject(input, 'input');
+
+    return {
+        profileId: readProfileId(source),
+        threadId: readEntityId(source.threadId, 'threadId', 'thr'),
+        title: readString(source.title, 'title'),
+    };
+}
+
+export function parseConversationListTagsInput(input: unknown): ConversationListTagsInput {
+    return parseProfileInput(input);
+}
+
+export function parseConversationUpsertTagInput(input: unknown): ConversationUpsertTagInput {
+    const source = readObject(input, 'input');
+
+    return {
+        profileId: readProfileId(source),
+        label: readString(source.label, 'label'),
+    };
+}
+
+export function parseConversationSetThreadTagsInput(input: unknown): ConversationSetThreadTagsInput {
+    const source = readObject(input, 'input');
+    const tagIds = readStringArray(source.tagIds, 'tagIds');
+
+    return {
+        profileId: readProfileId(source),
+        threadId: readEntityId(source.threadId, 'threadId', 'thr'),
+        tagIds,
     };
 }
 
@@ -790,6 +892,13 @@ export const sessionByIdInputSchema = createParser(parseSessionByIdInput);
 export const sessionStartRunInputSchema = createParser(parseSessionStartRunInput);
 export const sessionListRunsInputSchema = createParser(parseSessionListRunsInput);
 export const sessionListMessagesInputSchema = createParser(parseSessionListMessagesInput);
+export const conversationListBucketsInputSchema = createParser(parseConversationListBucketsInput);
+export const conversationListThreadsInputSchema = createParser(parseConversationListThreadsInput);
+export const conversationCreateThreadInputSchema = createParser(parseConversationCreateThreadInput);
+export const conversationRenameThreadInputSchema = createParser(parseConversationRenameThreadInput);
+export const conversationListTagsInputSchema = createParser(parseConversationListTagsInput);
+export const conversationUpsertTagInputSchema = createParser(parseConversationUpsertTagInput);
+export const conversationSetThreadTagsInputSchema = createParser(parseConversationSetThreadTagsInput);
 export const providerSetDefaultInputSchema = createParser(parseProviderSetDefaultInput);
 export const providerListProvidersInputSchema = createParser(parseProviderListProvidersInput);
 export const providerListModelsInputSchema = createParser(parseProviderListModelsInput);

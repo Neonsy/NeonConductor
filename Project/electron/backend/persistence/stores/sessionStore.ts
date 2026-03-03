@@ -1,9 +1,10 @@
 import { getPersistence } from '@/app/backend/persistence/db';
 import type { RunsTable, SessionsTable } from '@/app/backend/persistence/schema';
+import { threadStore } from '@/app/backend/persistence/stores/threadStore';
 import { nowIso } from '@/app/backend/persistence/stores/utils';
 import type { SessionSummaryRecord } from '@/app/backend/persistence/types';
 import { createEntityId, runStatuses } from '@/app/backend/runtime/contracts';
-import type { ConversationScope, EntityId, RunStatus, SessionKind } from '@/app/backend/runtime/contracts';
+import type { EntityId, RunStatus, SessionKind } from '@/app/backend/runtime/contracts';
 
 import type { Selectable } from 'kysely';
 
@@ -26,9 +27,9 @@ function mapSessionSummary(row: SessionRow, turnCount: number): SessionSummaryRe
     return {
         id: row.id as EntityId<'sess'>,
         profileId: row.profile_id,
-        scope: row.scope as ConversationScope,
+        conversationId: row.conversation_id,
+        threadId: row.thread_id,
         kind: row.kind as SessionKind,
-        ...(row.workspace_fingerprint ? { workspaceFingerprint: row.workspace_fingerprint } : {}),
         runStatus: parseRunStatus(row.run_status),
         turnCount,
         createdAt: row.created_at,
@@ -86,31 +87,27 @@ export class SessionStore {
         return row ?? null;
     }
 
-    async create(
-        profileId: string,
-        scope: ConversationScope,
-        kind: SessionKind,
-        workspaceFingerprint?: string
-    ): Promise<SessionSummaryRecord> {
-        if (scope === 'workspace' && !workspaceFingerprint) {
-            throw new Error('workspaceFingerprint is required when creating workspace sessions.');
-        }
-
-        if (scope !== 'workspace' && workspaceFingerprint) {
-            throw new Error('workspaceFingerprint is allowed only for workspace sessions.');
-        }
-
+    async create(profileId: string, threadId: string, kind: SessionKind): Promise<SessionSummaryRecord> {
         const { db } = getPersistence();
         const now = nowIso();
+        const thread = await db
+            .selectFrom('threads')
+            .select(['id', 'conversation_id'])
+            .where('id', '=', threadId)
+            .where('profile_id', '=', profileId)
+            .executeTakeFirst();
+        if (!thread) {
+            throw new Error(`Thread "${threadId}" does not exist for profile "${profileId}".`);
+        }
 
         const inserted = await db
             .insertInto('sessions')
             .values({
                 id: createEntityId('sess'),
                 profile_id: profileId,
-                scope,
+                conversation_id: thread.conversation_id,
+                thread_id: thread.id,
                 kind,
-                workspace_fingerprint: workspaceFingerprint ?? null,
                 run_status: 'idle',
                 pending_completion_run_id: null,
                 created_at: now,
@@ -119,6 +116,7 @@ export class SessionStore {
             .returningAll()
             .executeTakeFirstOrThrow();
 
+        await threadStore.touchByThread(profileId, thread.id);
         return mapSessionSummary(inserted, 0);
     }
 
@@ -167,7 +165,7 @@ export class SessionStore {
 
     async markRunPending(profileId: string, sessionId: string, runId: string): Promise<void> {
         const { db } = getPersistence();
-        await db
+        const updated = await db
             .updateTable('sessions')
             .set({
                 run_status: 'running',
@@ -176,7 +174,13 @@ export class SessionStore {
             })
             .where('id', '=', sessionId)
             .where('profile_id', '=', profileId)
+            .returning(['thread_id'])
             .execute();
+
+        const threadId = updated.at(0)?.thread_id;
+        if (threadId) {
+            await threadStore.touchByThread(profileId, threadId);
+        }
     }
 
     async markRunTerminal(
@@ -185,7 +189,7 @@ export class SessionStore {
         status: Extract<RunStatus, 'completed' | 'aborted' | 'error'>
     ): Promise<void> {
         const { db } = getPersistence();
-        await db
+        const updated = await db
             .updateTable('sessions')
             .set({
                 run_status: status,
@@ -194,12 +198,18 @@ export class SessionStore {
             })
             .where('id', '=', sessionId)
             .where('profile_id', '=', profileId)
+            .returning(['thread_id'])
             .execute();
+
+        const threadId = updated.at(0)?.thread_id;
+        if (threadId) {
+            await threadStore.touchByThread(profileId, threadId);
+        }
     }
 
     async clearPendingRun(profileId: string, sessionId: string): Promise<void> {
         const { db } = getPersistence();
-        await db
+        const updated = await db
             .updateTable('sessions')
             .set({
                 pending_completion_run_id: null,
@@ -207,7 +217,13 @@ export class SessionStore {
             })
             .where('id', '=', sessionId)
             .where('profile_id', '=', profileId)
+            .returning(['thread_id'])
             .execute();
+
+        const threadId = updated.at(0)?.thread_id;
+        if (threadId) {
+            await threadStore.touchByThread(profileId, threadId);
+        }
     }
 
     async revert(
