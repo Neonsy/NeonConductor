@@ -45,12 +45,17 @@ interface CachedFeedConfig {
     feedBaseUrl: string;
 }
 
+interface ActiveUpdateFlow {
+    source: 'switch' | 'manual';
+    channel: UpdateChannel;
+}
+
 const DEFAULT_CHANNEL: UpdateChannel = 'stable';
 
 let mainWindow: BrowserWindow | null = null;
 let initialized = false;
 let currentChannel: UpdateChannel = DEFAULT_CHANNEL;
-let activeSwitch: { channel: UpdateChannel } | null = null;
+let activeUpdateFlow: ActiveUpdateFlow | null = null;
 let resetStatusTimer: NodeJS.Timeout | null = null;
 let channelStore: Store<{ channel?: UpdateChannel }> | null = null;
 let manualCheckRequested = false;
@@ -217,7 +222,10 @@ async function checkForUpdatesForSelectedChannel(
 }
 
 function startSwitchFlow(channel: UpdateChannel, options: { feedConfigured?: boolean } = {}): void {
-    activeSwitch = { channel };
+    activeUpdateFlow = {
+        source: 'switch',
+        channel,
+    };
     updateSwitchStatus({
         phase: 'checking',
         channel,
@@ -235,7 +243,7 @@ function startSwitchFlow(channel: UpdateChannel, options: { feedConfigured?: boo
 
     void checkPromise.catch((error: unknown) => {
         console.error('[updater] Failed to check for updates after channel switch:', error);
-        activeSwitch = null;
+        activeUpdateFlow = null;
         updateSwitchStatus({
             phase: 'error',
             percent: null,
@@ -271,7 +279,25 @@ export async function checkForUpdatesManually(): Promise<{ started: boolean; mes
         };
     }
 
+    if (activeUpdateFlow) {
+        return {
+            started: false,
+            message: 'An update action is already in progress.',
+        };
+    }
+
     manualCheckRequested = true;
+    activeUpdateFlow = {
+        source: 'manual',
+        channel: currentChannel,
+    };
+    updateSwitchStatus({
+        phase: 'checking',
+        channel: currentChannel,
+        percent: 0,
+        message: 'Checking for updates in the selected channel...',
+        canInteract: false,
+    });
 
     try {
         await checkForUpdatesForSelectedChannel(currentChannel, {
@@ -283,8 +309,16 @@ export async function checkForUpdatesManually(): Promise<{ started: boolean; mes
             message: 'Checking for updates in the selected channel...',
         };
     } catch (error) {
+        activeUpdateFlow = null;
         manualCheckRequested = false;
         console.error('[updater] Manual update check failed:', error);
+        updateSwitchStatus({
+            phase: 'error',
+            percent: null,
+            message: 'Failed to check for updates in the selected channel.',
+            canInteract: true,
+        });
+        scheduleStatusReset(1200);
 
         const window = getWindow();
         if (window) {
@@ -329,44 +363,9 @@ export async function switchChannel(channel: UpdateChannel): Promise<SwitchChann
         phase: 'warning',
         channel,
         percent: null,
-        message: 'Confirming channel switch...',
-        canInteract: true,
+        message: 'Switching channel...',
+        canInteract: false,
     });
-
-    let confirmed = true;
-
-    if (window) {
-        const { response } = await dialog.showMessageBox(window, {
-            type: 'warning',
-            title: 'Switch Update Channel',
-            message: `Switch updates to ${channel}?`,
-            detail: 'Switching channels may apply newer or older builds. This can cause compatibility issues with in-progress features.',
-            buttons: ['Switch Channel', 'Cancel'],
-            defaultId: 0,
-            cancelId: 1,
-            noLink: true,
-        });
-
-        confirmed = response === 0;
-    }
-
-    if (!confirmed) {
-        updateSwitchStatus({
-            phase: 'idle',
-            channel: currentChannel,
-            percent: null,
-            message: '',
-            canInteract: true,
-        });
-
-        return {
-            channel: currentChannel,
-            changed: false,
-            cancelled: true,
-            checkStarted: false,
-            message: 'Channel switch was cancelled.',
-        };
-    }
 
     try {
         await configureFeedForChannel(channel, {
@@ -449,7 +448,7 @@ export function initAutoUpdater(): void {
     autoUpdater.autoInstallOnAppQuit = true;
 
     autoUpdater.on('checking-for-update', () => {
-        if (!activeSwitch) {
+        if (!activeUpdateFlow) {
             return;
         }
 
@@ -466,7 +465,7 @@ export function initAutoUpdater(): void {
             manualCheckRequested = false;
         }
 
-        if (!activeSwitch) {
+        if (!activeUpdateFlow) {
             return;
         }
 
@@ -481,7 +480,7 @@ export function initAutoUpdater(): void {
     autoUpdater.on('download-progress', (progress: ProgressInfo) => {
         getWindow()?.setProgressBar(progress.percent / 100);
 
-        if (!activeSwitch) {
+        if (!activeUpdateFlow) {
             return;
         }
 
@@ -498,7 +497,7 @@ export function initAutoUpdater(): void {
     autoUpdater.on('update-not-available', () => {
         getWindow()?.setProgressBar(-1);
 
-        if (!activeSwitch) {
+        if (!activeUpdateFlow) {
             if (manualCheckRequested) {
                 manualCheckRequested = false;
                 const window = getWindow();
@@ -513,23 +512,30 @@ export function initAutoUpdater(): void {
             return;
         }
 
-        const switchedChannel = activeSwitch.channel;
-        activeSwitch = null;
+        const flow = activeUpdateFlow;
+        activeUpdateFlow = null;
+        manualCheckRequested = false;
 
         updateSwitchStatus({
             phase: 'no_update',
-            channel: switchedChannel,
+            channel: flow.channel,
             percent: null,
             message: 'No update is available in the selected channel right now.',
             canInteract: true,
         });
 
         const window = getWindow();
-        if (window) {
+        if (window && flow.source === 'switch') {
             void dialog.showMessageBox(window, {
                 type: 'info',
                 title: 'Channel Updated',
                 message: 'No update is available in the selected channel right now.',
+            });
+        } else if (window && flow.source === 'manual') {
+            void dialog.showMessageBox(window, {
+                type: 'info',
+                title: 'No Updates Available',
+                message: 'You are already on the latest build for the selected channel.',
             });
         }
 
@@ -540,15 +546,15 @@ export function initAutoUpdater(): void {
         getWindow()?.setProgressBar(-1);
         manualCheckRequested = false;
 
-        if (activeSwitch) {
-            const switchedChannel = activeSwitch.channel;
-            activeSwitch = null;
+        if (activeUpdateFlow) {
+            const flow = activeUpdateFlow;
+            activeUpdateFlow = null;
 
             updateSwitchStatus({
                 phase: 'downloaded',
-                channel: switchedChannel,
+                channel: flow.channel,
                 percent: 100,
-                message: 'Preparing restart...',
+                message: flow.source === 'switch' ? 'Preparing restart...' : 'Update downloaded. Ready to restart.',
                 canInteract: false,
             });
 
@@ -558,31 +564,59 @@ export function initAutoUpdater(): void {
                 return;
             }
 
-            void dialog
-                .showMessageBox(window, {
-                    type: 'info',
-                    title: 'Channel Switch Ready',
-                    message: 'In order to complete the switch, the app needs to be restarted.',
-                    buttons: ['Restart', 'Close'],
-                    defaultId: 0,
-                    cancelId: 1,
-                    noLink: true,
-                })
-                .then(({ response }) => {
-                    if (response === 0) {
-                        app.removeAllListeners('window-all-closed');
-                        autoUpdater.quitAndInstall(true, true);
-                        return;
-                    }
+            if (flow.source === 'switch') {
+                void dialog
+                    .showMessageBox(window, {
+                        type: 'info',
+                        title: 'Channel Switch Ready',
+                        message: 'In order to complete the switch, the app needs to be restarted.',
+                        buttons: ['Restart', 'Close'],
+                        defaultId: 0,
+                        cancelId: 1,
+                        noLink: true,
+                    })
+                    .then(({ response }) => {
+                        if (response === 0) {
+                            app.removeAllListeners('window-all-closed');
+                            autoUpdater.quitAndInstall(true, true);
+                            return;
+                        }
 
-                    updateSwitchStatus({
-                        phase: 'idle',
-                        channel: currentChannel,
-                        percent: null,
-                        message: '',
-                        canInteract: true,
+                        updateSwitchStatus({
+                            phase: 'idle',
+                            channel: currentChannel,
+                            percent: null,
+                            message: '',
+                            canInteract: true,
+                        });
                     });
-                });
+            } else {
+                void dialog
+                    .showMessageBox(window, {
+                        type: 'info',
+                        title: 'Update Ready',
+                        message: 'A new version has been downloaded.',
+                        detail: 'Would you like to restart now to install the update, or install it when you quit?',
+                        buttons: ['Restart Now', 'Later'],
+                        defaultId: 0,
+                        cancelId: 1,
+                    })
+                    .then(({ response }) => {
+                        if (response === 0) {
+                            app.removeAllListeners('window-all-closed');
+                            autoUpdater.quitAndInstall(true, true);
+                            return;
+                        }
+
+                        updateSwitchStatus({
+                            phase: 'idle',
+                            channel: currentChannel,
+                            percent: null,
+                            message: '',
+                            canInteract: true,
+                        });
+                    });
+            }
 
             return;
         }
@@ -612,7 +646,7 @@ export function initAutoUpdater(): void {
         console.error('Auto-updater error:', error);
         getWindow()?.setProgressBar(-1);
 
-        if (!activeSwitch) {
+        if (!activeUpdateFlow) {
             if (manualCheckRequested) {
                 manualCheckRequested = false;
                 const window = getWindow();
@@ -627,22 +661,33 @@ export function initAutoUpdater(): void {
             return;
         }
 
-        activeSwitch = null;
+        const flow = activeUpdateFlow;
+        activeUpdateFlow = null;
+        manualCheckRequested = false;
 
         updateSwitchStatus({
             phase: 'error',
             percent: null,
-            message: 'Update failed while switching channels.',
+            message:
+                flow.source === 'switch'
+                    ? 'Update failed while switching channels.'
+                    : 'Update check failed while downloading the selected channel build.',
             canInteract: true,
         });
 
         const window = getWindow();
-        if (window) {
+        if (window && flow.source === 'switch') {
             void dialog.showMessageBox(window, {
                 type: 'error',
                 title: 'Channel Switch Failed',
                 message:
                     'The channel changed, but downloading an update failed. You can retry from the selected channel.',
+            });
+        } else if (window && flow.source === 'manual') {
+            void dialog.showMessageBox(window, {
+                type: 'error',
+                title: 'Update Check Failed',
+                message: 'An update was found, but downloading it failed. Please retry.',
             });
         }
 

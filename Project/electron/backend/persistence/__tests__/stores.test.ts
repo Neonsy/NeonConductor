@@ -9,6 +9,7 @@ import {
     mcpStore,
     modeStore,
     permissionStore,
+    providerCatalogStore,
     providerStore,
     runStore,
     secretReferenceStore,
@@ -116,6 +117,39 @@ describe('persistence stores', () => {
         await providerStore.setDefaults(profileId, 'openai', 'openai/gpt-5');
         const defaults = await providerStore.getDefaults(profileId);
         expect(defaults.providerId).toBe('openai');
+    });
+
+    it('applies Kilo-only ranking policy when ranking metadata exists', async () => {
+        const profileId = getDefaultProfileId();
+        await providerCatalogStore.replaceModels(profileId, 'kilo', [
+            {
+                modelId: 'kilo/model_fast',
+                label: 'Kilo Fast',
+                source: 'test',
+                pricing: { price: 0.3 },
+                raw: {
+                    latency_ms: 180,
+                    tps: 55,
+                },
+            },
+            {
+                modelId: 'kilo/model_balanced',
+                label: 'Kilo Balanced',
+                source: 'test',
+                pricing: { price: 0.1 },
+                raw: {
+                    latency_ms: 120,
+                    tps: 40,
+                },
+            },
+        ]);
+
+        const rankedKiloModels = await providerStore.listModels(profileId, 'kilo');
+        expect(rankedKiloModels[0]?.id).toBe('kilo/model_balanced');
+        expect(rankedKiloModels[1]?.id).toBe('kilo/model_fast');
+        expect(rankedKiloModels[0]?.price).toBe(0.1);
+        expect(rankedKiloModels[0]?.latency).toBe(120);
+        expect(rankedKiloModels[0]?.tps).toBe(40);
     });
 
     it('supports mcp and tool seed stores', async () => {

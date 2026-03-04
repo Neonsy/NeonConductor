@@ -14,6 +14,10 @@ function createCaller() {
     return appRouter.createCaller(context);
 }
 
+function isEntityId<P extends string>(value: string, prefix: P): value is `${P}_${string}` {
+    return value.startsWith(`${prefix}_`) && value.length > prefix.length + 1;
+}
+
 async function createSessionInScope(
     caller: ReturnType<typeof createCaller>,
     profileId: string,
@@ -33,7 +37,12 @@ async function createSessionInScope(
 
     const sessionResult = await caller.session.create({
         profileId,
-        threadId: threadResult.thread.id as EntityId<'thr'>,
+        threadId: (() => {
+            if (!isEntityId(threadResult.thread.id, 'thr')) {
+                throw new Error('Expected thread id with "thr_" prefix.');
+            }
+            return threadResult.thread.id;
+        })(),
         kind: input.kind,
     });
 
@@ -91,6 +100,8 @@ describe('runtime contracts', () => {
         const snapshot = await caller.runtime.getSnapshot({ profileId });
         const sessions = await caller.session.list({ profileId });
         const providers = await caller.provider.listProviders({ profileId });
+        const modes = await caller.mode.list({ profileId, topLevelTab: 'agent' });
+        const activeMode = await caller.mode.getActive({ profileId, topLevelTab: 'agent' });
         const pendingPermissions = await caller.permission.listPending();
         const tools = await caller.tool.list();
         const mcpServers = await caller.mcp.listServers();
@@ -109,6 +120,8 @@ describe('runtime contracts', () => {
         expect(snapshot.providerAuthStates.length).toBeGreaterThan(0);
         expect(snapshot.secretReferences).toEqual([]);
         expect(providers.providers.length).toBeGreaterThan(0);
+        expect(modes.modes.some((mode) => mode.modeKey === 'code')).toBe(true);
+        expect(activeMode.activeMode.modeKey).toBe('code');
         expect(pendingPermissions.requests).toEqual([]);
         expect(tools.tools.length).toBeGreaterThan(0);
         expect(mcpServers.servers.length).toBeGreaterThan(0);
@@ -174,6 +187,8 @@ describe('runtime contracts', () => {
             profileId,
             sessionId,
             prompt: 'First prompt',
+            topLevelTab: 'chat',
+            modeKey: 'chat',
             runtimeOptions: defaultRuntimeOptions,
             providerId: 'openai',
             modelId: 'openai/gpt-5',
@@ -204,6 +219,8 @@ describe('runtime contracts', () => {
             profileId,
             sessionId,
             prompt: 'Second prompt',
+            topLevelTab: 'chat',
+            modeKey: 'chat',
             runtimeOptions: defaultRuntimeOptions,
             providerId: 'openai',
             modelId: 'openai/gpt-5',
@@ -234,6 +251,140 @@ describe('runtime contracts', () => {
         expect(reverted.session.runStatus).toBe('completed');
     });
 
+    it('enforces planning-only mode and allows switching active mode', async () => {
+        const caller = createCaller();
+
+        const created = await createSessionInScope(caller, profileId, {
+            scope: 'detached',
+            title: 'Mode Enforcement Thread',
+            kind: 'local',
+        });
+
+        await expect(
+            caller.session.startRun({
+                profileId,
+                sessionId: created.session.id,
+                prompt: 'Should be blocked in plan mode',
+                topLevelTab: 'agent',
+                modeKey: 'plan',
+                runtimeOptions: defaultRuntimeOptions,
+                providerId: 'openai',
+                modelId: 'openai/gpt-5',
+            })
+        ).rejects.toThrow('planning-only');
+
+        const setActive = await caller.mode.setActive({
+            profileId,
+            topLevelTab: 'agent',
+            modeKey: 'debug',
+        });
+        expect(setActive.updated).toBe(true);
+        if (!setActive.updated) {
+            throw new Error('Expected mode update.');
+        }
+        expect(setActive.mode.modeKey).toBe('debug');
+
+        const active = await caller.mode.getActive({
+            profileId,
+            topLevelTab: 'agent',
+        });
+        expect(active.activeMode.modeKey).toBe('debug');
+    });
+
+    it('rejects invalid mode/tab combinations and missing execution context', async () => {
+        const caller = createCaller();
+        const created = await createSessionInScope(caller, profileId, {
+            scope: 'detached',
+            title: 'Invalid mode context thread',
+            kind: 'local',
+        });
+
+        await expect(
+            caller.session.startRun({
+                profileId,
+                sessionId: created.session.id,
+                prompt: 'Should fail due to tab/mode mismatch',
+                topLevelTab: 'chat',
+                modeKey: 'code',
+                runtimeOptions: defaultRuntimeOptions,
+                providerId: 'openai',
+                modelId: 'openai/gpt-5',
+            })
+        ).rejects.toThrow('invalid for tab');
+
+        await expect(
+            caller.session.startRun({
+                profileId,
+                sessionId: created.session.id,
+                prompt: 'Should fail due to missing mode key',
+                topLevelTab: 'chat',
+                runtimeOptions: defaultRuntimeOptions,
+            } as unknown as Parameters<typeof caller.session.startRun>[0])
+        ).rejects.toThrow('modeKey');
+    });
+
+    it('falls back to first runnable provider/model when defaults are not runnable', async () => {
+        const caller = createCaller();
+        const completionFetchMock = vi.fn().mockResolvedValue({
+            ok: true,
+            status: 200,
+            statusText: 'OK',
+            json: () => ({
+                choices: [
+                    {
+                        message: {
+                            content: 'Fallback provider response',
+                        },
+                    },
+                ],
+                usage: {
+                    prompt_tokens: 10,
+                    completion_tokens: 14,
+                    total_tokens: 24,
+                },
+            }),
+        });
+        vi.stubGlobal('fetch', completionFetchMock);
+
+        const configured = await caller.provider.setApiKey({
+            profileId,
+            providerId: 'openai',
+            apiKey: 'openai-test-key',
+        });
+        expect(configured.success).toBe(true);
+
+        const created = await createSessionInScope(caller, profileId, {
+            scope: 'detached',
+            title: 'Provider fallback thread',
+            kind: 'local',
+        });
+
+        const started = await caller.session.startRun({
+            profileId,
+            sessionId: created.session.id,
+            prompt: 'Fallback provider run',
+            topLevelTab: 'chat',
+            modeKey: 'chat',
+            runtimeOptions: defaultRuntimeOptions,
+        });
+        expect(started.accepted).toBe(true);
+        if (!started.accepted) {
+            throw new Error('Expected run start to be accepted.');
+        }
+
+        await waitForRunStatus(caller, profileId, created.session.id, 'completed');
+        const runs = await caller.session.listRuns({
+            profileId,
+            sessionId: created.session.id,
+        });
+        const latestRun = runs.runs.at(0);
+        expect(latestRun).toBeDefined();
+        if (!latestRun) {
+            throw new Error('Expected fallback run.');
+        }
+        expect(latestRun.providerId).toBe('openai');
+    });
+
     it('fails closed on invalid runtime options combinations', async () => {
         const caller = createCaller();
         const configured = await caller.provider.setApiKey({
@@ -254,6 +405,8 @@ describe('runtime contracts', () => {
                 profileId,
                 sessionId: created.session.id,
                 prompt: 'Invalid manual cache',
+                topLevelTab: 'chat',
+                modeKey: 'chat',
                 runtimeOptions: {
                     reasoning: {
                         effort: 'none',

@@ -1,6 +1,4 @@
-import { Menu, screen } from 'electron';
-
-import type { BrowserWindow, MenuItemConstructorOptions } from 'electron';
+import type { BrowserWindow } from 'electron';
 
 export type WindowState = {
     isMaximized: boolean;
@@ -9,6 +7,76 @@ export type WindowState = {
     canMinimize: boolean;
     platform: NodeJS.Platform;
 };
+
+export interface WindowStateEvent {
+    sequence: number;
+    state: WindowState;
+}
+
+type WindowStateListener = (event: WindowStateEvent) => void;
+
+const MAX_WINDOW_STATE_EVENTS = 100;
+
+let windowStateSequence = 0;
+const windowStateListeners = new Set<WindowStateListener>();
+const windowStateEvents: WindowStateEvent[] = [];
+const registeredWindowIds = new Set<number>();
+
+function emitWindowState(win: BrowserWindow | null): void {
+    const event: WindowStateEvent = {
+        sequence: ++windowStateSequence,
+        state: getWindowState(win),
+    };
+
+    windowStateEvents.push(event);
+    if (windowStateEvents.length > MAX_WINDOW_STATE_EVENTS) {
+        windowStateEvents.shift();
+    }
+
+    for (const listener of windowStateListeners) {
+        listener(event);
+    }
+}
+
+export function listWindowStateEvents(afterSequence?: number): WindowStateEvent[] {
+    const cursor = afterSequence ?? 0;
+    return windowStateEvents.filter((event) => event.sequence > cursor);
+}
+
+export function subscribeWindowState(listener: WindowStateListener): () => void {
+    windowStateListeners.add(listener);
+    return () => {
+        windowStateListeners.delete(listener);
+    };
+}
+
+export function registerWindowStateBridge(win: BrowserWindow): void {
+    if (registeredWindowIds.has(win.id)) {
+        return;
+    }
+
+    registeredWindowIds.add(win.id);
+
+    const publish = () => {
+        emitWindowState(win);
+    };
+
+    win.on('maximize', publish);
+    win.on('unmaximize', publish);
+    win.on('enter-full-screen', publish);
+    win.on('leave-full-screen', publish);
+    win.on('minimize', publish);
+    win.on('restore', publish);
+    win.on('focus', publish);
+    win.on('blur', publish);
+    win.on('resized', publish);
+
+    win.on('closed', () => {
+        registeredWindowIds.delete(win.id);
+    });
+
+    publish();
+}
 
 export function getWindowState(win: BrowserWindow | null): WindowState {
     return {
@@ -24,6 +92,7 @@ export function minimizeWindow(win: BrowserWindow | null): { success: boolean } 
     if (!win) return { success: false };
     if (!win.isMinimizable()) return { success: false };
     win.minimize();
+    emitWindowState(win);
     return { success: true };
 }
 
@@ -36,6 +105,7 @@ export function toggleMaximizeWindow(win: BrowserWindow | null): {
 
     if (win.isFullScreen()) {
         win.setFullScreen(false);
+        emitWindowState(win);
         return { success: true, isMaximized: win.isMaximized(), isFullScreen: false };
     }
 
@@ -45,61 +115,12 @@ export function toggleMaximizeWindow(win: BrowserWindow | null): {
         win.maximize();
     }
 
+    emitWindowState(win);
     return { success: true, isMaximized: win.isMaximized(), isFullScreen: win.isFullScreen() };
 }
 
 export function closeWindow(win: BrowserWindow | null): { success: boolean } {
     if (!win) return { success: false };
     win.close();
-    return { success: true };
-}
-
-export function showWindowMenu(win: BrowserWindow | null): { success: boolean } {
-    if (!win) return { success: false };
-
-    const state = getWindowState(win);
-
-    const template: MenuItemConstructorOptions[] = [
-        {
-            label: state.isFullScreen ? 'Exit Full Screen' : 'Restore',
-            enabled: state.isMaximized || state.isFullScreen,
-            click: () => {
-                if (win.isFullScreen()) {
-                    win.setFullScreen(false);
-                } else if (win.isMaximized()) {
-                    win.unmaximize();
-                }
-            },
-        },
-        {
-            label: 'Minimize',
-            enabled: state.canMinimize,
-            click: () => {
-                win.minimize();
-            },
-        },
-        {
-            label: 'Maximize',
-            enabled: state.canMaximize && !state.isMaximized && !state.isFullScreen,
-            click: () => {
-                win.maximize();
-            },
-        },
-        { type: 'separator' },
-        {
-            label: 'Close',
-            click: () => {
-                win.close();
-            },
-        },
-    ];
-
-    const menu = Menu.buildFromTemplate(template);
-    const cursor = screen.getCursorScreenPoint();
-    const bounds = win.getBounds();
-    const x = Math.max(0, cursor.x - bounds.x);
-    const y = Math.max(0, cursor.y - bounds.y);
-
-    menu.popup({ window: win, x, y });
     return { success: true };
 }

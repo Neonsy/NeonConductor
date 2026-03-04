@@ -42,6 +42,9 @@ export const sessionRouter = router({
                 payload: {
                     runId: result.runId,
                     profileId: input.profileId,
+                    topLevelTab: input.topLevelTab,
+                    modeKey: input.modeKey,
+                    workspaceFingerprint: input.workspaceFingerprint ?? null,
                 },
             });
         }

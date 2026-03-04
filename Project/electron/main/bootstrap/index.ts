@@ -10,6 +10,7 @@ import { flushAppLogger, initAppLogger } from '@/app/main/logging';
 import { devServerUrl, getMainDirname, isDev } from '@/app/main/runtime/env';
 import { attachCspHeaders } from '@/app/main/security/cspHeaders';
 import { createMainWindow } from '@/app/main/window/factory';
+import { registerWindowStateBridge } from '@/app/backend/trpc/routers/system/windowControls';
 
 interface BootstrapDeps {
     createContext: (opts: CreateContextOptions) => Promise<Context>;
@@ -61,6 +62,7 @@ export function bootstrapMainProcess(deps: BootstrapDeps, importMetaUrl: string)
         attachCspHeaders(runtimeCspOptions);
 
         mainWindow = createMainWindow(runtimeWindowOptions);
+        registerWindowStateBridge(mainWindow);
 
         // Wire up tRPC to handle IPC calls from the renderer
         ipcHandler = createIPCHandler({
@@ -71,6 +73,7 @@ export function bootstrapMainProcess(deps: BootstrapDeps, importMetaUrl: string)
 
         app.on('browser-window-created', (_event, window) => {
             ipcHandler?.attachWindow(window);
+            registerWindowStateBridge(window);
         });
 
         initAutoUpdater();
@@ -94,6 +97,7 @@ export function bootstrapMainProcess(deps: BootstrapDeps, importMetaUrl: string)
             mainWindow = createMainWindow({
                 ...runtimeWindowOptions,
             });
+            registerWindowStateBridge(mainWindow);
         }
     });
 }

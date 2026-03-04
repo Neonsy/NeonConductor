@@ -8,10 +8,13 @@ import {
     emitTransportSelectionEvent,
 } from '@/app/backend/runtime/services/runExecution/eventing';
 import { executeRun, isAbortError } from '@/app/backend/runtime/services/runExecution/executeRun';
+import { resolveModeExecution } from '@/app/backend/runtime/services/runExecution/mode';
 import { resolveRunAuth } from '@/app/backend/runtime/services/runExecution/resolveRunAuth';
+import { resolveFirstRunnableRunTarget } from '@/app/backend/runtime/services/runExecution/resolveRunnableTarget';
 import { resolveRunTarget } from '@/app/backend/runtime/services/runExecution/resolveRunTarget';
 import { resolveInitialRunTransport } from '@/app/backend/runtime/services/runExecution/transport';
 import type {
+    ResolvedRunAuth,
     RunCacheResolution,
     StartRunInput,
     StartRunResult,
@@ -43,40 +46,66 @@ export class RunExecutionService {
             };
         }
 
+        const resolvedMode = await resolveModeExecution({
+            profileId: input.profileId,
+            topLevelTab: input.topLevelTab,
+            modeKey: input.modeKey,
+        });
+
         const resolvedTarget = await resolveRunTarget({
             profileId: input.profileId,
             ...(input.providerId ? { providerId: input.providerId } : {}),
             ...(input.modelId ? { modelId: input.modelId } : {}),
         });
-        const resolvedAuth = await resolveRunAuth({
-            profileId: input.profileId,
-            providerId: resolvedTarget.providerId,
-        });
+        const explicitTargetRequested = input.providerId !== undefined || input.modelId !== undefined;
+        let activeTarget = resolvedTarget;
+        let resolvedAuth: ResolvedRunAuth;
+        try {
+            resolvedAuth = await resolveRunAuth({
+                profileId: input.profileId,
+                providerId: activeTarget.providerId,
+            });
+        } catch (error) {
+            if (explicitTargetRequested) {
+                throw error;
+            }
+
+            const fallback = await resolveFirstRunnableRunTarget(input.profileId, {
+                providerId: activeTarget.providerId,
+                modelId: activeTarget.modelId,
+            });
+            if (!fallback) {
+                throw error;
+            }
+
+            activeTarget = fallback.target;
+            resolvedAuth = fallback.auth;
+        }
         const modelCapabilities = await providerStore.getModelCapabilities(
             input.profileId,
-            resolvedTarget.providerId,
-            resolvedTarget.modelId
+            activeTarget.providerId,
+            activeTarget.modelId
         );
         if (!modelCapabilities) {
-            throw new Error(`Model "${resolvedTarget.modelId}" is missing runtime capabilities.`);
+            throw new Error(`Model "${activeTarget.modelId}" is missing runtime capabilities.`);
         }
 
         validateRunCapabilities({
-            providerId: resolvedTarget.providerId,
-            modelId: resolvedTarget.modelId,
+            providerId: activeTarget.providerId,
+            modelId: activeTarget.modelId,
             modelCapabilities,
             runtimeOptions: input.runtimeOptions,
         });
 
         const initialTransport = resolveInitialRunTransport({
-            providerId: resolvedTarget.providerId,
+            providerId: activeTarget.providerId,
             runtimeOptions: input.runtimeOptions,
         });
         const resolvedCache = resolveRunCache({
             profileId: input.profileId,
             sessionId: input.sessionId,
-            providerId: resolvedTarget.providerId,
-            modelId: resolvedTarget.modelId,
+            providerId: activeTarget.providerId,
+            modelId: activeTarget.modelId,
             runtimeOptions: input.runtimeOptions,
         });
 
@@ -84,8 +113,8 @@ export class RunExecutionService {
             profileId: input.profileId,
             sessionId: input.sessionId,
             prompt: input.prompt,
-            providerId: resolvedTarget.providerId,
-            modelId: resolvedTarget.modelId,
+            providerId: activeTarget.providerId,
+            modelId: activeTarget.modelId,
             authMethod: resolvedAuth.authMethod,
             runtimeOptions: input.runtimeOptions,
             cache: resolvedCache,
@@ -125,6 +154,25 @@ export class RunExecutionService {
         await runtimeEventLogService.append({
             entityType: 'run',
             entityId: run.id,
+            eventType: 'run.mode.context',
+            payload: {
+                runId: run.id,
+                sessionId: input.sessionId,
+                profileId: input.profileId,
+                topLevelTab: input.topLevelTab,
+                modeKey: input.modeKey,
+                workspaceFingerprint: input.workspaceFingerprint ?? null,
+                mode: {
+                    id: resolvedMode.mode.id,
+                    label: resolvedMode.mode.label,
+                    executionPolicy: resolvedMode.mode.executionPolicy,
+                },
+            },
+        });
+
+        await runtimeEventLogService.append({
+            entityType: 'run',
+            entityId: run.id,
             eventType: 'run.started',
             payload: {
                 run,
@@ -157,8 +205,8 @@ export class RunExecutionService {
             sessionId: input.sessionId,
             runId: run.id,
             prompt: input.prompt,
-            providerId: resolvedTarget.providerId,
-            modelId: resolvedTarget.modelId,
+            providerId: activeTarget.providerId,
+            modelId: activeTarget.modelId,
             authMethod: resolvedAuth.authMethod,
             runtimeOptions: input.runtimeOptions,
             cache: resolvedCache,

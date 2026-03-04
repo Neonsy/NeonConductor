@@ -51,6 +51,7 @@ export interface ProviderModelRecord {
     id: string;
     providerId: RuntimeProviderId;
     label: string;
+    sourceProvider?: string;
     supportsTools: boolean;
     supportsReasoning: boolean;
     supportsVision: boolean;
@@ -59,6 +60,9 @@ export interface ProviderModelRecord {
     inputModalities: Array<'text' | 'audio' | 'image' | 'video' | 'pdf'>;
     outputModalities: Array<'text' | 'audio' | 'image' | 'video' | 'pdf'>;
     promptFamily?: string;
+    price?: number;
+    latency?: number;
+    tps?: number;
 }
 
 export interface ProviderAuthStateRecord {
@@ -294,7 +298,13 @@ export interface RuntimeSnapshotV1 {
     runUsage: RunUsageRecord[];
     providerUsageSummaries: ProviderUsageSummary[];
     permissions: PermissionRecord[];
-    providers: Array<ProviderRecord & { isDefault: boolean }>;
+    providers: Array<
+        ProviderRecord & {
+            isDefault: boolean;
+            authMethod: ProviderAuthMethod | 'none';
+            authState: string;
+        }
+    >;
     providerModels: ProviderModelRecord[];
     providerAuthStates: ProviderAuthStateRecord[];
     providerAuthFlows: ProviderAuthFlowRecord[];
