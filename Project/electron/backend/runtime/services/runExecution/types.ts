@@ -4,12 +4,16 @@ import type {
     RuntimeProviderId,
     RuntimeRunOptions,
     RunStatus,
+    TopLevelTab,
 } from '@/app/backend/runtime/contracts';
 
 export interface StartRunInput {
     profileId: string;
     sessionId: EntityId<'sess'>;
     prompt: string;
+    topLevelTab: TopLevelTab;
+    modeKey: string;
+    workspaceFingerprint?: string;
     runtimeOptions: RuntimeRunOptions;
     providerId?: RuntimeProviderId;
     modelId?: string;

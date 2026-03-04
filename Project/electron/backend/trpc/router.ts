@@ -6,6 +6,7 @@
 import { router } from '@/app/backend/trpc/init';
 import { conversationRouter } from '@/app/backend/trpc/routers/conversation';
 import { mcpRouter } from '@/app/backend/trpc/routers/mcp';
+import { modeRouter } from '@/app/backend/trpc/routers/mode';
 import { permissionRouter } from '@/app/backend/trpc/routers/permission';
 import { providerRouter } from '@/app/backend/trpc/routers/provider';
 import { runtimeRouter } from '@/app/backend/trpc/routers/runtime';
@@ -22,6 +23,7 @@ export const appRouter = router({
     permission: permissionRouter,
     tool: toolRouter,
     mcp: mcpRouter,
+    mode: modeRouter,
     system: systemRouter,
     updates: updatesRouter,
 });

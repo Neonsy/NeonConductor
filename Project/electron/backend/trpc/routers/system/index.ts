@@ -8,18 +8,74 @@ import { signalReady } from '@/app/backend/trpc/routers/system/signalReady';
 import {
     closeWindow,
     getWindowState,
+    listWindowStateEvents,
     minimizeWindow,
-    showWindowMenu,
+    subscribeWindowState,
     toggleMaximizeWindow,
 } from '@/app/backend/trpc/routers/system/windowControls';
+import type { WindowStateEvent } from '@/app/backend/trpc/routers/system/windowControls';
+import { windowStateSubscriptionInputSchema } from '@/app/backend/runtime/contracts';
+
+function waitForNextWindowStateEvent(cursor: number, signal: AbortSignal): Promise<WindowStateEvent | null> {
+    return new Promise((resolve) => {
+        const unsubscribe = subscribeWindowState((event) => {
+            if (event.sequence <= cursor) {
+                return;
+            }
+
+            cleanup();
+            resolve(event);
+        });
+
+        const onAbort = () => {
+            cleanup();
+            resolve(null);
+        };
+
+        const cleanup = () => {
+            unsubscribe();
+            signal.removeEventListener('abort', onAbort);
+        };
+
+        signal.addEventListener('abort', onAbort, { once: true });
+    });
+}
 
 export const systemRouter = router({
     // Called by renderer when React has rendered, to show the window
     signalReady: publicProcedure.mutation(({ ctx }) => signalReady(ctx.win)),
     // Custom title bar controls via existing tRPC IPC channel
     getWindowState: publicProcedure.query(({ ctx }) => getWindowState(ctx.win)),
+    subscribeWindowState: publicProcedure.input(windowStateSubscriptionInputSchema).subscription(async function* ({
+        input,
+        signal,
+    }) {
+        let cursor = input.afterSequence ?? 0;
+        const replayEvents = listWindowStateEvents(cursor);
+        for (const event of replayEvents) {
+            if (signal?.aborted) {
+                return;
+            }
+
+            cursor = Math.max(cursor, event.sequence);
+            yield event;
+        }
+
+        if (!signal) {
+            return;
+        }
+
+        while (!signal.aborted) {
+            const nextEvent = await waitForNextWindowStateEvent(cursor, signal);
+            if (!nextEvent) {
+                return;
+            }
+
+            cursor = Math.max(cursor, nextEvent.sequence);
+            yield nextEvent;
+        }
+    }),
     minimizeWindow: publicProcedure.mutation(({ ctx }) => minimizeWindow(ctx.win)),
     toggleMaximizeWindow: publicProcedure.mutation(({ ctx }) => toggleMaximizeWindow(ctx.win)),
     closeWindow: publicProcedure.mutation(({ ctx }) => closeWindow(ctx.win)),
-    showWindowMenu: publicProcedure.mutation(({ ctx }) => showWindowMenu(ctx.win)),
 });

@@ -1,5 +1,5 @@
-import { ConversationShell } from '@/web/components/conversation/shell';
+import { WorkspaceSurface } from '@/web/components/runtime/workspaceSurface';
 
 export default function HomePage() {
-    return <ConversationShell />;
+    return <WorkspaceSurface />;
 }

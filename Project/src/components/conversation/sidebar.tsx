@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 
 import { Button } from '@/web/components/ui/button';
 
@@ -56,21 +56,17 @@ export function ConversationSidebar({
     const [newThreadWorkspace, setNewThreadWorkspace] = useState('');
     const [newTagLabel, setNewTagLabel] = useState('');
 
-    const workspaceOptions = useMemo(
-        () =>
-            [
-                ...new Set(
-                    buckets
-                        .filter((bucket) => bucket.scope === 'workspace')
-                        .map((bucket) => bucket.workspaceFingerprint)
-                ),
-            ]
-                .filter((fingerprint): fingerprint is string => Boolean(fingerprint))
-                .sort((left, right) => left.localeCompare(right)),
-        [buckets]
-    );
+    const workspaceOptions = [
+        ...new Set(
+            buckets
+                .filter((bucket) => bucket.scope === 'workspace')
+                .map((bucket) => bucket.workspaceFingerprint)
+        ),
+    ]
+        .filter((fingerprint): fingerprint is string => Boolean(fingerprint))
+        .sort((left, right) => left.localeCompare(right));
 
-    const tagLabelById = useMemo(() => new Map(tags.map((tag) => [tag.id, tag.label])), [tags]);
+    const tagLabelById = new Map(tags.map((tag) => [tag.id, tag.label]));
 
     const selectedThread = selectedThreadId ? threads.find((thread) => thread.id === selectedThreadId) : undefined;
 

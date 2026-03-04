@@ -1,32 +1,25 @@
 import { Copy, Minus, Square, X } from 'lucide-react';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
+import { ConfirmDialog } from '@/web/components/ui/confirmDialog';
 import ThemeToggle from '@/web/components/window/themeToggle';
+import { UpdateControlsPanel } from '@/web/components/window/updateControlsPanel';
+import { useWindowStateStreamStore } from '@/web/lib/window/stateStream';
 import { trpc } from '@/web/trpc/client';
 
 import type { MouseEvent as ReactMouseEvent } from 'react';
 
 export default function TitleBar() {
-    const { data: windowState, refetch } = trpc.system.getWindowState.useQuery(undefined, {
-        refetchInterval: 800,
-    });
+    const windowState = useWindowStateStreamStore((state) => state.windowState);
+    const [showUpdatesPanel, setShowUpdatesPanel] = useState(false);
+    const [confirmClose, setConfirmClose] = useState(false);
 
-    const minimizeMutation = trpc.system.minimizeWindow.useMutation({
-        onSuccess: () => {
-            void refetch();
-        },
-    });
+    const minimizeMutation = trpc.system.minimizeWindow.useMutation();
 
-    const toggleMaximizeMutation = trpc.system.toggleMaximizeWindow.useMutation({
-        onSuccess: () => {
-            void refetch();
-        },
-    });
+    const toggleMaximizeMutation = trpc.system.toggleMaximizeWindow.useMutation();
 
     const closeMutation = trpc.system.closeWindow.useMutation();
-    const showMenuMutation = trpc.system.showWindowMenu.useMutation();
-    const showUpdatesMenuMutation = trpc.updates.showMenu.useMutation();
-    const closeWindow = closeMutation.mutate;
+    const closeWindow = () => closeMutation.mutate();
 
     useEffect(() => {
         const onKeyDown = (event: KeyboardEvent) => {
@@ -59,9 +52,8 @@ export default function TitleBar() {
     const controlsDisabled =
         minimizeMutation.isPending ||
         toggleMaximizeMutation.isPending ||
-        closeMutation.isPending ||
-        showMenuMutation.isPending;
-    const menuControlsDisabled = controlsDisabled || showUpdatesMenuMutation.isPending;
+        closeMutation.isPending;
+    const menuControlsDisabled = controlsDisabled;
 
     const handleHeaderDoubleClick = (event: ReactMouseEvent<HTMLElement>) => {
         const eventTarget = event.target;
@@ -71,16 +63,8 @@ export default function TitleBar() {
         toggleMaximizeMutation.mutate();
     };
 
-    const handleHeaderContextMenu = (event: ReactMouseEvent<HTMLElement>) => {
-        const eventTarget = event.target;
-        if (!(eventTarget instanceof Element)) return;
-        if (eventTarget.closest('[data-no-drag="true"]')) return;
-        event.preventDefault();
-        showMenuMutation.mutate();
-    };
-
     const handleHelpMenuClick = () => {
-        showUpdatesMenuMutation.mutate();
+        setShowUpdatesPanel((current) => !current);
     };
 
     if (isFullScreen) {
@@ -96,8 +80,7 @@ export default function TitleBar() {
     return (
         <header
             className='border-border bg-background/95 text-foreground relative z-10 grid h-9 grid-cols-[1fr_auto_1fr] items-center border-b backdrop-blur-sm select-none [-webkit-app-region:drag]'
-            onDoubleClick={handleHeaderDoubleClick}
-            onContextMenu={handleHeaderContextMenu}>
+            onDoubleClick={handleHeaderDoubleClick}>
             <div className='flex h-full min-w-0 items-center justify-start gap-2 pl-2.5'>
                 {isMac ? (
                     <div
@@ -109,7 +92,7 @@ export default function TitleBar() {
                             aria-label='Close window'
                             title='Close'
                             onClick={() => {
-                                closeMutation.mutate();
+                                setConfirmClose(true);
                             }}
                             disabled={controlsDisabled}
                         />
@@ -184,7 +167,7 @@ export default function TitleBar() {
                             aria-label='Close window'
                             title='Close'
                             onClick={() => {
-                                closeMutation.mutate();
+                                setConfirmClose(true);
                             }}
                             disabled={controlsDisabled}>
                             <X className='h-3.5 w-3.5' />
@@ -192,6 +175,30 @@ export default function TitleBar() {
                     </div>
                 ) : null}
             </div>
+            <UpdateControlsPanel
+                open={showUpdatesPanel}
+                onClose={() => {
+                    setShowUpdatesPanel(false);
+                }}
+            />
+            <ConfirmDialog
+                open={confirmClose}
+                title='Close NeonConductor?'
+                message='Any active update or runtime operation will continue only if safely supported by the app lifecycle.'
+                confirmLabel='Close window'
+                cancelLabel='Cancel'
+                destructive
+                busy={closeMutation.isPending}
+                onCancel={() => {
+                    if (closeMutation.isPending) {
+                        return;
+                    }
+                    setConfirmClose(false);
+                }}
+                onConfirm={() => {
+                    closeWindow();
+                }}
+            />
         </header>
     );
 }

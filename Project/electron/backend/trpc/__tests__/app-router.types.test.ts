@@ -36,6 +36,9 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
         profileId: string;
         sessionId: string;
         prompt: string;
+        topLevelTab: 'chat' | 'agent' | 'orchestrator';
+        modeKey: string;
+        workspaceFingerprint?: string;
         runtimeOptions: {
             reasoning: {
                 effort: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
@@ -52,6 +55,24 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
         };
         providerId?: 'kilo' | 'openai';
         modelId?: string;
+    }>();
+
+    expectTypeOf<Inputs['mode']['list']>().toExtend<{
+        profileId: string;
+        topLevelTab: 'chat' | 'agent' | 'orchestrator';
+    }>();
+
+    expectTypeOf<Inputs['mode']['getActive']>().toExtend<{
+        profileId: string;
+        topLevelTab: 'chat' | 'agent' | 'orchestrator';
+        workspaceFingerprint?: string;
+    }>();
+
+    expectTypeOf<Inputs['mode']['setActive']>().toExtend<{
+        profileId: string;
+        topLevelTab: 'chat' | 'agent' | 'orchestrator';
+        modeKey: string;
+        workspaceFingerprint?: string;
     }>();
 
     expectTypeOf<Inputs['session']['list']>().toExtend<{

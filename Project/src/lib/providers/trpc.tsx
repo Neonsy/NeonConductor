@@ -4,9 +4,11 @@ import { useEffect } from 'react';
 
 import { useRuntimeEventStreamStore } from '@/web/lib/runtime/eventStream';
 import { trpcClient as runtimeClient } from '@/web/lib/trpcClient';
+import { useWindowStateStreamStore } from '@/web/lib/window/stateStream';
 import { trpc } from '@/web/trpc/client';
 
 import type { RuntimeEventRecordV1 } from '@/app/backend/persistence/types';
+import type { WindowStateEvent } from '@/app/backend/trpc/routers/system/windowControls';
 
 import type { ReactNode } from 'react';
 
@@ -57,11 +59,42 @@ function RuntimeEventStreamBootstrap(): ReactNode {
     return null;
 }
 
+function WindowStateStreamBootstrap(): ReactNode {
+    const setConnecting = useWindowStateStreamStore((state) => state.setConnecting);
+    const setError = useWindowStateStreamStore((state) => state.setError);
+    const pushEvent = useWindowStateStreamStore((state) => state.pushEvent);
+
+    useEffect(() => {
+        setConnecting();
+        const { lastSequence } = useWindowStateStreamStore.getState();
+
+        const subscription = runtimeClient.system.subscribeWindowState.subscribe(
+            lastSequence > 0 ? { afterSequence: lastSequence } : {},
+            {
+                onData: (event) => {
+                    pushEvent(event as WindowStateEvent);
+                },
+                onError: (error) => {
+                    const message = error instanceof Error ? error.message : String(error);
+                    setError(message);
+                },
+            }
+        );
+
+        return () => {
+            subscription.unsubscribe();
+        };
+    }, [setConnecting, setError, pushEvent]);
+
+    return null;
+}
+
 export function TRPCProvider({ children }: TRPCProviderProps): ReactNode {
     return (
         <trpc.Provider client={trpcClient} queryClient={queryClient}>
             <QueryClientProvider client={queryClient}>
                 <RuntimeEventStreamBootstrap />
+                <WindowStateStreamBootstrap />
                 {children}
             </QueryClientProvider>
         </trpc.Provider>

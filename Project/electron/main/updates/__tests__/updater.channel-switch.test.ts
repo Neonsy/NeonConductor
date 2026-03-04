@@ -236,4 +236,26 @@ describe('updater channel switching', () => {
         expect(harness.autoUpdater.setFeedURL).toHaveBeenCalledTimes(1);
         expect(harness.autoUpdater.checkForUpdates).toHaveBeenCalledTimes(1);
     });
+
+    it('reports manual check download progress through switch status', async () => {
+        const harness = await loadUpdaterHarness({
+            appVersion: '3.1.0-alpha.3',
+            persistedChannel: 'alpha',
+        });
+
+        harness.updater.initAutoUpdater();
+        await flushTasks();
+
+        const result = await harness.updater.checkForUpdatesManually();
+        expect(result.started).toBe(true);
+        expect(harness.updater.getSwitchStatusSnapshot().phase).toBe('checking');
+
+        harness.autoUpdater.emit('update-available');
+        expect(harness.updater.getSwitchStatusSnapshot().phase).toBe('downloading');
+        expect(harness.updater.getSwitchStatusSnapshot().percent).toBe(0);
+
+        harness.autoUpdater.emit('download-progress', { percent: 42 });
+        expect(harness.updater.getSwitchStatusSnapshot().phase).toBe('downloading');
+        expect(harness.updater.getSwitchStatusSnapshot().percent).toBe(42);
+    });
 });
