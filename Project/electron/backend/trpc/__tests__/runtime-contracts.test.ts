@@ -1,7 +1,6 @@
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getDefaultProfileId, getPersistence, resetPersistenceForTests } from '@/app/backend/persistence/db';
@@ -1222,6 +1221,7 @@ describe('runtime contracts', () => {
         const caller = createCaller();
         const tempDir = mkdtempSync(path.join(os.tmpdir(), 'neonconductor-tool-test-'));
         const tempFile = path.join(tempDir, 'readme.txt');
+        // eslint-disable-next-line security/detect-non-literal-fs-filename -- test uses isolated mkdtemp path to validate runtime tool behavior.
         writeFileSync(tempFile, 'hello from tool execution test', 'utf8');
 
         const tools = await caller.tool.list();
@@ -1240,7 +1240,14 @@ describe('runtime contracts', () => {
         if (!allowedRead.ok) {
             throw new Error('Expected read_file invocation to be allowed in agent.ask mode.');
         }
-        expect(String(allowedRead.output['content'] ?? '')).toContain('hello from tool execution test');
+        const allowedReadContent = allowedRead.output['content'];
+        const allowedReadText =
+            typeof allowedReadContent === 'string'
+                ? allowedReadContent
+                : allowedReadContent === undefined
+                  ? ''
+                  : JSON.stringify(allowedReadContent);
+        expect(allowedReadText).toContain('hello from tool execution test');
 
         const deniedMutation = await caller.tool.invoke({
             profileId,

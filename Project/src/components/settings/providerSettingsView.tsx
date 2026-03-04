@@ -1,97 +1,21 @@
-import { ExternalLink, RefreshCw } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
-import { Button } from '@/web/components/ui/button';
+import { ProviderAuthenticationSection } from '@/web/components/settings/providerSettings/authenticationSection';
+import { ProviderDefaultModelSection } from '@/web/components/settings/providerSettings/defaultModelSection';
+import { isProviderId, methodLabel } from '@/web/components/settings/providerSettings/helpers';
+import {
+    OpenAIAccountLimitsSection,
+    OpenAILocalUsageSection,
+} from '@/web/components/settings/providerSettings/openAISections';
+import { ProviderSidebar } from '@/web/components/settings/providerSettings/providerSidebar';
+import type {
+    ActiveAuthFlow,
+    ProviderAuthStateView,
+    ProviderListItem,
+} from '@/web/components/settings/providerSettings/types';
 import { trpc } from '@/web/trpc/client';
 
 import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
-
-interface ActiveAuthFlow {
-    providerId: RuntimeProviderId;
-    flowId: string;
-    userCode?: string;
-    verificationUri?: string;
-    pollAfterSeconds: number;
-}
-
-function isProviderId(value: string | undefined): value is RuntimeProviderId {
-    return value === 'kilo' || value === 'openai';
-}
-
-function methodLabel(method: string): string {
-    if (method === 'api_key') return 'API key';
-    if (method === 'device_code') return 'Device code';
-    if (method === 'oauth_device') return 'OAuth device';
-    if (method === 'oauth_pkce') return 'OAuth PKCE';
-    return method;
-}
-
-function formatMetric(value: number | undefined, fallback = '-'): string {
-    if (value === undefined || !Number.isFinite(value)) {
-        return fallback;
-    }
-
-    return String(value);
-}
-
-function formatInteger(value: number | undefined): string {
-    if (value === undefined || !Number.isFinite(value)) {
-        return '-';
-    }
-
-    return Math.round(value).toLocaleString();
-}
-
-function formatPercent(value: number | undefined): string {
-    if (value === undefined || !Number.isFinite(value)) {
-        return '-';
-    }
-
-    return `${Math.round(value)}%`;
-}
-
-function formatWindowLabel(minutes: number | undefined): string {
-    if (!minutes || !Number.isFinite(minutes)) {
-        return 'Window';
-    }
-
-    if (minutes === 5 * 60) {
-        return '5h window';
-    }
-
-    if (minutes === 7 * 24 * 60) {
-        return 'Weekly window';
-    }
-
-    if (minutes % (24 * 60) === 0) {
-        return `${String(minutes / (24 * 60))}d window`;
-    }
-
-    if (minutes % 60 === 0) {
-        return `${String(minutes / 60)}h window`;
-    }
-
-    return `${String(minutes)}m window`;
-}
-
-function formatResetCountdown(resetAtMs: number | undefined): string {
-    if (resetAtMs === undefined || !Number.isFinite(resetAtMs)) {
-        return '-';
-    }
-
-    const diff = Math.round((resetAtMs - Date.now()) / 1000);
-    if (diff <= 0) {
-        return 'now';
-    }
-
-    const hours = Math.floor(diff / 3600);
-    const minutes = Math.floor((diff % 3600) / 60);
-    if (hours > 0) {
-        return `in ${String(hours)}h ${String(minutes)}m`;
-    }
-
-    return `in ${String(minutes)}m`;
-}
 
 interface ProviderSettingsViewProps {
     profileId: string;
@@ -104,6 +28,7 @@ export function ProviderSettingsView({ profileId }: ProviderSettingsViewProps) {
 
     const providers = providersQuery.data?.providers ?? [];
     const defaults = snapshotQuery.data?.defaults;
+    const providerItems: ProviderListItem[] = providers;
 
     const [selectedProviderId, setSelectedProviderId] = useState<RuntimeProviderId | undefined>(undefined);
     const [selectedModelId, setSelectedModelId] = useState<string>('');
@@ -325,7 +250,9 @@ export function ProviderSettingsView({ profileId }: ProviderSettingsViewProps) {
         setSelectedModelId(models[0]?.id ?? '');
     }, [defaults?.modelId, defaults?.providerId, models, selectedModelId, selectedProviderId]);
 
-    const selectedAuthState = authStateQuery.data?.found ? authStateQuery.data.state : undefined;
+    const selectedAuthState: ProviderAuthStateView | undefined = authStateQuery.data?.found
+        ? authStateQuery.data.state
+        : undefined;
     const selectedIsDefaultProvider = defaults?.providerId === selectedProviderId;
     const selectedIsDefaultModel = selectedIsDefaultProvider && defaults?.modelId === selectedModelId;
     const openAISubscriptionUsage = openAISubscriptionUsageQuery.data?.usage;
@@ -333,32 +260,14 @@ export function ProviderSettingsView({ profileId }: ProviderSettingsViewProps) {
 
     return (
         <section className='grid min-h-full grid-cols-[260px_1fr]'>
-            <aside className='border-border bg-background/40 min-h-0 overflow-y-auto border-r p-3'>
-                <p className='text-muted-foreground mb-2 text-xs font-semibold tracking-wide uppercase'>Providers</p>
-                <div className='space-y-2'>
-                    {providers.map((provider) => (
-                        <button
-                            key={provider.id}
-                            type='button'
-                            className={`w-full rounded-md border px-2 py-2 text-left ${
-                                provider.id === selectedProviderId
-                                    ? 'border-primary bg-primary/10'
-                                    : 'border-border bg-card hover:bg-accent'
-                            }`}
-                            onClick={() => {
-                                setStatusMessage(undefined);
-                                setSelectedProviderId(provider.id);
-                            }}>
-                            <p className='text-sm font-medium'>
-                                {provider.label} {provider.isDefault ? <span className='text-primary text-xs'>(default)</span> : null}
-                            </p>
-                            <p className='text-muted-foreground text-xs'>
-                                auth: {provider.authState} ({provider.authMethod})
-                            </p>
-                        </button>
-                    ))}
-                </div>
-            </aside>
+            <ProviderSidebar
+                providers={providerItems}
+                selectedProviderId={selectedProviderId}
+                onSelectProvider={(providerId) => {
+                    setStatusMessage(undefined);
+                    setSelectedProviderId(providerId);
+                }}
+            />
 
             <div className='min-h-0 overflow-y-auto p-4'>
                 {selectedProvider ? (
@@ -371,195 +280,107 @@ export function ProviderSettingsView({ profileId }: ProviderSettingsViewProps) {
                             {statusMessage ? <p className='text-primary mt-2 text-xs'>{statusMessage}</p> : null}
                         </div>
 
-                        <section className='space-y-2'>
-                            <p className='text-sm font-semibold'>Default Model</p>
-                            <div className='grid grid-cols-[1fr_auto_auto] gap-2'>
-                                <select
-                                    value={selectedModelId}
-                                    onChange={(event) => {
-                                        setSelectedModelId(event.target.value);
-                                    }}
-                                    className='border-border bg-background h-9 rounded-md border px-2 text-sm'
-                                    disabled={models.length === 0}>
-                                    {models.map((model) => (
-                                        <option key={model.id} value={model.id}>
-                                            {model.label}
-                                            {selectedProvider.id === 'kilo'
-                                                ? ` · price ${formatMetric(model.price)} · latency ${formatMetric(model.latency)} · tps ${formatMetric(model.tps)}`
-                                                : ''}
-                                        </option>
-                                    ))}
-                                </select>
-                                <Button
-                                    type='button'
-                                    size='sm'
-                                    variant='outline'
-                                    disabled={!selectedModelId || setDefaultMutation.isPending || selectedIsDefaultModel}
-                                    onClick={() => {
-                                        if (!selectedProviderId || !selectedModelId) {
-                                            return;
-                                        }
+                        <ProviderDefaultModelSection
+                            selectedProviderId={selectedProviderId}
+                            selectedModelId={selectedModelId}
+                            models={models}
+                            isDefaultModel={selectedIsDefaultModel}
+                            isSavingDefault={setDefaultMutation.isPending}
+                            isSyncingCatalog={syncCatalogMutation.isPending}
+                            onSelectModel={setSelectedModelId}
+                            onSetDefault={() => {
+                                if (!selectedProviderId || !selectedModelId) {
+                                    return;
+                                }
 
-                                        void setDefaultMutation.mutateAsync({
-                                            profileId,
-                                            providerId: selectedProviderId,
-                                            modelId: selectedModelId,
-                                        });
-                                    }}>
-                                    {selectedIsDefaultModel ? 'Default' : 'Set Default'}
-                                </Button>
-                                <Button
-                                    type='button'
-                                    size='sm'
-                                    variant='outline'
-                                    disabled={syncCatalogMutation.isPending || !selectedProviderId}
-                                    onClick={() => {
-                                        if (!selectedProviderId) {
-                                            return;
-                                        }
+                                void setDefaultMutation.mutateAsync({
+                                    profileId,
+                                    providerId: selectedProviderId,
+                                    modelId: selectedModelId,
+                                });
+                            }}
+                            onSyncCatalog={() => {
+                                if (!selectedProviderId) {
+                                    return;
+                                }
 
-                                        void syncCatalogMutation.mutateAsync({
-                                            profileId,
-                                            providerId: selectedProviderId,
-                                            force: true,
-                                        });
-                                    }}>
-                                    <RefreshCw className='h-3.5 w-3.5' />
-                                    Sync
-                                </Button>
-                            </div>
-                        </section>
+                                void syncCatalogMutation.mutateAsync({
+                                    profileId,
+                                    providerId: selectedProviderId,
+                                    force: true,
+                                });
+                            }}
+                        />
 
-                        <section className='space-y-2'>
-                            <p className='text-sm font-semibold'>Authentication</p>
-                            <p className='text-muted-foreground text-xs'>
-                                State: {selectedAuthState?.authState ?? selectedProvider.authState} ({selectedAuthState?.authMethod ?? selectedProvider.authMethod})
-                            </p>
+                        <ProviderAuthenticationSection
+                            selectedProviderId={selectedProviderId}
+                            selectedProviderAuthState={selectedProvider.authState}
+                            selectedProviderAuthMethod={selectedProvider.authMethod}
+                            selectedAuthState={selectedAuthState}
+                            methods={methods}
+                            apiKeyInput={apiKeyInput}
+                            activeAuthFlow={activeAuthFlow}
+                            isSavingApiKey={setApiKeyMutation.isPending}
+                            isStartingAuth={startAuthMutation.isPending}
+                            isPollingAuth={pollAuthMutation.isPending}
+                            isCancellingAuth={cancelAuthMutation.isPending}
+                            onApiKeyInputChange={setApiKeyInput}
+                            onSaveApiKey={() => {
+                                if (!selectedProviderId) {
+                                    return;
+                                }
 
-                            {methods.includes('api_key') ? (
-                                <div className='grid grid-cols-[1fr_auto] gap-2'>
-                                    <input
-                                        type='password'
-                                        value={apiKeyInput}
-                                        onChange={(event) => {
-                                            setApiKeyInput(event.target.value);
-                                        }}
-                                        className='border-border bg-background h-9 rounded-md border px-2 text-sm'
-                                        placeholder='Paste API key'
-                                    />
-                                    <Button
-                                        type='button'
-                                        size='sm'
-                                        variant='outline'
-                                        disabled={apiKeyInput.trim().length === 0 || setApiKeyMutation.isPending || !selectedProviderId}
-                                        onClick={() => {
-                                            if (!selectedProviderId) {
-                                                return;
-                                            }
+                                void setApiKeyMutation.mutateAsync({
+                                    profileId,
+                                    providerId: selectedProviderId,
+                                    apiKey: apiKeyInput.trim(),
+                                });
+                            }}
+                            onStartOAuthDevice={() => {
+                                if (!selectedProviderId) {
+                                    return;
+                                }
 
-                                            void setApiKeyMutation.mutateAsync({
-                                                profileId,
-                                                providerId: selectedProviderId,
-                                                apiKey: apiKeyInput.trim(),
-                                            });
-                                        }}>
-                                        Save Key
-                                    </Button>
-                                </div>
-                            ) : null}
+                                void startAuthMutation.mutateAsync({
+                                    profileId,
+                                    providerId: selectedProviderId,
+                                    method: 'oauth_device',
+                                });
+                            }}
+                            onStartDeviceCode={() => {
+                                if (!selectedProviderId) {
+                                    return;
+                                }
 
-                            <div className='flex flex-wrap gap-2'>
-                                {methods.includes('oauth_device') ? (
-                                    <Button
-                                        type='button'
-                                        size='sm'
-                                        variant='outline'
-                                        disabled={startAuthMutation.isPending || selectedProviderId !== 'openai'}
-                                        onClick={() => {
-                                            if (!selectedProviderId) {
-                                                return;
-                                            }
+                                void startAuthMutation.mutateAsync({
+                                    profileId,
+                                    providerId: selectedProviderId,
+                                    method: 'device_code',
+                                });
+                            }}
+                            onPollNow={() => {
+                                if (!activeAuthFlow) {
+                                    return;
+                                }
 
-                                            void startAuthMutation.mutateAsync({
-                                                profileId,
-                                                providerId: selectedProviderId,
-                                                method: 'oauth_device',
-                                            });
-                                        }}>
-                                        Start OAuth Device
-                                    </Button>
-                                ) : null}
-                                {methods.includes('device_code') ? (
-                                    <Button
-                                        type='button'
-                                        size='sm'
-                                        variant='outline'
-                                        disabled={startAuthMutation.isPending || selectedProviderId !== 'kilo'}
-                                        onClick={() => {
-                                            if (!selectedProviderId) {
-                                                return;
-                                            }
+                                void pollAuthMutation.mutateAsync({
+                                    profileId,
+                                    providerId: activeAuthFlow.providerId,
+                                    flowId: activeAuthFlow.flowId,
+                                });
+                            }}
+                            onCancelFlow={() => {
+                                if (!activeAuthFlow) {
+                                    return;
+                                }
 
-                                            void startAuthMutation.mutateAsync({
-                                                profileId,
-                                                providerId: selectedProviderId,
-                                                method: 'device_code',
-                                            });
-                                        }}>
-                                        Start Device Code
-                                    </Button>
-                                ) : null}
-                            </div>
-
-                            {activeAuthFlow && activeAuthFlow.providerId === selectedProvider.id ? (
-                                <div className='border-border bg-background rounded-md border p-3'>
-                                    <p className='text-xs font-semibold'>Auth flow in progress</p>
-                                    <p className='text-muted-foreground mt-1 text-xs'>
-                                        Enter code <span className='text-foreground font-semibold'>{activeAuthFlow.userCode ?? '-'}</span> and confirm in browser.
-                                    </p>
-                                    {activeAuthFlow.verificationUri ? (
-                                        <a
-                                            href={activeAuthFlow.verificationUri}
-                                            target='_blank'
-                                            rel='noreferrer'
-                                            className='text-primary mt-1 inline-flex items-center gap-1 text-xs underline'>
-                                            Open verification page
-                                            <ExternalLink className='h-3 w-3' />
-                                        </a>
-                                    ) : null}
-                                    <div className='mt-2 flex gap-2'>
-                                        <Button
-                                            type='button'
-                                            size='sm'
-                                            variant='outline'
-                                            disabled={pollAuthMutation.isPending}
-                                            onClick={() => {
-                                                void pollAuthMutation.mutateAsync({
-                                                    profileId,
-                                                    providerId: activeAuthFlow.providerId,
-                                                    flowId: activeAuthFlow.flowId,
-                                                });
-                                            }}>
-                                            Poll Now
-                                        </Button>
-                                        <Button
-                                            type='button'
-                                            size='sm'
-                                            variant='outline'
-                                            disabled={cancelAuthMutation.isPending}
-                                            onClick={() => {
-                                                void cancelAuthMutation.mutateAsync({
-                                                    profileId,
-                                                    providerId: activeAuthFlow.providerId,
-                                                    flowId: activeAuthFlow.flowId,
-                                                });
-                                            }}>
-                                            Cancel
-                                        </Button>
-                                    </div>
-                                </div>
-                            ) : null}
-                        </section>
+                                void cancelAuthMutation.mutateAsync({
+                                    profileId,
+                                    providerId: activeAuthFlow.providerId,
+                                    flowId: activeAuthFlow.flowId,
+                                });
+                            }}
+                        />
 
                         {selectedProvider.id === 'kilo' ? (
                             <section className='space-y-1'>
@@ -574,140 +395,17 @@ export function ProviderSettingsView({ profileId }: ProviderSettingsViewProps) {
                         ) : null}
 
                         {selectedProvider.id === 'openai' ? (
-                            <section className='space-y-2'>
-                                <p className='text-sm font-semibold'>OpenAI Subscription Limits (Account)</p>
-                                <p className='text-muted-foreground text-xs'>
-                                    Pulled from OpenAI ChatGPT usage windows when OAuth is active. This reflects account-level limits, not only this app.
-                                </p>
-                                {openAISubscriptionRateLimitsQuery.isLoading ? (
-                                    <p className='text-muted-foreground text-xs'>Loading subscription limits...</p>
-                                ) : null}
-                                {openAISubscriptionRateLimits?.source === 'chatgpt_wham' ? (
-                                    <div className='space-y-2'>
-                                        <p className='text-muted-foreground text-xs'>
-                                            Plan: {openAISubscriptionRateLimits.planType ?? 'unknown'}
-                                        </p>
-                                        <div className='grid gap-2 md:grid-cols-2'>
-                                            <div className='border-border bg-background rounded-md border p-3'>
-                                                <p className='text-xs font-semibold'>
-                                                    {formatWindowLabel(openAISubscriptionRateLimits.primary?.windowMinutes)}
-                                                </p>
-                                                <p className='text-muted-foreground mt-1 text-xs'>
-                                                    Used: {formatPercent(openAISubscriptionRateLimits.primary?.usedPercent)}
-                                                </p>
-                                                <div className='bg-border mt-1 h-1.5 w-full overflow-hidden rounded'>
-                                                    <div
-                                                        className='bg-primary h-full'
-                                                        style={{
-                                                            width: `${String(
-                                                                Math.max(
-                                                                    0,
-                                                                    Math.min(
-                                                                        100,
-                                                                        openAISubscriptionRateLimits.primary?.usedPercent ?? 0
-                                                                    )
-                                                                )
-                                                            )}%`,
-                                                        }}
-                                                    />
-                                                </div>
-                                                <p className='text-muted-foreground mt-1 text-xs'>
-                                                    Resets: {formatResetCountdown(openAISubscriptionRateLimits.primary?.resetsAt)}
-                                                </p>
-                                            </div>
-                                            <div className='border-border bg-background rounded-md border p-3'>
-                                                <p className='text-xs font-semibold'>
-                                                    {formatWindowLabel(openAISubscriptionRateLimits.secondary?.windowMinutes)}
-                                                </p>
-                                                <p className='text-muted-foreground mt-1 text-xs'>
-                                                    Used: {formatPercent(openAISubscriptionRateLimits.secondary?.usedPercent)}
-                                                </p>
-                                                <div className='bg-border mt-1 h-1.5 w-full overflow-hidden rounded'>
-                                                    <div
-                                                        className='bg-primary h-full'
-                                                        style={{
-                                                            width: `${String(
-                                                                Math.max(
-                                                                    0,
-                                                                    Math.min(
-                                                                        100,
-                                                                        openAISubscriptionRateLimits.secondary?.usedPercent ?? 0
-                                                                    )
-                                                                )
-                                                            )}%`,
-                                                        }}
-                                                    />
-                                                </div>
-                                                <p className='text-muted-foreground mt-1 text-xs'>
-                                                    Resets: {formatResetCountdown(openAISubscriptionRateLimits.secondary?.resetsAt)}
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ) : null}
-                                {openAISubscriptionRateLimits?.source === 'unavailable' ? (
-                                    <p className='text-muted-foreground text-xs'>
-                                        {openAISubscriptionRateLimits.detail ??
-                                            'Subscription limits unavailable. Sign in with OpenAI OAuth for account-level windows.'}
-                                    </p>
-                                ) : null}
-                            </section>
+                            <OpenAIAccountLimitsSection
+                                isLoading={openAISubscriptionRateLimitsQuery.isLoading}
+                                rateLimits={openAISubscriptionRateLimits}
+                            />
                         ) : null}
 
                         {selectedProvider.id === 'openai' ? (
-                            <section className='space-y-2'>
-                                <p className='text-sm font-semibold'>OpenAI Subscription Usage (Local)</p>
-                                <p className='text-muted-foreground text-xs'>
-                                    Rolling windows from local `openai_subscription` run telemetry captured by this app only.
-                                </p>
-                                {openAISubscriptionUsageQuery.isLoading ? (
-                                    <p className='text-muted-foreground text-xs'>Loading subscription usage...</p>
-                                ) : null}
-                                {openAISubscriptionUsage ? (
-                                    <div className='grid gap-2 md:grid-cols-2'>
-                                        <div className='border-border bg-background rounded-md border p-3'>
-                                            <p className='text-xs font-semibold'>Last 5 Hours</p>
-                                            <p className='text-muted-foreground mt-1 text-xs'>
-                                                Runs: {formatInteger(openAISubscriptionUsage.fiveHour.runCount)}
-                                            </p>
-                                            <p className='text-muted-foreground text-xs'>
-                                                Total tokens: {formatInteger(openAISubscriptionUsage.fiveHour.totalTokens)}
-                                            </p>
-                                            <p className='text-muted-foreground text-xs'>
-                                                Input/Output: {formatInteger(openAISubscriptionUsage.fiveHour.inputTokens)} /{' '}
-                                                {formatInteger(openAISubscriptionUsage.fiveHour.outputTokens)}
-                                            </p>
-                                            <p className='text-muted-foreground text-xs'>
-                                                Cached/Reasoning: {formatInteger(openAISubscriptionUsage.fiveHour.cachedTokens)} /{' '}
-                                                {formatInteger(openAISubscriptionUsage.fiveHour.reasoningTokens)}
-                                            </p>
-                                            <p className='text-muted-foreground text-xs'>
-                                                Avg latency: {formatInteger(openAISubscriptionUsage.fiveHour.averageLatencyMs)} ms
-                                            </p>
-                                        </div>
-                                        <div className='border-border bg-background rounded-md border p-3'>
-                                            <p className='text-xs font-semibold'>Last 7 Days</p>
-                                            <p className='text-muted-foreground mt-1 text-xs'>
-                                                Runs: {formatInteger(openAISubscriptionUsage.weekly.runCount)}
-                                            </p>
-                                            <p className='text-muted-foreground text-xs'>
-                                                Total tokens: {formatInteger(openAISubscriptionUsage.weekly.totalTokens)}
-                                            </p>
-                                            <p className='text-muted-foreground text-xs'>
-                                                Input/Output: {formatInteger(openAISubscriptionUsage.weekly.inputTokens)} /{' '}
-                                                {formatInteger(openAISubscriptionUsage.weekly.outputTokens)}
-                                            </p>
-                                            <p className='text-muted-foreground text-xs'>
-                                                Cached/Reasoning: {formatInteger(openAISubscriptionUsage.weekly.cachedTokens)} /{' '}
-                                                {formatInteger(openAISubscriptionUsage.weekly.reasoningTokens)}
-                                            </p>
-                                            <p className='text-muted-foreground text-xs'>
-                                                Avg latency: {formatInteger(openAISubscriptionUsage.weekly.averageLatencyMs)} ms
-                                            </p>
-                                        </div>
-                                    </div>
-                                ) : null}
-                            </section>
+                            <OpenAILocalUsageSection
+                                isLoading={openAISubscriptionUsageQuery.isLoading}
+                                usage={openAISubscriptionUsage}
+                            />
                         ) : null}
                     </div>
                 ) : (

@@ -1,3 +1,14 @@
+import {
+    createParser,
+    readOptionalBoolean,
+    readOptionalString,
+    readProfileId,
+    readProviderAuthMethod,
+    readProviderId,
+    readObject,
+    readString,
+} from '@/app/backend/runtime/contracts/parsers/helpers';
+import { parseProfileInput } from '@/app/backend/runtime/contracts/parsers/profile';
 import type {
     ProviderByIdInput,
     ProviderCancelAuthInput,
@@ -16,17 +27,6 @@ import type {
     ProviderSyncCatalogInput,
     ProviderFlowInput,
 } from '@/app/backend/runtime/contracts/types';
-import {
-    createParser,
-    readOptionalBoolean,
-    readOptionalString,
-    readProfileId,
-    readProviderAuthMethod,
-    readProviderId,
-    readObject,
-    readString,
-} from '@/app/backend/runtime/contracts/parsers/helpers';
-import { parseProfileInput } from '@/app/backend/runtime/contracts/parsers/profile';
 
 export function parseProviderSetDefaultInput(input: unknown): ProviderSetDefaultInput {
     const source = readObject(input, 'input');

@@ -1,5 +1,4 @@
 import { topLevelTabs } from '@/app/backend/runtime/contracts/enums';
-import type { McpByServerInput, ToolInvokeInput } from '@/app/backend/runtime/contracts/types';
 import {
     createParser,
     readEnumValue,
@@ -8,6 +7,7 @@ import {
     readProfileId,
     readString,
 } from '@/app/backend/runtime/contracts/parsers/helpers';
+import type { McpByServerInput, ToolInvokeInput } from '@/app/backend/runtime/contracts/types';
 
 export function parseToolInvokeInput(input: unknown): ToolInvokeInput {
     const source = readObject(input, 'input');

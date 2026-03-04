@@ -1,99 +1,27 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import { useConversationUiState } from '@/web/components/conversation/hooks/useConversationUiState';
-import { ModeExecutionPanel } from '@/web/components/conversation/panels/modeExecutionPanel';
 import { useSessionRunSelection } from '@/web/components/conversation/hooks/useSessionRunSelection';
 import { useThreadSidebarState } from '@/web/components/conversation/hooks/useThreadSidebarState';
+import { ModeExecutionPanel } from '@/web/components/conversation/panels/modeExecutionPanel';
 import { SessionWorkspacePanel } from '@/web/components/conversation/sessionWorkspacePanel';
+import {
+    DEFAULT_RUN_OPTIONS,
+    isEntityId,
+    isProviderId,
+    isProviderRunnable,
+    modelExists,
+    resolveLatestRunTarget,
+    type RunTargetSelection,
+} from '@/web/components/conversation/shellHelpers';
+import { submitPrompt as submitPromptFromComposer } from '@/web/components/conversation/shellPromptSubmit';
 import { ConversationSidebar } from '@/web/components/conversation/sidebar';
 import { useRuntimeEventStreamStore } from '@/web/lib/runtime/eventStream';
 import { useRuntimeSnapshot } from '@/web/lib/runtime/useRuntimeSnapshot';
 import { trpc } from '@/web/trpc/client';
 
-import type { ProviderModelRecord, RunRecord } from '@/app/backend/persistence/types';
-import type { EntityId, EntityIdPrefix, RuntimeProviderId, RuntimeRunOptions, TopLevelTab } from '@/app/backend/runtime/contracts';
-
-const DEFAULT_RUN_OPTIONS: RuntimeRunOptions = {
-    reasoning: {
-        effort: 'medium',
-        summary: 'auto',
-        includeEncrypted: false,
-    },
-    cache: {
-        strategy: 'auto',
-    },
-    transport: {
-        openai: 'auto',
-    },
-};
-
-interface RunTargetSelection {
-    providerId: RuntimeProviderId;
-    modelId: string;
-}
-
-function isEntityId<P extends EntityIdPrefix>(value: string | undefined, prefix: P): value is EntityId<P> {
-    return typeof value === 'string' && value.startsWith(`${prefix}_`) && value.length > prefix.length + 1;
-}
-
-function isProviderId(value: string | undefined): value is RuntimeProviderId {
-    return value === 'kilo' || value === 'openai';
-}
-
-function isProviderRunnable(authState: string, authMethod: string): boolean {
-    if (authMethod === 'none') {
-        return false;
-    }
-
-    if (authMethod === 'api_key') {
-        return authState === 'configured' || authState === 'authenticated';
-    }
-
-    return authState === 'authenticated';
-}
-
-function modelExists(modelsByProvider: Map<RuntimeProviderId, ProviderModelRecord[]>, providerId: RuntimeProviderId, modelId: string): boolean {
-    return (modelsByProvider.get(providerId) ?? []).some((model) => model.id === modelId);
-}
-
-function resolveLatestRunTarget(
-    runs: RunRecord[],
-    modelsByProvider: Map<RuntimeProviderId, ProviderModelRecord[]>
-): RunTargetSelection | undefined {
-    for (const run of runs) {
-        if (!isProviderId(run.providerId) || typeof run.modelId !== 'string') {
-            continue;
-        }
-
-        if (!modelExists(modelsByProvider, run.providerId, run.modelId)) {
-            continue;
-        }
-
-        return {
-            providerId: run.providerId,
-            modelId: run.modelId,
-        };
-    }
-
-    return undefined;
-}
-
-function toActionableRunError(message: string, providerLabel: string): string {
-    const normalized = message.toLowerCase();
-    if (
-        normalized.includes('not authenticated') ||
-        normalized.includes('auth state') ||
-        normalized.includes('missing from secret store')
-    ) {
-        return `${providerLabel} is not authenticated. Open Settings > Providers and connect it before running.`;
-    }
-
-    if (normalized.includes('planning-only')) {
-        return message;
-    }
-
-    return `Run failed: ${message}`;
-}
+import type { ProviderModelRecord } from '@/app/backend/persistence/types';
+import type { EntityId, RuntimeProviderId, TopLevelTab } from '@/app/backend/runtime/contracts';
 
 interface ConversationShellProps {
     profileId: string;
@@ -521,78 +449,34 @@ export function ConversationShell({ profileId, topLevelTab, modeKey }: Conversat
                         setPrompt(nextPrompt);
                     }}
                     onSubmitPrompt={() => {
-                        if (prompt.trim().length === 0 || startRunMutation.isPending) {
-                            return;
-                        }
-
-                        if (!isEntityId(selectedSessionId, 'sess')) {
-                            return;
-                        }
-
-                        if (isPlanningMode) {
-                            void planStartMutation
-                                .mutateAsync({
-                                    profileId,
-                                    sessionId: selectedSessionId,
-                                    topLevelTab,
-                                    modeKey,
-                                    prompt: prompt.trim(),
-                                    ...(selectedThread?.workspaceFingerprint
-                                        ? { workspaceFingerprint: selectedThread.workspaceFingerprint }
-                                        : {}),
-                                })
-                                .then(() => {
-                                    setPrompt('');
-                                    setRunSubmitError(undefined);
-                                    void activePlanQuery.refetch();
-                                })
-                                .catch((error: unknown) => {
-                                    const message = error instanceof Error ? error.message : String(error);
-                                    setRunSubmitError(`Plan start failed: ${message}`);
-                                });
-                            return;
-                        }
-
-                        if (!resolvedRunTarget) {
-                            setRunSubmitError('No runnable provider/model found. Open Settings > Providers to configure one.');
-                            return;
-                        }
-
-                        const selectedProvider = providerById.get(resolvedRunTarget.providerId);
-                        if (
-                            selectedProvider &&
-                            !isProviderRunnable(selectedProvider.authState, selectedProvider.authMethod)
-                        ) {
-                            setRunSubmitError(
-                                `${selectedProvider.label} is not authenticated. Open Settings > Providers to connect it before running.`
-                            );
-                            return;
-                        }
-
-                        void startRunMutation
-                            .mutateAsync({
-                                profileId,
-                                sessionId: selectedSessionId,
-                                prompt: prompt.trim(),
-                                topLevelTab,
-                                modeKey,
-                                providerId: resolvedRunTarget.providerId,
-                                modelId: resolvedRunTarget.modelId,
-                                ...(selectedThread?.workspaceFingerprint
-                                    ? { workspaceFingerprint: selectedThread.workspaceFingerprint }
-                                    : {}),
-                                runtimeOptions: DEFAULT_RUN_OPTIONS,
-                            })
-                            .then(() => {
+                        void submitPromptFromComposer({
+                            prompt,
+                            isStartingRun: startRunMutation.isPending,
+                            selectedSessionId,
+                            isPlanningMode,
+                            profileId,
+                            topLevelTab,
+                            modeKey,
+                            workspaceFingerprint: selectedThread?.workspaceFingerprint,
+                            resolvedRunTarget,
+                            runtimeOptions: DEFAULT_RUN_OPTIONS,
+                            providerById,
+                            startPlan: planStartMutation.mutateAsync,
+                            startRun: startRunMutation.mutateAsync,
+                            onPromptCleared: () => {
                                 setRunSubmitError(undefined);
                                 setPrompt('');
+                            },
+                            onPlanRefetch: () => {
+                                void activePlanQuery.refetch();
+                            },
+                            onRuntimeRefetch: () => {
                                 void runtimeSnapshot.refetch();
-                            })
-                            .catch((error: unknown) => {
-                                const message = error instanceof Error ? error.message : String(error);
-                                const providerLabel = selectedProvider?.label ?? resolvedRunTarget.providerId;
-                                setRunSubmitError(toActionableRunError(message, providerLabel));
-                            });
+                            },
+                            onError: (message) => {
+                                setRunSubmitError(message);
+                            },
+                        });
                     }}
                     modePanel={
                         <ModeExecutionPanel

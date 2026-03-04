@@ -1,7 +1,7 @@
 import { useState } from 'react';
 
-import { ConfirmDialog } from '@/web/components/ui/confirmDialog';
 import { Button } from '@/web/components/ui/button';
+import { ConfirmDialog } from '@/web/components/ui/confirmDialog';
 import { trpc } from '@/web/trpc/client';
 
 type UpdateChannel = 'stable' | 'beta' | 'alpha';

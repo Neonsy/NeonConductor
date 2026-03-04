@@ -10,7 +10,13 @@ import { autoUpdater, type ProgressInfo } from 'electron-updater';
 import { err, ok, type Result } from 'neverthrow';
 
 import { appLog } from '@/app/main/logging';
-import { GitHubReleaseResolverError, resolveLatestReleaseForChannel } from '@/app/main/updates/githubReleaseResolver';
+import {
+    checkForUpdatesForSelectedChannel as checkUpdaterForSelectedChannel,
+    configureFeedForChannel as configureUpdaterFeedForChannel,
+    type CachedFeedConfig,
+    type ConfigureFeedOptions,
+    type UpdaterOperationError,
+} from '@/app/main/updates/feedControl';
 
 export type UpdateChannel = 'stable' | 'beta' | 'alpha';
 
@@ -37,29 +43,12 @@ interface PersistedChannelState {
     exists: boolean;
 }
 
-interface ConfigureFeedOptions {
-    forceRefresh?: boolean;
-    applyResolvedChannel?: boolean;
-}
-
-interface CachedFeedConfig {
-    tag: string;
-    feedBaseUrl: string;
-}
-
 interface ActiveUpdateFlow {
     source: 'switch' | 'manual';
     channel: UpdateChannel;
 }
 
 const DEFAULT_CHANNEL: UpdateChannel = 'stable';
-
-type UpdaterOperationErrorCode = 'resolver_failed' | 'check_failed';
-
-interface UpdaterOperationError {
-    code: UpdaterOperationErrorCode;
-    message: string;
-}
 
 let mainWindow: BrowserWindow | null = null;
 let initialized = false;
@@ -187,90 +176,31 @@ function persistChannel(channel: UpdateChannel): void {
 async function configureFeedForChannel(
     channel: UpdateChannel,
     options: ConfigureFeedOptions = {}
-): Promise<Result<void, UpdaterOperationError>> {
-    const forceRefresh = options.forceRefresh ?? false;
-    const applyResolvedChannel = options.applyResolvedChannel ?? true;
-
-    let feedConfig = !forceRefresh ? resolvedFeedCache.get(channel) : undefined;
-
-    try {
-        if (!feedConfig) {
-            const release = await resolveLatestReleaseForChannel(channel);
-            feedConfig = {
-                tag: release.tag,
-                feedBaseUrl: release.feedBaseUrl,
-            };
-            resolvedFeedCache.set(channel, feedConfig);
-        }
-
-        const resolvedFeed = feedConfig;
-
-        appLog.info({
-            tag: 'updater.resolver',
-            message: 'Resolved feed configuration.',
-            channel,
-            releaseTag: resolvedFeed.tag,
-            feedBaseUrl: resolvedFeed.feedBaseUrl,
-        });
-
-        autoUpdater.setFeedURL({
-            provider: 'generic',
-            url: resolvedFeed.feedBaseUrl,
-            channel: toUpdaterChannel(channel),
-        });
-
-        if (applyResolvedChannel) {
-            applyChannel(channel);
-        }
-        return ok(undefined);
-    } catch (error) {
-        if (error instanceof GitHubReleaseResolverError) {
-            appLog.error({
-                tag: 'updater.resolver',
-                message: 'Failed to resolve feed channel.',
-                channel,
-                code: error.code,
-                statusCode: error.statusCode,
-                error: error.message,
-            });
-        } else {
-            appLog.error({
-                tag: 'updater.resolver',
-                message: 'Failed to resolve feed.',
-                channel,
-                ...(error instanceof Error ? { error: error.message } : { error: String(error) }),
-            });
-        }
-
-        return err({
-            code: 'resolver_failed',
-            message: 'Failed to resolve feed for selected channel.',
-        });
-    }
+): ReturnType<typeof configureUpdaterFeedForChannel> {
+    return configureUpdaterFeedForChannel({
+        channel,
+        options,
+        resolvedFeedCache,
+        applyChannel,
+        toUpdaterChannel,
+        updaterClient: autoUpdater,
+        logger: appLog,
+    });
 }
 
 async function checkForUpdatesForSelectedChannel(
     channel: UpdateChannel,
     options: ConfigureFeedOptions = {}
-): Promise<Result<void, UpdaterOperationError>> {
-    const configureResult = await configureFeedForChannel(channel, {
-        forceRefresh: options.forceRefresh ?? true,
-        applyResolvedChannel: options.applyResolvedChannel ?? true,
+): ReturnType<typeof checkUpdaterForSelectedChannel> {
+    return checkUpdaterForSelectedChannel({
+        channel,
+        options,
+        resolvedFeedCache,
+        applyChannel,
+        toUpdaterChannel,
+        updaterClient: autoUpdater,
+        logger: appLog,
     });
-
-    if (configureResult.isErr()) {
-        return configureResult;
-    }
-
-    try {
-        await autoUpdater.checkForUpdates();
-        return ok(undefined);
-    } catch {
-        return err({
-            code: 'check_failed',
-            message: 'Failed to check for updates for selected channel.',
-        });
-    }
 }
 
 function startSwitchFlow(channel: UpdateChannel, options: { feedConfigured?: boolean } = {}): void {

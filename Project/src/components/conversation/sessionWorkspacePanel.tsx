@@ -1,8 +1,9 @@
-import { Button } from '@/web/components/ui/button';
 import { ComposerActionPanel } from '@/web/components/conversation/panels/composerActionPanel';
 import { MessageTimelinePanel } from '@/web/components/conversation/panels/messageTimelinePanel';
+import { Button } from '@/web/components/ui/button';
 
 import type { MessagePartRecord, MessageRecord, SessionSummaryRecord, RunRecord } from '@/app/backend/persistence/types';
+
 import type { ReactNode } from 'react';
 
 interface SessionWorkspacePanelProps {

@@ -1,10 +1,4 @@
 import { contextBudgets, runtimeResetTargets } from '@/app/backend/runtime/contracts/enums';
-import type {
-    ContextBudgetInput,
-    RuntimeEventsSubscriptionInput,
-    RuntimeResetInput,
-    WindowStateSubscriptionInput,
-} from '@/app/backend/runtime/contracts/types';
 import {
     createParser,
     readEnumValue,
@@ -13,6 +7,12 @@ import {
     readOptionalNumber,
     readOptionalString,
 } from '@/app/backend/runtime/contracts/parsers/helpers';
+import type {
+    ContextBudgetInput,
+    RuntimeEventsSubscriptionInput,
+    RuntimeResetInput,
+    WindowStateSubscriptionInput,
+} from '@/app/backend/runtime/contracts/types';
 
 export function parseRuntimeEventsSubscriptionInput(input: unknown): RuntimeEventsSubscriptionInput {
     if (input === undefined) {

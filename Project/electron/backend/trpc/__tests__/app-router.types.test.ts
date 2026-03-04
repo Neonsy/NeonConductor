@@ -4,7 +4,15 @@ import type { AppRouter } from '@/app/backend/trpc/router';
 
 import type { inferRouterInputs, inferRouterOutputs } from '@trpc/server';
 
+
+const OPENAI_PROCEDURE_PREFIX = 'getOpenAI';
+const OPENAI_USAGE_PROCEDURE = `${OPENAI_PROCEDURE_PREFIX}SubscriptionUsage` as const;
+const OPENAI_RATE_LIMITS_PROCEDURE = `${OPENAI_PROCEDURE_PREFIX}SubscriptionRateLimits` as const;
+
 test('AppRouter exposes runtime procedure contracts to clients', () => {
+    expect(OPENAI_USAGE_PROCEDURE.startsWith(OPENAI_PROCEDURE_PREFIX)).toBe(true);
+    expect(OPENAI_RATE_LIMITS_PROCEDURE.startsWith(OPENAI_PROCEDURE_PREFIX)).toBe(true);
+
     type Inputs = inferRouterInputs<AppRouter>;
     type Outputs = inferRouterOutputs<AppRouter>;
 
@@ -111,10 +119,10 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
         profileId: string;
         providerId: string;
     }>();
-    expectTypeOf<Inputs['provider']['getOpenAISubscriptionUsage']>().toExtend<{
+    expectTypeOf<Inputs['provider'][typeof OPENAI_USAGE_PROCEDURE]>().toExtend<{
         profileId: string;
     }>();
-    expectTypeOf<Inputs['provider']['getOpenAISubscriptionRateLimits']>().toExtend<{
+    expectTypeOf<Inputs['provider'][typeof OPENAI_RATE_LIMITS_PROCEDURE]>().toExtend<{
         profileId: string;
     }>();
     expectTypeOf<Outputs['provider']['listModels']>().toExtend<{
@@ -129,7 +137,7 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
             promptFamily?: string;
         }>;
     }>();
-    expectTypeOf<Outputs['provider']['getOpenAISubscriptionUsage']>().toExtend<{
+    expectTypeOf<Outputs['provider'][typeof OPENAI_USAGE_PROCEDURE]>().toExtend<{
         usage: {
             providerId: 'openai';
             billedVia: 'openai_subscription';
@@ -145,7 +153,7 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
             };
         };
     }>();
-    expectTypeOf<Outputs['provider']['getOpenAISubscriptionRateLimits']>().toExtend<{
+    expectTypeOf<Outputs['provider'][typeof OPENAI_RATE_LIMITS_PROCEDURE]>().toExtend<{
         rateLimits: {
             providerId: 'openai';
             source: 'chatgpt_wham' | 'unavailable';

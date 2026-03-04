@@ -1,11 +1,4 @@
 import { permissionPolicies, topLevelTabs } from '@/app/backend/runtime/contracts/enums';
-import type {
-    PermissionDecisionInput,
-    PermissionGetEffectivePolicyInput,
-    PermissionRequestInput,
-    PermissionSetProfileOverrideInput,
-    PermissionSetWorkspaceOverrideInput,
-} from '@/app/backend/runtime/contracts/types';
 import {
     createParser,
     readEntityId,
@@ -15,6 +8,13 @@ import {
     readProfileId,
     readString,
 } from '@/app/backend/runtime/contracts/parsers/helpers';
+import type {
+    PermissionDecisionInput,
+    PermissionGetEffectivePolicyInput,
+    PermissionRequestInput,
+    PermissionSetProfileOverrideInput,
+    PermissionSetWorkspaceOverrideInput,
+} from '@/app/backend/runtime/contracts/types';
 
 export function parsePermissionRequestInput(input: unknown): PermissionRequestInput {
     const source = readObject(input, 'input');
