@@ -106,11 +106,11 @@ export class OrchestratorStore {
                 .execute();
         }
 
-        const run = await this.getRunById(input.profileId, id as EntityId<'orch'>);
+        const run = await this.getRunById(input.profileId, id);
         if (!run) {
             throw new Error(`Failed to create orchestrator run "${id}".`);
         }
-        const steps = await this.listSteps(id as EntityId<'orch'>);
+        const steps = await this.listSteps(id);
 
         return { run, steps };
     }

@@ -1,13 +1,4 @@
 import { conversationScopes, conversationThreadSorts } from '@/app/backend/runtime/contracts/enums';
-import type {
-    ConversationCreateThreadInput,
-    ConversationListBucketsInput,
-    ConversationListTagsInput,
-    ConversationListThreadsInput,
-    ConversationRenameThreadInput,
-    ConversationSetThreadTagsInput,
-    ConversationUpsertTagInput,
-} from '@/app/backend/runtime/contracts/types';
 import {
     createParser,
     readEntityId,
@@ -19,6 +10,15 @@ import {
     readStringArray,
 } from '@/app/backend/runtime/contracts/parsers/helpers';
 import { parseProfileInput } from '@/app/backend/runtime/contracts/parsers/profile';
+import type {
+    ConversationCreateThreadInput,
+    ConversationListBucketsInput,
+    ConversationListTagsInput,
+    ConversationListThreadsInput,
+    ConversationRenameThreadInput,
+    ConversationSetThreadTagsInput,
+    ConversationUpsertTagInput,
+} from '@/app/backend/runtime/contracts/types';
 
 export function parseConversationListBucketsInput(input: unknown): ConversationListBucketsInput {
     return parseProfileInput(input);

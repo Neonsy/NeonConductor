@@ -1,5 +1,4 @@
 import { topLevelTabs } from '@/app/backend/runtime/contracts/enums';
-import type { ModeGetActiveInput, ModeListInput, ModeSetActiveInput } from '@/app/backend/runtime/contracts/types';
 import {
     createParser,
     readEnumValue,
@@ -8,6 +7,7 @@ import {
     readProfileId,
     readString,
 } from '@/app/backend/runtime/contracts/parsers/helpers';
+import type { ModeGetActiveInput, ModeListInput, ModeSetActiveInput } from '@/app/backend/runtime/contracts/types';
 
 export function parseModeListInput(input: unknown): ModeListInput {
     const source = readObject(input, 'input');

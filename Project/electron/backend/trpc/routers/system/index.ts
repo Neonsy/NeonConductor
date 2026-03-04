@@ -3,6 +3,7 @@
  * Handles window management and other system tasks.
  */
 
+import { windowStateSubscriptionInputSchema } from '@/app/backend/runtime/contracts';
 import { publicProcedure, router } from '@/app/backend/trpc/init';
 import { signalReady } from '@/app/backend/trpc/routers/system/signalReady';
 import {
@@ -14,7 +15,6 @@ import {
     toggleMaximizeWindow,
 } from '@/app/backend/trpc/routers/system/windowControls';
 import type { WindowStateEvent } from '@/app/backend/trpc/routers/system/windowControls';
-import { windowStateSubscriptionInputSchema } from '@/app/backend/runtime/contracts';
 
 function waitForNextWindowStateEvent(cursor: number, signal: AbortSignal): Promise<WindowStateEvent | null> {
     return new Promise((resolve) => {

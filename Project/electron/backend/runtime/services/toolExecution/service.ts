@@ -71,8 +71,24 @@ function normalizeToolPath(targetPath: string | undefined): string {
     return path.resolve(process.cwd(), targetPath);
 }
 
+function resolveAbsoluteToolPath(targetPath: string | undefined): Result<string, ToolExecutionFailure> {
+    const normalizedPath = normalizeToolPath(targetPath);
+    if (!path.isAbsolute(normalizedPath)) {
+        return err({
+            code: 'invalid_args',
+            message: 'Tool path must resolve to an absolute path.',
+        });
+    }
+
+    return ok(path.normalize(normalizedPath));
+}
+
 async function listFilesTool(args: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const rootPath = normalizeToolPath(readStringArg(args, 'path'));
+    const rootPathResult = resolveAbsoluteToolPath(readStringArg(args, 'path'));
+    if (rootPathResult.isErr()) {
+        throw new Error(rootPathResult.error.message);
+    }
+    const rootPath = rootPathResult.value;
     const includeHidden = readBooleanArg(args, 'includeHidden', false);
     const recursive = readBooleanArg(args, 'recursive', false);
     const maxEntries = Math.max(1, Math.floor(readNumberArg(args, 'maxEntries', 200)));
@@ -85,6 +101,7 @@ async function listFilesTool(args: Record<string, unknown>): Promise<Record<stri
             continue;
         }
 
+        // eslint-disable-next-line security/detect-non-literal-fs-filename -- current is normalized absolute path from validated tool args.
         const dirents = await readdir(current, { withFileTypes: true });
         for (const dirent of dirents) {
             if (!includeHidden && dirent.name.startsWith('.')) {
@@ -125,8 +142,13 @@ async function readFileTool(args: Record<string, unknown>): Promise<Result<Recor
     }
 
     const maxBytes = Math.max(1, Math.floor(readNumberArg(args, 'maxBytes', 200_000)));
-    const targetPath = normalizeToolPath(fileArg);
+    const targetPathResult = resolveAbsoluteToolPath(fileArg);
+    if (targetPathResult.isErr()) {
+        return err(targetPathResult.error);
+    }
+    const targetPath = targetPathResult.value;
     try {
+        // eslint-disable-next-line security/detect-non-literal-fs-filename -- targetPath is normalized absolute path from validated tool args.
         const buffer = await readFile(targetPath);
         const truncated = buffer.byteLength > maxBytes;
         const content = buffer.subarray(0, maxBytes).toString('utf8');

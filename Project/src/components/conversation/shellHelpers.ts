@@ -1,0 +1,88 @@
+import type { ProviderModelRecord, RunRecord } from '@/app/backend/persistence/types';
+import type { EntityId, EntityIdPrefix, RuntimeProviderId, RuntimeRunOptions } from '@/app/backend/runtime/contracts';
+
+export const DEFAULT_RUN_OPTIONS: RuntimeRunOptions = {
+    reasoning: {
+        effort: 'medium',
+        summary: 'auto',
+        includeEncrypted: false,
+    },
+    cache: {
+        strategy: 'auto',
+    },
+    transport: {
+        openai: 'auto',
+    },
+};
+
+export interface RunTargetSelection {
+    providerId: RuntimeProviderId;
+    modelId: string;
+}
+
+export function isEntityId<P extends EntityIdPrefix>(value: string | undefined, prefix: P): value is EntityId<P> {
+    return typeof value === 'string' && value.startsWith(`${prefix}_`) && value.length > prefix.length + 1;
+}
+
+export function isProviderId(value: string | undefined): value is RuntimeProviderId {
+    return value === 'kilo' || value === 'openai';
+}
+
+export function isProviderRunnable(authState: string, authMethod: string): boolean {
+    if (authMethod === 'none') {
+        return false;
+    }
+
+    if (authMethod === 'api_key') {
+        return authState === 'configured' || authState === 'authenticated';
+    }
+
+    return authState === 'authenticated';
+}
+
+export function modelExists(
+    modelsByProvider: Map<RuntimeProviderId, ProviderModelRecord[]>,
+    providerId: RuntimeProviderId,
+    modelId: string
+): boolean {
+    return (modelsByProvider.get(providerId) ?? []).some((model) => model.id === modelId);
+}
+
+export function resolveLatestRunTarget(
+    runs: RunRecord[],
+    modelsByProvider: Map<RuntimeProviderId, ProviderModelRecord[]>
+): RunTargetSelection | undefined {
+    for (const run of runs) {
+        if (!isProviderId(run.providerId) || typeof run.modelId !== 'string') {
+            continue;
+        }
+
+        if (!modelExists(modelsByProvider, run.providerId, run.modelId)) {
+            continue;
+        }
+
+        return {
+            providerId: run.providerId,
+            modelId: run.modelId,
+        };
+    }
+
+    return undefined;
+}
+
+export function toActionableRunError(message: string, providerLabel: string): string {
+    const normalized = message.toLowerCase();
+    if (
+        normalized.includes('not authenticated') ||
+        normalized.includes('auth state') ||
+        normalized.includes('missing from secret store')
+    ) {
+        return `${providerLabel} is not authenticated. Open Settings > Providers and connect it before running.`;
+    }
+
+    if (normalized.includes('planning-only')) {
+        return message;
+    }
+
+    return `Run failed: ${message}`;
+}
