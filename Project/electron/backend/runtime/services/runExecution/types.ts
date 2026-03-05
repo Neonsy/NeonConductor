@@ -6,6 +6,7 @@ import type {
     RunStatus,
     TopLevelTab,
 } from '@/app/backend/runtime/contracts';
+import type { RunExecutionErrorCode } from '@/app/backend/runtime/services/runExecution/errors';
 
 export interface StartRunInput {
     profileId: string;
@@ -14,6 +15,8 @@ export interface StartRunInput {
     topLevelTab: TopLevelTab;
     modeKey: string;
     workspaceFingerprint?: string;
+    requestId?: string;
+    correlationId?: string;
     runtimeOptions: RuntimeRunOptions;
     providerId?: RuntimeProviderId;
     modelId?: string;
@@ -53,7 +56,9 @@ export interface RunTransportResolution {
 export type StartRunResult =
     | {
           accepted: false;
-          reason: 'not_found' | 'already_running';
+          reason: 'not_found' | 'already_running' | 'rejected';
+          code?: RunExecutionErrorCode;
+          message?: string;
       }
     | {
           accepted: true;

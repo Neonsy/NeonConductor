@@ -10,6 +10,8 @@ function createCaller() {
     const context: Context = {
         senderId: 1,
         win: null,
+        requestId: 'test-request-id',
+        correlationId: 'test-correlation-id',
     };
 
     return appRouter.createCaller(context);
@@ -48,6 +50,9 @@ async function createSession(caller: ReturnType<typeof createCaller>, profileId:
         threadId: threadResult.thread.id,
         kind: 'local',
     });
+    if (!sessionResult.created) {
+        throw new Error(`Expected session creation success, received "${sessionResult.reason}".`);
+    }
     if (!isEntityId(sessionResult.session.id, 'sess')) {
         throw new Error('Expected session id with "sess_" prefix.');
     }

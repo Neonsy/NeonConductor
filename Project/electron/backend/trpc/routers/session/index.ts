@@ -9,24 +9,36 @@ import {
     sessionRevertInputSchema,
     sessionStartRunInputSchema,
 } from '@/app/backend/runtime/contracts';
+import { eventMetadata } from '@/app/backend/runtime/services/common/logContext';
 import { runExecutionService } from '@/app/backend/runtime/services/runExecution/service';
 import { runtimeEventLogService } from '@/app/backend/runtime/services/runtimeEventLog';
 import { sessionEditService } from '@/app/backend/runtime/services/sessionEdit/service';
 import { publicProcedure, router } from '@/app/backend/trpc/init';
 
 export const sessionRouter = router({
-    create: publicProcedure.input(sessionCreateInputSchema).mutation(async ({ input }) => {
+    create: publicProcedure.input(sessionCreateInputSchema).mutation(async ({ input, ctx }) => {
         const session = await sessionStore.create(input.profileId, input.threadId, input.kind);
+        if (!session.created) {
+            return {
+                created: false as const,
+                reason: session.reason,
+            };
+        }
         await runtimeEventLogService.append({
             entityType: 'session',
-            entityId: session.id,
+            entityId: session.session.id,
             eventType: 'session.created',
             payload: {
-                session,
+                session: session.session,
             },
+            ...eventMetadata({
+                requestId: ctx.requestId,
+                correlationId: ctx.correlationId,
+                origin: 'trpc.session.create',
+            }),
         });
 
-        return { session };
+        return { created: true as const, session: session.session };
     }),
     list: publicProcedure.input(profileInputSchema).query(async ({ input }) => {
         return { sessions: await sessionStore.list(input.profileId) };
@@ -34,8 +46,12 @@ export const sessionRouter = router({
     status: publicProcedure.input(sessionByIdInputSchema).query(async ({ input }) => {
         return sessionStore.status(input.profileId, input.sessionId);
     }),
-    startRun: publicProcedure.input(sessionStartRunInputSchema).mutation(async ({ input }) => {
-        const result = await runExecutionService.startRun(input);
+    startRun: publicProcedure.input(sessionStartRunInputSchema).mutation(async ({ input, ctx }) => {
+        const result = await runExecutionService.startRun({
+            ...input,
+            requestId: ctx.requestId,
+            correlationId: ctx.correlationId,
+        });
 
         if (result.accepted) {
             await runtimeEventLogService.append({
@@ -49,6 +65,11 @@ export const sessionRouter = router({
                     modeKey: input.modeKey,
                     workspaceFingerprint: input.workspaceFingerprint ?? null,
                 },
+                ...eventMetadata({
+                    requestId: ctx.requestId,
+                    correlationId: ctx.correlationId,
+                    origin: 'trpc.session.startRun',
+                }),
             });
         }
 
@@ -70,7 +91,7 @@ export const sessionRouter = router({
             messageParts,
         };
     }),
-    abort: publicProcedure.input(sessionByIdInputSchema).mutation(async ({ input }) => {
+    abort: publicProcedure.input(sessionByIdInputSchema).mutation(async ({ input, ctx }) => {
         const result = await runExecutionService.abortRun(input.profileId, input.sessionId);
         if (result.aborted) {
             await runtimeEventLogService.append({
@@ -81,12 +102,17 @@ export const sessionRouter = router({
                     runId: result.runId,
                     profileId: input.profileId,
                 },
+                ...eventMetadata({
+                    requestId: ctx.requestId,
+                    correlationId: ctx.correlationId,
+                    origin: 'trpc.session.abort',
+                }),
             });
         }
 
         return result;
     }),
-    revert: publicProcedure.input(sessionRevertInputSchema).mutation(async ({ input }) => {
+    revert: publicProcedure.input(sessionRevertInputSchema).mutation(async ({ input, ctx }) => {
         if (input.topLevelTab === 'chat') {
             return {
                 reverted: false as const,
@@ -119,12 +145,17 @@ export const sessionRouter = router({
                     session: result.session,
                     profileId: input.profileId,
                 },
+                ...eventMetadata({
+                    requestId: ctx.requestId,
+                    correlationId: ctx.correlationId,
+                    origin: 'trpc.session.revert',
+                }),
             });
         }
 
         return result;
     }),
-    edit: publicProcedure.input(sessionEditInputSchema).mutation(async ({ input }) => {
+    edit: publicProcedure.input(sessionEditInputSchema).mutation(async ({ input, ctx }) => {
         const sessionThread = await threadStore.getBySessionId(input.profileId, input.sessionId);
         if (!sessionThread) {
             return {
@@ -153,6 +184,11 @@ export const sessionRouter = router({
                     started: result.started,
                     runId: result.runId ?? null,
                 },
+                ...eventMetadata({
+                    requestId: ctx.requestId,
+                    correlationId: ctx.correlationId,
+                    origin: 'trpc.session.edit',
+                }),
             });
         }
 

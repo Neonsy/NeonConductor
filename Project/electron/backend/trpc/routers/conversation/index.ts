@@ -12,8 +12,10 @@ import {
     conversationSetThreadTagsInputSchema,
     conversationUpsertTagInputSchema,
 } from '@/app/backend/runtime/contracts';
+import { eventMetadata } from '@/app/backend/runtime/services/common/logContext';
 import { runtimeEventLogService } from '@/app/backend/runtime/services/runtimeEventLog';
 import { publicProcedure, router } from '@/app/backend/trpc/init';
+import { toTrpcError } from '@/app/backend/trpc/trpcErrorMap';
 
 const THREAD_SORT_SETTING_KEY = 'conversation_thread_sort';
 const DEFAULT_THREAD_SORT = 'latest' as const;
@@ -104,10 +106,13 @@ export const conversationRouter = router({
             }),
         };
     }),
-    createThread: publicProcedure.input(conversationCreateThreadInputSchema).mutation(async ({ input }) => {
+    createThread: publicProcedure.input(conversationCreateThreadInputSchema).mutation(async ({ input, ctx }) => {
         const topLevelTab = input.topLevelTab ?? 'chat';
         if (input.scope === 'detached' && topLevelTab !== 'chat') {
-            throw new Error('Playground threads are chat-only.');
+            throw toTrpcError({
+                code: 'unsupported_tab',
+                message: 'Playground threads are chat-only.',
+            });
         }
 
         const bucket = await conversationStore.createOrGetBucket({
@@ -115,32 +120,46 @@ export const conversationRouter = router({
             scope: input.scope,
             ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
         });
+        if (bucket.isErr()) {
+            throw toTrpcError(bucket.error);
+        }
         const thread = await threadStore.create({
             profileId: input.profileId,
-            conversationId: bucket.id,
+            conversationId: bucket.value.id,
             title: input.title,
             topLevelTab,
         });
+        if (thread.isErr()) {
+            throw toTrpcError(thread.error);
+        }
 
         await runtimeEventLogService.append({
             entityType: 'thread',
-            entityId: thread.id,
+            entityId: thread.value.id,
             eventType: 'conversation.thread.created',
             payload: {
                 profileId: input.profileId,
-                bucket,
-                thread,
+                bucket: bucket.value,
+                thread: thread.value,
             },
+            ...eventMetadata({
+                requestId: ctx.requestId,
+                correlationId: ctx.correlationId,
+                origin: 'trpc.conversation.createThread',
+            }),
         });
 
         return {
-            bucket,
-            thread,
+            bucket: bucket.value,
+            thread: thread.value,
         };
     }),
-    renameThread: publicProcedure.input(conversationRenameThreadInputSchema).mutation(async ({ input }) => {
+    renameThread: publicProcedure.input(conversationRenameThreadInputSchema).mutation(async ({ input, ctx }) => {
         const thread = await threadStore.rename(input.profileId, input.threadId, input.title);
-        if (!thread) {
+        if (thread.isErr()) {
+            throw toTrpcError(thread.error);
+        }
+        if (!thread.value) {
             return {
                 renamed: false as const,
                 reason: 'not_found' as const,
@@ -149,17 +168,22 @@ export const conversationRouter = router({
 
         await runtimeEventLogService.append({
             entityType: 'thread',
-            entityId: thread.id,
+            entityId: thread.value.id,
             eventType: 'conversation.thread.renamed',
             payload: {
                 profileId: input.profileId,
-                thread,
+                thread: thread.value,
             },
+            ...eventMetadata({
+                requestId: ctx.requestId,
+                correlationId: ctx.correlationId,
+                origin: 'trpc.conversation.renameThread',
+            }),
         });
 
         return {
             renamed: true as const,
-            thread,
+            thread: thread.value,
         };
     }),
     listTags: publicProcedure.input(conversationListTagsInputSchema).query(async ({ input }) => {
@@ -171,7 +195,7 @@ export const conversationRouter = router({
         const tag = await tagStore.upsert(input.profileId, input.label);
         return { tag };
     }),
-    setThreadTags: publicProcedure.input(conversationSetThreadTagsInputSchema).mutation(async ({ input }) => {
+    setThreadTags: publicProcedure.input(conversationSetThreadTagsInputSchema).mutation(async ({ input, ctx }) => {
         const threadTags = await tagStore.setThreadTags(input.profileId, input.threadId, input.tagIds);
         await runtimeEventLogService.append({
             entityType: 'thread',
@@ -182,6 +206,11 @@ export const conversationRouter = router({
                 threadId: input.threadId,
                 tagIds: threadTags.map((item) => item.tagId),
             },
+            ...eventMetadata({
+                requestId: ctx.requestId,
+                correlationId: ctx.correlationId,
+                origin: 'trpc.conversation.setThreadTags',
+            }),
         });
 
         return {
@@ -223,7 +252,10 @@ export const conversationRouter = router({
             if (input.mode === 'ai_optional') {
                 const aiModel = input.aiModel?.trim();
                 if (!aiModel) {
-                    throw new Error('Invalid "aiModel": required when mode is "ai_optional".');
+                    throw toTrpcError({
+                        code: 'invalid_input',
+                        message: 'Invalid "aiModel": required when mode is "ai_optional".',
+                    });
                 }
                 await settingsStore.setString(input.profileId, THREAD_TITLE_AI_MODEL_SETTING_KEY, aiModel);
             } else {

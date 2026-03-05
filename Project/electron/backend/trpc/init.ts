@@ -3,11 +3,11 @@
  * Creates the base router and procedure builders used by all routers.
  */
 
-import { TRPCError, initTRPC } from '@trpc/server';
+import { initTRPC } from '@trpc/server';
 import { createRequestLogger } from 'evlog';
-import { randomUUID } from 'node:crypto';
 
 import type { Context } from '@/app/backend/trpc/context';
+import { extractErrorCode, toTrpcError } from '@/app/backend/trpc/trpcErrorMap';
 import { isAppLoggerEnabled } from '@/app/main/logging';
 
 const t = initTRPC.context<Context>().create({
@@ -23,29 +23,7 @@ const TRPC_STATUS_BY_CODE = new Map<string, number>([
     ['TIMEOUT', 408],
     ['CONFLICT', 409],
     ['TOO_MANY_REQUESTS', 429],
-]);
-
-const TRPC_CODE_BY_OPERATIONAL_ERROR_CODE = new Map<string, TRPCError['code']>([
-    ['auth_missing', 'UNAUTHORIZED'],
-    ['flow_not_found', 'NOT_FOUND'],
-    ['invalid_payload', 'BAD_REQUEST'],
-    ['cache_key_invalid', 'BAD_REQUEST'],
-    ['runtime_option_invalid', 'BAD_REQUEST'],
-    ['provider_auth_invalid_state', 'UNAUTHORIZED'],
-    ['provider_auth_unsupported', 'BAD_REQUEST'],
-    ['provider_model_missing', 'NOT_FOUND'],
-    ['provider_model_not_available', 'BAD_REQUEST'],
-    ['provider_not_authenticated', 'UNAUTHORIZED'],
-    ['provider_not_registered', 'NOT_FOUND'],
-    ['provider_not_supported', 'BAD_REQUEST'],
-    ['provider_request_failed', 'INTERNAL_SERVER_ERROR'],
-    ['provider_request_unavailable', 'TIMEOUT'],
-    ['provider_secret_missing', 'UNAUTHORIZED'],
-    ['refresh_token_missing', 'UNAUTHORIZED'],
-    ['request_failed', 'INTERNAL_SERVER_ERROR'],
-    ['request_unavailable', 'TIMEOUT'],
-    ['schema_error', 'BAD_REQUEST'],
-    ['timeout', 'TIMEOUT'],
+    ['INTERNAL_SERVER_ERROR', 500],
 ]);
 
 function mapTrpcCodeToStatus(code: unknown): number {
@@ -54,23 +32,6 @@ function mapTrpcCodeToStatus(code: unknown): number {
     }
 
     return TRPC_STATUS_BY_CODE.get(code) ?? 500;
-}
-
-function mapOperationalErrorCodeToTrpcCode(code: string | undefined): TRPCError['code'] | undefined {
-    if (!code) {
-        return undefined;
-    }
-
-    return TRPC_CODE_BY_OPERATIONAL_ERROR_CODE.get(code);
-}
-
-function extractErrorCode(error: unknown): string | undefined {
-    if (!error || typeof error !== 'object' || !('code' in error)) {
-        return undefined;
-    }
-
-    const { code } = error as { code?: unknown };
-    return typeof code === 'string' ? code : undefined;
 }
 
 function normalizeError(error: unknown): Error {
@@ -82,29 +43,7 @@ function normalizeError(error: unknown): Error {
 }
 
 function normalizeBoundaryError(error: unknown): Error {
-    const normalized = normalizeError(error);
-    if (normalized instanceof TRPCError) {
-        return normalized;
-    }
-
-    const operationalTrpcCode = mapOperationalErrorCodeToTrpcCode(extractErrorCode(normalized));
-    if (operationalTrpcCode) {
-        return new TRPCError({
-            code: operationalTrpcCode,
-            message: normalized.message,
-            cause: normalized,
-        });
-    }
-
-    if (normalized.message.startsWith('Invalid "')) {
-        return new TRPCError({
-            code: 'BAD_REQUEST',
-            message: normalized.message,
-            cause: normalized,
-        });
-    }
-
-    return normalized;
+    return toTrpcError(error);
 }
 
 const trpcRequestLoggingMiddleware = t.middleware(async (opts) => {
@@ -112,7 +51,7 @@ const trpcRequestLoggingMiddleware = t.middleware(async (opts) => {
         return opts.next();
     }
 
-    const requestId = randomUUID();
+    const requestId = opts.ctx.requestId;
     const requestLog = createRequestLogger({
         method: opts.type.toUpperCase(),
         path: `trpc.${opts.path}`,
@@ -121,6 +60,7 @@ const trpcRequestLoggingMiddleware = t.middleware(async (opts) => {
 
     requestLog.set({
         senderId: opts.ctx.senderId,
+        correlationId: opts.ctx.correlationId,
         ...(opts.ctx.win?.id ? { windowId: opts.ctx.win.id } : {}),
     });
 

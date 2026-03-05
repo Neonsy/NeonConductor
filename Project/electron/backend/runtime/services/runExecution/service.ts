@@ -8,6 +8,7 @@ import {
 } from '@/app/backend/persistence/stores';
 import type { ProviderRuntimeInput, ProviderRuntimeTransportSelection } from '@/app/backend/providers/types';
 import type { EntityId, ProviderAuthMethod, RuntimeProviderId } from '@/app/backend/runtime/contracts';
+import { eventMetadata, withCorrelationContext } from '@/app/backend/runtime/services/common/logContext';
 import { resolveRunCache } from '@/app/backend/runtime/services/runExecution/cacheKey';
 import { validateRunCapabilities } from '@/app/backend/runtime/services/runExecution/capabilities';
 import { buildChatReplayContext } from '@/app/backend/runtime/services/runExecution/chatContext';
@@ -44,10 +45,13 @@ function createSessionKey(profileId: string, sessionId: string): string {
     return `${profileId}:${sessionId}`;
 }
 
-function toRunExecutionError(error: RunExecutionError): Error {
-    const exception = new Error(error.message);
-    (exception as { code?: string }).code = error.code;
-    return exception;
+function toRejectedStartResult(error: RunExecutionError): Extract<StartRunResult, { accepted: false }> {
+    return {
+        accepted: false,
+        reason: 'rejected',
+        code: error.code,
+        message: error.message,
+    };
 }
 
 export class RunExecutionService {
@@ -60,9 +64,14 @@ export class RunExecutionService {
             appLog.warn({
                 tag: 'run-execution',
                 message: 'Rejected run start because session is not runnable.',
-                profileId: input.profileId,
-                sessionId: input.sessionId,
-                reason: runnable.reason,
+                ...withCorrelationContext(
+                    { requestId: input.requestId, correlationId: input.correlationId },
+                    {
+                        profileId: input.profileId,
+                        sessionId: input.sessionId,
+                        reason: runnable.reason,
+                    }
+                ),
             });
             return {
                 accepted: false,
@@ -80,12 +89,17 @@ export class RunExecutionService {
             appLog.warn({
                 tag: 'run-execution',
                 message: 'Rejected run start because session thread mode does not match selected tab.',
-                profileId: input.profileId,
-                sessionId: input.sessionId,
-                expectedTopLevelTab: sessionThread.thread.topLevelTab,
-                requestedTopLevelTab: input.topLevelTab,
+                ...withCorrelationContext(
+                    { requestId: input.requestId, correlationId: input.correlationId },
+                    {
+                        profileId: input.profileId,
+                        sessionId: input.sessionId,
+                        expectedTopLevelTab: sessionThread.thread.topLevelTab,
+                        requestedTopLevelTab: input.topLevelTab,
+                    }
+                ),
             });
-            throw toRunExecutionError({
+            return toRejectedStartResult({
                 code: 'invalid_mode',
                 message: `Thread mode "${sessionThread.thread.topLevelTab}" does not match tab "${input.topLevelTab}".`,
             });
@@ -97,7 +111,7 @@ export class RunExecutionService {
             modeKey: input.modeKey,
         });
         if (resolvedModeResult.isErr()) {
-            throw toRunExecutionError(resolvedModeResult.error);
+            return toRejectedStartResult(resolvedModeResult.error);
         }
         const resolvedMode = resolvedModeResult.value;
 
@@ -107,7 +121,7 @@ export class RunExecutionService {
             ...(input.modelId ? { modelId: input.modelId } : {}),
         });
         if (resolvedTargetResult.isErr()) {
-            throw toRunExecutionError(resolvedTargetResult.error);
+            return toRejectedStartResult(resolvedTargetResult.error);
         }
         const resolvedTarget = resolvedTargetResult.value;
         const explicitTargetRequested = input.providerId !== undefined || input.modelId !== undefined;
@@ -122,13 +136,18 @@ export class RunExecutionService {
                 appLog.warn({
                     tag: 'run-execution',
                     message: 'Explicit provider/model target is not runnable with current auth state.',
-                    profileId: input.profileId,
-                    sessionId: input.sessionId,
-                    providerId: activeTarget.providerId,
-                    modelId: activeTarget.modelId,
-                    error: resolvedAuthResult.error.message,
+                    ...withCorrelationContext(
+                        { requestId: input.requestId, correlationId: input.correlationId },
+                        {
+                            profileId: input.profileId,
+                            sessionId: input.sessionId,
+                            providerId: activeTarget.providerId,
+                            modelId: activeTarget.modelId,
+                            error: resolvedAuthResult.error.message,
+                        }
+                    ),
                 });
-                throw toRunExecutionError(resolvedAuthResult.error);
+                return toRejectedStartResult(resolvedAuthResult.error);
             }
 
             const fallback = await resolveFirstRunnableRunTarget(input.profileId, {
@@ -139,24 +158,34 @@ export class RunExecutionService {
                 appLog.warn({
                     tag: 'run-execution',
                     message: 'No runnable provider/model fallback found for session run.',
-                    profileId: input.profileId,
-                    sessionId: input.sessionId,
-                    providerId: activeTarget.providerId,
-                    modelId: activeTarget.modelId,
-                    error: resolvedAuthResult.error.message,
+                    ...withCorrelationContext(
+                        { requestId: input.requestId, correlationId: input.correlationId },
+                        {
+                            profileId: input.profileId,
+                            sessionId: input.sessionId,
+                            providerId: activeTarget.providerId,
+                            modelId: activeTarget.modelId,
+                            error: resolvedAuthResult.error.message,
+                        }
+                    ),
                 });
-                throw toRunExecutionError(resolvedAuthResult.error);
+                return toRejectedStartResult(resolvedAuthResult.error);
             }
 
             appLog.info({
                 tag: 'run-execution',
                 message: 'Using provider/model fallback for session run.',
-                profileId: input.profileId,
-                sessionId: input.sessionId,
-                requestedProviderId: activeTarget.providerId,
-                requestedModelId: activeTarget.modelId,
-                fallbackProviderId: fallback.target.providerId,
-                fallbackModelId: fallback.target.modelId,
+                ...withCorrelationContext(
+                    { requestId: input.requestId, correlationId: input.correlationId },
+                    {
+                        profileId: input.profileId,
+                        sessionId: input.sessionId,
+                        requestedProviderId: activeTarget.providerId,
+                        requestedModelId: activeTarget.modelId,
+                        fallbackProviderId: fallback.target.providerId,
+                        fallbackModelId: fallback.target.modelId,
+                    }
+                ),
             });
 
             activeTarget = fallback.target;
@@ -173,12 +202,17 @@ export class RunExecutionService {
             appLog.warn({
                 tag: 'run-execution',
                 message: 'Model capabilities missing for run target.',
-                profileId: input.profileId,
-                sessionId: input.sessionId,
-                providerId: activeTarget.providerId,
-                modelId: activeTarget.modelId,
+                ...withCorrelationContext(
+                    { requestId: input.requestId, correlationId: input.correlationId },
+                    {
+                        profileId: input.profileId,
+                        sessionId: input.sessionId,
+                        providerId: activeTarget.providerId,
+                        modelId: activeTarget.modelId,
+                    }
+                ),
             });
-            throw toRunExecutionError({
+            return toRejectedStartResult({
                 code: 'provider_model_missing',
                 message: `Model "${activeTarget.modelId}" is missing runtime capabilities.`,
             });
@@ -194,13 +228,18 @@ export class RunExecutionService {
             appLog.warn({
                 tag: 'run-execution',
                 message: 'Rejected run start because runtime options are invalid for the selected model.',
-                profileId: input.profileId,
-                sessionId: input.sessionId,
-                providerId: activeTarget.providerId,
-                modelId: activeTarget.modelId,
-                error: capabilityValidation.error.message,
+                ...withCorrelationContext(
+                    { requestId: input.requestId, correlationId: input.correlationId },
+                    {
+                        profileId: input.profileId,
+                        sessionId: input.sessionId,
+                        providerId: activeTarget.providerId,
+                        modelId: activeTarget.modelId,
+                        error: capabilityValidation.error.message,
+                    }
+                ),
             });
-            throw toRunExecutionError(capabilityValidation.error);
+            return toRejectedStartResult(capabilityValidation.error);
         }
 
         const initialTransport = resolveInitialRunTransport({
@@ -227,13 +266,18 @@ export class RunExecutionService {
             appLog.warn({
                 tag: 'run-execution',
                 message: 'Failed to resolve cache settings for run start.',
-                profileId: input.profileId,
-                sessionId: input.sessionId,
-                providerId: activeTarget.providerId,
-                modelId: activeTarget.modelId,
-                error: resolvedCacheResult.error.message,
+                ...withCorrelationContext(
+                    { requestId: input.requestId, correlationId: input.correlationId },
+                    {
+                        profileId: input.profileId,
+                        sessionId: input.sessionId,
+                        providerId: activeTarget.providerId,
+                        modelId: activeTarget.modelId,
+                        error: resolvedCacheResult.error.message,
+                    }
+                ),
             });
-            throw toRunExecutionError(resolvedCacheResult.error);
+            return toRejectedStartResult(resolvedCacheResult.error);
         }
         const resolvedCache = resolvedCacheResult.value;
         const kiloRoutingPreference =
@@ -322,6 +366,11 @@ export class RunExecutionService {
                     executionPolicy: resolvedMode.mode.executionPolicy,
                 },
             },
+            ...eventMetadata({
+                requestId: input.requestId,
+                correlationId: input.correlationId,
+                origin: 'runtime.runExecution.startRun',
+            }),
         });
 
         await runtimeEventLogService.append({
@@ -333,6 +382,11 @@ export class RunExecutionService {
                 sessionId: input.sessionId,
                 profileId: input.profileId,
             },
+            ...eventMetadata({
+                requestId: input.requestId,
+                correlationId: input.correlationId,
+                origin: 'runtime.runExecution.startRun',
+            }),
         });
 
         await emitCacheResolutionEvent({
@@ -394,13 +448,18 @@ export class RunExecutionService {
         appLog.info({
             tag: 'run-execution',
             message: 'Started session run.',
-            profileId: input.profileId,
-            sessionId: input.sessionId,
-            runId: run.id,
-            providerId: activeTarget.providerId,
-            modelId: activeTarget.modelId,
-            topLevelTab: input.topLevelTab,
-            modeKey: input.modeKey,
+            ...withCorrelationContext(
+                { requestId: input.requestId, correlationId: input.correlationId },
+                {
+                    profileId: input.profileId,
+                    sessionId: input.sessionId,
+                    runId: run.id,
+                    providerId: activeTarget.providerId,
+                    modelId: activeTarget.modelId,
+                    topLevelTab: input.topLevelTab,
+                    modeKey: input.modeKey,
+                }
+            ),
         });
 
         return {

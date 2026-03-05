@@ -120,7 +120,11 @@ export class SessionStore {
         return mapSessionSummary(updatedSession, await this.countTurns(profileId, updatedSession.id));
     }
 
-    async create(profileId: string, threadId: string, kind: SessionKind): Promise<SessionSummaryRecord> {
+    async create(
+        profileId: string,
+        threadId: string,
+        kind: SessionKind
+    ): Promise<{ created: false; reason: 'thread_not_found' } | { created: true; session: SessionSummaryRecord }> {
         const { db } = getPersistence();
         const now = nowIso();
         const thread = await db
@@ -130,7 +134,7 @@ export class SessionStore {
             .where('profile_id', '=', profileId)
             .executeTakeFirst();
         if (!thread) {
-            throw new Error(`Thread "${threadId}" does not exist for profile "${profileId}".`);
+            return { created: false, reason: 'thread_not_found' };
         }
 
         const inserted = await db
@@ -150,7 +154,10 @@ export class SessionStore {
             .executeTakeFirstOrThrow();
 
         await threadStore.touchByThread(profileId, thread.id);
-        return mapSessionSummary(inserted, 0);
+        return {
+            created: true,
+            session: mapSessionSummary(inserted, 0),
+        };
     }
 
     async list(profileId: string): Promise<SessionSummaryRecord[]> {
@@ -343,6 +350,10 @@ export class SessionStore {
             parentThreadId: sourceThread.id,
             rootThreadId: sourceThread.rootThreadId,
         });
+        if (branchThread.isErr()) {
+            return { branched: false, reason: 'session_not_found' };
+        }
+        const createdBranchThread = branchThread.value;
         const now = nowIso();
         let latestAssistantAt: string | undefined;
 
@@ -353,7 +364,7 @@ export class SessionStore {
                     id: branchSessionId,
                     profile_id: profileId,
                     conversation_id: sourceSession.conversation_id,
-                    thread_id: branchThread.id,
+                    thread_id: createdBranchThread.id,
                     kind: sourceSession.kind,
                     run_status: 'idle',
                     pending_completion_run_id: null,
@@ -477,9 +488,9 @@ export class SessionStore {
 
         const summary = await this.syncSessionStatus(profileId, branchSessionId);
         await threadStore.touchByThread(profileId, sourceSession.thread_id);
-        await threadStore.touchByThread(profileId, branchThread.id);
+        await threadStore.touchByThread(profileId, createdBranchThread.id);
         if (latestAssistantAt) {
-            await threadStore.markAssistantActivity(profileId, branchThread.id, latestAssistantAt);
+            await threadStore.markAssistantActivity(profileId, createdBranchThread.id, latestAssistantAt);
         }
 
         return {
@@ -489,10 +500,10 @@ export class SessionStore {
             clonedRunCount: prefixRuns.length,
             sourceThreadId: sourceThread.id,
             thread: {
-                id: branchThread.id,
-                topLevelTab: branchThread.topLevelTab,
-                ...(branchThread.parentThreadId ? { parentThreadId: branchThread.parentThreadId } : {}),
-                rootThreadId: branchThread.rootThreadId,
+                id: createdBranchThread.id,
+                topLevelTab: createdBranchThread.topLevelTab,
+                ...(createdBranchThread.parentThreadId ? { parentThreadId: createdBranchThread.parentThreadId } : {}),
+                rootThreadId: createdBranchThread.rootThreadId,
             },
         };
     }

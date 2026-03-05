@@ -34,18 +34,27 @@ describe('persistence stores', () => {
             scope: 'detached',
             title: 'Detached',
         });
+        if (bucket.isErr()) {
+            throw new Error(bucket.error.message);
+        }
         const thread = await threadStore.create({
             profileId,
-            conversationId: bucket.id,
+            conversationId: bucket.value.id,
             title: 'Main',
             topLevelTab: 'chat',
         });
-        const session = await sessionStore.create(profileId, thread.id, 'local');
-        expect(session.turnCount).toBe(0);
+        if (thread.isErr()) {
+            throw new Error(thread.error.message);
+        }
+        const session = await sessionStore.create(profileId, thread.value.id, 'local');
+        if (!session.created) {
+            throw new Error(`Expected session creation to succeed, received "${session.reason}".`);
+        }
+        expect(session.session.turnCount).toBe(0);
 
         const run = await runStore.create({
             profileId,
-            sessionId: session.id,
+            sessionId: session.session.id,
             prompt: 'hello',
             providerId: 'openai',
             modelId: 'openai/gpt-5',
@@ -72,18 +81,18 @@ describe('persistence stores', () => {
                 selected: 'responses',
             },
         });
-        await sessionStore.markRunPending(profileId, session.id, run.id);
+        await sessionStore.markRunPending(profileId, session.session.id, run.id);
         await runStore.finalize(run.id, { status: 'completed' });
-        await sessionStore.markRunTerminal(profileId, session.id, 'completed');
+        await sessionStore.markRunTerminal(profileId, session.session.id, 'completed');
 
-        const status = await sessionStore.status(profileId, session.id);
+        const status = await sessionStore.status(profileId, session.session.id);
         expect(status.found).toBe(true);
         if (!status.found) {
             throw new Error('Expected session to exist.');
         }
         expect(status.session.runStatus).toBe('completed');
 
-        const reverted = await sessionStore.revert(profileId, session.id);
+        const reverted = await sessionStore.revert(profileId, session.session.id);
         expect(reverted.reverted).toBe(true);
     });
 
@@ -132,18 +141,28 @@ describe('persistence stores', () => {
             scope: 'detached',
             title: 'Usage Test',
         });
+        if (conversation.isErr()) {
+            throw new Error(conversation.error.message);
+        }
         const thread = await threadStore.create({
             profileId,
-            conversationId: conversation.id,
+            conversationId: conversation.value.id,
             title: 'Usage Thread',
             topLevelTab: 'chat',
         });
-        const session = await sessionStore.create(profileId, thread.id, 'local');
+        if (thread.isErr()) {
+            throw new Error(thread.error.message);
+        }
+        const session = await sessionStore.create(profileId, thread.value.id, 'local');
+        if (!session.created) {
+            throw new Error(`Expected session creation to succeed, received "${session.reason}".`);
+        }
+        const usageSessionId = session.session.id;
 
         async function createRun(prompt: string) {
             return runStore.create({
                 profileId,
-                sessionId: session.id,
+                sessionId: usageSessionId,
                 prompt,
                 providerId: 'openai',
                 modelId: 'openai/gpt-5',
@@ -393,19 +412,28 @@ describe('persistence stores', () => {
             workspaceFingerprint: 'wsf_workspace_a',
             title: 'Workspace Chat',
         });
+        if (conversation.isErr()) {
+            throw new Error(conversation.error.message);
+        }
         const thread = await threadStore.create({
             profileId,
-            conversationId: conversation.id,
+            conversationId: conversation.value.id,
             title: 'Thread A',
             topLevelTab: 'chat',
         });
+        if (thread.isErr()) {
+            throw new Error(thread.error.message);
+        }
         const tag = await tagStore.upsert(profileId, 'backend');
-        const linked = await tagStore.setThreadTags(profileId, thread.id, [tag.id]);
+        const linked = await tagStore.setThreadTags(profileId, thread.value.id, [tag.id]);
 
-        const session = await sessionStore.create(profileId, thread.id, 'local');
+        const session = await sessionStore.create(profileId, thread.value.id, 'local');
+        if (!session.created) {
+            throw new Error(`Expected session creation to succeed, received "${session.reason}".`);
+        }
         const run = await runStore.create({
             profileId,
-            sessionId: session.id,
+            sessionId: session.session.id,
             prompt: 'first',
             providerId: 'openai',
             modelId: 'openai/gpt-5',
@@ -432,13 +460,13 @@ describe('persistence stores', () => {
                 selected: 'responses',
             },
         });
-        await sessionStore.markRunPending(profileId, session.id, run.id);
+        await sessionStore.markRunPending(profileId, session.session.id, run.id);
         await runStore.finalize(run.id, { status: 'completed' });
-        await sessionStore.markRunTerminal(profileId, session.id, 'completed');
+        await sessionStore.markRunTerminal(profileId, session.session.id, 'completed');
 
         const diff = await diffStore.create({
             profileId,
-            sessionId: session.id,
+            sessionId: session.session.id,
             runId: run.id,
             summary: 'created patch',
             payload: { files: ['README.md'] },
@@ -456,14 +484,14 @@ describe('persistence stores', () => {
         });
         const tags = await tagStore.listByProfile(profileId);
         const threadTags = await tagStore.listThreadTagsByProfile(profileId);
-        const diffs = await diffStore.listBySession(profileId, session.id);
+        const diffs = await diffStore.listBySession(profileId, session.session.id);
         const firstLinked = linked[0];
         if (!firstLinked) {
             throw new Error('Expected at least one linked thread tag.');
         }
 
-        expect(conversations.some((item) => item.id === conversation.id)).toBe(true);
-        expect(threads.some((item) => item.id === thread.id)).toBe(true);
+        expect(conversations.some((item) => item.id === conversation.value.id)).toBe(true);
+        expect(threads.some((item) => item.id === thread.value.id)).toBe(true);
         expect(tags.some((item) => item.id === tag.id)).toBe(true);
         expect(
             threadTags.some((item) => item.threadId === firstLinked.threadId && item.tagId === firstLinked.tagId)
