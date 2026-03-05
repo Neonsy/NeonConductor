@@ -45,6 +45,14 @@
 - Keep fixtures, stubs, and mocks in test-only paths.
 - If code is genuinely shared by runtime and tests, place it in a neutral source module and keep test-specific behavior out of it.
 
+### 7) Use `evlog` + `neverthrow` by Default
+- Use `evlog` for debugging/diagnostic logging in application code; do not introduce ad-hoc logging patterns.
+- Logging must be development-only and must not be enabled in packaged production builds.
+- Prefer structured log events over free-form strings so issues are traceable.
+- Use `neverthrow` `Result` flows for recoverable failures to improve DX and explicit error handling.
+- Do not add new throw-based control flow for expected runtime errors; return typed error results instead.
+- Reserve `throw` for truly unrecoverable programmer/configuration faults only.
+
 ## Repository Documentation Status
 - Root `README.md` is intentionally empty; it serves as a pointer target to `Markdown/README`.
 - `Project/README.md` is intentionally not filled yet.

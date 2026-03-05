@@ -1,9 +1,12 @@
 import { randomUUID } from 'node:crypto';
 
 import { getPersistence } from '@/app/backend/persistence/db';
+import { parseEnumValue } from '@/app/backend/persistence/stores/rowParsers';
 import { nowIso } from '@/app/backend/persistence/stores/utils';
 import type { ConversationRecord } from '@/app/backend/persistence/types';
+import { conversationScopes } from '@/app/backend/runtime/contracts';
 import type { ConversationScope } from '@/app/backend/runtime/contracts';
+import { errOp, okOp, type OperationalResult } from '@/app/backend/runtime/services/common/operationalError';
 
 function createConversationId(): string {
     return `conv_${randomUUID()}`;
@@ -25,7 +28,7 @@ function mapConversationRecord(row: {
     return {
         id: row.id,
         profileId: row.profile_id,
-        scope: row.scope as ConversationScope,
+        scope: parseEnumValue(row.scope, 'conversations.scope', conversationScopes),
         ...(row.workspace_fingerprint ? { workspaceFingerprint: row.workspace_fingerprint } : {}),
         title: row.title,
         createdAt: row.created_at,
@@ -38,13 +41,13 @@ export class ConversationStore {
         profileId: string,
         scope: ConversationScope,
         workspaceFingerprint?: string
-    ): Promise<ConversationRecord | null> {
+    ): Promise<OperationalResult<ConversationRecord | null>> {
         if (scope === 'workspace' && !workspaceFingerprint) {
-            throw new Error('workspaceFingerprint is required when creating workspace conversations.');
+            return errOp('invalid_input', 'workspaceFingerprint is required when creating workspace conversations.');
         }
 
         if (scope !== 'workspace' && workspaceFingerprint) {
-            throw new Error('workspaceFingerprint is allowed only for workspace conversations.');
+            return errOp('invalid_input', 'workspaceFingerprint is allowed only for workspace conversations.');
         }
 
         const { db } = getPersistence();
@@ -63,7 +66,7 @@ export class ConversationStore {
             .orderBy('id', 'asc')
             .executeTakeFirst();
 
-        return existing ? mapConversationRecord(existing) : null;
+        return okOp(existing ? mapConversationRecord(existing) : null);
     }
 
     async createOrGetBucket(input: {
@@ -71,10 +74,16 @@ export class ConversationStore {
         scope: ConversationScope;
         workspaceFingerprint?: string;
         title?: string;
-    }): Promise<ConversationRecord> {
+    }): Promise<OperationalResult<ConversationRecord>> {
         const existing = await this.findBucketByScope(input.profileId, input.scope, input.workspaceFingerprint);
-        if (existing) {
-            return existing;
+        if (existing.isErr()) {
+            return errOp(existing.error.code, existing.error.message, {
+                ...(existing.error.details ? { details: existing.error.details } : {}),
+                ...(existing.error.retryable !== undefined ? { retryable: existing.error.retryable } : {}),
+            });
+        }
+        if (existing.value) {
+            return okOp(existing.value);
         }
 
         const { db } = getPersistence();
@@ -95,7 +104,7 @@ export class ConversationStore {
             .returning(['id', 'profile_id', 'scope', 'workspace_fingerprint', 'title', 'created_at', 'updated_at'])
             .executeTakeFirstOrThrow();
 
-        return mapConversationRecord(inserted);
+        return okOp(mapConversationRecord(inserted));
     }
 
     async listBuckets(profileId: string): Promise<ConversationRecord[]> {

@@ -8,6 +8,9 @@ export interface RuntimeEventLogService {
         entityId: string;
         eventType: string;
         payload: Record<string, unknown>;
+        requestId?: string;
+        correlationId?: string;
+        origin?: string;
     }): Promise<RuntimeEventRecordV1>;
     getEvents(afterSequence: number | null, limit: number): Promise<RuntimeEventRecordV1[]>;
 }
@@ -18,8 +21,21 @@ class RuntimeEventLogServiceImpl implements RuntimeEventLogService {
         entityId: string;
         eventType: string;
         payload: Record<string, unknown>;
+        requestId?: string;
+        correlationId?: string;
+        origin?: string;
     }): Promise<RuntimeEventRecordV1> {
-        const appended = await runtimeEventStore.append(event);
+        const appended = await runtimeEventStore.append({
+            entityType: event.entityType,
+            entityId: event.entityId,
+            eventType: event.eventType,
+            payload: {
+                ...event.payload,
+                ...(event.requestId ? { requestId: event.requestId } : {}),
+                ...(event.correlationId ? { correlationId: event.correlationId } : {}),
+                ...(event.origin ? { origin: event.origin } : {}),
+            },
+        });
         runtimeEventBus.publish(appended);
         return appended;
     }

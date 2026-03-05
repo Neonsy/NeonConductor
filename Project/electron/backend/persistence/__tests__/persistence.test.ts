@@ -16,6 +16,8 @@ function createCaller() {
     const context: Context = {
         senderId: 1,
         win: null,
+        requestId: 'test-request-id',
+        correlationId: 'test-correlation-id',
     };
 
     return appRouter.createCaller(context);
@@ -119,6 +121,9 @@ describe('persistence bootstrap and durability', () => {
             threadId: thread.thread.id as `thr_${string}`,
             kind: 'local',
         });
+        if (!created.created) {
+            throw new Error(`Expected session creation success, received "${created.reason}".`);
+        }
 
         closePersistence();
 

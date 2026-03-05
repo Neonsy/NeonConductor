@@ -4,6 +4,7 @@
  */
 
 import { BrowserWindow } from 'electron';
+import { randomUUID } from 'node:crypto';
 
 import type { CreateContextOptions } from 'electron-trpc-experimental/main';
 
@@ -13,11 +14,20 @@ export interface Context {
 
     // Reference to the BrowserWindow that sent the request
     win: BrowserWindow | null;
+
+    // Unique ID for this request.
+    requestId: string;
+
+    // Correlation ID propagated across nested service calls.
+    correlationId: string;
 }
 
 export function createContext(opts: CreateContextOptions): Promise<Context> {
+    const requestId = randomUUID();
     return Promise.resolve({
         senderId: opts.event.sender.id,
         win: BrowserWindow.fromWebContents(opts.event.sender),
+        requestId,
+        correlationId: requestId,
     });
 }

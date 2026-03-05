@@ -12,6 +12,8 @@ function createCaller() {
     const context: Context = {
         senderId: 1,
         win: null,
+        requestId: 'test-request-id',
+        correlationId: 'test-correlation-id',
     };
 
     return appRouter.createCaller(context);
@@ -50,6 +52,9 @@ async function createSessionInScope(
         })(),
         kind: input.kind,
     });
+    if (!sessionResult.created) {
+        throw new Error(`Expected session creation success, received "${sessionResult.reason}".`);
+    }
 
     return {
         thread: threadResult.thread,
@@ -733,18 +738,22 @@ describe('runtime contracts', () => {
             topLevelTab: 'agent',
         });
 
-        await expect(
-            caller.session.startRun({
-                profileId,
-                sessionId: created.session.id,
-                prompt: 'Should be blocked in plan mode',
-                topLevelTab: 'agent',
-                modeKey: 'plan',
-                runtimeOptions: defaultRuntimeOptions,
-                providerId: 'openai',
-                modelId: 'openai/gpt-5',
-            })
-        ).rejects.toThrow('planning-only');
+        const blockedPlanMode = await caller.session.startRun({
+            profileId,
+            sessionId: created.session.id,
+            prompt: 'Should be blocked in plan mode',
+            topLevelTab: 'agent',
+            modeKey: 'plan',
+            runtimeOptions: defaultRuntimeOptions,
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
+        });
+        expect(blockedPlanMode.accepted).toBe(false);
+        if (blockedPlanMode.accepted) {
+            throw new Error('Expected planning-only run start to be rejected.');
+        }
+        expect(blockedPlanMode.code).toBe('mode_policy_invalid');
+        expect(blockedPlanMode.message).toContain('planning-only');
 
         const setActive = await caller.mode.setActive({
             profileId,
@@ -772,18 +781,22 @@ describe('runtime contracts', () => {
             kind: 'local',
         });
 
-        await expect(
-            caller.session.startRun({
-                profileId,
-                sessionId: created.session.id,
-                prompt: 'Should fail due to tab/mode mismatch',
-                topLevelTab: 'chat',
-                modeKey: 'code',
-                runtimeOptions: defaultRuntimeOptions,
-                providerId: 'openai',
-                modelId: 'openai/gpt-5',
-            })
-        ).rejects.toThrow('invalid for tab');
+        const invalidModeForTab = await caller.session.startRun({
+            profileId,
+            sessionId: created.session.id,
+            prompt: 'Should fail due to tab/mode mismatch',
+            topLevelTab: 'chat',
+            modeKey: 'code',
+            runtimeOptions: defaultRuntimeOptions,
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
+        });
+        expect(invalidModeForTab.accepted).toBe(false);
+        if (invalidModeForTab.accepted) {
+            throw new Error('Expected invalid mode/tab run start to be rejected.');
+        }
+        expect(invalidModeForTab.code).toBe('invalid_mode');
+        expect(invalidModeForTab.message).toContain('invalid for tab');
 
         await expect(
             caller.session.startRun({

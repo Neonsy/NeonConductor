@@ -11,8 +11,10 @@ import type { MessageTimelineEntry } from '@/web/components/conversation/message
 import { MessageEditDialog } from '@/web/components/conversation/panels/messageEditDialog';
 import { ModeExecutionPanel } from '@/web/components/conversation/panels/modeExecutionPanel';
 import { SessionWorkspacePanel } from '@/web/components/conversation/sessionWorkspacePanel';
+import { toEditFailureMessage, type PendingMessageEdit } from '@/web/components/conversation/shellEditFlow';
 import { DEFAULT_RUN_OPTIONS, isEntityId, isProviderId } from '@/web/components/conversation/shellHelpers';
 import { submitPrompt as submitPromptFromComposer } from '@/web/components/conversation/shellPromptSubmit';
+import { resolveTabSwitchNotice } from '@/web/components/conversation/shellTabSwitch';
 import { ConversationSidebar } from '@/web/components/conversation/sidebar';
 import { useRuntimeEventStreamStore } from '@/web/lib/runtime/eventStream';
 import { useRuntimeSnapshot } from '@/web/lib/runtime/useRuntimeSnapshot';
@@ -25,40 +27,6 @@ interface ConversationShellProps {
     topLevelTab: TopLevelTab;
     modeKey: string;
     onTopLevelTabChange: (nextTab: TopLevelTab) => void;
-}
-
-interface PendingMessageEdit {
-    messageId: EntityId<'msg'>;
-    initialText: string;
-    forcedMode?: 'branch';
-}
-
-function toEditFailureMessage(reason: string): string {
-    if (reason === 'message_not_found') {
-        return 'Could not find the selected message for editing.';
-    }
-    if (reason === 'message_not_editable') {
-        return 'Only user text messages can be edited.';
-    }
-    if (reason === 'session_not_found') {
-        return 'The selected session no longer exists.';
-    }
-    if (reason === 'run_not_found') {
-        return 'The target run for this message was not found.';
-    }
-    if (reason === 'no_turns') {
-        return 'No turns are available to edit in this session.';
-    }
-    if (reason === 'auto_start_required') {
-        return 'Message edits currently require starting a replacement run.';
-    }
-    if (reason === 'run_start_rejected') {
-        return 'The edited run could not be started.';
-    }
-    if (reason === 'thread_tab_mismatch') {
-        return 'Edit is not allowed from this tab because the thread belongs to another mode.';
-    }
-    return `Edit failed: ${reason}`;
 }
 
 export function ConversationShell({ profileId, topLevelTab, modeKey, onTopLevelTabChange }: ConversationShellProps) {
@@ -276,9 +244,11 @@ export function ConversationShell({ profileId, topLevelTab, modeKey, onTopLevelT
                 isAddingTag={mutations.upsertTagMutation.isPending || mutations.setThreadTagsMutation.isPending}
                 onSelectThread={(threadId) => {
                     const targetThread = sidebarState.visibleThreads.find((thread) => thread.id === threadId);
-                    if (targetThread && targetThread.topLevelTab !== topLevelTab) {
-                        onTopLevelTabChange(targetThread.topLevelTab);
-                        setTabSwitchNotice(`Switched to ${targetThread.topLevelTab} to open this thread.`);
+                    const nextTab = targetThread?.topLevelTab ?? topLevelTab;
+                    const switchState = resolveTabSwitchNotice(topLevelTab, nextTab);
+                    if (switchState.shouldSwitch) {
+                        onTopLevelTabChange(nextTab);
+                        setTabSwitchNotice(switchState.notice);
                         window.setTimeout(() => {
                             setTabSwitchNotice(undefined);
                         }, 2200);
@@ -424,6 +394,10 @@ export function ConversationShell({ profileId, topLevelTab, modeKey, onTopLevelT
                                 kind: 'local',
                             })
                             .then((result) => {
+                                if (!result.created) {
+                                    setRunSubmitError('Selected thread no longer exists.');
+                                    return;
+                                }
                                 uiState.setSelectedSessionId(result.session.id);
                                 setRunSubmitError(undefined);
                                 void runtimeSnapshot.refetch();

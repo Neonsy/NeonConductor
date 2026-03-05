@@ -213,7 +213,10 @@ class ThreadTitleService {
                 modelId: input.modelId,
                 prompt: input.prompt,
             });
-            await threadStore.rename(input.profileId, sessionThread.thread.id, templateTitle);
+            const renamedTemplate = await threadStore.rename(input.profileId, sessionThread.thread.id, templateTitle);
+            if (renamedTemplate.isErr()) {
+                return;
+            }
 
             const mode = modeRaw === TITLE_AI_MODE ? TITLE_AI_MODE : DEFAULT_TITLE_MODE;
             const aiModel = aiModelRaw?.trim();
@@ -229,7 +232,10 @@ class ThreadTitleService {
             if (!aiTitle) {
                 return;
             }
-            await threadStore.rename(input.profileId, sessionThread.thread.id, aiTitle);
+            const renamedAi = await threadStore.rename(input.profileId, sessionThread.thread.id, aiTitle);
+            if (renamedAi.isErr()) {
+                return;
+            }
         } catch (error) {
             appLog.warn({
                 tag: 'thread-title',

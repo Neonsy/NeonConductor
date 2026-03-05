@@ -2,209 +2,31 @@ import { randomUUID } from 'node:crypto';
 
 import { getPersistence } from '@/app/backend/persistence/db';
 import { parseEnumValue } from '@/app/backend/persistence/stores/rowParsers';
+import { mapThreadListRecord, mapThreadRecord } from '@/app/backend/persistence/stores/threadStore.mapper';
+import {
+    compareAnchor,
+    compareIsoDesc,
+    compareThreadOrder,
+    flattenBranchView,
+    getAnchorActivity,
+    toAnchorKey,
+    type ThreadSort,
+} from '@/app/backend/persistence/stores/threadStore.ordering';
+import {
+    SESSION_THREAD_WITH_CONVERSATION_COLUMNS,
+    THREAD_COLUMNS,
+} from '@/app/backend/persistence/stores/threadStore.queries';
+import { parseThreadTitle } from '@/app/backend/persistence/stores/threadStore.validation';
 import { nowIso } from '@/app/backend/persistence/stores/utils';
 import type { ThreadListRecord, ThreadRecord } from '@/app/backend/persistence/types';
 import { topLevelTabs } from '@/app/backend/runtime/contracts';
 import type { TopLevelTab } from '@/app/backend/runtime/contracts';
+import { errOp, okOp, type OperationalResult } from '@/app/backend/runtime/services/common/operationalError';
 
-type ThreadSort = 'latest' | 'alphabetical';
 type ThreadGroupView = 'workspace' | 'branch';
-
-interface ThreadRow {
-    id: string;
-    profile_id: string;
-    conversation_id: string;
-    title: string;
-    top_level_tab: string;
-    parent_thread_id: string | null;
-    root_thread_id: string;
-    last_assistant_at: string | null;
-    created_at: string;
-    updated_at: string;
-}
-
-interface ThreadListRow extends ThreadRow {
-    scope: string;
-    workspace_fingerprint: string | null;
-    session_count: number;
-    latest_session_updated_at: string | null;
-}
 
 function createThreadId(): string {
     return `thr_${randomUUID()}`;
-}
-
-function mapThreadRecord(row: ThreadRow): ThreadRecord {
-    return {
-        id: row.id,
-        profileId: row.profile_id,
-        conversationId: row.conversation_id,
-        title: row.title,
-        topLevelTab: parseEnumValue(row.top_level_tab, 'threads.top_level_tab', topLevelTabs),
-        ...(row.parent_thread_id ? { parentThreadId: row.parent_thread_id } : {}),
-        rootThreadId: row.root_thread_id,
-        ...(row.last_assistant_at ? { lastAssistantAt: row.last_assistant_at } : {}),
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
-    };
-}
-
-function toAnchorKey(thread: ThreadListRecord): string {
-    if (thread.anchorKind === 'playground') {
-        return 'playground';
-    }
-
-    return `workspace:${thread.anchorId ?? 'unknown'}`;
-}
-
-function compareIsoDesc(left?: string, right?: string): number {
-    const leftValue = left ?? '';
-    const rightValue = right ?? '';
-    if (leftValue > rightValue) return -1;
-    if (leftValue < rightValue) return 1;
-    return 0;
-}
-
-function compareAnchor(left: ThreadListRecord, right: ThreadListRecord): number {
-    if (left.anchorKind !== right.anchorKind) {
-        return left.anchorKind === 'workspace' ? -1 : 1;
-    }
-
-    const leftAnchor = left.anchorId ?? '';
-    const rightAnchor = right.anchorId ?? '';
-    if (leftAnchor !== rightAnchor) {
-        return leftAnchor.localeCompare(rightAnchor, undefined, {
-            sensitivity: 'base',
-            numeric: true,
-        });
-    }
-
-    return 0;
-}
-
-function getThreadActivity(thread: ThreadListRecord): string {
-    return thread.lastAssistantAt ?? thread.latestSessionUpdatedAt ?? thread.updatedAt;
-}
-
-function getAnchorActivity(threads: ThreadListRecord[]): string {
-    let latest = '';
-    for (const thread of threads) {
-        const activity = getThreadActivity(thread);
-        if (activity > latest) {
-            latest = activity;
-        }
-    }
-    return latest;
-}
-
-function compareThreadOrder(left: ThreadListRecord, right: ThreadListRecord, sort: ThreadSort): number {
-    if (sort === 'alphabetical') {
-        const titleCompare = left.title.localeCompare(right.title, undefined, {
-            sensitivity: 'base',
-            numeric: true,
-        });
-        if (titleCompare !== 0) {
-            return titleCompare;
-        }
-    } else {
-        const activityCompare = compareIsoDesc(getThreadActivity(left), getThreadActivity(right));
-        if (activityCompare !== 0) {
-            return activityCompare;
-        }
-    }
-
-    return left.id.localeCompare(right.id);
-}
-
-function mapThreadListRecord(row: ThreadListRow): ThreadListRecord {
-    return {
-        id: row.id,
-        profileId: row.profile_id,
-        conversationId: row.conversation_id,
-        title: row.title,
-        topLevelTab: parseEnumValue(row.top_level_tab, 'threads.top_level_tab', topLevelTabs),
-        ...(row.parent_thread_id ? { parentThreadId: row.parent_thread_id } : {}),
-        rootThreadId: row.root_thread_id,
-        ...(row.last_assistant_at ? { lastAssistantAt: row.last_assistant_at } : {}),
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
-        scope: row.scope === 'workspace' ? 'workspace' : 'detached',
-        ...(row.workspace_fingerprint ? { workspaceFingerprint: row.workspace_fingerprint } : {}),
-        anchorKind: row.scope === 'workspace' ? 'workspace' : 'playground',
-        ...(row.scope === 'workspace'
-            ? { anchorId: row.workspace_fingerprint ?? 'unknown-workspace' }
-            : { anchorId: 'playground' }),
-        sessionCount: row.session_count,
-        ...(row.latest_session_updated_at ? { latestSessionUpdatedAt: row.latest_session_updated_at } : {}),
-    };
-}
-
-function flattenBranchView(threads: ThreadListRecord[], sort: ThreadSort): ThreadListRecord[] {
-    const byAnchor = new Map<string, ThreadListRecord[]>();
-    for (const thread of threads) {
-        const key = toAnchorKey(thread);
-        const existing = byAnchor.get(key) ?? [];
-        existing.push(thread);
-        byAnchor.set(key, existing);
-    }
-
-    const orderedAnchors = Array.from(byAnchor.values()).sort((leftGroup, rightGroup) => {
-        const leftFirst = leftGroup[0];
-        const rightFirst = rightGroup[0];
-        if (!leftFirst || !rightFirst) {
-            return leftGroup.length - rightGroup.length;
-        }
-        const activityCompare = compareIsoDesc(getAnchorActivity(leftGroup), getAnchorActivity(rightGroup));
-        if (activityCompare !== 0) {
-            return activityCompare;
-        }
-        return compareAnchor(leftFirst, rightFirst);
-    });
-
-    const ordered: ThreadListRecord[] = [];
-    for (const anchorThreads of orderedAnchors) {
-        const threadById = new Map(anchorThreads.map((thread) => [thread.id, thread]));
-        const childrenByParent = new Map<string, ThreadListRecord[]>();
-        const roots: ThreadListRecord[] = [];
-
-        for (const thread of anchorThreads) {
-            const parentId = thread.parentThreadId;
-            if (!parentId || !threadById.has(parentId)) {
-                roots.push(thread);
-                continue;
-            }
-
-            const existing = childrenByParent.get(parentId) ?? [];
-            existing.push(thread);
-            childrenByParent.set(parentId, existing);
-        }
-
-        roots.sort((left, right) => compareThreadOrder(left, right, sort));
-        for (const children of childrenByParent.values()) {
-            children.sort((left, right) => compareThreadOrder(left, right, sort));
-        }
-
-        const stack = [...roots].reverse();
-        while (stack.length > 0) {
-            const current = stack.pop();
-            if (!current) {
-                continue;
-            }
-            ordered.push(current);
-            const children = childrenByParent.get(current.id);
-            if (!children || children.length === 0) {
-                continue;
-            }
-            for (let index = children.length - 1; index >= 0; index -= 1) {
-                const child = children[index];
-                if (child) {
-                    stack.push(child);
-                }
-            }
-        }
-    }
-
-    return ordered;
 }
 
 export class ThreadStore {
@@ -215,10 +37,13 @@ export class ThreadStore {
         topLevelTab: TopLevelTab;
         parentThreadId?: string;
         rootThreadId?: string;
-    }): Promise<ThreadRecord> {
-        const title = input.title.trim();
-        if (title.length === 0) {
-            throw new Error('Thread title must be a non-empty string.');
+    }): Promise<OperationalResult<ThreadRecord>> {
+        const title = parseThreadTitle(input.title);
+        if (title.isErr()) {
+            return errOp(title.error.code, title.error.message, {
+                ...(title.error.details ? { details: title.error.details } : {}),
+                ...(title.error.retryable !== undefined ? { retryable: title.error.retryable } : {}),
+            });
         }
 
         const { db } = getPersistence();
@@ -230,11 +55,14 @@ export class ThreadStore {
             .executeTakeFirst();
 
         if (!conversation) {
-            throw new Error(`Conversation "${input.conversationId}" does not exist for profile "${input.profileId}".`);
+            return errOp(
+                'conversation_not_found',
+                `Conversation "${input.conversationId}" does not exist for profile "${input.profileId}".`
+            );
         }
 
         if (conversation.scope === 'detached' && input.topLevelTab !== 'chat') {
-            throw new Error('Playground threads are chat-only.');
+            return errOp('unsupported_tab', 'Playground threads are chat-only.');
         }
 
         let resolvedParentThreadId: string | undefined;
@@ -248,15 +76,16 @@ export class ThreadStore {
                 .where('profile_id', '=', input.profileId)
                 .executeTakeFirst();
             if (!parent) {
-                throw new Error(
+                return errOp(
+                    'thread_not_found',
                     `Parent thread "${input.parentThreadId}" does not exist for profile "${input.profileId}".`
                 );
             }
             if (parent.conversation_id !== input.conversationId) {
-                throw new Error('Parent thread must belong to the same conversation bucket.');
+                return errOp('thread_mode_mismatch', 'Parent thread must belong to the same conversation bucket.');
             }
             if (parseEnumValue(parent.top_level_tab, 'threads.top_level_tab', topLevelTabs) !== input.topLevelTab) {
-                throw new Error('Thread mode affinity mismatch with parent thread.');
+                return errOp('thread_mode_mismatch', 'Thread mode affinity mismatch with parent thread.');
             }
 
             resolvedParentThreadId = parent.id;
@@ -271,13 +100,16 @@ export class ThreadStore {
                 .where('profile_id', '=', input.profileId)
                 .executeTakeFirst();
             if (!root) {
-                throw new Error(`Root thread "${input.rootThreadId}" does not exist for profile "${input.profileId}".`);
+                return errOp(
+                    'thread_not_found',
+                    `Root thread "${input.rootThreadId}" does not exist for profile "${input.profileId}".`
+                );
             }
             if (root.conversation_id !== input.conversationId) {
-                throw new Error('Root thread must belong to the same conversation bucket.');
+                return errOp('thread_mode_mismatch', 'Root thread must belong to the same conversation bucket.');
             }
             if (parseEnumValue(root.top_level_tab, 'threads.top_level_tab', topLevelTabs) !== input.topLevelTab) {
-                throw new Error('Thread mode affinity mismatch with root thread.');
+                return errOp('thread_mode_mismatch', 'Thread mode affinity mismatch with root thread.');
             }
             resolvedRootThreadId = root.id;
         }
@@ -290,7 +122,7 @@ export class ThreadStore {
                 id: threadId,
                 profile_id: input.profileId,
                 conversation_id: input.conversationId,
-                title,
+                title: title.value,
                 top_level_tab: input.topLevelTab,
                 parent_thread_id: resolvedParentThreadId ?? null,
                 root_thread_id: resolvedRootThreadId ?? threadId,
@@ -298,71 +130,41 @@ export class ThreadStore {
                 created_at: now,
                 updated_at: now,
             })
-            .returning([
-                'id',
-                'profile_id',
-                'conversation_id',
-                'title',
-                'top_level_tab',
-                'parent_thread_id',
-                'root_thread_id',
-                'last_assistant_at',
-                'created_at',
-                'updated_at',
-            ])
+            .returning(THREAD_COLUMNS)
             .executeTakeFirstOrThrow();
 
-        return mapThreadRecord(inserted);
+        return okOp(mapThreadRecord(inserted));
     }
 
-    async rename(profileId: string, threadId: string, title: string): Promise<ThreadRecord | null> {
-        const trimmed = title.trim();
-        if (trimmed.length === 0) {
-            throw new Error('Thread title must be a non-empty string.');
+    async rename(profileId: string, threadId: string, title: string): Promise<OperationalResult<ThreadRecord | null>> {
+        const trimmed = parseThreadTitle(title);
+        if (trimmed.isErr()) {
+            return errOp(trimmed.error.code, trimmed.error.message, {
+                ...(trimmed.error.details ? { details: trimmed.error.details } : {}),
+                ...(trimmed.error.retryable !== undefined ? { retryable: trimmed.error.retryable } : {}),
+            });
         }
 
         const { db } = getPersistence();
         const updated = await db
             .updateTable('threads')
             .set({
-                title: trimmed,
+                title: trimmed.value,
                 updated_at: nowIso(),
             })
             .where('id', '=', threadId)
             .where('profile_id', '=', profileId)
-            .returning([
-                'id',
-                'profile_id',
-                'conversation_id',
-                'title',
-                'top_level_tab',
-                'parent_thread_id',
-                'root_thread_id',
-                'last_assistant_at',
-                'created_at',
-                'updated_at',
-            ])
+            .returning(THREAD_COLUMNS)
             .executeTakeFirst();
 
-        return updated ? mapThreadRecord(updated) : null;
+        return okOp(updated ? mapThreadRecord(updated) : null);
     }
 
     async getById(profileId: string, threadId: string): Promise<ThreadRecord | null> {
         const { db } = getPersistence();
         const row = await db
             .selectFrom('threads')
-            .select([
-                'id',
-                'profile_id',
-                'conversation_id',
-                'title',
-                'top_level_tab',
-                'parent_thread_id',
-                'root_thread_id',
-                'last_assistant_at',
-                'created_at',
-                'updated_at',
-            ])
+            .select(THREAD_COLUMNS)
             .where('id', '=', threadId)
             .where('profile_id', '=', profileId)
             .executeTakeFirst();
@@ -383,20 +185,7 @@ export class ThreadStore {
             .selectFrom('sessions')
             .innerJoin('threads', 'threads.id', 'sessions.thread_id')
             .innerJoin('conversations', 'conversations.id', 'threads.conversation_id')
-            .select([
-                'threads.id as id',
-                'threads.profile_id as profile_id',
-                'threads.conversation_id as conversation_id',
-                'threads.title as title',
-                'threads.top_level_tab as top_level_tab',
-                'threads.parent_thread_id as parent_thread_id',
-                'threads.root_thread_id as root_thread_id',
-                'threads.last_assistant_at as last_assistant_at',
-                'threads.created_at as created_at',
-                'threads.updated_at as updated_at',
-                'conversations.scope as scope',
-                'conversations.workspace_fingerprint as workspace_fingerprint',
-            ])
+            .select(SESSION_THREAD_WITH_CONVERSATION_COLUMNS)
             .where('sessions.id', '=', sessionId)
             .where('sessions.profile_id', '=', profileId)
             .executeTakeFirst();
