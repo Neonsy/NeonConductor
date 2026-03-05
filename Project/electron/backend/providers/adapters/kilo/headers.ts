@@ -88,5 +88,21 @@ export function buildKiloRuntimeBody(input: ProviderRuntimeInput): Record<string
         };
     }
 
+    if (input.kiloRouting) {
+        if (input.kiloRouting.mode === 'dynamic') {
+            if (input.kiloRouting.sort !== 'default') {
+                body['provider'] = {
+                    sort: input.kiloRouting.sort,
+                };
+            }
+        } else {
+            body['provider'] = {
+                order: [input.kiloRouting.providerId],
+                only: [input.kiloRouting.providerId],
+                allow_fallbacks: false,
+            };
+        }
+    }
+
     return body;
 }

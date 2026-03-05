@@ -1,5 +1,7 @@
 import type {
     EntityId,
+    KiloDynamicSort,
+    KiloRoutingMode,
     KiloAccountContext,
     MarketplacePackage,
     ModeDefinition,
@@ -119,6 +121,16 @@ export interface ProviderAuthFlowRecord {
     createdAt: string;
     updatedAt: string;
     consumedAt?: string;
+}
+
+export interface KiloModelRoutingPreferenceRecord {
+    profileId: string;
+    providerId: 'kilo';
+    modelId: string;
+    routingMode: KiloRoutingMode;
+    sort?: KiloDynamicSort;
+    pinnedProviderId?: string;
+    updatedAt: string;
 }
 
 export interface ProviderDiscoverySnapshotRecord {

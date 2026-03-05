@@ -352,6 +352,16 @@ export interface ProviderDiscoverySnapshotsTable {
     status: string;
 }
 
+export interface KiloModelRoutingPreferencesTable {
+    profile_id: string;
+    provider_id: 'kilo';
+    model_id: string;
+    routing_mode: 'dynamic' | 'pinned';
+    sort: 'default' | 'price' | 'throughput' | 'latency' | null;
+    pinned_provider_id: string | null;
+    updated_at: string;
+}
+
 export interface PlanRecordsTable {
     id: string;
     profile_id: string;
@@ -452,6 +462,7 @@ export interface DatabaseSchema {
     provider_auth_flows: ProviderAuthFlowsTable;
     provider_model_catalog: ProviderModelCatalogTable;
     provider_discovery_snapshots: ProviderDiscoverySnapshotsTable;
+    kilo_model_routing_preferences: KiloModelRoutingPreferencesTable;
     plan_records: PlanRecordsTable;
     plan_items: PlanItemsTable;
     orchestrator_runs: OrchestratorRunsTable;

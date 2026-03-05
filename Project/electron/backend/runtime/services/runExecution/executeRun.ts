@@ -2,7 +2,7 @@ import { runStore, runUsageStore, sessionStore } from '@/app/backend/persistence
 import { getProviderAdapter } from '@/app/backend/providers/adapters';
 import { getProviderRuntimeBehavior } from '@/app/backend/providers/behaviors';
 import type { ProviderRuntimeTransportSelection, ProviderRuntimeUsage } from '@/app/backend/providers/types';
-import type { ProviderAuthMethod, RuntimeProviderId } from '@/app/backend/runtime/contracts';
+import type { KiloDynamicSort, ProviderAuthMethod, RuntimeProviderId } from '@/app/backend/runtime/contracts';
 import { emitPartEvents, emitTransportSelectionEvent } from '@/app/backend/runtime/services/runExecution/eventing';
 import type { RunCacheResolution, StartRunInput } from '@/app/backend/runtime/services/runExecution/types';
 import { mergeUsage } from '@/app/backend/runtime/services/runExecution/usage';
@@ -37,6 +37,15 @@ export interface ExecuteRunInput {
     apiKey?: string;
     accessToken?: string;
     organizationId?: string;
+    kiloRouting?:
+        | {
+              mode: 'dynamic';
+              sort: KiloDynamicSort;
+          }
+        | {
+              mode: 'pinned';
+              providerId: string;
+          };
     assistantMessageId: string;
     signal: AbortSignal;
 }
@@ -65,6 +74,7 @@ export async function executeRun(input: ExecuteRunInput): Promise<void> {
             ...(input.apiKey ? { apiKey: input.apiKey } : {}),
             ...(input.accessToken ? { accessToken: input.accessToken } : {}),
             ...(input.organizationId ? { organizationId: input.organizationId } : {}),
+            ...(input.kiloRouting ? { kiloRouting: input.kiloRouting } : {}),
             signal: input.signal,
         },
         {

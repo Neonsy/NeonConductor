@@ -1,6 +1,7 @@
 export { accountSnapshotStore } from '@/app/backend/persistence/stores/accountSnapshotStore';
 export { conversationStore } from '@/app/backend/persistence/stores/conversationStore';
 export { diffStore } from '@/app/backend/persistence/stores/diffStore';
+export { kiloRoutingPreferenceStore } from '@/app/backend/persistence/stores/kiloRoutingPreferenceStore';
 export { marketplaceStore } from '@/app/backend/persistence/stores/marketplaceStore';
 export { messageStore } from '@/app/backend/persistence/stores/messageStore';
 export { mcpStore } from '@/app/backend/persistence/stores/mcpStore';

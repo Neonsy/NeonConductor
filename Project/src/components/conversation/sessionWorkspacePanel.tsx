@@ -24,6 +24,7 @@ interface SessionWorkspacePanelProps {
     canCreateSession: boolean;
     selectedProviderId: string | undefined;
     selectedModelId: string | undefined;
+    routingBadge?: string;
     providerOptions: Array<{ id: string; label: string; authState: string }>;
     modelOptions: Array<{ id: string; label: string; price?: number; latency?: number; tps?: number }>;
     runErrorMessage: string | undefined;
@@ -50,6 +51,7 @@ export function SessionWorkspacePanel({
     canCreateSession,
     selectedProviderId,
     selectedModelId,
+    routingBadge,
     providerOptions,
     modelOptions,
     runErrorMessage,
@@ -129,6 +131,7 @@ export function SessionWorkspacePanel({
                     isSubmitting={isStartingRun}
                     selectedProviderId={selectedProviderId}
                     selectedModelId={selectedModelId}
+                    {...(routingBadge !== undefined ? { routingBadge } : {})}
                     providerOptions={providerOptions}
                     modelOptions={modelOptions}
                     runErrorMessage={runErrorMessage}

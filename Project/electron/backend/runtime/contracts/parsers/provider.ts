@@ -1,5 +1,7 @@
+import { kiloDynamicSorts, kiloRoutingModes } from '@/app/backend/runtime/contracts/enums';
 import {
     createParser,
+    readEnumValue,
     readOptionalBoolean,
     readOptionalString,
     readProfileId,
@@ -16,10 +18,13 @@ import type {
     ProviderCompleteAuthInput,
     ProviderGetAccountContextInput,
     ProviderListAuthMethodsInput,
+    ProviderListModelProvidersInput,
     ProviderListModelsInput,
     ProviderListProvidersInput,
     ProviderPollAuthInput,
     ProviderRefreshAuthInput,
+    ProviderGetModelRoutingPreferenceInput,
+    ProviderSetModelRoutingPreferenceInput,
     ProviderSetApiKeyInput,
     ProviderSetDefaultInput,
     ProviderSetOrganizationInput,
@@ -152,6 +157,66 @@ export function parseProviderSetOrganizationInput(input: unknown): ProviderSetOr
     };
 }
 
+function readKiloProviderId(value: unknown, field: string): 'kilo' {
+    const providerId = readProviderId(value, field);
+    if (providerId !== 'kilo') {
+        throw new Error('Invalid "providerId": routing preferences are supported only for "kilo".');
+    }
+
+    return providerId;
+}
+
+export function parseProviderGetModelRoutingPreferenceInput(input: unknown): ProviderGetModelRoutingPreferenceInput {
+    const source = readObject(input, 'input');
+    return {
+        profileId: readProfileId(source),
+        providerId: readKiloProviderId(source.providerId, 'providerId'),
+        modelId: readString(source.modelId, 'modelId'),
+    };
+}
+
+export function parseProviderSetModelRoutingPreferenceInput(input: unknown): ProviderSetModelRoutingPreferenceInput {
+    const source = readObject(input, 'input');
+    const routingMode = readEnumValue(source.routingMode, 'routingMode', kiloRoutingModes);
+    const sort = readOptionalString(source.sort, 'sort');
+    const pinnedProviderId = readOptionalString(source.pinnedProviderId, 'pinnedProviderId');
+
+    if (routingMode === 'dynamic') {
+        if (pinnedProviderId) {
+            throw new Error('Invalid "pinnedProviderId": not allowed when routingMode is "dynamic".');
+        }
+        if (!sort) {
+            throw new Error('Invalid "sort": required when routingMode is "dynamic".');
+        }
+        return {
+            profileId: readProfileId(source),
+            providerId: readKiloProviderId(source.providerId, 'providerId'),
+            modelId: readString(source.modelId, 'modelId'),
+            routingMode,
+            sort: readEnumValue(sort, 'sort', kiloDynamicSorts),
+        };
+    }
+
+    if (sort) {
+        throw new Error('Invalid "sort": not allowed when routingMode is "pinned".');
+    }
+    if (!pinnedProviderId) {
+        throw new Error('Invalid "pinnedProviderId": required when routingMode is "pinned".');
+    }
+
+    return {
+        profileId: readProfileId(source),
+        providerId: readKiloProviderId(source.providerId, 'providerId'),
+        modelId: readString(source.modelId, 'modelId'),
+        routingMode,
+        pinnedProviderId,
+    };
+}
+
+export function parseProviderListModelProvidersInput(input: unknown): ProviderListModelProvidersInput {
+    return parseProviderGetModelRoutingPreferenceInput(input);
+}
+
 export const providerSetDefaultInputSchema = createParser(parseProviderSetDefaultInput);
 export const providerListProvidersInputSchema = createParser(parseProviderListProvidersInput);
 export const providerListModelsInputSchema = createParser(parseProviderListModelsInput);
@@ -167,3 +232,6 @@ export const providerCancelAuthInputSchema = createParser(parseProviderCancelAut
 export const providerRefreshAuthInputSchema = createParser(parseProviderRefreshAuthInput);
 export const providerGetAccountContextInputSchema = createParser(parseProviderGetAccountContextInput);
 export const providerSetOrganizationInputSchema = createParser(parseProviderSetOrganizationInput);
+export const providerGetModelRoutingPreferenceInputSchema = createParser(parseProviderGetModelRoutingPreferenceInput);
+export const providerSetModelRoutingPreferenceInputSchema = createParser(parseProviderSetModelRoutingPreferenceInput);
+export const providerListModelProvidersInputSchema = createParser(parseProviderListModelProvidersInput);

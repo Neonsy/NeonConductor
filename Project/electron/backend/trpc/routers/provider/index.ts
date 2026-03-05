@@ -5,13 +5,16 @@ import {
     providerClearAuthInputSchema,
     providerCompleteAuthInputSchema,
     providerGetAccountContextInputSchema,
+    providerGetModelRoutingPreferenceInputSchema,
     providerListAuthMethodsInputSchema,
+    providerListModelProvidersInputSchema,
     providerListModelsInputSchema,
     providerListProvidersInputSchema,
     providerPollAuthInputSchema,
     providerRefreshAuthInputSchema,
     providerSetApiKeyInputSchema,
     providerSetDefaultInputSchema,
+    providerSetModelRoutingPreferenceInputSchema,
     providerSetOrganizationInputSchema,
     providerStartAuthInputSchema,
     providerSyncCatalogInputSchema,
@@ -184,6 +187,38 @@ export const providerRouter = router({
         });
 
         return result;
+    }),
+    getModelRoutingPreference: publicProcedure
+        .input(providerGetModelRoutingPreferenceInputSchema)
+        .query(async ({ input }) => {
+            return {
+                preference: await providerManagementService.getModelRoutingPreference(input),
+            };
+        }),
+    setModelRoutingPreference: publicProcedure
+        .input(providerSetModelRoutingPreferenceInputSchema)
+        .mutation(async ({ input }) => {
+            const preference = await providerManagementService.setModelRoutingPreference(input);
+            await runtimeEventLogService.append({
+                entityType: 'provider',
+                entityId: input.providerId,
+                eventType: 'provider.kilo-routing.set',
+                payload: {
+                    profileId: input.profileId,
+                    providerId: input.providerId,
+                    modelId: input.modelId,
+                    routingMode: preference.routingMode,
+                    sort: preference.sort ?? null,
+                    pinnedProviderId: preference.pinnedProviderId ?? null,
+                },
+            });
+
+            return { preference };
+        }),
+    listModelProviders: publicProcedure.input(providerListModelProvidersInputSchema).query(async ({ input }) => {
+        return {
+            providers: await providerManagementService.listModelProviders(input),
+        };
     }),
     setApiKey: publicProcedure.input(providerSetApiKeyInputSchema).mutation(async ({ input }) => {
         try {

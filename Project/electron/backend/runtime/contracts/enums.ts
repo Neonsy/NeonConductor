@@ -39,6 +39,12 @@ export type RuntimeCacheStrategy = (typeof runtimeCacheStrategies)[number];
 export const runtimeOpenAITransports = ['responses', 'chat', 'auto'] as const;
 export type RuntimeOpenAITransport = (typeof runtimeOpenAITransports)[number];
 
+export const kiloRoutingModes = ['dynamic', 'pinned'] as const;
+export type KiloRoutingMode = (typeof kiloRoutingModes)[number];
+
+export const kiloDynamicSorts = ['default', 'price', 'throughput', 'latency'] as const;
+export type KiloDynamicSort = (typeof kiloDynamicSorts)[number];
+
 export const runtimeMessagePartTypes = [
     'text',
     'reasoning',

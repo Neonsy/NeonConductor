@@ -1,5 +1,11 @@
 import type { ProviderModelRecord } from '@/app/backend/persistence/types';
-import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
+import type {
+    KiloDynamicSort,
+    KiloModelProviderInfo,
+    KiloModelRoutingPreference,
+    KiloRoutingMode,
+    RuntimeProviderId,
+} from '@/app/backend/runtime/contracts';
 
 export interface ActiveAuthFlow {
     providerId: RuntimeProviderId;
@@ -23,3 +29,15 @@ export interface ProviderAuthStateView {
 }
 
 export type ProviderModelOption = ProviderModelRecord;
+
+export interface KiloRoutingDraft {
+    routingMode: KiloRoutingMode;
+    sort: KiloDynamicSort;
+    pinnedProviderId: string;
+}
+
+export interface KiloRoutingSectionPreference extends KiloModelRoutingPreference {
+    providerId: 'kilo';
+}
+
+export type KiloModelProviderOption = KiloModelProviderInfo;

@@ -198,6 +198,24 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
         providerId: 'kilo';
         organizationId?: string | null;
     }>();
+    expectTypeOf<Inputs['provider']['getModelRoutingPreference']>().toExtend<{
+        profileId: string;
+        providerId: 'kilo';
+        modelId: string;
+    }>();
+    expectTypeOf<Inputs['provider']['setModelRoutingPreference']>().toExtend<{
+        profileId: string;
+        providerId: 'kilo';
+        modelId: string;
+        routingMode: 'dynamic' | 'pinned';
+        sort?: 'default' | 'price' | 'throughput' | 'latency';
+        pinnedProviderId?: string;
+    }>();
+    expectTypeOf<Inputs['provider']['listModelProviders']>().toExtend<{
+        profileId: string;
+        providerId: 'kilo';
+        modelId: string;
+    }>();
 
     expectTypeOf<Inputs['permission']['request']>().toExtend<{
         policy: 'ask' | 'allow' | 'deny';

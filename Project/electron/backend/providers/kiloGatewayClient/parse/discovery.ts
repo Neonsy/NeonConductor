@@ -10,6 +10,7 @@ import type {
     KiloGatewayModelsByProvider,
     KiloGatewayProvider,
 } from '@/app/backend/providers/kiloGatewayClient/types';
+import { appLog } from '@/app/main/logging';
 
 export function parseModelsPayload(payload: Record<string, unknown>): KiloGatewayModel[] {
     const list = readArray(unwrapData(payload));
@@ -78,15 +79,74 @@ export function parseProvidersPayload(payload: Record<string, unknown>): KiloGat
 
             return {
                 id,
-                label: readOptionalString(entry['label']) ?? readOptionalString(entry['name']) ?? id,
+                label:
+                    readOptionalString(entry['label']) ??
+                    readOptionalString(entry['displayName']) ??
+                    readOptionalString(entry['name']) ??
+                    id,
                 raw: entry,
             };
         })
         .filter((provider): provider is KiloGatewayProvider => provider !== null);
 }
 
+function readModelIdFromRecord(value: Record<string, unknown>): string | undefined {
+    const direct =
+        readOptionalString(value['id']) ??
+        readOptionalString(value['modelId']) ??
+        readOptionalString(value['slug']) ??
+        readOptionalString(value['permaslug']) ??
+        readOptionalString(value['name']);
+    if (direct) {
+        return direct;
+    }
+
+    const endpoint = isRecord(value['endpoint']) ? value['endpoint'] : null;
+    const endpointModel = endpoint && isRecord(endpoint['model']) ? endpoint['model'] : null;
+    if (endpointModel) {
+        const nested =
+            readOptionalString(endpointModel['id']) ??
+            readOptionalString(endpointModel['slug']) ??
+            readOptionalString(endpointModel['permaslug']) ??
+            readOptionalString(endpointModel['name']);
+        if (nested) {
+            return nested;
+        }
+    }
+
+    return undefined;
+}
+
+function listModelsByProviderEntries(payload: Record<string, unknown>): unknown[] {
+    const directProviders = readArray(payload['providers']);
+    if (directProviders.length > 0) {
+        return directProviders;
+    }
+
+    const unwrapped = unwrapData(payload);
+    if (Array.isArray(unwrapped)) {
+        return unwrapped;
+    }
+
+    if (isRecord(unwrapped)) {
+        const nestedProviders = readArray(unwrapped['providers']);
+        if (nestedProviders.length > 0) {
+            return nestedProviders;
+        }
+    }
+
+    const payloadKeys = Object.keys(payload);
+    appLog.warn({
+        tag: 'provider.kilo-gateway',
+        message: 'Kilo models-by-provider payload did not match known shapes.',
+        payloadKeys,
+    });
+
+    return [];
+}
+
 export function parseModelsByProviderPayload(payload: Record<string, unknown>): KiloGatewayModelsByProvider[] {
-    const list = readArray(unwrapData(payload));
+    const list = listModelsByProviderEntries(payload);
 
     return list
         .map((entry) => {
@@ -97,7 +157,9 @@ export function parseModelsByProviderPayload(payload: Record<string, unknown>): 
             const providerId =
                 readOptionalString(entry['provider']) ??
                 readOptionalString(entry['providerId']) ??
-                readOptionalString(entry['id']);
+                readOptionalString(entry['id']) ??
+                readOptionalString(entry['slug']) ??
+                readOptionalString(entry['name']);
             if (!providerId) {
                 return null;
             }
@@ -108,7 +170,7 @@ export function parseModelsByProviderPayload(payload: Record<string, unknown>): 
                 }
 
                 if (isRecord(value)) {
-                    const modelId = readOptionalString(value['id']) ?? readOptionalString(value['modelId']);
+                    const modelId = readModelIdFromRecord(value);
                     return modelId ? [modelId] : [];
                 }
 

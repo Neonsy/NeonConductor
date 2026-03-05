@@ -72,6 +72,7 @@ class RuntimeResetServiceImpl implements RuntimeResetService {
                     await db.deleteFrom('provider_auth_flows').where('profile_id', '=', profileId).execute();
                     await db.deleteFrom('provider_model_catalog').where('profile_id', '=', profileId).execute();
                     await db.deleteFrom('provider_discovery_snapshots').where('profile_id', '=', profileId).execute();
+                    await db.deleteFrom('kilo_model_routing_preferences').where('profile_id', '=', profileId).execute();
                     await db.deleteFrom('permission_policy_overrides').where('profile_id', '=', profileId).execute();
                     await removeSecretsByReferences(secretRefs.map((secretRef) => secretRef.secretKeyRef));
                 }
@@ -116,6 +117,7 @@ class RuntimeResetServiceImpl implements RuntimeResetService {
                 await db.deleteFrom('provider_auth_flows').execute();
                 await db.deleteFrom('provider_model_catalog').execute();
                 await db.deleteFrom('provider_discovery_snapshots').execute();
+                await db.deleteFrom('kilo_model_routing_preferences').execute();
                 await db.deleteFrom('permission_policy_overrides').execute();
                 await db.deleteFrom('marketplace_packages').execute();
                 await db.deleteFrom('provider_models').execute();

@@ -1,4 +1,9 @@
-import type { ProviderAuthMethod, RuntimeProviderId } from '@/app/backend/runtime/contracts/enums';
+import type {
+    KiloDynamicSort,
+    KiloRoutingMode,
+    ProviderAuthMethod,
+    RuntimeProviderId,
+} from '@/app/backend/runtime/contracts/enums';
 import type { ProfileInput } from '@/app/backend/runtime/contracts/types/common';
 
 export interface MarketplacePackage {
@@ -84,6 +89,39 @@ export type ProviderGetAccountContextInput = ProviderByIdInput;
 export interface ProviderSetOrganizationInput extends ProfileInput {
     providerId: 'kilo';
     organizationId?: string | null;
+}
+
+export interface KiloModelRoutingPreference {
+    profileId: string;
+    providerId: 'kilo';
+    modelId: string;
+    routingMode: KiloRoutingMode;
+    sort?: KiloDynamicSort;
+    pinnedProviderId?: string;
+}
+
+export interface ProviderGetModelRoutingPreferenceInput extends ProfileInput {
+    providerId: 'kilo';
+    modelId: string;
+}
+
+export interface ProviderSetModelRoutingPreferenceInput extends ProviderGetModelRoutingPreferenceInput {
+    routingMode: KiloRoutingMode;
+    sort?: KiloDynamicSort;
+    pinnedProviderId?: string;
+}
+
+export type ProviderListModelProvidersInput = ProviderGetModelRoutingPreferenceInput;
+
+export interface KiloModelProviderInfo {
+    providerId: string;
+    label: string;
+    inputPrice?: number;
+    outputPrice?: number;
+    cacheReadPrice?: number;
+    cacheWritePrice?: number;
+    contextLength?: number;
+    maxCompletionTokens?: number;
 }
 
 export interface SecretReference {

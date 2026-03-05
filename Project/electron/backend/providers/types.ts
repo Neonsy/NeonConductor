@@ -1,5 +1,6 @@
 import type { FirstPartyProviderId } from '@/app/backend/providers/registry';
 import type {
+    KiloDynamicSort,
     ProviderAuthMethod,
     RuntimeMessagePartType,
     RuntimeOpenAITransport,
@@ -131,6 +132,15 @@ export interface ProviderRuntimeInput {
     apiKey?: string;
     accessToken?: string;
     organizationId?: string;
+    kiloRouting?:
+        | {
+              mode: 'dynamic';
+              sort: KiloDynamicSort;
+          }
+        | {
+              mode: 'pinned';
+              providerId: string;
+          };
     signal: AbortSignal;
 }
 

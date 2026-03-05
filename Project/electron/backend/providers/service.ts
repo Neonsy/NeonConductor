@@ -2,6 +2,11 @@ import type { ProviderAuthStateRecord } from '@/app/backend/persistence/types';
 import { providerAuthExecutionService } from '@/app/backend/providers/providerAuthExecutionService';
 import { syncCatalog } from '@/app/backend/providers/service/catalogSync';
 import {
+    getModelRoutingPreference,
+    listModelProviders,
+    setModelRoutingPreference,
+} from '@/app/backend/providers/service/kiloRoutingService';
+import {
     getOpenAISubscriptionRateLimits,
     getOpenAISubscriptionUsage,
     listAuthStates,
@@ -13,8 +18,19 @@ import {
     listUsageSummaries,
     setDefault,
 } from '@/app/backend/providers/service/readService';
-import type { ProviderListItem, ProviderSyncResult } from '@/app/backend/providers/service/types';
-import type { ProviderAuthMethod, RuntimeProviderId } from '@/app/backend/runtime/contracts';
+import type {
+    KiloModelProviderOption,
+    ProviderListItem,
+    ProviderSyncResult,
+} from '@/app/backend/providers/service/types';
+import type {
+    KiloModelRoutingPreference,
+    ProviderAuthMethod,
+    ProviderGetModelRoutingPreferenceInput,
+    ProviderListModelProvidersInput,
+    ProviderSetModelRoutingPreferenceInput,
+    RuntimeProviderId,
+} from '@/app/backend/runtime/contracts';
 
 class ProviderManagementService {
     async listProviders(profileId: string): Promise<ProviderListItem[]> {
@@ -103,6 +119,22 @@ class ProviderManagementService {
 
     async syncCatalog(profileId: string, providerId: RuntimeProviderId, force = false): Promise<ProviderSyncResult> {
         return syncCatalog(profileId, providerId, force);
+    }
+
+    async getModelRoutingPreference(
+        input: ProviderGetModelRoutingPreferenceInput
+    ): Promise<KiloModelRoutingPreference> {
+        return getModelRoutingPreference(input);
+    }
+
+    async setModelRoutingPreference(
+        input: ProviderSetModelRoutingPreferenceInput
+    ): Promise<KiloModelRoutingPreference> {
+        return setModelRoutingPreference(input);
+    }
+
+    async listModelProviders(input: ProviderListModelProvidersInput): Promise<KiloModelProviderOption[]> {
+        return listModelProviders(input);
     }
 }
 

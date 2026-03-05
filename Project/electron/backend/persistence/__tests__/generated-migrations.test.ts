@@ -18,6 +18,7 @@ describe('generated migrations', () => {
             '010_p3b_conversation_graph.sql',
             '011_p4_2_plan_orchestrator_and_permission_overrides.sql',
             '012_p4_3_profile_lifecycle.sql',
+            '013_p4_4_kilo_model_routing_preferences.sql',
         ]);
     });
 });

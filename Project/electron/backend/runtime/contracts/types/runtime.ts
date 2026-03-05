@@ -55,6 +55,7 @@ export interface RuntimeResetCounts {
     providerAuthFlows: number;
     providerCatalogModels: number;
     providerDiscoverySnapshots: number;
+    kiloModelRoutingPreferences: number;
 }
 
 export interface RuntimeResetResult {

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ProviderAuthenticationSection } from '@/web/components/settings/providerSettings/authenticationSection';
 import { ProviderDefaultModelSection } from '@/web/components/settings/providerSettings/defaultModelSection';
 import { isProviderId, methodLabel } from '@/web/components/settings/providerSettings/helpers';
+import { KiloRoutingSection } from '@/web/components/settings/providerSettings/kiloRoutingSection';
 import {
     OpenAIAccountLimitsSection,
     OpenAILocalUsageSection,
@@ -10,6 +11,7 @@ import {
 import { ProviderSidebar } from '@/web/components/settings/providerSettings/providerSidebar';
 import type {
     ActiveAuthFlow,
+    KiloRoutingDraft,
     ProviderAuthStateView,
     ProviderListItem,
 } from '@/web/components/settings/providerSettings/types';
@@ -35,6 +37,7 @@ export function ProviderSettingsView({ profileId }: ProviderSettingsViewProps) {
     const [apiKeyInput, setApiKeyInput] = useState('');
     const [activeAuthFlow, setActiveAuthFlow] = useState<ActiveAuthFlow | undefined>(undefined);
     const [statusMessage, setStatusMessage] = useState<string | undefined>(undefined);
+    const [kiloRoutingDraft, setKiloRoutingDraft] = useState<KiloRoutingDraft | undefined>(undefined);
 
     useEffect(() => {
         setActiveAuthFlow(undefined);
@@ -73,6 +76,30 @@ export function ProviderSettingsView({ profileId }: ProviderSettingsViewProps) {
         },
         {
             enabled: Boolean(selectedProviderId),
+            refetchOnWindowFocus: false,
+        }
+    );
+
+    const kiloRoutingPreferenceQuery = trpc.provider.getModelRoutingPreference.useQuery(
+        {
+            profileId,
+            providerId: 'kilo',
+            modelId: selectedModelId,
+        },
+        {
+            enabled: selectedProviderId === 'kilo' && selectedModelId.trim().length > 0,
+            refetchOnWindowFocus: false,
+        }
+    );
+
+    const kiloModelProvidersQuery = trpc.provider.listModelProviders.useQuery(
+        {
+            profileId,
+            providerId: 'kilo',
+            modelId: selectedModelId,
+        },
+        {
+            enabled: selectedProviderId === 'kilo' && selectedModelId.trim().length > 0,
             refetchOnWindowFocus: false,
         }
     );
@@ -150,6 +177,13 @@ export function ProviderSettingsView({ profileId }: ProviderSettingsViewProps) {
             setStatusMessage(`Catalog synced (${String(result.modelCount)} models).`);
             void listModelsQuery.refetch();
             void snapshotQuery.refetch();
+        },
+    });
+
+    const setModelRoutingPreferenceMutation = trpc.provider.setModelRoutingPreference.useMutation({
+        onSuccess: () => {
+            void kiloRoutingPreferenceQuery.refetch();
+            void kiloModelProvidersQuery.refetch();
         },
     });
 
@@ -237,6 +271,7 @@ export function ProviderSettingsView({ profileId }: ProviderSettingsViewProps) {
 
     const methods = selectedProviderId ? (authMethodMap.get(selectedProviderId) ?? []) : [];
     const models = listModelsQuery.data?.models ?? [];
+    const kiloModelProviders = kiloModelProvidersQuery.data?.providers ?? [];
 
     useEffect(() => {
         if (!selectedProviderId) {
@@ -262,6 +297,78 @@ export function ProviderSettingsView({ profileId }: ProviderSettingsViewProps) {
     const selectedIsDefaultModel = selectedIsDefaultProvider && defaults?.modelId === selectedModelId;
     const openAISubscriptionUsage = openAISubscriptionUsageQuery.data?.usage;
     const openAISubscriptionRateLimits = openAISubscriptionRateLimitsQuery.data?.rateLimits;
+
+    useEffect(() => {
+        if (selectedProviderId !== 'kilo' || selectedModelId.trim().length === 0) {
+            setKiloRoutingDraft(undefined);
+            return;
+        }
+
+        const preference = kiloRoutingPreferenceQuery.data?.preference;
+        if (!preference) {
+            setKiloRoutingDraft({
+                routingMode: 'dynamic',
+                sort: 'default',
+                pinnedProviderId: '',
+            });
+            return;
+        }
+
+        if (preference.routingMode === 'dynamic') {
+            setKiloRoutingDraft({
+                routingMode: 'dynamic',
+                sort: preference.sort ?? 'default',
+                pinnedProviderId: '',
+            });
+            return;
+        }
+
+        setKiloRoutingDraft({
+            routingMode: 'pinned',
+            sort: 'default',
+            pinnedProviderId: preference.pinnedProviderId ?? '',
+        });
+    }, [kiloRoutingPreferenceQuery.data?.preference, selectedModelId, selectedProviderId]);
+
+    const saveKiloRoutingPreference = async (nextDraft: KiloRoutingDraft): Promise<void> => {
+        if (selectedProviderId !== 'kilo' || selectedModelId.trim().length === 0) {
+            return;
+        }
+
+        const previousDraft = kiloRoutingDraft;
+        setKiloRoutingDraft(nextDraft);
+
+        try {
+            if (nextDraft.routingMode === 'dynamic') {
+                await setModelRoutingPreferenceMutation.mutateAsync({
+                    profileId,
+                    providerId: 'kilo',
+                    modelId: selectedModelId,
+                    routingMode: 'dynamic',
+                    sort: nextDraft.sort,
+                });
+            } else {
+                if (nextDraft.pinnedProviderId.trim().length === 0) {
+                    setStatusMessage('Select a provider before enabling pinned routing.');
+                    setKiloRoutingDraft(previousDraft);
+                    return;
+                }
+
+                await setModelRoutingPreferenceMutation.mutateAsync({
+                    profileId,
+                    providerId: 'kilo',
+                    modelId: selectedModelId,
+                    routingMode: 'pinned',
+                    pinnedProviderId: nextDraft.pinnedProviderId,
+                });
+            }
+
+            setStatusMessage('Kilo routing preference saved.');
+        } catch {
+            setStatusMessage('Failed to save Kilo routing preference.');
+            setKiloRoutingDraft(previousDraft);
+        }
+    };
 
     return (
         <section className='grid min-h-full grid-cols-[260px_1fr]'>
@@ -317,6 +424,58 @@ export function ProviderSettingsView({ profileId }: ProviderSettingsViewProps) {
                                 });
                             }}
                         />
+
+                        {selectedProvider.id === 'kilo' && selectedModelId.trim().length > 0 && kiloRoutingDraft ? (
+                            <KiloRoutingSection
+                                selectedModelId={selectedModelId}
+                                draft={kiloRoutingDraft}
+                                providers={kiloModelProviders}
+                                isLoadingPreference={kiloRoutingPreferenceQuery.isLoading}
+                                isLoadingProviders={kiloModelProvidersQuery.isLoading}
+                                isSaving={setModelRoutingPreferenceMutation.isPending}
+                                onModeChange={(mode) => {
+                                    if (mode === 'dynamic') {
+                                        void saveKiloRoutingPreference({
+                                            routingMode: 'dynamic',
+                                            sort: kiloRoutingDraft.sort,
+                                            pinnedProviderId: '',
+                                        });
+                                        return;
+                                    }
+
+                                    const pinnedProviderId =
+                                        kiloRoutingDraft.pinnedProviderId || kiloModelProviders[0]?.providerId || '';
+                                    if (!pinnedProviderId) {
+                                        setStatusMessage('No available providers to pin for this model.');
+                                        return;
+                                    }
+
+                                    void saveKiloRoutingPreference({
+                                        routingMode: 'pinned',
+                                        sort: 'default',
+                                        pinnedProviderId,
+                                    });
+                                }}
+                                onSortChange={(sort) => {
+                                    void saveKiloRoutingPreference({
+                                        routingMode: 'dynamic',
+                                        sort,
+                                        pinnedProviderId: '',
+                                    });
+                                }}
+                                onPinnedProviderChange={(providerId) => {
+                                    if (providerId.trim().length === 0) {
+                                        return;
+                                    }
+
+                                    void saveKiloRoutingPreference({
+                                        routingMode: 'pinned',
+                                        sort: 'default',
+                                        pinnedProviderId: providerId,
+                                    });
+                                }}
+                            />
+                        ) : null}
 
                         <ProviderAuthenticationSection
                             selectedProviderId={selectedProviderId}

@@ -14,6 +14,7 @@ import { submitPrompt as submitPromptFromComposer } from '@/web/components/conve
 import { ConversationSidebar } from '@/web/components/conversation/sidebar';
 import { useRuntimeEventStreamStore } from '@/web/lib/runtime/eventStream';
 import { useRuntimeSnapshot } from '@/web/lib/runtime/useRuntimeSnapshot';
+import { trpc } from '@/web/trpc/client';
 
 import type { EntityId, RuntimeProviderId, TopLevelTab } from '@/app/backend/runtime/contracts';
 
@@ -135,6 +136,33 @@ export function ConversationShell({ profileId, topLevelTab, modeKey }: Conversat
         ...(sessionOverride ? { sessionOverride } : {}),
     });
     const isPlanningMode = modeKey === 'plan' && (topLevelTab === 'agent' || topLevelTab === 'orchestrator');
+    const kiloRoutingPreferenceQuery = trpc.provider.getModelRoutingPreference.useQuery(
+        {
+            profileId,
+            providerId: 'kilo',
+            modelId: runTargetState.selectedModelIdForComposer ?? '',
+        },
+        {
+            enabled:
+                runTargetState.selectedProviderIdForComposer === 'kilo' &&
+                Boolean(runTargetState.selectedModelIdForComposer),
+            refetchOnWindowFocus: false,
+        }
+    );
+    const routingBadge =
+        runTargetState.selectedProviderIdForComposer !== 'kilo'
+            ? undefined
+            : kiloRoutingPreferenceQuery.data?.preference.routingMode === 'pinned'
+              ? `Routing: Pinned (${kiloRoutingPreferenceQuery.data.preference.pinnedProviderId ?? 'unknown'})`
+              : `Routing: Dynamic (${
+                    kiloRoutingPreferenceQuery.data?.preference.sort === 'price'
+                        ? 'Lowest Price'
+                        : kiloRoutingPreferenceQuery.data?.preference.sort === 'throughput'
+                          ? 'Highest Throughput'
+                          : kiloRoutingPreferenceQuery.data?.preference.sort === 'latency'
+                            ? 'Lowest Latency'
+                            : 'Default'
+                })`;
 
     const planOrchestrator = buildConversationShellPlanOrchestrator({
         profileId,
@@ -249,6 +277,7 @@ export function ConversationShell({ profileId, topLevelTab, modeKey }: Conversat
                     canCreateSession={Boolean(selectedThreadId)}
                     selectedProviderId={runTargetState.selectedProviderIdForComposer}
                     selectedModelId={runTargetState.selectedModelIdForComposer}
+                    {...(routingBadge !== undefined ? { routingBadge } : {})}
                     providerOptions={runTargetState.providerOptions}
                     modelOptions={runTargetState.modelOptions}
                     runErrorMessage={runSubmitError}

@@ -30,6 +30,7 @@ export const EMPTY_COUNTS: RuntimeResetCounts = {
     providerAuthFlows: 0,
     providerCatalogModels: 0,
     providerDiscoverySnapshots: 0,
+    kiloModelRoutingPreferences: 0,
 };
 
 export interface WorkspaceResolvedCounts {
@@ -322,6 +323,7 @@ export async function resolveProfileSettingsCounts(
         providerAuthFlows,
         providerCatalogModels,
         providerDiscoverySnapshots,
+        kiloModelRoutingPreferences,
     ] = await Promise.all([
         db
             .selectFrom('settings')
@@ -378,6 +380,11 @@ export async function resolveProfileSettingsCounts(
             .select((eb) => eb.fn.count<number>('kind').as('count'))
             .where('profile_id', '=', profileId)
             .executeTakeFirst(),
+        db
+            .selectFrom('kilo_model_routing_preferences')
+            .select((eb) => eb.fn.count<number>('model_id').as('count'))
+            .where('profile_id', '=', profileId)
+            .executeTakeFirst(),
     ]);
 
     return {
@@ -393,6 +400,7 @@ export async function resolveProfileSettingsCounts(
         providerAuthFlows: providerAuthFlows?.count ?? 0,
         providerCatalogModels: providerCatalogModels?.count ?? 0,
         providerDiscoverySnapshots: providerDiscoverySnapshots?.count ?? 0,
+        kiloModelRoutingPreferences: kiloModelRoutingPreferences?.count ?? 0,
     };
 }
 
@@ -423,6 +431,7 @@ export async function resolveFullCounts(db: Kysely<DatabaseSchema>): Promise<Run
         providerAuthFlows,
         providerCatalogModels,
         providerDiscoverySnapshots,
+        kiloModelRoutingPreferences,
     ] = await Promise.all([
         db
             .selectFrom('settings')
@@ -524,6 +533,10 @@ export async function resolveFullCounts(db: Kysely<DatabaseSchema>): Promise<Run
             .selectFrom('provider_discovery_snapshots')
             .select((eb) => eb.fn.count<number>('kind').as('count'))
             .executeTakeFirst(),
+        db
+            .selectFrom('kilo_model_routing_preferences')
+            .select((eb) => eb.fn.count<number>('model_id').as('count'))
+            .executeTakeFirst(),
     ]);
 
     return {
@@ -552,5 +565,6 @@ export async function resolveFullCounts(db: Kysely<DatabaseSchema>): Promise<Run
         providerAuthFlows: providerAuthFlows?.count ?? 0,
         providerCatalogModels: providerCatalogModels?.count ?? 0,
         providerDiscoverySnapshots: providerDiscoverySnapshots?.count ?? 0,
+        kiloModelRoutingPreferences: kiloModelRoutingPreferences?.count ?? 0,
     };
 }

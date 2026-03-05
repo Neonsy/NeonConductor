@@ -1,5 +1,11 @@
-import { messageStore, providerStore, runStore, sessionStore } from '@/app/backend/persistence/stores';
-import type { ProviderRuntimeTransportSelection } from '@/app/backend/providers/types';
+import {
+    kiloRoutingPreferenceStore,
+    messageStore,
+    providerStore,
+    runStore,
+    sessionStore,
+} from '@/app/backend/persistence/stores';
+import type { ProviderRuntimeInput, ProviderRuntimeTransportSelection } from '@/app/backend/providers/types';
 import type { EntityId, ProviderAuthMethod, RuntimeProviderId } from '@/app/backend/runtime/contracts';
 import { resolveRunCache } from '@/app/backend/runtime/services/runExecution/cacheKey';
 import { validateRunCapabilities } from '@/app/backend/runtime/services/runExecution/capabilities';
@@ -197,6 +203,32 @@ export class RunExecutionService {
             throw toRunExecutionError(resolvedCacheResult.error);
         }
         const resolvedCache = resolvedCacheResult.value;
+        const kiloRoutingPreference =
+            activeTarget.providerId === 'kilo'
+                ? await kiloRoutingPreferenceStore.getPreference(input.profileId, activeTarget.modelId)
+                : null;
+        const kiloRouting: ProviderRuntimeInput['kiloRouting'] =
+            activeTarget.providerId !== 'kilo'
+                ? undefined
+                : kiloRoutingPreference
+                  ? kiloRoutingPreference.routingMode === 'dynamic'
+                      ? {
+                            mode: 'dynamic' as const,
+                            sort: kiloRoutingPreference.sort ?? 'default',
+                        }
+                      : kiloRoutingPreference.pinnedProviderId
+                        ? {
+                              mode: 'pinned' as const,
+                              providerId: kiloRoutingPreference.pinnedProviderId,
+                          }
+                        : {
+                              mode: 'dynamic' as const,
+                              sort: 'default',
+                          }
+                  : {
+                        mode: 'dynamic' as const,
+                        sort: 'default',
+                    };
 
         const run = await runStore.create({
             profileId: input.profileId,
@@ -308,6 +340,7 @@ export class RunExecutionService {
             ...(resolvedAuth.apiKey ? { apiKey: resolvedAuth.apiKey } : {}),
             ...(resolvedAuth.accessToken ? { accessToken: resolvedAuth.accessToken } : {}),
             ...(resolvedAuth.organizationId ? { organizationId: resolvedAuth.organizationId } : {}),
+            ...(kiloRouting ? { kiloRouting } : {}),
             assistantMessageId: assistantMessage.id,
             signal: controller.signal,
         }).finally(() => {
@@ -417,6 +450,15 @@ export class RunExecutionService {
         apiKey?: string;
         accessToken?: string;
         organizationId?: string;
+        kiloRouting?:
+            | {
+                  mode: 'dynamic';
+                  sort: 'default' | 'price' | 'throughput' | 'latency';
+              }
+            | {
+                  mode: 'pinned';
+                  providerId: string;
+              };
         assistantMessageId: string;
         signal: AbortSignal;
     }): Promise<void> {

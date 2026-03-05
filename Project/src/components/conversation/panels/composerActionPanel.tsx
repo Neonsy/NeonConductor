@@ -20,6 +20,7 @@ interface ComposerActionPanelProps {
     isSubmitting: boolean;
     selectedProviderId: string | undefined;
     selectedModelId: string | undefined;
+    routingBadge?: string;
     providerOptions: ProviderOption[];
     modelOptions: ModelOption[];
     runErrorMessage: string | undefined;
@@ -35,6 +36,7 @@ export function ComposerActionPanel({
     isSubmitting,
     selectedProviderId,
     selectedModelId,
+    routingBadge,
     providerOptions,
     modelOptions,
     runErrorMessage,
@@ -84,6 +86,7 @@ export function ComposerActionPanel({
                     ))}
                 </select>
             </div>
+            {routingBadge ? <p className='text-muted-foreground text-xs'>{routingBadge}</p> : null}
             {runErrorMessage ? <p className='text-destructive text-xs'>{runErrorMessage}</p> : null}
             <textarea
                 value={prompt}

@@ -1,5 +1,5 @@
 import type { ProviderRecord } from '@/app/backend/persistence/types';
-import type { ProviderAuthMethod, RuntimeProviderId } from '@/app/backend/runtime/contracts';
+import type { KiloModelProviderInfo, ProviderAuthMethod, RuntimeProviderId } from '@/app/backend/runtime/contracts';
 
 export interface ProviderListItem extends ProviderRecord {
     isDefault: boolean;
@@ -15,3 +15,5 @@ export interface ProviderSyncResult {
     detail?: string;
     modelCount: number;
 }
+
+export type KiloModelProviderOption = KiloModelProviderInfo;
