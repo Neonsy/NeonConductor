@@ -10,6 +10,7 @@ export type ProviderBilledVia = 'kilo_gateway' | 'openai_api' | 'openai_subscrip
 export interface ProviderRuntimeCacheInput {
     profileId: string;
     sessionId: string;
+    cacheScopeKey?: string;
     modelId: string;
     runtimeOptions: RuntimeRunOptions;
 }

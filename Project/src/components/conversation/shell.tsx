@@ -7,6 +7,8 @@ import { useConversationShellRunTarget } from '@/web/components/conversation/con
 import { useConversationUiState } from '@/web/components/conversation/hooks/useConversationUiState';
 import { useSessionRunSelection } from '@/web/components/conversation/hooks/useSessionRunSelection';
 import { useThreadSidebarState } from '@/web/components/conversation/hooks/useThreadSidebarState';
+import type { MessageTimelineEntry } from '@/web/components/conversation/messageTimelineModel';
+import { MessageEditDialog } from '@/web/components/conversation/panels/messageEditDialog';
 import { ModeExecutionPanel } from '@/web/components/conversation/panels/modeExecutionPanel';
 import { SessionWorkspacePanel } from '@/web/components/conversation/sessionWorkspacePanel';
 import { DEFAULT_RUN_OPTIONS, isEntityId, isProviderId } from '@/web/components/conversation/shellHelpers';
@@ -24,9 +26,41 @@ interface ConversationShellProps {
     modeKey: string;
 }
 
+interface PendingMessageEdit {
+    messageId: EntityId<'msg'>;
+    initialText: string;
+    forcedMode?: 'branch';
+}
+
+function toEditFailureMessage(reason: string): string {
+    if (reason === 'message_not_found') {
+        return 'Could not find the selected message for editing.';
+    }
+    if (reason === 'message_not_editable') {
+        return 'Only user text messages can be edited.';
+    }
+    if (reason === 'session_not_found') {
+        return 'The selected session no longer exists.';
+    }
+    if (reason === 'run_not_found') {
+        return 'The target run for this message was not found.';
+    }
+    if (reason === 'no_turns') {
+        return 'No turns are available to edit in this session.';
+    }
+    if (reason === 'auto_start_required') {
+        return 'Message edits currently require starting a replacement run.';
+    }
+    if (reason === 'run_start_rejected') {
+        return 'The edited run could not be started.';
+    }
+    return `Edit failed: ${reason}`;
+}
+
 export function ConversationShell({ profileId, topLevelTab, modeKey }: ConversationShellProps) {
     const [prompt, setPrompt] = useState('');
     const [runSubmitError, setRunSubmitError] = useState<string | undefined>(undefined);
+    const [pendingMessageEdit, setPendingMessageEdit] = useState<PendingMessageEdit | undefined>(undefined);
     const [sessionTargetBySessionId, setSessionTargetBySessionId] = useState<
         Record<string, { providerId?: RuntimeProviderId; modelId?: string }>
     >({});
@@ -149,6 +183,18 @@ export function ConversationShell({ profileId, topLevelTab, modeKey }: Conversat
             refetchOnWindowFocus: false,
         }
     );
+    const editPreferenceQuery = trpc.conversation.getEditPreference.useQuery(
+        {
+            profileId,
+        },
+        {
+            refetchOnWindowFocus: false,
+        }
+    );
+    const editPreference: 'ask' | 'truncate' | 'branch' =
+        editPreferenceQuery.data?.value === 'truncate' || editPreferenceQuery.data?.value === 'branch'
+            ? editPreferenceQuery.data.value
+            : 'ask';
     const routingBadge =
         runTargetState.selectedProviderIdForComposer !== 'kilo'
             ? undefined
@@ -369,6 +415,33 @@ export function ConversationShell({ profileId, topLevelTab, modeKey }: Conversat
                             },
                         });
                     }}
+                    onEditMessage={(entry: MessageTimelineEntry) => {
+                        if (!isEntityId(entry.id, 'msg')) {
+                            return;
+                        }
+                        const editableText = entry.editableText?.trim();
+                        if (!editableText) {
+                            return;
+                        }
+                        setPendingMessageEdit({
+                            messageId: entry.id,
+                            initialText: editableText,
+                        });
+                    }}
+                    onBranchFromMessage={(entry: MessageTimelineEntry) => {
+                        if (!isEntityId(entry.id, 'msg')) {
+                            return;
+                        }
+                        const editableText = entry.editableText?.trim();
+                        if (!editableText) {
+                            return;
+                        }
+                        setPendingMessageEdit({
+                            messageId: entry.id,
+                            initialText: editableText,
+                            forcedMode: 'branch',
+                        });
+                    }}
                     modePanel={
                         <ModeExecutionPanel
                             topLevelTab={topLevelTab}
@@ -389,6 +462,77 @@ export function ConversationShell({ profileId, topLevelTab, modeKey }: Conversat
                     }
                 />
             </section>
+            <MessageEditDialog
+                open={Boolean(pendingMessageEdit)}
+                initialText={pendingMessageEdit?.initialText ?? ''}
+                preferredResolution={editPreference}
+                {...(pendingMessageEdit?.forcedMode ? { forcedMode: pendingMessageEdit.forcedMode } : {})}
+                busy={mutations.editSessionMutation.isPending || mutations.setEditPreferenceMutation.isPending}
+                onCancel={() => {
+                    setPendingMessageEdit(undefined);
+                }}
+                onSave={(input) => {
+                    if (!pendingMessageEdit) {
+                        return;
+                    }
+                    if (!isEntityId(selectedSessionId, 'sess')) {
+                        setRunSubmitError('Select a session before editing a message.');
+                        return;
+                    }
+
+                    setRunSubmitError(undefined);
+                    void mutations.editSessionMutation
+                        .mutateAsync({
+                            profileId,
+                            sessionId: selectedSessionId,
+                            topLevelTab,
+                            modeKey,
+                            messageId: pendingMessageEdit.messageId,
+                            replacementText: input.replacementText,
+                            editMode: input.editMode,
+                            autoStartRun: true,
+                            runtimeOptions: DEFAULT_RUN_OPTIONS,
+                            ...(runTargetState.resolvedRunTarget
+                                ? { providerId: runTargetState.resolvedRunTarget.providerId }
+                                : {}),
+                            ...(runTargetState.resolvedRunTarget
+                                ? { modelId: runTargetState.resolvedRunTarget.modelId }
+                                : {}),
+                            ...(selectedThread?.workspaceFingerprint
+                                ? { workspaceFingerprint: selectedThread.workspaceFingerprint }
+                                : {}),
+                        })
+                        .then(async (result) => {
+                            if (!result.edited) {
+                                setRunSubmitError(toEditFailureMessage(result.reason));
+                                return;
+                            }
+
+                            if (input.rememberChoice && editPreference === 'ask') {
+                                await mutations.setEditPreferenceMutation.mutateAsync({
+                                    profileId,
+                                    value: input.editMode,
+                                });
+                                void editPreferenceQuery.refetch();
+                            }
+
+                            uiState.setSelectedSessionId(result.sessionId);
+                            if (result.runId) {
+                                uiState.setSelectedRunId(result.runId);
+                            } else {
+                                uiState.setSelectedRunId(undefined);
+                            }
+                            setPendingMessageEdit(undefined);
+                            setPrompt('');
+                            void runtimeSnapshot.refetch();
+                            void queries.listThreadsQuery.refetch();
+                        })
+                        .catch((error: unknown) => {
+                            const message = error instanceof Error ? error.message : String(error);
+                            setRunSubmitError(`Edit failed: ${message}`);
+                        });
+                }}
+            />
         </main>
     );
 }

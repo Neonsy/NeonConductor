@@ -2,6 +2,9 @@ import type { MessageTimelineEntry } from '@/web/components/conversation/message
 
 interface MessageTimelineItemProps {
     entry: MessageTimelineEntry;
+    canBranch: boolean;
+    onEditMessage?: (entry: MessageTimelineEntry) => void;
+    onBranchFromMessage?: (entry: MessageTimelineEntry) => void;
 }
 
 export function MessageTimelineEmptyState() {
@@ -12,14 +15,47 @@ export function MessageTimelineEmptyState() {
     );
 }
 
-export function MessageTimelineItem({ entry }: MessageTimelineItemProps) {
+export function MessageTimelineItem({
+    entry,
+    canBranch,
+    onEditMessage,
+    onBranchFromMessage,
+}: MessageTimelineItemProps) {
+    const canEdit = entry.role === 'user' && typeof entry.editableText === 'string' && entry.editableText.length > 0;
+
     return (
         <article className='border-border bg-card rounded-lg border p-3'>
-            <header className='mb-2 flex items-center gap-2'>
-                <span className='bg-secondary text-secondary-foreground rounded px-2 py-0.5 text-[10px] font-semibold tracking-wide uppercase'>
-                    {entry.role}
-                </span>
-                <span className='text-muted-foreground text-xs'>{new Date(entry.createdAt).toLocaleTimeString()}</span>
+            <header className='mb-2 flex items-center justify-between gap-2'>
+                <div className='flex items-center gap-2'>
+                    <span className='bg-secondary text-secondary-foreground rounded px-2 py-0.5 text-[10px] font-semibold tracking-wide uppercase'>
+                        {entry.role}
+                    </span>
+                    <span className='text-muted-foreground text-xs'>
+                        {new Date(entry.createdAt).toLocaleTimeString()}
+                    </span>
+                </div>
+                {canEdit ? (
+                    <div className='flex items-center gap-1'>
+                        <button
+                            type='button'
+                            className='border-border bg-background hover:bg-accent rounded border px-2 py-0.5 text-[11px]'
+                            onClick={() => {
+                                onEditMessage?.(entry);
+                            }}>
+                            Edit
+                        </button>
+                        {canBranch ? (
+                            <button
+                                type='button'
+                                className='border-border bg-background hover:bg-accent rounded border px-2 py-0.5 text-[11px]'
+                                onClick={() => {
+                                    onBranchFromMessage?.(entry);
+                                }}>
+                                Branch
+                            </button>
+                        ) : null}
+                    </div>
+                ) : null}
             </header>
             <div className='space-y-2 text-sm leading-relaxed'>
                 {entry.body.length > 0 ? (

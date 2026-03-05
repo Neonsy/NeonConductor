@@ -11,6 +11,7 @@ import type { RunCacheResolution } from '@/app/backend/runtime/services/runExecu
 interface ResolveRunCacheInput {
     profileId: string;
     sessionId: string;
+    cacheScopeKey?: string;
     providerId: RuntimeProviderId;
     modelId: string;
     runtimeOptions: RuntimeRunOptions;
@@ -21,6 +22,7 @@ export function resolveRunCache(input: ResolveRunCacheInput): RunExecutionResult
     const cacheResolution = behavior.resolveCache({
         profileId: input.profileId,
         sessionId: input.sessionId,
+        ...(input.cacheScopeKey ? { cacheScopeKey: input.cacheScopeKey } : {}),
         modelId: input.modelId,
         runtimeOptions: input.runtimeOptions,
     });

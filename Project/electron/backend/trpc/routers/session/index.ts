@@ -3,12 +3,15 @@ import {
     profileInputSchema,
     sessionByIdInputSchema,
     sessionCreateInputSchema,
+    sessionEditInputSchema,
     sessionListMessagesInputSchema,
     sessionListRunsInputSchema,
+    sessionRevertInputSchema,
     sessionStartRunInputSchema,
 } from '@/app/backend/runtime/contracts';
 import { runExecutionService } from '@/app/backend/runtime/services/runExecution/service';
 import { runtimeEventLogService } from '@/app/backend/runtime/services/runtimeEventLog';
+import { sessionEditService } from '@/app/backend/runtime/services/sessionEdit/service';
 import { publicProcedure, router } from '@/app/backend/trpc/init';
 
 export const sessionRouter = router({
@@ -83,7 +86,15 @@ export const sessionRouter = router({
 
         return result;
     }),
-    revert: publicProcedure.input(sessionByIdInputSchema).mutation(async ({ input }) => {
+    revert: publicProcedure.input(sessionRevertInputSchema).mutation(async ({ input }) => {
+        if (input.topLevelTab === 'chat') {
+            return {
+                reverted: false as const,
+                reason: 'unsupported_tab' as const,
+                message: 'Checkpoint-style revert is only supported in agent and orchestrator tabs.',
+            };
+        }
+
         const result = await sessionStore.revert(input.profileId, input.sessionId);
         if (result.reverted) {
             await runtimeEventLogService.append({
@@ -93,6 +104,26 @@ export const sessionRouter = router({
                 payload: {
                     session: result.session,
                     profileId: input.profileId,
+                },
+            });
+        }
+
+        return result;
+    }),
+    edit: publicProcedure.input(sessionEditInputSchema).mutation(async ({ input }) => {
+        const result = await sessionEditService.edit(input);
+        if (result.edited) {
+            await runtimeEventLogService.append({
+                entityType: 'session',
+                entityId: result.sessionId,
+                eventType: 'session.edited',
+                payload: {
+                    profileId: input.profileId,
+                    sourceSessionId: result.sourceSessionId,
+                    sessionId: result.sessionId,
+                    editMode: result.editMode,
+                    started: result.started,
+                    runId: result.runId ?? null,
                 },
             });
         }

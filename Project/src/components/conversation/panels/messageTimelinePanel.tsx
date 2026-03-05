@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { MessageTimelineEmptyState, MessageTimelineItem } from '@/web/components/conversation/messageTimeline';
 import { buildTimelineEntries, isWithinBottomThreshold } from '@/web/components/conversation/messageTimelineModel';
+import type { MessageTimelineEntry } from '@/web/components/conversation/messageTimelineModel';
 import { Button } from '@/web/components/ui/button';
 
 import type { MessagePartRecord, MessageRecord } from '@/app/backend/persistence/types';
@@ -10,9 +11,16 @@ import type { MessagePartRecord, MessageRecord } from '@/app/backend/persistence
 interface MessageTimelinePanelProps {
     messages: MessageRecord[];
     partsByMessageId: Map<string, MessagePartRecord[]>;
+    onEditMessage?: (entry: MessageTimelineEntry) => void;
+    onBranchFromMessage?: (entry: MessageTimelineEntry) => void;
 }
 
-export function MessageTimelinePanel({ messages, partsByMessageId }: MessageTimelinePanelProps) {
+export function MessageTimelinePanel({
+    messages,
+    partsByMessageId,
+    onEditMessage,
+    onBranchFromMessage,
+}: MessageTimelinePanelProps) {
     const entries = useMemo(() => buildTimelineEntries(messages, partsByMessageId), [messages, partsByMessageId]);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const [isAutoStickEnabled, setIsAutoStickEnabled] = useState(true);
@@ -107,7 +115,12 @@ export function MessageTimelinePanel({ messages, partsByMessageId }: MessageTime
                                     data-index={virtualRow.index}
                                     className='absolute top-0 left-0 w-full pb-3'
                                     style={{ transform: `translateY(${String(virtualRow.start)}px)` }}>
-                                    <MessageTimelineItem entry={entry} />
+                                    <MessageTimelineItem
+                                        entry={entry}
+                                        canBranch={Boolean(onBranchFromMessage)}
+                                        {...(onEditMessage ? { onEditMessage } : {})}
+                                        {...(onBranchFromMessage ? { onBranchFromMessage } : {})}
+                                    />
                                 </div>
                             );
                         })}

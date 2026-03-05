@@ -347,13 +347,224 @@ describe('runtime contracts', () => {
         expect(afterAbort.session.runStatus).toBe('aborted');
         expect(afterAbort.session.turnCount).toBe(2);
 
-        const reverted = await caller.session.revert({ profileId, sessionId });
+        const chatRevert = await caller.session.revert({ profileId, sessionId, topLevelTab: 'chat' });
+        expect(chatRevert.reverted).toBe(false);
+
+        const reverted = await caller.session.revert({ profileId, sessionId, topLevelTab: 'agent' });
         expect(reverted.reverted).toBe(true);
         if (!reverted.reverted) {
             throw new Error('Expected revert to succeed.');
         }
         expect(reverted.session.turnCount).toBe(1);
         expect(reverted.session.runStatus).toBe('completed');
+    });
+
+    it('supports session edit truncate and branch across all tabs with chat-only replay', async () => {
+        const caller = createCaller();
+        const requestBodies: Array<Record<string, unknown>> = [];
+        vi.stubGlobal(
+            'fetch',
+            vi.fn((_url: string, init?: RequestInit) => {
+                const body = init?.body;
+                if (typeof body === 'string') {
+                    requestBodies.push(JSON.parse(body) as Record<string, unknown>);
+                }
+
+                return Promise.resolve({
+                    ok: true,
+                    status: 200,
+                    statusText: 'OK',
+                    json: () => ({
+                        choices: [
+                            {
+                                message: {
+                                    content: 'ok',
+                                },
+                            },
+                        ],
+                        usage: {
+                            prompt_tokens: 10,
+                            completion_tokens: 20,
+                            total_tokens: 30,
+                        },
+                    }),
+                });
+            })
+        );
+
+        const configured = await caller.provider.setApiKey({
+            profileId,
+            providerId: 'openai',
+            apiKey: 'openai-edit-test-key',
+        });
+        expect(configured.success).toBe(true);
+
+        const created = await createSessionInScope(caller, profileId, {
+            scope: 'detached',
+            title: 'Edit + Branch Thread',
+            kind: 'local',
+        });
+        const sessionId = created.session.id;
+
+        const firstRun = await caller.session.startRun({
+            profileId,
+            sessionId,
+            prompt: 'first',
+            topLevelTab: 'chat',
+            modeKey: 'chat',
+            runtimeOptions: defaultRuntimeOptions,
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
+        });
+        expect(firstRun.accepted).toBe(true);
+        if (!firstRun.accepted) {
+            throw new Error('Expected first run to start.');
+        }
+        await waitForRunStatus(caller, profileId, sessionId, 'completed');
+
+        const secondRun = await caller.session.startRun({
+            profileId,
+            sessionId,
+            prompt: 'second',
+            topLevelTab: 'chat',
+            modeKey: 'chat',
+            runtimeOptions: defaultRuntimeOptions,
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
+        });
+        expect(secondRun.accepted).toBe(true);
+        if (!secondRun.accepted) {
+            throw new Error('Expected second run to start.');
+        }
+        await waitForRunStatus(caller, profileId, sessionId, 'completed');
+
+        const beforeEditMessages = await caller.session.listMessages({ profileId, sessionId });
+        const beforeEditUserMessages = beforeEditMessages.messages.filter((message) => message.role === 'user');
+        const secondUserMessage = beforeEditUserMessages.at(1);
+        if (!secondUserMessage) {
+            throw new Error('Expected second user message.');
+        }
+
+        const truncated = await caller.session.edit({
+            profileId,
+            sessionId,
+            topLevelTab: 'agent',
+            modeKey: 'code',
+            messageId: secondUserMessage.id,
+            replacementText: 'second edited in agent tab',
+            editMode: 'truncate',
+            autoStartRun: true,
+            runtimeOptions: defaultRuntimeOptions,
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
+        });
+        expect(truncated.edited).toBe(true);
+        if (!truncated.edited) {
+            throw new Error(`Expected truncate edit to succeed, received reason "${truncated.reason}".`);
+        }
+        expect(truncated.sessionId).toBe(sessionId);
+        if (truncated.started && truncated.runId) {
+            await waitForRunStatus(caller, profileId, sessionId, 'completed');
+        }
+
+        const statusAfterTruncate = await caller.session.status({ profileId, sessionId });
+        expect(statusAfterTruncate.found).toBe(true);
+        if (!statusAfterTruncate.found) {
+            throw new Error('Expected session after truncate edit.');
+        }
+        expect(statusAfterTruncate.session.turnCount).toBe(2);
+
+        const afterEditMessages = await caller.session.listMessages({ profileId, sessionId });
+        const afterEditUserMessages = afterEditMessages.messages.filter((message) => message.role === 'user');
+        const latestUserMessage = afterEditUserMessages.at(-1);
+        if (!latestUserMessage) {
+            throw new Error('Expected latest user message after truncate.');
+        }
+
+        const branchedAgent = await caller.session.edit({
+            profileId,
+            sessionId,
+            topLevelTab: 'agent',
+            modeKey: 'code',
+            messageId: latestUserMessage.id,
+            replacementText: 'branch prompt for agent tab',
+            editMode: 'branch',
+            autoStartRun: true,
+            runtimeOptions: defaultRuntimeOptions,
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
+        });
+        expect(branchedAgent.edited).toBe(true);
+        if (!branchedAgent.edited) {
+            throw new Error(`Expected agent branch edit to succeed, received reason "${branchedAgent.reason}".`);
+        }
+        expect(branchedAgent.sessionId).not.toBe(sessionId);
+        expect(branchedAgent.started).toBe(true);
+        if (branchedAgent.started) {
+            await waitForRunStatus(caller, profileId, branchedAgent.sessionId, 'completed');
+        }
+
+        const branchAgentRuns = await caller.session.listRuns({
+            profileId,
+            sessionId: branchedAgent.sessionId,
+        });
+        expect(branchAgentRuns.runs.length).toBe(2);
+
+        const branchedOrchestrator = await caller.session.edit({
+            profileId,
+            sessionId,
+            topLevelTab: 'orchestrator',
+            modeKey: 'orchestrate',
+            messageId: latestUserMessage.id,
+            replacementText: 'branch prompt for orchestrator tab',
+            editMode: 'branch',
+            autoStartRun: true,
+            runtimeOptions: defaultRuntimeOptions,
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
+        });
+        expect(branchedOrchestrator.edited).toBe(true);
+        if (!branchedOrchestrator.edited) {
+            throw new Error(
+                `Expected orchestrator branch edit to succeed, received reason "${branchedOrchestrator.reason}".`
+            );
+        }
+        expect(branchedOrchestrator.sessionId).not.toBe(sessionId);
+        expect(branchedOrchestrator.sessionId).not.toBe(branchedAgent.sessionId);
+        expect(branchedOrchestrator.started).toBe(true);
+        if (branchedOrchestrator.started) {
+            await waitForRunStatus(caller, profileId, branchedOrchestrator.sessionId, 'completed');
+        }
+
+        const branchOrchestratorRuns = await caller.session.listRuns({
+            profileId,
+            sessionId: branchedOrchestrator.sessionId,
+        });
+        expect(branchOrchestratorRuns.runs.length).toBe(2);
+
+        const sourceRuns = await caller.session.listRuns({
+            profileId,
+            sessionId,
+        });
+        expect(sourceRuns.runs.length).toBe(2);
+
+        const secondChatBody = requestBodies[1];
+        const secondChatInput = Array.isArray(secondChatBody?.['input']) ? secondChatBody['input'] : [];
+        expect(secondChatInput.length).toBeGreaterThan(1);
+
+        const agentEditBody = requestBodies[2];
+        const agentEditInput = Array.isArray(agentEditBody?.['input']) ? agentEditBody['input'] : [];
+        expect(agentEditInput.length).toBe(1);
+
+        const agentBranchBody = requestBodies[3];
+        const agentBranchInput = Array.isArray(agentBranchBody?.['input']) ? agentBranchBody['input'] : [];
+        expect(agentBranchInput.length).toBe(1);
+
+        const orchestratorBranchBody = requestBodies[4];
+        const orchestratorBranchInput = Array.isArray(orchestratorBranchBody?.['input'])
+            ? orchestratorBranchBody['input']
+            : [];
+        expect(orchestratorBranchInput.length).toBe(1);
     });
 
     it('enforces planning-only mode and allows switching active mode', async () => {

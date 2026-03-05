@@ -1,5 +1,6 @@
 import type {
     RuntimeProviderId,
+    SessionEditMode,
     RuntimeReasoningEffort,
     RuntimeReasoningSummary,
     RuntimeCacheStrategy,
@@ -17,6 +18,10 @@ export interface SessionCreateInput extends ProfileInput {
 
 export interface SessionByIdInput extends ProfileInput {
     sessionId: EntityId<'sess'>;
+}
+
+export interface SessionRevertInput extends SessionByIdInput {
+    topLevelTab: TopLevelTab;
 }
 
 export interface RuntimeReasoningOptions {
@@ -48,6 +53,19 @@ export interface SessionStartRunInput extends SessionByIdInput {
     modeKey: string;
     workspaceFingerprint?: string;
     runtimeOptions: RuntimeRunOptions;
+}
+
+export interface SessionEditInput extends SessionByIdInput {
+    topLevelTab: TopLevelTab;
+    modeKey?: string;
+    messageId: EntityId<'msg'>;
+    replacementText: string;
+    editMode: SessionEditMode;
+    autoStartRun?: boolean;
+    providerId?: RuntimeProviderId;
+    modelId?: string;
+    workspaceFingerprint?: string;
+    runtimeOptions?: RuntimeRunOptions;
 }
 
 export type SessionListRunsInput = SessionByIdInput;

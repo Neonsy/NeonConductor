@@ -122,6 +122,10 @@ export interface ProviderRuntimeInput {
     providerId: FirstPartyProviderId;
     modelId: string;
     promptText: string;
+    contextMessages?: Array<{
+        role: 'system' | 'user' | 'assistant';
+        text: string;
+    }>;
     runtimeOptions: {
         reasoning: ProviderRuntimeReasoningOptions;
         cache: ProviderRuntimeCacheOptions;

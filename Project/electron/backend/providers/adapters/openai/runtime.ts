@@ -162,19 +162,22 @@ function buildResponsesBody(input: ProviderRuntimeInput): Record<string, unknown
     const effort = mapReasoningEffort(input.runtimeOptions.reasoning.effort);
     const include = input.runtimeOptions.reasoning.includeEncrypted ? ['reasoning.encrypted_content'] : [];
 
+    const contextMessages =
+        input.contextMessages && input.contextMessages.length > 0
+            ? input.contextMessages
+            : [{ role: 'user' as const, text: input.promptText }];
+
     const body: Record<string, unknown> = {
         model: toUpstreamModelId(input.modelId),
-        input: [
-            {
-                role: 'user',
-                content: [
-                    {
-                        type: 'input_text',
-                        text: input.promptText,
-                    },
-                ],
-            },
-        ],
+        input: contextMessages.map((message) => ({
+            role: message.role,
+            content: [
+                {
+                    type: 'input_text',
+                    text: message.text,
+                },
+            ],
+        })),
         reasoning: {
             summary: input.runtimeOptions.reasoning.summary,
             ...(effort ? { effort } : {}),
@@ -189,14 +192,17 @@ function buildResponsesBody(input: ProviderRuntimeInput): Record<string, unknown
 }
 
 function buildChatCompletionsBody(input: ProviderRuntimeInput): Record<string, unknown> {
+    const contextMessages =
+        input.contextMessages && input.contextMessages.length > 0
+            ? input.contextMessages
+            : [{ role: 'user' as const, text: input.promptText }];
+
     return {
         model: toUpstreamModelId(input.modelId),
-        messages: [
-            {
-                role: 'user',
-                content: input.promptText,
-            },
-        ],
+        messages: contextMessages.map((message) => ({
+            role: message.role,
+            content: message.text,
+        })),
         stream: false,
         stream_options: {
             include_usage: true,

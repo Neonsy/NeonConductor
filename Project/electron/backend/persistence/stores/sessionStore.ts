@@ -88,6 +88,38 @@ export class SessionStore {
         return row ?? null;
     }
 
+    private async listRunsAscending(profileId: string, sessionId: string): Promise<RunRow[]> {
+        const { db } = getPersistence();
+        return db
+            .selectFrom('runs')
+            .selectAll()
+            .where('profile_id', '=', profileId)
+            .where('session_id', '=', sessionId)
+            .orderBy('created_at', 'asc')
+            .orderBy('id', 'asc')
+            .execute();
+    }
+
+    private async syncSessionStatus(profileId: string, sessionId: string): Promise<SessionSummaryRecord> {
+        const { db } = getPersistence();
+        const nextRun = await this.getLatestRun(profileId, sessionId);
+        const nextStatus = mapRunStatusToSessionStatus(nextRun?.status ?? null);
+        const nextPendingRunId = nextRun?.status === 'running' ? nextRun.id : null;
+        const updatedSession = await db
+            .updateTable('sessions')
+            .set({
+                run_status: nextStatus,
+                pending_completion_run_id: nextPendingRunId,
+                updated_at: nowIso(),
+            })
+            .where('id', '=', sessionId)
+            .where('profile_id', '=', profileId)
+            .returningAll()
+            .executeTakeFirstOrThrow();
+
+        return mapSessionSummary(updatedSession, await this.countTurns(profileId, updatedSession.id));
+    }
+
     async create(profileId: string, threadId: string, kind: SessionKind): Promise<SessionSummaryRecord> {
         const { db } = getPersistence();
         const now = nowIso();
@@ -229,6 +261,199 @@ export class SessionStore {
         }
     }
 
+    async truncateFromRun(
+        profileId: string,
+        sessionId: EntityId<'sess'>,
+        runId: EntityId<'run'>
+    ): Promise<
+        | { truncated: false; reason: 'session_not_found' | 'run_not_found' | 'no_turns' }
+        | { truncated: true; session: SessionSummaryRecord; deletedRunIds: EntityId<'run'>[] }
+    > {
+        const { db } = getPersistence();
+        const session = await this.getSessionById(profileId, sessionId);
+        if (!session) {
+            return { truncated: false, reason: 'session_not_found' };
+        }
+
+        const runs = await this.listRunsAscending(profileId, session.id);
+        if (runs.length === 0) {
+            return { truncated: false, reason: 'no_turns' };
+        }
+
+        const index = runs.findIndex((item) => item.id === runId);
+        if (index < 0) {
+            return { truncated: false, reason: 'run_not_found' };
+        }
+
+        const runIdsToDelete = runs.slice(index).map((item) => parseEntityId(item.id, 'runs.id', 'run'));
+        await db.deleteFrom('runs').where('id', 'in', runIdsToDelete).where('profile_id', '=', profileId).execute();
+
+        const updated = await this.syncSessionStatus(profileId, session.id);
+        await threadStore.touchByThread(profileId, session.thread_id);
+
+        return {
+            truncated: true,
+            session: updated,
+            deletedRunIds: runIdsToDelete,
+        };
+    }
+
+    async createBranchFromRun(
+        profileId: string,
+        sessionId: EntityId<'sess'>,
+        runId: EntityId<'run'>
+    ): Promise<
+        | { branched: false; reason: 'session_not_found' | 'run_not_found' }
+        | { branched: true; session: SessionSummaryRecord; sourceRunCount: number; clonedRunCount: number }
+    > {
+        const { db } = getPersistence();
+        const sourceSession = await this.getSessionById(profileId, sessionId);
+        if (!sourceSession) {
+            return { branched: false, reason: 'session_not_found' };
+        }
+
+        const sourceRuns = await this.listRunsAscending(profileId, sourceSession.id);
+        const targetIndex = sourceRuns.findIndex((item) => item.id === runId);
+        if (targetIndex < 0) {
+            return { branched: false, reason: 'run_not_found' };
+        }
+        const prefixRuns = sourceRuns.slice(0, targetIndex);
+        const branchSessionId = createEntityId('sess');
+        const now = nowIso();
+
+        await db.transaction().execute(async (trx) => {
+            await trx
+                .insertInto('sessions')
+                .values({
+                    id: branchSessionId,
+                    profile_id: profileId,
+                    conversation_id: sourceSession.conversation_id,
+                    thread_id: sourceSession.thread_id,
+                    kind: sourceSession.kind,
+                    run_status: 'idle',
+                    pending_completion_run_id: null,
+                    created_at: now,
+                    updated_at: now,
+                })
+                .execute();
+
+            for (const sourceRun of prefixRuns) {
+                const clonedRunId = createEntityId('run');
+                await trx
+                    .insertInto('runs')
+                    .values({
+                        id: clonedRunId,
+                        session_id: branchSessionId,
+                        profile_id: profileId,
+                        prompt: sourceRun.prompt,
+                        status: sourceRun.status,
+                        provider_id: sourceRun.provider_id,
+                        model_id: sourceRun.model_id,
+                        auth_method: sourceRun.auth_method,
+                        reasoning_effort: sourceRun.reasoning_effort,
+                        reasoning_summary: sourceRun.reasoning_summary,
+                        reasoning_include_encrypted: sourceRun.reasoning_include_encrypted,
+                        cache_strategy: sourceRun.cache_strategy,
+                        cache_key: sourceRun.cache_key,
+                        cache_applied: sourceRun.cache_applied,
+                        cache_skip_reason: sourceRun.cache_skip_reason,
+                        transport_openai_preference: sourceRun.transport_openai_preference,
+                        transport_selected: sourceRun.transport_selected,
+                        transport_degraded_reason: sourceRun.transport_degraded_reason,
+                        started_at: sourceRun.started_at,
+                        completed_at: sourceRun.completed_at,
+                        aborted_at: sourceRun.aborted_at,
+                        error_code: sourceRun.error_code,
+                        error_message: sourceRun.error_message,
+                        created_at: sourceRun.created_at,
+                        updated_at: sourceRun.updated_at,
+                    })
+                    .execute();
+
+                const usage = await trx
+                    .selectFrom('run_usage')
+                    .selectAll()
+                    .where('run_id', '=', sourceRun.id)
+                    .executeTakeFirst();
+                if (usage) {
+                    await trx
+                        .insertInto('run_usage')
+                        .values({
+                            run_id: clonedRunId,
+                            provider_id: usage.provider_id,
+                            model_id: usage.model_id,
+                            input_tokens: usage.input_tokens,
+                            output_tokens: usage.output_tokens,
+                            cached_tokens: usage.cached_tokens,
+                            reasoning_tokens: usage.reasoning_tokens,
+                            total_tokens: usage.total_tokens,
+                            latency_ms: usage.latency_ms,
+                            cost_microunits: usage.cost_microunits,
+                            billed_via: usage.billed_via,
+                            recorded_at: usage.recorded_at,
+                        })
+                        .execute();
+                }
+
+                const sourceMessages = await trx
+                    .selectFrom('messages')
+                    .selectAll()
+                    .where('run_id', '=', sourceRun.id)
+                    .where('profile_id', '=', profileId)
+                    .orderBy('created_at', 'asc')
+                    .orderBy('id', 'asc')
+                    .execute();
+
+                for (const sourceMessage of sourceMessages) {
+                    const clonedMessageId = createEntityId('msg');
+                    await trx
+                        .insertInto('messages')
+                        .values({
+                            id: clonedMessageId,
+                            profile_id: profileId,
+                            session_id: branchSessionId,
+                            run_id: clonedRunId,
+                            role: sourceMessage.role,
+                            created_at: sourceMessage.created_at,
+                            updated_at: sourceMessage.updated_at,
+                        })
+                        .execute();
+
+                    const sourceParts = await trx
+                        .selectFrom('message_parts')
+                        .selectAll()
+                        .where('message_id', '=', sourceMessage.id)
+                        .orderBy('sequence', 'asc')
+                        .execute();
+
+                    for (const sourcePart of sourceParts) {
+                        await trx
+                            .insertInto('message_parts')
+                            .values({
+                                id: createEntityId('part'),
+                                message_id: clonedMessageId,
+                                sequence: sourcePart.sequence,
+                                part_type: sourcePart.part_type,
+                                payload_json: sourcePart.payload_json,
+                                created_at: sourcePart.created_at,
+                            })
+                            .execute();
+                    }
+                }
+            }
+        });
+
+        const summary = await this.syncSessionStatus(profileId, branchSessionId);
+        await threadStore.touchByThread(profileId, sourceSession.thread_id);
+
+        return {
+            branched: true,
+            session: summary,
+            sourceRunCount: sourceRuns.length,
+            clonedRunCount: prefixRuns.length,
+        };
+    }
+
     async revert(
         profileId: string,
         sessionId: EntityId<'sess'>
@@ -248,26 +473,12 @@ export class SessionStore {
 
         await db.deleteFrom('runs').where('id', '=', latestRun.id).where('profile_id', '=', profileId).execute();
 
-        const now = nowIso();
-        const nextRun = await this.getLatestRun(profileId, session.id);
-        const nextStatus = mapRunStatusToSessionStatus(nextRun?.status ?? null);
-        const nextPendingRunId = nextRun?.status === 'running' ? nextRun.id : null;
-
-        const updatedSession = await db
-            .updateTable('sessions')
-            .set({
-                run_status: nextStatus,
-                pending_completion_run_id: nextPendingRunId,
-                updated_at: now,
-            })
-            .where('id', '=', session.id)
-            .where('profile_id', '=', profileId)
-            .returningAll()
-            .executeTakeFirstOrThrow();
+        const updatedSession = await this.syncSessionStatus(profileId, session.id);
+        await threadStore.touchByThread(profileId, session.thread_id);
 
         return {
             reverted: true,
-            session: mapSessionSummary(updatedSession, await this.countTurns(profileId, updatedSession.id)),
+            session: updatedSession,
         };
     }
 
