@@ -25,14 +25,22 @@
 - Do not introduce massive "god files"; split by responsibility.
 - If a file starts growing into multiple concerns, stop and extract modules immediately.
 - Prefer clear, composable units over central dumping grounds to reduce cognitive load.
-- Treat oversized files as a DX bug and refactor before merging.
+- There is no hard line limit; files can exceed 500 LOC when still coherent.
+- Preferred target is to keep files under 1000 LOC.
+- Treat oversized or multi-concern files as a DX bug and refactor before merging.
 
 ### 5) Type Safety at Boundaries (No Blind Casts)
+- Do not use broad `as SomeType` assertions to silence type errors.
 - Avoid `as SomeType` assertions in application code when a runtime/type guard can prove correctness.
 - Prefer typed parser/validator boundaries and explicit narrowing helpers (fail-closed on invalid data).
-- Use `as const` only for literal narrowing; do not use broad assertions to silence type errors.
+- Use `as const` only for literal narrowing.
+- If a cast is unavoidable, keep it at a validated parser/guard boundary, not at mutation call sites.
 - When IDs cross renderer/service boundaries, validate prefix/shape before mutation calls instead of casting.
 - Keep stable internal IDs immutable and separate from user-facing names (rename display fields, not identity keys).
+
+## Repository Documentation Status
+- Root `README.md` is intentionally empty; it serves as a pointer target to `Markdown/README`.
+- `Project/README.md` is intentionally not filled yet.
 
 ## Practical Rule
 - Every PR should leave the touched area clearer than it was.
