@@ -159,4 +159,3 @@ class RuntimeResetServiceImpl implements RuntimeResetService {
 }
 
 export const runtimeResetService: RuntimeResetService = new RuntimeResetServiceImpl();
-

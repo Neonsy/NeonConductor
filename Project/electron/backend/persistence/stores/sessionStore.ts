@@ -1,9 +1,10 @@
 import { getPersistence } from '@/app/backend/persistence/db';
 import type { RunsTable, SessionsTable } from '@/app/backend/persistence/schema';
+import { parseEntityId, parseEnumValue } from '@/app/backend/persistence/stores/rowParsers';
 import { threadStore } from '@/app/backend/persistence/stores/threadStore';
 import { nowIso } from '@/app/backend/persistence/stores/utils';
 import type { SessionSummaryRecord } from '@/app/backend/persistence/types';
-import { createEntityId, runStatuses } from '@/app/backend/runtime/contracts';
+import { createEntityId, runStatuses, sessionKinds } from '@/app/backend/runtime/contracts';
 import type { EntityId, RunStatus, SessionKind } from '@/app/backend/runtime/contracts';
 
 import type { Selectable } from 'kysely';
@@ -25,11 +26,11 @@ function parseRunStatus(value: string): RunStatus {
 
 function mapSessionSummary(row: SessionRow, turnCount: number): SessionSummaryRecord {
     return {
-        id: row.id as EntityId<'sess'>,
+        id: parseEntityId(row.id, 'sessions.id', 'sess'),
         profileId: row.profile_id,
         conversationId: row.conversation_id,
         threadId: row.thread_id,
-        kind: row.kind as SessionKind,
+        kind: parseEnumValue(row.kind, 'sessions.kind', sessionKinds),
         runStatus: parseRunStatus(row.run_status),
         turnCount,
         createdAt: row.created_at,
@@ -159,7 +160,9 @@ export class SessionStore {
         return {
             found: true,
             session: mapSessionSummary(session, turnCount),
-            activeRunId: session.pending_completion_run_id as EntityId<'run'> | null,
+            activeRunId: session.pending_completion_run_id
+                ? parseEntityId(session.pending_completion_run_id, 'sessions.pending_completion_run_id', 'run')
+                : null,
         };
     }
 

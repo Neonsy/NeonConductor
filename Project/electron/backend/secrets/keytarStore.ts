@@ -74,11 +74,11 @@ function isKeytarModule(value: unknown): value is KeytarModule {
         return false;
     }
 
-    const source = value as Record<string, unknown>;
+    const getMember = (name: string): unknown => Reflect.get(value, name);
     return (
-        typeof source['getPassword'] === 'function' &&
-        typeof source['setPassword'] === 'function' &&
-        typeof source['deletePassword'] === 'function'
+        typeof getMember('getPassword') === 'function' &&
+        typeof getMember('setPassword') === 'function' &&
+        typeof getMember('deletePassword') === 'function'
     );
 }
 
@@ -95,12 +95,10 @@ export function createKeytarSecretStore(serviceName = DEFAULT_SERVICE_NAME): {
     info: SecretStoreInfo;
 } {
     try {
-        const imported = require('keytar') as unknown;
-        const moduleValue = isKeytarModule(imported)
-            ? imported
-            : isKeytarModule((imported as { default?: unknown }).default)
-              ? (imported as { default: KeytarModule }).default
-              : null;
+        const imported: unknown = require('keytar');
+        const defaultExport =
+            imported && typeof imported === 'object' ? (imported as Record<string, unknown>)['default'] : undefined;
+        const moduleValue = isKeytarModule(imported) ? imported : isKeytarModule(defaultExport) ? defaultExport : null;
 
         if (!moduleValue) {
             return {

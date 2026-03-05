@@ -1,8 +1,25 @@
 import { getPersistence } from '@/app/backend/persistence/db';
-import { nowIso, parseJsonValue } from '@/app/backend/persistence/stores/utils';
+import { parseEntityId, parseEnumValue, parseJsonRecord } from '@/app/backend/persistence/stores/rowParsers';
+import { nowIso } from '@/app/backend/persistence/stores/utils';
 import type { RuntimeEntityType, RuntimeEventRecordV1 } from '@/app/backend/persistence/types';
 import { createEntityId } from '@/app/backend/runtime/contracts';
-import type { EntityId } from '@/app/backend/runtime/contracts';
+
+const runtimeEntityTypes = [
+    'session',
+    'run',
+    'profile',
+    'permission',
+    'provider',
+    'tool',
+    'mcp',
+    'runtime',
+    'conversation',
+    'thread',
+    'tag',
+    'diff',
+    'plan',
+    'orchestrator',
+] as const;
 
 export class RuntimeEventStore {
     async append(event: {
@@ -30,11 +47,11 @@ export class RuntimeEventStore {
 
         return {
             sequence: inserted.sequence,
-            eventId: inserted.event_id as EntityId<'evt'>,
-            entityType: inserted.entity_type as RuntimeEntityType,
+            eventId: parseEntityId(inserted.event_id, 'runtime_events.event_id', 'evt'),
+            entityType: parseEnumValue(inserted.entity_type, 'runtime_events.entity_type', runtimeEntityTypes),
             entityId: inserted.entity_id,
             eventType: inserted.event_type,
-            payload: parseJsonValue(inserted.payload_json, {}),
+            payload: parseJsonRecord(inserted.payload_json),
             createdAt: inserted.created_at,
         };
     }
@@ -56,11 +73,11 @@ export class RuntimeEventStore {
 
         return rows.map((row) => ({
             sequence: row.sequence,
-            eventId: row.event_id as EntityId<'evt'>,
-            entityType: row.entity_type as RuntimeEntityType,
+            eventId: parseEntityId(row.event_id, 'runtime_events.event_id', 'evt'),
+            entityType: parseEnumValue(row.entity_type, 'runtime_events.entity_type', runtimeEntityTypes),
             entityId: row.entity_id,
             eventType: row.event_type,
-            payload: parseJsonValue(row.payload_json, {}),
+            payload: parseJsonRecord(row.payload_json),
             createdAt: row.created_at,
         }));
     }

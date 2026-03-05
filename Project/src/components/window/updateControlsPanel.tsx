@@ -54,7 +54,9 @@ export function UpdateControlsPanel({ open, onClose }: UpdateControlsPanelProps)
                                 key={channel.id}
                                 type='button'
                                 className={`w-full rounded-md border px-2 py-2 text-left ${
-                                    isCurrent ? 'border-primary bg-primary/10' : 'border-border bg-background hover:bg-accent'
+                                    isCurrent
+                                        ? 'border-primary bg-primary/10'
+                                        : 'border-border bg-background hover:bg-accent'
                                 }`}
                                 onClick={() => {
                                     if (isCurrent || setChannelMutation.isPending) {

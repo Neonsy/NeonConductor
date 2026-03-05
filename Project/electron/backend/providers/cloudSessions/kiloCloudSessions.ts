@@ -18,6 +18,10 @@ export interface CloudFetchResult {
     error?: string;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
 export async function fetchCloudSession(token: string, sessionId: string): Promise<CloudFetchResult> {
     const response = await fetch(exportUrl(sessionId), {
         headers: {
@@ -34,6 +38,11 @@ export async function fetchCloudSession(token: string, sessionId: string): Promi
         return { ok: false, status: response.status, error: 'Failed to fetch session' };
     }
 
-    const data = (await response.json()) as Record<string, unknown>;
+    const payload: unknown = await response.json();
+    if (!isRecord(payload)) {
+        return { ok: false, status: response.status, error: 'Invalid session payload' };
+    }
+
+    const data = payload;
     return { ok: true, status: 200, data };
 }

@@ -2,7 +2,12 @@ import { ComposerActionPanel } from '@/web/components/conversation/panels/compos
 import { MessageTimelinePanel } from '@/web/components/conversation/panels/messageTimelinePanel';
 import { Button } from '@/web/components/ui/button';
 
-import type { MessagePartRecord, MessageRecord, SessionSummaryRecord, RunRecord } from '@/app/backend/persistence/types';
+import type {
+    MessagePartRecord,
+    MessageRecord,
+    SessionSummaryRecord,
+    RunRecord,
+} from '@/app/backend/persistence/types';
 
 import type { ReactNode } from 'react';
 
@@ -61,7 +66,11 @@ export function SessionWorkspacePanel({
         <div className='grid min-h-0 flex-1 grid-cols-[280px_1fr]'>
             <aside className='border-border min-h-0 overflow-y-auto border-r p-3'>
                 <div className='mb-2 flex justify-end'>
-                    <Button type='button' size='sm' disabled={!canCreateSession || isCreatingSession} onClick={onCreateSession}>
+                    <Button
+                        type='button'
+                        size='sm'
+                        disabled={!canCreateSession || isCreatingSession}
+                        onClick={onCreateSession}>
                         New Session
                     </Button>
                 </div>

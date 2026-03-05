@@ -43,7 +43,11 @@ function mapModeDefinition(row: {
 }
 
 export class ModeStore {
-    async getByProfileTabMode(profileId: string, topLevelTab: TopLevelTab, modeKey: string): Promise<ModeDefinitionRecord | null> {
+    async getByProfileTabMode(
+        profileId: string,
+        topLevelTab: TopLevelTab,
+        modeKey: string
+    ): Promise<ModeDefinitionRecord | null> {
         const { db } = getPersistence();
         const row = await db
             .selectFrom('mode_definitions')

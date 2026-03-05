@@ -1,7 +1,9 @@
 import { getPersistence } from '@/app/backend/persistence/db';
 import { providerCatalogStore } from '@/app/backend/persistence/stores/providerCatalogStore';
+import { parseEnumValue } from '@/app/backend/persistence/stores/rowParsers';
 import { settingsStore } from '@/app/backend/persistence/stores/settingsStore';
 import type { ProviderModelRecord, ProviderRecord } from '@/app/backend/persistence/types';
+import { providerIds } from '@/app/backend/runtime/contracts';
 import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
 
 export class ProviderStore {
@@ -15,7 +17,7 @@ export class ProviderStore {
             .execute();
 
         return rows.map((row) => ({
-            id: row.id as RuntimeProviderId,
+            id: parseEnumValue(row.id, 'providers.id', providerIds),
             label: row.label,
             supportsByok: row.supports_byok === 1,
         }));

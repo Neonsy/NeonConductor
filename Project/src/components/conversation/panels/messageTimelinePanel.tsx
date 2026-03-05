@@ -89,7 +89,7 @@ export function MessageTimelinePanel({ messages, partsByMessageId }: MessageTime
 
     return (
         <div className='relative min-h-0 flex-1'>
-            <div ref={scrollContainerRef} className='min-h-0 h-full overflow-y-auto pr-1' onScroll={syncScrollState}>
+            <div ref={scrollContainerRef} className='h-full min-h-0 overflow-y-auto pr-1' onScroll={syncScrollState}>
                 {entries.length === 0 ? (
                     <MessageTimelineEmptyState />
                 ) : (

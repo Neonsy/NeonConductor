@@ -6,11 +6,7 @@ import {
     secretReferenceStore,
 } from '@/app/backend/persistence/stores';
 import type { ProviderAuthStateRecord } from '@/app/backend/persistence/types';
-import {
-    errAuthExecution,
-    okAuthExecution,
-    type AuthExecutionResult,
-} from '@/app/backend/providers/auth/errors';
+import { errAuthExecution, okAuthExecution, type AuthExecutionResult } from '@/app/backend/providers/auth/errors';
 import { persistSecretRef } from '@/app/backend/providers/auth/secretRefs';
 import type { FlowAuthMethod } from '@/app/backend/providers/auth/types';
 import { assertSupportedProviderId } from '@/app/backend/providers/registry';

@@ -2,7 +2,14 @@ import { err, ok, type Result } from 'neverthrow';
 
 import { planStore, runStore } from '@/app/backend/persistence/stores';
 import type { PlanQuestionRecord } from '@/app/backend/persistence/types';
-import type { EntityId, PlanAnswerQuestionInput, PlanImplementInput, PlanRecordView, PlanReviseInput, PlanStartInput } from '@/app/backend/runtime/contracts';
+import type {
+    EntityId,
+    PlanAnswerQuestionInput,
+    PlanImplementInput,
+    PlanRecordView,
+    PlanReviseInput,
+    PlanStartInput,
+} from '@/app/backend/runtime/contracts';
 import { orchestratorExecutionService } from '@/app/backend/runtime/services/orchestrator/executionService';
 import { runExecutionService } from '@/app/backend/runtime/services/runExecution/service';
 import { runtimeEventLogService } from '@/app/backend/runtime/services/runtimeEventLog';
@@ -21,6 +28,16 @@ interface PlanServiceError {
     message: string;
 }
 
+class PlanServiceException extends Error {
+    readonly code: PlanServiceErrorCode;
+
+    constructor(error: PlanServiceError) {
+        super(error.message);
+        this.name = 'PlanServiceException';
+        this.code = error.code;
+    }
+}
+
 function okPlan<T>(value: T): Result<T, PlanServiceError> {
     return ok(value);
 }
@@ -33,9 +50,7 @@ function errPlan(code: PlanServiceErrorCode, message: string): Result<never, Pla
 }
 
 function toPlanException(error: PlanServiceError): Error {
-    const exception = new Error(error.message);
-    (exception as { code?: string }).code = error.code;
-    return exception;
+    return new PlanServiceException(error);
 }
 
 function validatePlanStartInput(input: PlanStartInput): Result<void, PlanServiceError> {
@@ -67,7 +82,10 @@ function createDefaultQuestions(prompt: string): PlanQuestionRecord[] {
     ];
 }
 
-function toPlanView(plan: Awaited<ReturnType<typeof planStore.getById>>, items: Awaited<ReturnType<typeof planStore.listItems>>): PlanRecordView | null {
+function toPlanView(
+    plan: Awaited<ReturnType<typeof planStore.getById>>,
+    items: Awaited<ReturnType<typeof planStore.listItems>>
+): PlanRecordView | null {
     if (!plan) {
         return null;
     }
@@ -102,6 +120,19 @@ function toPlanView(plan: Awaited<ReturnType<typeof planStore.getById>>, items: 
         createdAt: plan.createdAt,
         updatedAt: plan.updatedAt,
     };
+}
+
+function requirePlanView(
+    plan: Awaited<ReturnType<typeof planStore.getById>>,
+    items: Awaited<ReturnType<typeof planStore.listItems>>,
+    context: string
+): PlanRecordView {
+    const view = toPlanView(plan, items);
+    if (!view) {
+        throw new Error(`Invariant violation: expected plan view during ${context}.`);
+    }
+
+    return view;
 }
 
 export class PlanService {
@@ -169,11 +200,14 @@ export class PlanService {
         });
 
         return {
-            plan: toPlanView(plan, []) as PlanRecordView,
+            plan: requirePlanView(plan, [], 'plan.start'),
         };
     }
 
-    async getById(profileId: string, planId: EntityId<'plan'>): Promise<{ found: false } | { found: true; plan: PlanRecordView }> {
+    async getById(
+        profileId: string,
+        planId: EntityId<'plan'>
+    ): Promise<{ found: false } | { found: true; plan: PlanRecordView }> {
         const plan = await planStore.getById(profileId, planId);
         if (!plan) {
             return { found: false };
@@ -230,7 +264,9 @@ export class PlanService {
         return { found: true, plan: view };
     }
 
-    async answerQuestion(input: PlanAnswerQuestionInput): Promise<{ found: false } | { found: true; plan: PlanRecordView }> {
+    async answerQuestion(
+        input: PlanAnswerQuestionInput
+    ): Promise<{ found: false } | { found: true; plan: PlanRecordView }> {
         const updated = await planStore.setAnswer(input.planId, input.questionId, input.answer);
         if (!updated || updated.profileId !== input.profileId) {
             return { found: false };
@@ -249,7 +285,7 @@ export class PlanService {
         const items = await planStore.listItems(input.planId);
         return {
             found: true,
-            plan: toPlanView(updated, items) as PlanRecordView,
+            plan: requirePlanView(updated, items, 'plan.answerQuestion'),
         };
     }
 
@@ -259,16 +295,21 @@ export class PlanService {
             return { found: false };
         }
 
-        const descriptions = input.items.map((item) => item.description.trim()).filter((description) => description.length > 0);
+        const descriptions = input.items
+            .map((item) => item.description.trim())
+            .filter((description) => description.length > 0);
         const items = await planStore.replaceItems(input.planId, descriptions);
 
         return {
             found: true,
-            plan: toPlanView(revised, items) as PlanRecordView,
+            plan: requirePlanView(revised, items, 'plan.revise'),
         };
     }
 
-    async approve(profileId: string, planId: EntityId<'plan'>): Promise<{ found: false } | { found: true; plan: PlanRecordView }> {
+    async approve(
+        profileId: string,
+        planId: EntityId<'plan'>
+    ): Promise<{ found: false } | { found: true; plan: PlanRecordView }> {
         const existing = await planStore.getById(profileId, planId);
         if (!existing) {
             return { found: false };
@@ -316,14 +357,20 @@ export class PlanService {
 
         return {
             found: true,
-            plan: toPlanView(approved, items) as PlanRecordView,
+            plan: requirePlanView(approved, items, 'plan.approve'),
         };
     }
 
     async implement(input: PlanImplementInput): Promise<
         | { found: false }
         | { found: true; started: true; mode: 'agent.code'; runId: EntityId<'run'>; plan: PlanRecordView }
-        | { found: true; started: true; mode: 'orchestrator.orchestrate'; orchestratorRunId: EntityId<'orch'>; plan: PlanRecordView }
+        | {
+              found: true;
+              started: true;
+              mode: 'orchestrator.orchestrate';
+              orchestratorRunId: EntityId<'orch'>;
+              plan: PlanRecordView;
+          }
     > {
         const plan = await planStore.getById(input.profileId, input.planId);
         if (!plan) {
@@ -413,7 +460,7 @@ export class PlanService {
                 started: true,
                 mode: 'agent.code',
                 runId: result.runId,
-                plan: toPlanView(implementing, items) as PlanRecordView,
+                plan: requirePlanView(implementing, items, 'plan.implement.agent'),
             };
         }
 
@@ -454,7 +501,7 @@ export class PlanService {
                 started: true,
                 mode: 'orchestrator.orchestrate',
                 orchestratorRunId: started.run.id,
-                plan: toPlanView(implementing, items) as PlanRecordView,
+                plan: requirePlanView(implementing, items, 'plan.implement.orchestrator'),
             };
         }
 

@@ -15,6 +15,46 @@ interface StoredConversationUiState {
     selectedTagId?: string;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function parseScopeFilter(value: unknown): ScopeFilter | undefined {
+    return value === 'all' || value === 'workspace' || value === 'detached' ? value : undefined;
+}
+
+function parseThreadSort(value: unknown): ThreadSort | undefined {
+    return value === 'latest' || value === 'alphabetical' ? value : undefined;
+}
+
+function parseOptionalString(value: unknown): string | undefined {
+    return typeof value === 'string' ? value : undefined;
+}
+
+function parseStoredState(value: unknown): StoredConversationUiState {
+    if (!isRecord(value)) {
+        return {};
+    }
+
+    const scopeFilter = parseScopeFilter(value['scopeFilter']);
+    const workspaceFilter = parseOptionalString(value['workspaceFilter']);
+    const sort = parseThreadSort(value['sort']);
+    const selectedThreadId = parseOptionalString(value['selectedThreadId']);
+    const selectedSessionId = parseOptionalString(value['selectedSessionId']);
+    const selectedRunId = parseOptionalString(value['selectedRunId']);
+    const selectedTagId = parseOptionalString(value['selectedTagId']);
+
+    return {
+        ...(scopeFilter ? { scopeFilter } : {}),
+        ...(workspaceFilter ? { workspaceFilter } : {}),
+        ...(sort ? { sort } : {}),
+        ...(selectedThreadId ? { selectedThreadId } : {}),
+        ...(selectedSessionId ? { selectedSessionId } : {}),
+        ...(selectedRunId ? { selectedRunId } : {}),
+        ...(selectedTagId ? { selectedTagId } : {}),
+    };
+}
+
 export interface ConversationUiState {
     scopeFilter: ScopeFilter;
     workspaceFilter: string | undefined;
@@ -44,12 +84,7 @@ function readStoredState(profileId: string): StoredConversationUiState {
     }
 
     try {
-        const parsed = JSON.parse(raw) as unknown;
-        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-            return {};
-        }
-
-        return parsed as StoredConversationUiState;
+        return parseStoredState(JSON.parse(raw));
     } catch {
         return {};
     }

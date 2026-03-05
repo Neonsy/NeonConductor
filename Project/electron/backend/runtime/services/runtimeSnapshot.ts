@@ -96,7 +96,9 @@ class RuntimeSnapshotServiceImpl implements RuntimeSnapshotService {
             loadSlice('provider-models', () => providerManagementService.listModelsByProfile(profileId)),
             loadSlice('provider-auth-states', () => providerManagementService.listAuthStates(profileId)),
             loadSlice('provider-auth-flows', () => providerAuthFlowStore.listByProfile(profileId)),
-            loadSlice('provider-discovery-snapshots', () => providerManagementService.listDiscoverySnapshots(profileId)),
+            loadSlice('provider-discovery-snapshots', () =>
+                providerManagementService.listDiscoverySnapshots(profileId)
+            ),
             loadSlice('tools', () => toolStore.list()),
             loadSlice('mcp-servers', () => mcpStore.listServers()),
             loadSlice('provider-defaults', () => providerManagementService.getDefaults(profileId)),

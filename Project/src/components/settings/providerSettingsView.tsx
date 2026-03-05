@@ -111,7 +111,9 @@ export function ProviderSettingsView({ profileId }: ProviderSettingsViewProps) {
     const setDefaultMutation = trpc.provider.setDefault.useMutation({
         onSuccess: (result) => {
             if (!result.success) {
-                setStatusMessage(result.reason === 'model_not_found' ? 'Selected model is not available.' : 'Default update failed.');
+                setStatusMessage(
+                    result.reason === 'model_not_found' ? 'Selected model is not available.' : 'Default update failed.'
+                );
                 return;
             }
 
@@ -206,13 +208,16 @@ export function ProviderSettingsView({ profileId }: ProviderSettingsViewProps) {
             return;
         }
 
-        const timer = window.setTimeout(() => {
-            void pollAuthMutation.mutateAsync({
-                profileId,
-                providerId: activeAuthFlow.providerId,
-                flowId: activeAuthFlow.flowId,
-            });
-        }, Math.max(1, activeAuthFlow.pollAfterSeconds) * 1000);
+        const timer = window.setTimeout(
+            () => {
+                void pollAuthMutation.mutateAsync({
+                    profileId,
+                    providerId: activeAuthFlow.providerId,
+                    flowId: activeAuthFlow.flowId,
+                });
+            },
+            Math.max(1, activeAuthFlow.pollAfterSeconds) * 1000
+        );
 
         return () => {
             window.clearTimeout(timer);
@@ -230,7 +235,7 @@ export function ProviderSettingsView({ profileId }: ProviderSettingsViewProps) {
         return map;
     }, [authMethodsQuery.data?.methods]);
 
-    const methods = selectedProviderId ? authMethodMap.get(selectedProviderId) ?? [] : [];
+    const methods = selectedProviderId ? (authMethodMap.get(selectedProviderId) ?? []) : [];
     const models = listModelsQuery.data?.models ?? [];
 
     useEffect(() => {
@@ -275,7 +280,8 @@ export function ProviderSettingsView({ profileId }: ProviderSettingsViewProps) {
                         <div>
                             <h4 className='text-base font-semibold'>{selectedProvider.label}</h4>
                             <p className='text-muted-foreground text-xs'>
-                                Local runtime works with any configured provider. Kilo login is only required for Kilo-specific extras.
+                                Local runtime works with any configured provider. Kilo login is only required for
+                                Kilo-specific extras.
                             </p>
                             {statusMessage ? <p className='text-primary mt-2 text-xs'>{statusMessage}</p> : null}
                         </div>
@@ -389,7 +395,8 @@ export function ProviderSettingsView({ profileId }: ProviderSettingsViewProps) {
                                     Cloud sessions and marketplace remain Kilo-gated and unlock after Kilo login.
                                 </p>
                                 <p className='text-muted-foreground text-xs'>
-                                    Account state: {accountContextQuery.data?.authState.authState ?? selectedProvider.authState}
+                                    Account state:{' '}
+                                    {accountContextQuery.data?.authState.authState ?? selectedProvider.authState}
                                 </p>
                             </section>
                         ) : null}

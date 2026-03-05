@@ -40,8 +40,18 @@ describe('message timeline model', () => {
         const parts = [
             createPart({ id: 'part_text', messageId: message.id, partType: 'text', text: 'Answer body' }),
             createPart({ id: 'part_reasoning', messageId: message.id, partType: 'reasoning', text: 'Thinking steps' }),
-            createPart({ id: 'part_summary', messageId: message.id, partType: 'reasoning_summary', text: 'Reasoning summary' }),
-            createPart({ id: 'part_encrypted', messageId: message.id, partType: 'reasoning_encrypted', payload: { opaque: 'cipher' } }),
+            createPart({
+                id: 'part_summary',
+                messageId: message.id,
+                partType: 'reasoning_summary',
+                text: 'Reasoning summary',
+            }),
+            createPart({
+                id: 'part_encrypted',
+                messageId: message.id,
+                partType: 'reasoning_encrypted',
+                payload: { opaque: 'cipher' },
+            }),
         ];
 
         const entries = buildTimelineEntries([message], new Map([[message.id, parts]]));

@@ -5,11 +5,7 @@ import {
     OPENAI_OAUTH_REDIRECT_URI,
     OPENAI_OAUTH_TOKEN_URL,
 } from '@/app/backend/providers/auth/constants';
-import {
-    errAuthExecution,
-    okAuthExecution,
-    type AuthExecutionResult,
-} from '@/app/backend/providers/auth/errors';
+import { errAuthExecution, okAuthExecution, type AuthExecutionResult } from '@/app/backend/providers/auth/errors';
 import {
     createOpaque,
     createPkceChallenge,

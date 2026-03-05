@@ -1,6 +1,11 @@
 import { getPersistence } from '@/app/backend/persistence/db';
+import { parseEnumValue } from '@/app/backend/persistence/stores/rowParsers';
 import { nowIso } from '@/app/backend/persistence/stores/utils';
 import type { McpServerRecord } from '@/app/backend/persistence/types';
+
+const mcpAuthModes = ['none', 'token'] as const;
+const mcpConnectionStates = ['disconnected', 'connected'] as const;
+const mcpAuthStates = ['unauthenticated', 'authenticated'] as const;
 
 function mapMcpRecord(row: {
     id: string;
@@ -12,9 +17,9 @@ function mapMcpRecord(row: {
     return {
         id: row.id,
         label: row.label,
-        authMode: row.auth_mode as McpServerRecord['authMode'],
-        connectionState: row.connection_state as McpServerRecord['connectionState'],
-        authState: row.auth_state as McpServerRecord['authState'],
+        authMode: parseEnumValue(row.auth_mode, 'mcp_servers.auth_mode', mcpAuthModes),
+        connectionState: parseEnumValue(row.connection_state, 'mcp_servers.connection_state', mcpConnectionStates),
+        authState: parseEnumValue(row.auth_state, 'mcp_servers.auth_state', mcpAuthStates),
     };
 }
 

@@ -1,44 +1,19 @@
 import { getPersistence } from '@/app/backend/persistence/db';
+import { parseEntityId, parseEnumValue, parseJsonRecord } from '@/app/backend/persistence/stores/rowParsers';
 import { nowIso } from '@/app/backend/persistence/stores/utils';
 import type { MessagePartRecord, MessageRecord } from '@/app/backend/persistence/types';
 import { createEntityId } from '@/app/backend/runtime/contracts';
 import { runtimeMessagePartTypes } from '@/app/backend/runtime/contracts';
-import type { EntityId } from '@/app/backend/runtime/contracts';
 
 const messageRoles = ['user', 'assistant', 'system', 'tool'] as const;
 type MessageRole = (typeof messageRoles)[number];
 
-function isOneOf<T extends string>(value: string, allowed: readonly T[]): value is T {
-    return allowed.some((candidate) => candidate === value);
-}
-
 function parseMessageRole(value: string): MessageRole {
-    if (isOneOf(value, messageRoles)) {
-        return value;
-    }
-
-    throw new Error(`Invalid message role in persistence row: "${value}".`);
+    return parseEnumValue(value, 'message.role', messageRoles);
 }
 
 function parsePartType(value: string): (typeof runtimeMessagePartTypes)[number] {
-    if (isOneOf(value, runtimeMessagePartTypes)) {
-        return value;
-    }
-
-    throw new Error(`Invalid message part type in persistence row: "${value}".`);
-}
-
-function parsePayload(value: string): Record<string, unknown> {
-    try {
-        const parsed = JSON.parse(value) as unknown;
-        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-            return parsed as Record<string, unknown>;
-        }
-
-        return {};
-    } catch {
-        return {};
-    }
+    return parseEnumValue(value, 'message_part.part_type', runtimeMessagePartTypes);
 }
 
 function mapMessageRecord(row: {
@@ -51,10 +26,10 @@ function mapMessageRecord(row: {
     updated_at: string;
 }): MessageRecord {
     return {
-        id: row.id as EntityId<'msg'>,
+        id: parseEntityId(row.id, 'messages.id', 'msg'),
         profileId: row.profile_id,
-        sessionId: row.session_id as EntityId<'sess'>,
-        runId: row.run_id as EntityId<'run'>,
+        sessionId: parseEntityId(row.session_id, 'messages.session_id', 'sess'),
+        runId: parseEntityId(row.run_id, 'messages.run_id', 'run'),
         role: parseMessageRole(row.role),
         createdAt: row.created_at,
         updatedAt: row.updated_at,
@@ -70,11 +45,11 @@ function mapMessagePartRecord(row: {
     created_at: string;
 }): MessagePartRecord {
     return {
-        id: row.id as EntityId<'part'>,
-        messageId: row.message_id as EntityId<'msg'>,
+        id: parseEntityId(row.id, 'message_parts.id', 'part'),
+        messageId: parseEntityId(row.message_id, 'message_parts.message_id', 'msg'),
         sequence: row.sequence,
         partType: parsePartType(row.part_type),
-        payload: parsePayload(row.payload_json),
+        payload: parseJsonRecord(row.payload_json),
         createdAt: row.created_at,
     };
 }

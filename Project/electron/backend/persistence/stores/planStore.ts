@@ -1,8 +1,23 @@
 import { getPersistence } from '@/app/backend/persistence/db';
+import { parseEntityId, parseEnumValue, parseJsonRecord } from '@/app/backend/persistence/stores/rowParsers';
 import { nowIso, parseJsonValue } from '@/app/backend/persistence/stores/utils';
 import type { PlanItemRecord, PlanQuestionRecord, PlanRecord } from '@/app/backend/persistence/types';
-import { createEntityId } from '@/app/backend/runtime/contracts';
-import type { EntityId, PlanStatus, TopLevelTab } from '@/app/backend/runtime/contracts';
+import { createEntityId, planItemStatuses, planStatuses, topLevelTabs } from '@/app/backend/runtime/contracts';
+import type { EntityId, TopLevelTab } from '@/app/backend/runtime/contracts';
+
+function isPlanQuestionRecord(value: unknown): value is PlanQuestionRecord {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        return false;
+    }
+
+    const record: Record<string, unknown> = {};
+    for (const [key, entryValue] of Object.entries(value)) {
+        record[key] = entryValue;
+    }
+    const id = record['id'];
+    const question = record['question'];
+    return typeof id === 'string' && typeof question === 'string';
+}
 
 function mapPlanRecord(row: {
     id: string;
@@ -23,20 +38,41 @@ function mapPlanRecord(row: {
     created_at: string;
     updated_at: string;
 }): PlanRecord {
+    const rawQuestions = parseJsonValue<unknown>(row.questions_json, []);
+    const questions = Array.isArray(rawQuestions) ? rawQuestions.filter(isPlanQuestionRecord) : [];
+
+    const rawAnswers = parseJsonRecord(row.answers_json);
+    const answers: Record<string, string> = {};
+    for (const [key, value] of Object.entries(rawAnswers)) {
+        if (typeof value === 'string') {
+            answers[key] = value;
+        }
+    }
+
     return {
-        id: row.id as EntityId<'plan'>,
+        id: parseEntityId(row.id, 'plan_records.id', 'plan'),
         profileId: row.profile_id,
-        sessionId: row.session_id as EntityId<'sess'>,
-        topLevelTab: row.top_level_tab as TopLevelTab,
+        sessionId: parseEntityId(row.session_id, 'plan_records.session_id', 'sess'),
+        topLevelTab: parseEnumValue(row.top_level_tab, 'plan_records.top_level_tab', topLevelTabs),
         modeKey: row.mode_key,
-        status: row.status as PlanStatus,
+        status: parseEnumValue(row.status, 'plan_records.status', planStatuses),
         sourcePrompt: row.source_prompt,
         summaryMarkdown: row.summary_markdown,
-        questions: parseJsonValue<PlanQuestionRecord[]>(row.questions_json, []),
-        answers: parseJsonValue<Record<string, string>>(row.answers_json, {}),
+        questions,
+        answers,
         ...(row.workspace_fingerprint ? { workspaceFingerprint: row.workspace_fingerprint } : {}),
-        ...(row.implementation_run_id ? { implementationRunId: row.implementation_run_id as EntityId<'run'> } : {}),
-        ...(row.orchestrator_run_id ? { orchestratorRunId: row.orchestrator_run_id as EntityId<'orch'> } : {}),
+        ...(row.implementation_run_id
+            ? {
+                  implementationRunId: parseEntityId(
+                      row.implementation_run_id,
+                      'plan_records.implementation_run_id',
+                      'run'
+                  ),
+              }
+            : {}),
+        ...(row.orchestrator_run_id
+            ? { orchestratorRunId: parseEntityId(row.orchestrator_run_id, 'plan_records.orchestrator_run_id', 'orch') }
+            : {}),
         ...(row.approved_at ? { approvedAt: row.approved_at } : {}),
         ...(row.implemented_at ? { implementedAt: row.implemented_at } : {}),
         createdAt: row.created_at,
@@ -56,12 +92,12 @@ function mapPlanItemRecord(row: {
     updated_at: string;
 }): PlanItemRecord {
     return {
-        id: row.id as EntityId<'step'>,
-        planId: row.plan_id as EntityId<'plan'>,
+        id: parseEntityId(row.id, 'plan_items.id', 'step'),
+        planId: parseEntityId(row.plan_id, 'plan_items.plan_id', 'plan'),
         sequence: row.sequence,
         description: row.description,
-        status: row.status as PlanItemRecord['status'],
-        ...(row.run_id ? { runId: row.run_id as EntityId<'run'> } : {}),
+        status: parseEnumValue(row.status, 'plan_items.status', planItemStatuses),
+        ...(row.run_id ? { runId: parseEntityId(row.run_id, 'plan_items.run_id', 'run') } : {}),
         ...(row.error_message ? { errorMessage: row.error_message } : {}),
         createdAt: row.created_at,
         updatedAt: row.updated_at,
@@ -122,7 +158,11 @@ export class PlanStore {
         return row ? mapPlanRecord(row) : null;
     }
 
-    async getLatestBySession(profileId: string, sessionId: EntityId<'sess'>, topLevelTab: TopLevelTab): Promise<PlanRecord | null> {
+    async getLatestBySession(
+        profileId: string,
+        sessionId: EntityId<'sess'>,
+        topLevelTab: TopLevelTab
+    ): Promise<PlanRecord | null> {
         const { db } = getPersistence();
         const row = await db
             .selectFrom('plan_records')

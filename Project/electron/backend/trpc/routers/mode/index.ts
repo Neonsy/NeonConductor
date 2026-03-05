@@ -1,5 +1,9 @@
 import { modeStore, settingsStore } from '@/app/backend/persistence/stores';
-import { modeGetActiveInputSchema, modeListInputSchema, modeSetActiveInputSchema } from '@/app/backend/runtime/contracts';
+import {
+    modeGetActiveInputSchema,
+    modeListInputSchema,
+    modeSetActiveInputSchema,
+} from '@/app/backend/runtime/contracts';
 import type { TopLevelTab } from '@/app/backend/runtime/contracts';
 import { runtimeEventLogService } from '@/app/backend/runtime/services/runtimeEventLog';
 import { publicProcedure, router } from '@/app/backend/trpc/init';
@@ -25,7 +29,9 @@ async function resolveActiveMode(input: {
     topLevelTab: TopLevelTab;
     workspaceFingerprint?: string;
 }) {
-    const modes = (await modeStore.listByProfileAndTab(input.profileId, input.topLevelTab)).filter((mode) => mode.enabled);
+    const modes = (await modeStore.listByProfileAndTab(input.profileId, input.topLevelTab)).filter(
+        (mode) => mode.enabled
+    );
     if (modes.length === 0) {
         throw new Error(`No enabled modes found for tab "${input.topLevelTab}" on profile "${input.profileId}".`);
     }

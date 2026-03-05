@@ -15,13 +15,6 @@ interface ThreadRow {
     updated_at: string;
 }
 
-interface ThreadListQueryRow extends ThreadRow {
-    scope: string;
-    workspace_fingerprint: string | null;
-    session_count: number;
-    latest_session_updated_at: string | null;
-}
-
 function createThreadId(): string {
     return `thr_${randomUUID()}`;
 }
@@ -169,7 +162,7 @@ export class ThreadStore {
             query = query.where('conversations.workspace_fingerprint', '=', input.workspaceFingerprint);
         }
 
-        const rows = (await query.execute()) as ThreadListQueryRow[];
+        const rows = await query.execute();
         const listed = rows.map<ThreadListRecord>((row) => ({
             id: row.id,
             profileId: row.profile_id,

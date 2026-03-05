@@ -1,8 +1,10 @@
 import { randomUUID } from 'node:crypto';
 
 import { getPersistence } from '@/app/backend/persistence/db';
+import { parseEnumValue } from '@/app/backend/persistence/stores/rowParsers';
 import { nowIso } from '@/app/backend/persistence/stores/utils';
 import type { SecretReferenceRecord } from '@/app/backend/persistence/types';
+import { providerIds } from '@/app/backend/runtime/contracts';
 import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
 
 function mapSecretReference(row: {
@@ -17,7 +19,7 @@ function mapSecretReference(row: {
     return {
         id: row.id,
         profileId: row.profile_id,
-        providerId: row.provider_id as RuntimeProviderId,
+        providerId: parseEnumValue(row.provider_id, 'secret_references.provider_id', providerIds),
         secretKeyRef: row.secret_key_ref,
         secretKind: row.secret_kind,
         status: row.status,

@@ -29,7 +29,9 @@ export function MessageTimelineItem({ entry }: MessageTimelineItemProps) {
                                 <div className='text-primary inline-flex items-center gap-1.5 text-xs font-semibold tracking-wide uppercase'>
                                     Reasoning
                                     {item.providerLimitedReasoning ? (
-                                        <span className='text-muted-foreground text-[10px] tracking-normal lowercase'>provider-limited</span>
+                                        <span className='text-muted-foreground text-[10px] tracking-normal lowercase'>
+                                            provider-limited
+                                        </span>
                                     ) : null}
                                 </div>
                             ) : null}

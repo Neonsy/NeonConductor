@@ -1,10 +1,6 @@
 import { providerAuthFlowStore, providerAuthStore } from '@/app/backend/persistence/stores';
 import { getAuthState, persistAuthenticatedState } from '@/app/backend/providers/auth/authStateService';
-import {
-    errAuthExecution,
-    okAuthExecution,
-    type AuthExecutionResult,
-} from '@/app/backend/providers/auth/errors';
+import { errAuthExecution, okAuthExecution, type AuthExecutionResult } from '@/app/backend/providers/auth/errors';
 import { nowIso } from '@/app/backend/providers/auth/helpers';
 import { exchangeOpenAIAuthorizationCode } from '@/app/backend/providers/auth/openaiOAuthClient';
 import {
@@ -44,7 +40,10 @@ export async function pollAuthFlow(input: {
             lastErrorCode: 'expired',
             lastErrorMessage: 'Authentication flow expired.',
         });
-        return okAuthExecution({ flow: expiredFlow ?? flow, state: await getAuthState(input.profileId, input.providerId) });
+        return okAuthExecution({
+            flow: expiredFlow ?? flow,
+            state: await getAuthState(input.profileId, input.providerId),
+        });
     }
 
     if (flow.providerId === 'kilo' && flow.flowType === 'device_code') {

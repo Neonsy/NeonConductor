@@ -25,7 +25,13 @@ type ToolExecutionResult =
     | {
           ok: false;
           toolId: string;
-          error: 'tool_not_found' | 'policy_denied' | 'permission_required' | 'invalid_args' | 'not_implemented' | 'execution_failed';
+          error:
+              | 'tool_not_found'
+              | 'policy_denied'
+              | 'permission_required'
+              | 'invalid_args'
+              | 'not_implemented'
+              | 'execution_failed';
           message: string;
           args: Record<string, unknown>;
           at: string;
@@ -132,7 +138,9 @@ async function listFilesTool(args: Record<string, unknown>): Promise<Record<stri
     };
 }
 
-async function readFileTool(args: Record<string, unknown>): Promise<Result<Record<string, unknown>, ToolExecutionFailure>> {
+async function readFileTool(
+    args: Record<string, unknown>
+): Promise<Result<Record<string, unknown>, ToolExecutionFailure>> {
     const fileArg = readStringArg(args, 'path');
     if (!fileArg) {
         return err({

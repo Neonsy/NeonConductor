@@ -1,8 +1,11 @@
 import { getPersistence } from '@/app/backend/persistence/db';
+import { parseEntityId, parseEnumValue } from '@/app/backend/persistence/stores/rowParsers';
 import { nowIso } from '@/app/backend/persistence/stores/utils';
 import type { PermissionRecord } from '@/app/backend/persistence/types';
-import type { EntityId, PermissionPolicy } from '@/app/backend/runtime/contracts';
-import { createEntityId } from '@/app/backend/runtime/contracts';
+import { createEntityId, permissionPolicies } from '@/app/backend/runtime/contracts';
+import type { PermissionPolicy } from '@/app/backend/runtime/contracts';
+
+const permissionDecisions = ['pending', 'granted', 'denied'] as const;
 
 function mapPermissionRecord(row: {
     id: string;
@@ -14,10 +17,10 @@ function mapPermissionRecord(row: {
     updated_at: string;
 }): PermissionRecord {
     return {
-        id: row.id as EntityId<'perm'>,
-        policy: row.policy as PermissionPolicy,
+        id: parseEntityId(row.id, 'permissions.id', 'perm'),
+        policy: parseEnumValue(row.policy, 'permissions.policy', permissionPolicies),
         resource: row.resource,
-        decision: row.decision as PermissionRecord['decision'],
+        decision: parseEnumValue(row.decision, 'permissions.decision', permissionDecisions),
         createdAt: row.created_at,
         updatedAt: row.updated_at,
         ...(row.rationale ? { rationale: row.rationale } : {}),

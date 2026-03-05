@@ -58,9 +58,7 @@ export function ConversationSidebar({
 
     const workspaceOptions = [
         ...new Set(
-            buckets
-                .filter((bucket) => bucket.scope === 'workspace')
-                .map((bucket) => bucket.workspaceFingerprint)
+            buckets.filter((bucket) => bucket.scope === 'workspace').map((bucket) => bucket.workspaceFingerprint)
         ),
     ]
         .filter((fingerprint): fingerprint is string => Boolean(fingerprint))

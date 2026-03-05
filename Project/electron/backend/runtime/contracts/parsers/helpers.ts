@@ -1,4 +1,11 @@
-import { providerAuthMethods, providerIds, runtimeCacheStrategies, runtimeOpenAITransports, runtimeReasoningEfforts, runtimeReasoningSummaries } from '@/app/backend/runtime/contracts/enums';
+import {
+    providerAuthMethods,
+    providerIds,
+    runtimeCacheStrategies,
+    runtimeOpenAITransports,
+    runtimeReasoningEfforts,
+    runtimeReasoningSummaries,
+} from '@/app/backend/runtime/contracts/enums';
 import type { ProviderAuthMethod, RuntimeProviderId } from '@/app/backend/runtime/contracts/enums';
 import type { EntityId, EntityIdPrefix } from '@/app/backend/runtime/contracts/ids';
 import type { ProfileInput, RuntimeRunOptions } from '@/app/backend/runtime/contracts/types';
@@ -75,7 +82,11 @@ export function readStringArray(value: unknown, field: string): string[] {
     return value.map((item, index) => readString(item, `${field}[${String(index)}]`));
 }
 
-export function readEnumValue<const T extends readonly string[]>(value: unknown, field: string, allowedValues: T): T[number] {
+export function readEnumValue<const T extends readonly string[]>(
+    value: unknown,
+    field: string,
+    allowedValues: T
+): T[number] {
     const text = readString(value, field);
     if ((allowedValues as readonly string[]).includes(text)) {
         return text as T[number];

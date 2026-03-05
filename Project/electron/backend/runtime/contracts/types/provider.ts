@@ -1,7 +1,4 @@
-import type {
-    ProviderAuthMethod,
-    RuntimeProviderId,
-} from '@/app/backend/runtime/contracts/enums';
+import type { ProviderAuthMethod, RuntimeProviderId } from '@/app/backend/runtime/contracts/enums';
 import type { ProfileInput } from '@/app/backend/runtime/contracts/types/common';
 
 export interface MarketplacePackage {

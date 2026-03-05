@@ -22,10 +22,7 @@ export function validateRunCapabilities(input: ValidateRunCapabilitiesInput): Ru
         runtimeOptions: input.runtimeOptions,
     });
     if (validation.isErr()) {
-        return errRunExecution(
-            'runtime_option_invalid',
-            validation.error.message
-        );
+        return errRunExecution('runtime_option_invalid', validation.error.message);
     }
 
     return okRunExecution(undefined);

@@ -1,11 +1,7 @@
 import { providerAuthFlowStore, providerAuthStore } from '@/app/backend/persistence/stores';
 import type { ProviderAuthFlowRecord } from '@/app/backend/persistence/types';
 import { getAuthState, persistAuthenticatedState } from '@/app/backend/providers/auth/authStateService';
-import {
-    errAuthExecution,
-    okAuthExecution,
-    type AuthExecutionResult,
-} from '@/app/backend/providers/auth/errors';
+import { errAuthExecution, okAuthExecution, type AuthExecutionResult } from '@/app/backend/providers/auth/errors';
 import { nowIso } from '@/app/backend/providers/auth/helpers';
 import { syncKiloAccountContext } from '@/app/backend/providers/auth/kiloAccountSync';
 import { exchangeOpenAIDeviceCode } from '@/app/backend/providers/auth/openaiOAuthClient';
@@ -47,7 +43,10 @@ export async function handleKiloDevicePoll(flow: ProviderAuthFlowRecord): Promis
             lastErrorCode: status.status,
             lastErrorMessage: `Kilo device auth ${status.status}.`,
         });
-        return okAuthExecution({ flow: failedFlow ?? flow, state: await getAuthState(flow.profileId, flow.providerId) });
+        return okAuthExecution({
+            flow: failedFlow ?? flow,
+            state: await getAuthState(flow.profileId, flow.providerId),
+        });
     }
 
     if (!status.accessToken) {
@@ -77,7 +76,9 @@ export async function handleKiloDevicePoll(flow: ProviderAuthFlowRecord): Promis
     return okAuthExecution({ flow: completedFlow ?? flow, state });
 }
 
-export async function handleOpenAIDevicePoll(flow: ProviderAuthFlowRecord): Promise<AuthExecutionResult<PollAuthResult>> {
+export async function handleOpenAIDevicePoll(
+    flow: ProviderAuthFlowRecord
+): Promise<AuthExecutionResult<PollAuthResult>> {
     const tokenResult = await exchangeOpenAIDeviceCode(flow.deviceCode ?? '');
     if (tokenResult.isErr()) {
         return errAuthExecution(tokenResult.error.code, tokenResult.error.message);

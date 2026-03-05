@@ -25,10 +25,7 @@ export function resolveRunCache(input: ResolveRunCacheInput): RunExecutionResult
         runtimeOptions: input.runtimeOptions,
     });
     if (cacheResolution.isErr()) {
-        return errRunExecution(
-            'cache_resolution_failed',
-            cacheResolution.error.message
-        );
+        return errRunExecution('cache_resolution_failed', cacheResolution.error.message);
     }
 
     return okRunExecution(cacheResolution.value);

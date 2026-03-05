@@ -23,6 +23,8 @@
         "build:linux": "pnpm run build && electron-builder --linux -c electron-builder.json5",
         "publish:generic": "tsx scripts/publish.ts",
         "migrate:runtime": "tsx scripts/migrate-runtime.ts",
+        "quality:report": "tsx scripts/quality-report.ts",
+        "quality:gate:changed": "tsx scripts/quality-gate-changed.ts",
         "typecheck": "pnpm run check:migrations && tsr generate && tsc --noEmit -p tsconfig.renderer.json && tsc --noEmit -p tsconfig.node.json",
         "lint": "tsr generate && eslint .",
         "lint:fix": "tsr generate && eslint . --fix",
@@ -115,8 +117,12 @@
     },
     "pnpm": {
         "onlyBuiltDependencies": [
+            "electron",
+            "electron-winstaller",
+            "esbuild",
             "better-sqlite3",
-            "keytar"
+            "keytar",
+            "unrs-resolver"
         ],
         "overrides": {
             "@typescript-eslint/utils": "8.56.0"

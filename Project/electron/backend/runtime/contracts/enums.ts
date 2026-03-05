@@ -71,7 +71,15 @@ export type ProviderAuthFlowType = (typeof providerAuthFlowTypes)[number];
 export const providerAuthFlowStatuses = ['pending', 'completed', 'cancelled', 'expired', 'failed'] as const;
 export type ProviderAuthFlowStatus = (typeof providerAuthFlowStatuses)[number];
 
-export const planStatuses = ['awaiting_answers', 'draft', 'approved', 'implementing', 'implemented', 'failed', 'cancelled'] as const;
+export const planStatuses = [
+    'awaiting_answers',
+    'draft',
+    'approved',
+    'implementing',
+    'implemented',
+    'failed',
+    'cancelled',
+] as const;
 export type PlanStatus = (typeof planStatuses)[number];
 
 export const planItemStatuses = ['pending', 'running', 'completed', 'failed', 'aborted'] as const;

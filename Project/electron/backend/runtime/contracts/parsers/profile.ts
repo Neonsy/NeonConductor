@@ -1,5 +1,18 @@
-import { createParser, readObject, readOptionalString, readProfileId, readString } from '@/app/backend/runtime/contracts/parsers/helpers';
-import type { ProfileCreateInput, ProfileDeleteInput, ProfileDuplicateInput, ProfileInput, ProfileRenameInput, ProfileSetActiveInput } from '@/app/backend/runtime/contracts/types';
+import {
+    createParser,
+    readObject,
+    readOptionalString,
+    readProfileId,
+    readString,
+} from '@/app/backend/runtime/contracts/parsers/helpers';
+import type {
+    ProfileCreateInput,
+    ProfileDeleteInput,
+    ProfileDuplicateInput,
+    ProfileInput,
+    ProfileRenameInput,
+    ProfileSetActiveInput,
+} from '@/app/backend/runtime/contracts/types';
 
 export function parseProfileInput(input: unknown): ProfileInput {
     const source = readObject(input, 'input');

@@ -185,7 +185,11 @@ export function WorkspaceSurface() {
 
             <div className='min-h-0 flex-1'>
                 {resolvedProfileId ? (
-                    <ConversationShell profileId={resolvedProfileId} topLevelTab={topLevelTab} modeKey={activeModeKey} />
+                    <ConversationShell
+                        profileId={resolvedProfileId}
+                        topLevelTab={topLevelTab}
+                        modeKey={activeModeKey}
+                    />
                 ) : (
                     <div className='text-muted-foreground flex h-full items-center justify-center text-sm'>
                         Loading profile state...

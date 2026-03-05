@@ -57,7 +57,12 @@ export function ProviderDefaultModelSection({
                     onClick={onSetDefault}>
                     {isDefaultModel ? 'Default' : 'Set Default'}
                 </Button>
-                <Button type='button' size='sm' variant='outline' disabled={isSyncingCatalog || !selectedProviderId} onClick={onSyncCatalog}>
+                <Button
+                    type='button'
+                    size='sm'
+                    variant='outline'
+                    disabled={isSyncingCatalog || !selectedProviderId}
+                    onClick={onSyncCatalog}>
                     <RefreshCw className='h-3.5 w-3.5' />
                     Sync
                 </Button>

@@ -1,9 +1,6 @@
 import { ExternalLink } from 'lucide-react';
 
-import type {
-    ActiveAuthFlow,
-    ProviderAuthStateView,
-} from '@/web/components/settings/providerSettings/types';
+import type { ActiveAuthFlow, ProviderAuthStateView } from '@/web/components/settings/providerSettings/types';
 import { Button } from '@/web/components/ui/button';
 
 import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
@@ -104,8 +101,9 @@ export function ProviderAuthenticationSection({
                 <div className='border-border bg-background rounded-md border p-3'>
                     <p className='text-xs font-semibold'>Auth flow in progress</p>
                     <p className='text-muted-foreground mt-1 text-xs'>
-                        Enter code <span className='text-foreground font-semibold'>{activeAuthFlow.userCode ?? '-'}</span> and confirm in
-                        browser.
+                        Enter code{' '}
+                        <span className='text-foreground font-semibold'>{activeAuthFlow.userCode ?? '-'}</span> and
+                        confirm in browser.
                     </p>
                     {activeAuthFlow.verificationUri ? (
                         <a
@@ -121,7 +119,12 @@ export function ProviderAuthenticationSection({
                         <Button type='button' size='sm' variant='outline' disabled={isPollingAuth} onClick={onPollNow}>
                             Poll Now
                         </Button>
-                        <Button type='button' size='sm' variant='outline' disabled={isCancellingAuth} onClick={onCancelFlow}>
+                        <Button
+                            type='button'
+                            size='sm'
+                            variant='outline'
+                            disabled={isCancellingAuth}
+                            onClick={onCancelFlow}>
                             Cancel
                         </Button>
                     </div>

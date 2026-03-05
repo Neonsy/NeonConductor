@@ -1,7 +1,8 @@
 import { getPersistence } from '@/app/backend/persistence/db';
+import { parseEntityId, parseEnumValue } from '@/app/backend/persistence/stores/rowParsers';
 import { nowIso } from '@/app/backend/persistence/stores/utils';
 import type { OrchestratorRunRecord, OrchestratorStepRecord } from '@/app/backend/persistence/types';
-import { createEntityId } from '@/app/backend/runtime/contracts';
+import { createEntityId, orchestratorRunStatuses, planItemStatuses } from '@/app/backend/runtime/contracts';
 import type { EntityId, OrchestratorRunStatus } from '@/app/backend/runtime/contracts';
 
 function mapOrchestratorRunRecord(row: {
@@ -19,11 +20,11 @@ function mapOrchestratorRunRecord(row: {
     updated_at: string;
 }): OrchestratorRunRecord {
     return {
-        id: row.id as EntityId<'orch'>,
+        id: parseEntityId(row.id, 'orchestrator_runs.id', 'orch'),
         profileId: row.profile_id,
-        sessionId: row.session_id as EntityId<'sess'>,
-        planId: row.plan_id as EntityId<'plan'>,
-        status: row.status as OrchestratorRunStatus,
+        sessionId: parseEntityId(row.session_id, 'orchestrator_runs.session_id', 'sess'),
+        planId: parseEntityId(row.plan_id, 'orchestrator_runs.plan_id', 'plan'),
+        status: parseEnumValue(row.status, 'orchestrator_runs.status', orchestratorRunStatuses),
         ...(row.active_step_index !== null ? { activeStepIndex: row.active_step_index } : {}),
         startedAt: row.started_at,
         ...(row.completed_at ? { completedAt: row.completed_at } : {}),
@@ -46,12 +47,12 @@ function mapOrchestratorStepRecord(row: {
     updated_at: string;
 }): OrchestratorStepRecord {
     return {
-        id: row.id as EntityId<'step'>,
-        orchestratorRunId: row.orchestrator_run_id as EntityId<'orch'>,
+        id: parseEntityId(row.id, 'orchestrator_steps.id', 'step'),
+        orchestratorRunId: parseEntityId(row.orchestrator_run_id, 'orchestrator_steps.orchestrator_run_id', 'orch'),
         sequence: row.sequence,
         description: row.description,
-        status: row.status as OrchestratorStepRecord['status'],
-        ...(row.run_id ? { runId: row.run_id as EntityId<'run'> } : {}),
+        status: parseEnumValue(row.status, 'orchestrator_steps.status', planItemStatuses),
+        ...(row.run_id ? { runId: parseEntityId(row.run_id, 'orchestrator_steps.run_id', 'run') } : {}),
         ...(row.error_message ? { errorMessage: row.error_message } : {}),
         createdAt: row.created_at,
         updatedAt: row.updated_at,

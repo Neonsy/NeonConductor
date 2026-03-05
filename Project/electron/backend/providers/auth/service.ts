@@ -17,6 +17,7 @@ import { cancelAuthFlow, completeAuthFlow, pollAuthFlow } from '@/app/backend/pr
 import { readSecretValue } from '@/app/backend/providers/auth/secretRefs';
 import { startAuthFlow } from '@/app/backend/providers/auth/startAuthFlow';
 import type { PollAuthResult, ProviderAccountContextResult, StartAuthResult } from '@/app/backend/providers/auth/types';
+import { providerIds } from '@/app/backend/runtime/contracts';
 import type { ProviderAuthMethod, RuntimeProviderId } from '@/app/backend/runtime/contracts';
 import { appLog } from '@/app/main/logging';
 
@@ -25,7 +26,7 @@ export class ProviderAuthExecutionService {
 
     listAuthMethods(profileId: string): Array<{ providerId: RuntimeProviderId; methods: ProviderAuthMethod[] }> {
         void profileId;
-        return (Object.keys(AUTH_METHODS_BY_PROVIDER) as RuntimeProviderId[]).map((providerId) => ({
+        return providerIds.map((providerId) => ({
             providerId,
             methods: AUTH_METHODS_BY_PROVIDER[providerId],
         }));

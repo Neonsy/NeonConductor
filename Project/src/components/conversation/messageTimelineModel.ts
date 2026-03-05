@@ -63,7 +63,10 @@ function buildBodyEntries(message: MessageRecord, parts: MessagePartRecord[]): M
     return projected;
 }
 
-export function buildTimelineEntries(messages: MessageRecord[], partsByMessageId: Map<string, MessagePartRecord[]>): MessageTimelineEntry[] {
+export function buildTimelineEntries(
+    messages: MessageRecord[],
+    partsByMessageId: Map<string, MessagePartRecord[]>
+): MessageTimelineEntry[] {
     return messages.map((message) => {
         const parts = partsByMessageId.get(message.id) ?? [];
         return {

@@ -1,4 +1,3 @@
-
 import type { DatabaseSchema } from '@/app/backend/persistence/schema';
 import type { RuntimeResetCounts, RuntimeResetInput } from '@/app/backend/runtime/contracts';
 import { getSecretStore } from '@/app/backend/secrets/store';
@@ -278,7 +277,10 @@ export async function resolveWorkspaceCounts(
     };
 }
 
-export async function applyWorkspaceDelete(db: Kysely<DatabaseSchema>, resolved: WorkspaceResolvedCounts): Promise<void> {
+export async function applyWorkspaceDelete(
+    db: Kysely<DatabaseSchema>,
+    resolved: WorkspaceResolvedCounts
+): Promise<void> {
     if (resolved.entityIds.length > 0) {
         await db.deleteFrom('runtime_events').where('entity_id', 'in', resolved.entityIds).execute();
     }
@@ -552,5 +554,3 @@ export async function resolveFullCounts(db: Kysely<DatabaseSchema>): Promise<Run
         providerDiscoverySnapshots: providerDiscoverySnapshots?.count ?? 0,
     };
 }
-
-

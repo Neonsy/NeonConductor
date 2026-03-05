@@ -1,6 +1,8 @@
 import { getPersistence } from '@/app/backend/persistence/db';
+import { parseEnumValue } from '@/app/backend/persistence/stores/rowParsers';
 import { nowIso } from '@/app/backend/persistence/stores/utils';
 import type { PermissionPolicyOverrideRecord } from '@/app/backend/persistence/types';
+import { permissionPolicies } from '@/app/backend/runtime/contracts';
 import type { PermissionPolicy } from '@/app/backend/runtime/contracts';
 
 const PROFILE_SCOPE_KEY = '__profile__';
@@ -17,7 +19,7 @@ function mapPermissionPolicyOverrideRecord(row: {
         profileId: row.profile_id,
         scopeKey: row.scope_key,
         resource: row.resource,
-        policy: row.policy as PermissionPolicy,
+        policy: parseEnumValue(row.policy, 'permission_policy_overrides.policy', permissionPolicies),
         createdAt: row.created_at,
         updatedAt: row.updated_at,
     };
@@ -45,7 +47,12 @@ export class PermissionPolicyOverrideStore {
         return row ? mapPermissionPolicyOverrideRecord(row) : null;
     }
 
-    async upsert(profileId: string, scopeKey: string, resource: string, policy: PermissionPolicy): Promise<PermissionPolicyOverrideRecord> {
+    async upsert(
+        profileId: string,
+        scopeKey: string,
+        resource: string,
+        policy: PermissionPolicy
+    ): Promise<PermissionPolicyOverrideRecord> {
         const { db } = getPersistence();
         const now = nowIso();
 

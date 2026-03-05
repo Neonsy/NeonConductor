@@ -19,7 +19,9 @@ export function defaultAuthState(profileId: string, providerId: RuntimeProviderI
     };
 }
 
-export async function ensureSupportedProvider(providerId: RuntimeProviderId): Promise<ProviderServiceResult<RuntimeProviderId>> {
+export async function ensureSupportedProvider(
+    providerId: RuntimeProviderId
+): Promise<ProviderServiceResult<RuntimeProviderId>> {
     const supportedProviderIdResult = toSupportedProviderIdResult(providerId);
     if (supportedProviderIdResult.isErr()) {
         return errProviderService('provider_not_supported', supportedProviderIdResult.error.message);

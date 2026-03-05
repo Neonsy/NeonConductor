@@ -2,7 +2,6 @@ import type { ProviderListItem } from '@/web/components/settings/providerSetting
 
 import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
 
-
 interface ProviderSidebarProps {
     providers: ProviderListItem[];
     selectedProviderId: RuntimeProviderId | undefined;
@@ -27,7 +26,8 @@ export function ProviderSidebar({ providers, selectedProviderId, onSelectProvide
                             onSelectProvider(provider.id);
                         }}>
                         <p className='text-sm font-medium'>
-                            {provider.label} {provider.isDefault ? <span className='text-primary text-xs'>(default)</span> : null}
+                            {provider.label}{' '}
+                            {provider.isDefault ? <span className='text-primary text-xs'>(default)</span> : null}
                         </p>
                         <p className='text-muted-foreground text-xs'>
                             auth: {provider.authState} ({provider.authMethod})

@@ -1,6 +1,14 @@
-import { formatInteger, formatPercent, formatResetCountdown, formatWindowLabel } from '@/web/components/settings/providerSettings/helpers';
+import {
+    formatInteger,
+    formatPercent,
+    formatResetCountdown,
+    formatWindowLabel,
+} from '@/web/components/settings/providerSettings/helpers';
 
-import type { OpenAISubscriptionRateLimitsSummary, OpenAISubscriptionUsageSummary } from '@/app/backend/persistence/types';
+import type {
+    OpenAISubscriptionRateLimitsSummary,
+    OpenAISubscriptionUsageSummary,
+} from '@/app/backend/persistence/types';
 
 interface OpenAIAccountLimitsSectionProps {
     isLoading: boolean;
@@ -17,7 +25,8 @@ export function OpenAIAccountLimitsSection({ isLoading, rateLimits }: OpenAIAcco
         <section className='space-y-2'>
             <p className='text-sm font-semibold'>OpenAI Subscription Limits (Account)</p>
             <p className='text-muted-foreground text-xs'>
-                Pulled from OpenAI ChatGPT usage windows when OAuth is active. This reflects account-level limits, not only this app.
+                Pulled from OpenAI ChatGPT usage windows when OAuth is active. This reflects account-level limits, not
+                only this app.
             </p>
             {isLoading ? <p className='text-muted-foreground text-xs'>Loading subscription limits...</p> : null}
             {rateLimits?.source === 'chatgpt_wham' ? (
@@ -25,7 +34,9 @@ export function OpenAIAccountLimitsSection({ isLoading, rateLimits }: OpenAIAcco
                     <p className='text-muted-foreground text-xs'>Plan: {rateLimits.planType ?? 'unknown'}</p>
                     <div className='grid gap-2 md:grid-cols-2'>
                         <div className='border-border bg-background rounded-md border p-3'>
-                            <p className='text-xs font-semibold'>{formatWindowLabel(rateLimits.primary?.windowMinutes)}</p>
+                            <p className='text-xs font-semibold'>
+                                {formatWindowLabel(rateLimits.primary?.windowMinutes)}
+                            </p>
                             <p className='text-muted-foreground mt-1 text-xs'>
                                 Used: {formatPercent(rateLimits.primary?.usedPercent)}
                             </p>
@@ -42,7 +53,9 @@ export function OpenAIAccountLimitsSection({ isLoading, rateLimits }: OpenAIAcco
                             </p>
                         </div>
                         <div className='border-border bg-background rounded-md border p-3'>
-                            <p className='text-xs font-semibold'>{formatWindowLabel(rateLimits.secondary?.windowMinutes)}</p>
+                            <p className='text-xs font-semibold'>
+                                {formatWindowLabel(rateLimits.secondary?.windowMinutes)}
+                            </p>
                             <p className='text-muted-foreground mt-1 text-xs'>
                                 Used: {formatPercent(rateLimits.secondary?.usedPercent)}
                             </p>
@@ -63,7 +76,8 @@ export function OpenAIAccountLimitsSection({ isLoading, rateLimits }: OpenAIAcco
             ) : null}
             {rateLimits?.source === 'unavailable' ? (
                 <p className='text-muted-foreground text-xs'>
-                    {rateLimits.detail ?? 'Subscription limits unavailable. Sign in with OpenAI OAuth for account-level windows.'}
+                    {rateLimits.detail ??
+                        'Subscription limits unavailable. Sign in with OpenAI OAuth for account-level windows.'}
                 </p>
             ) : null}
         </section>
@@ -82,10 +96,15 @@ export function OpenAILocalUsageSection({ isLoading, usage }: OpenAILocalUsageSe
                 <div className='grid gap-2 md:grid-cols-2'>
                     <div className='border-border bg-background rounded-md border p-3'>
                         <p className='text-xs font-semibold'>Last 5 Hours</p>
-                        <p className='text-muted-foreground mt-1 text-xs'>Runs: {formatInteger(usage.fiveHour.runCount)}</p>
-                        <p className='text-muted-foreground text-xs'>Total tokens: {formatInteger(usage.fiveHour.totalTokens)}</p>
+                        <p className='text-muted-foreground mt-1 text-xs'>
+                            Runs: {formatInteger(usage.fiveHour.runCount)}
+                        </p>
                         <p className='text-muted-foreground text-xs'>
-                            Input/Output: {formatInteger(usage.fiveHour.inputTokens)} / {formatInteger(usage.fiveHour.outputTokens)}
+                            Total tokens: {formatInteger(usage.fiveHour.totalTokens)}
+                        </p>
+                        <p className='text-muted-foreground text-xs'>
+                            Input/Output: {formatInteger(usage.fiveHour.inputTokens)} /{' '}
+                            {formatInteger(usage.fiveHour.outputTokens)}
                         </p>
                         <p className='text-muted-foreground text-xs'>
                             Cached/Reasoning: {formatInteger(usage.fiveHour.cachedTokens)} /{' '}
@@ -97,10 +116,15 @@ export function OpenAILocalUsageSection({ isLoading, usage }: OpenAILocalUsageSe
                     </div>
                     <div className='border-border bg-background rounded-md border p-3'>
                         <p className='text-xs font-semibold'>Last 7 Days</p>
-                        <p className='text-muted-foreground mt-1 text-xs'>Runs: {formatInteger(usage.weekly.runCount)}</p>
-                        <p className='text-muted-foreground text-xs'>Total tokens: {formatInteger(usage.weekly.totalTokens)}</p>
+                        <p className='text-muted-foreground mt-1 text-xs'>
+                            Runs: {formatInteger(usage.weekly.runCount)}
+                        </p>
                         <p className='text-muted-foreground text-xs'>
-                            Input/Output: {formatInteger(usage.weekly.inputTokens)} / {formatInteger(usage.weekly.outputTokens)}
+                            Total tokens: {formatInteger(usage.weekly.totalTokens)}
+                        </p>
+                        <p className='text-muted-foreground text-xs'>
+                            Input/Output: {formatInteger(usage.weekly.inputTokens)} /{' '}
+                            {formatInteger(usage.weekly.outputTokens)}
                         </p>
                         <p className='text-muted-foreground text-xs'>
                             Cached/Reasoning: {formatInteger(usage.weekly.cachedTokens)} /{' '}

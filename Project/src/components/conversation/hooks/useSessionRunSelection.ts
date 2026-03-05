@@ -1,6 +1,11 @@
 import { useEffect, useMemo } from 'react';
 
-import type { MessagePartRecord, MessageRecord, RunRecord, SessionSummaryRecord } from '@/app/backend/persistence/types';
+import type {
+    MessagePartRecord,
+    MessageRecord,
+    RunRecord,
+    SessionSummaryRecord,
+} from '@/app/backend/persistence/types';
 
 interface UseSessionRunSelectionInput {
     allSessions: SessionSummaryRecord[];
@@ -48,12 +53,7 @@ export function useSessionRunSelection(input: UseSessionRunSelectionInput): Sess
         if (firstSession) {
             input.onSelectFallbackSession(firstSession.id);
         }
-    }, [
-        input.onSelectFallbackSession,
-        input.onSelectedSessionInvalid,
-        input.selectedSessionId,
-        sessions,
-    ]);
+    }, [input.onSelectFallbackSession, input.onSelectedSessionInvalid, input.selectedSessionId, sessions]);
 
     const runs = useMemo(() => {
         if (!input.selectedSessionId) {
@@ -79,12 +79,7 @@ export function useSessionRunSelection(input: UseSessionRunSelectionInput): Sess
         if (firstRun) {
             input.onSelectFallbackRun(firstRun.id);
         }
-    }, [
-        input.onSelectFallbackRun,
-        input.onSelectedRunInvalid,
-        input.selectedRunId,
-        runs,
-    ]);
+    }, [input.onSelectFallbackRun, input.onSelectedRunInvalid, input.selectedRunId, runs]);
 
     const messages = useMemo(() => {
         if (!input.selectedSessionId) {

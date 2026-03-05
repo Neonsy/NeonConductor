@@ -29,6 +29,41 @@ interface TRPCProviderProps {
     children: ReactNode;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isRuntimeEventRecord(value: unknown): value is RuntimeEventRecordV1 {
+    if (!isRecord(value) || !isRecord(value['payload'])) {
+        return false;
+    }
+
+    return (
+        typeof value['sequence'] === 'number' &&
+        typeof value['eventId'] === 'string' &&
+        typeof value['entityType'] === 'string' &&
+        typeof value['entityId'] === 'string' &&
+        typeof value['eventType'] === 'string' &&
+        typeof value['createdAt'] === 'string'
+    );
+}
+
+function isWindowStateEvent(value: unknown): value is WindowStateEvent {
+    if (!isRecord(value) || !isRecord(value['state'])) {
+        return false;
+    }
+
+    const state = value['state'];
+    return (
+        typeof value['sequence'] === 'number' &&
+        typeof state['isMaximized'] === 'boolean' &&
+        typeof state['isFullScreen'] === 'boolean' &&
+        typeof state['canMaximize'] === 'boolean' &&
+        typeof state['canMinimize'] === 'boolean' &&
+        typeof state['platform'] === 'string'
+    );
+}
+
 function RuntimeEventStreamBootstrap(): ReactNode {
     const setConnecting = useRuntimeEventStreamStore((state) => state.setConnecting);
     const setError = useRuntimeEventStreamStore((state) => state.setError);
@@ -42,7 +77,12 @@ function RuntimeEventStreamBootstrap(): ReactNode {
             lastSequence > 0 ? { afterSequence: lastSequence } : {},
             {
                 onData: (event) => {
-                    pushEvent(event as RuntimeEventRecordV1);
+                    if (isRuntimeEventRecord(event)) {
+                        pushEvent(event);
+                        return;
+                    }
+
+                    setError('Received invalid runtime event payload.');
                 },
                 onError: (error) => {
                     const message = error instanceof Error ? error.message : String(error);
@@ -72,7 +112,12 @@ function WindowStateStreamBootstrap(): ReactNode {
             lastSequence > 0 ? { afterSequence: lastSequence } : {},
             {
                 onData: (event) => {
-                    pushEvent(event as WindowStateEvent);
+                    if (isWindowStateEvent(event)) {
+                        pushEvent(event);
+                        return;
+                    }
+
+                    setError('Received invalid window state payload.');
                 },
                 onError: (error) => {
                     const message = error instanceof Error ? error.message : String(error);

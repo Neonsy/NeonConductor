@@ -1,7 +1,12 @@
 import { err, ok, type Result } from 'neverthrow';
 
 import { orchestratorStore, planStore, runStore } from '@/app/backend/persistence/stores';
-import type { OrchestratorRunRecord, OrchestratorStepRecord, PlanItemRecord, PlanRecord } from '@/app/backend/persistence/types';
+import type {
+    OrchestratorRunRecord,
+    OrchestratorStepRecord,
+    PlanItemRecord,
+    PlanRecord,
+} from '@/app/backend/persistence/types';
 import type { EntityId, OrchestratorStartInput } from '@/app/backend/runtime/contracts';
 import { runExecutionService } from '@/app/backend/runtime/services/runExecution/service';
 import { runtimeEventLogService } from '@/app/backend/runtime/services/runtimeEventLog';
@@ -24,7 +29,10 @@ function okOrchestrator<T>(value: T): Result<T, OrchestratorExecutionError> {
     return ok(value);
 }
 
-function errOrchestrator(code: OrchestratorExecutionErrorCode, message: string): Result<never, OrchestratorExecutionError> {
+function errOrchestrator(
+    code: OrchestratorExecutionErrorCode,
+    message: string
+): Result<never, OrchestratorExecutionError> {
     return err({
         code,
         message,
@@ -84,8 +92,13 @@ async function waitForRunTerminal(runId: EntityId<'run'>): Promise<'completed' |
 export class OrchestratorExecutionService {
     private readonly activeRuns = new Map<EntityId<'orch'>, ActiveOrchestratorRun>();
 
-    async start(input: OrchestratorStartInput): Promise<{ started: true; run: OrchestratorRunRecord; steps: OrchestratorStepRecord[] }> {
-        const validation = validateOrchestratorStart(await planStore.getById(input.profileId, input.planId), input.planId);
+    async start(
+        input: OrchestratorStartInput
+    ): Promise<{ started: true; run: OrchestratorRunRecord; steps: OrchestratorStepRecord[] }> {
+        const validation = validateOrchestratorStart(
+            await planStore.getById(input.profileId, input.planId),
+            input.planId
+        );
         if (validation.isErr()) {
             appLog.warn({
                 tag: 'orchestrator',
@@ -101,7 +114,9 @@ export class OrchestratorExecutionService {
 
         const planItems = await planStore.listItems(plan.id);
         const stepDescriptions =
-            planItems.length > 0 ? planItems.map((item) => item.description) : [plan.summaryMarkdown || plan.sourcePrompt];
+            planItems.length > 0
+                ? planItems.map((item) => item.description)
+                : [plan.summaryMarkdown || plan.sourcePrompt];
 
         const created = await orchestratorStore.createRun({
             profileId: input.profileId,
@@ -156,7 +171,10 @@ export class OrchestratorExecutionService {
         };
     }
 
-    async getStatus(profileId: string, orchestratorRunId: EntityId<'orch'>): Promise<{ found: false } | { found: true; run: OrchestratorRunRecord; steps: OrchestratorStepRecord[] }> {
+    async getStatus(
+        profileId: string,
+        orchestratorRunId: EntityId<'orch'>
+    ): Promise<{ found: false } | { found: true; run: OrchestratorRunRecord; steps: OrchestratorStepRecord[] }> {
         const run = await orchestratorStore.getRunById(profileId, orchestratorRunId);
         if (!run) {
             return { found: false };
@@ -169,7 +187,10 @@ export class OrchestratorExecutionService {
         };
     }
 
-    async getLatestBySession(profileId: string, sessionId: EntityId<'sess'>): Promise<{ found: false } | { found: true; run: OrchestratorRunRecord; steps: OrchestratorStepRecord[] }> {
+    async getLatestBySession(
+        profileId: string,
+        sessionId: EntityId<'sess'>
+    ): Promise<{ found: false } | { found: true; run: OrchestratorRunRecord; steps: OrchestratorStepRecord[] }> {
         const run = await orchestratorStore.getLatestBySession(profileId, sessionId);
         if (!run) {
             return { found: false };
@@ -182,7 +203,10 @@ export class OrchestratorExecutionService {
         };
     }
 
-    async abort(profileId: string, orchestratorRunId: EntityId<'orch'>): Promise<{ aborted: false; reason: 'not_found' } | { aborted: true; runId: EntityId<'orch'> }> {
+    async abort(
+        profileId: string,
+        orchestratorRunId: EntityId<'orch'>
+    ): Promise<{ aborted: false; reason: 'not_found' } | { aborted: true; runId: EntityId<'orch'> }> {
         const run = await orchestratorStore.getRunById(profileId, orchestratorRunId);
         if (!run) {
             return { aborted: false, reason: 'not_found' };
@@ -282,7 +306,9 @@ export class OrchestratorExecutionService {
                 runtimeOptions: input.startInput.runtimeOptions,
                 ...(input.startInput.providerId ? { providerId: input.startInput.providerId } : {}),
                 ...(input.startInput.modelId ? { modelId: input.startInput.modelId } : {}),
-                ...(input.startInput.workspaceFingerprint ? { workspaceFingerprint: input.startInput.workspaceFingerprint } : {}),
+                ...(input.startInput.workspaceFingerprint
+                    ? { workspaceFingerprint: input.startInput.workspaceFingerprint }
+                    : {}),
             });
 
             if (!started.accepted) {

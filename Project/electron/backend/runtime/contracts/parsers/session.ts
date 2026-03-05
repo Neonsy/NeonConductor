@@ -10,7 +10,13 @@ import {
     readProviderId,
     readString,
 } from '@/app/backend/runtime/contracts/parsers/helpers';
-import type { SessionByIdInput, SessionCreateInput, SessionListMessagesInput, SessionListRunsInput, SessionStartRunInput } from '@/app/backend/runtime/contracts/types';
+import type {
+    SessionByIdInput,
+    SessionCreateInput,
+    SessionListMessagesInput,
+    SessionListRunsInput,
+    SessionStartRunInput,
+} from '@/app/backend/runtime/contracts/types';
 
 export function parseSessionCreateInput(input: unknown): SessionCreateInput {
     const source = readObject(input, 'input');

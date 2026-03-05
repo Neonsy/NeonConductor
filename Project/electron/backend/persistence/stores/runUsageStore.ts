@@ -1,6 +1,7 @@
 import { sql } from 'kysely';
 
 import { getPersistence } from '@/app/backend/persistence/db';
+import { parseEntityId, parseEnumValue } from '@/app/backend/persistence/stores/rowParsers';
 import { nowIso } from '@/app/backend/persistence/stores/utils';
 import type {
     OpenAISubscriptionUsageSummary,
@@ -9,7 +10,7 @@ import type {
     RunUsageRecord,
 } from '@/app/backend/persistence/types';
 import { assertSupportedProviderId } from '@/app/backend/providers/registry';
-import type { EntityId, RuntimeProviderId } from '@/app/backend/runtime/contracts';
+import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
 
 function readNumber(value: number | null): number | undefined {
     return value === null ? undefined : value;
@@ -19,11 +20,7 @@ const billedViaValues = ['kilo_gateway', 'openai_api', 'openai_subscription'] as
 type BilledVia = (typeof billedViaValues)[number];
 
 function parseBilledVia(value: string): BilledVia {
-    if (billedViaValues.some((candidate) => candidate === value)) {
-        return value as BilledVia;
-    }
-
-    throw new Error(`Invalid billed_via in run_usage row: "${value}".`);
+    return parseEnumValue(value, 'run_usage.billed_via', billedViaValues);
 }
 
 function mapRunUsageRecord(row: {
@@ -41,7 +38,7 @@ function mapRunUsageRecord(row: {
     recorded_at: string;
 }): RunUsageRecord {
     const record: RunUsageRecord = {
-        runId: row.run_id as EntityId<'run'>,
+        runId: parseEntityId(row.run_id, 'run_usage.run_id', 'run'),
         providerId: assertSupportedProviderId(row.provider_id),
         modelId: row.model_id,
         billedVia: parseBilledVia(row.billed_via),

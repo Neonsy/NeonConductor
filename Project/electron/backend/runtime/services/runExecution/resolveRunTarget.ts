@@ -17,7 +17,10 @@ function tryAssertProviderId(value: string): RuntimeProviderId | undefined {
     return supportedProviderIdResult.value;
 }
 
-async function resolveFirstModelForProvider(profileId: string, providerId: RuntimeProviderId): Promise<string | undefined> {
+async function resolveFirstModelForProvider(
+    profileId: string,
+    providerId: RuntimeProviderId
+): Promise<string | undefined> {
     const models = await providerStore.listModels(profileId, providerId);
     return models.at(0)?.id;
 }

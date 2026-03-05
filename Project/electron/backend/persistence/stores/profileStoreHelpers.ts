@@ -53,7 +53,9 @@ async function resolveDefaultProviderAndModel(
             ? parseJsonValue<string>(providerRaw, FALLBACK_DEFAULT_PROVIDER_ID)
             : FALLBACK_DEFAULT_PROVIDER_ID;
     const modelId =
-        typeof modelRaw === 'string' ? parseJsonValue<string>(modelRaw, FALLBACK_DEFAULT_MODEL_ID) : FALLBACK_DEFAULT_MODEL_ID;
+        typeof modelRaw === 'string'
+            ? parseJsonValue<string>(modelRaw, FALLBACK_DEFAULT_MODEL_ID)
+            : FALLBACK_DEFAULT_MODEL_ID;
 
     return {
         providerId:
@@ -70,15 +72,7 @@ async function copyModeDefinitions(
 ): Promise<void> {
     const modes = await tx
         .selectFrom('mode_definitions')
-        .select([
-            'top_level_tab',
-            'mode_key',
-            'label',
-            'prompt_json',
-            'execution_policy_json',
-            'source',
-            'enabled',
-        ])
+        .select(['top_level_tab', 'mode_key', 'label', 'prompt_json', 'execution_policy_json', 'source', 'enabled'])
         .where('profile_id', '=', sourceProfileId)
         .orderBy('top_level_tab', 'asc')
         .orderBy('mode_key', 'asc')

@@ -52,12 +52,7 @@ export function useThreadSidebarState(input: UseThreadSidebarStateInput): Thread
         if (firstVisibleThread) {
             input.onSelectFallbackThread(firstVisibleThread.id);
         }
-    }, [
-        input.onSelectFallbackThread,
-        input.onSelectedThreadInvalid,
-        input.selectedThreadId,
-        visibleThreads,
-    ]);
+    }, [input.onSelectFallbackThread, input.onSelectedThreadInvalid, input.selectedThreadId, visibleThreads]);
 
     return {
         threadTagIdsByThread,

@@ -1,7 +1,11 @@
 import { modeStore } from '@/app/backend/persistence/stores';
 import { agentModes, orchestratorModes } from '@/app/backend/runtime/contracts';
 import type { ModeDefinition, TopLevelTab } from '@/app/backend/runtime/contracts';
-import { errRunExecution, okRunExecution, type RunExecutionResult } from '@/app/backend/runtime/services/runExecution/errors';
+import {
+    errRunExecution,
+    okRunExecution,
+    type RunExecutionResult,
+} from '@/app/backend/runtime/services/runExecution/errors';
 
 interface ResolveModeExecutionInput {
     profileId: string;
@@ -25,7 +29,9 @@ function isAllowedModeForTab(topLevelTab: TopLevelTab, modeKey: string): boolean
     return (orchestratorModes as readonly string[]).includes(modeKey);
 }
 
-export async function resolveModeExecution(input: ResolveModeExecutionInput): Promise<RunExecutionResult<ResolvedModeExecution>> {
+export async function resolveModeExecution(
+    input: ResolveModeExecutionInput
+): Promise<RunExecutionResult<ResolvedModeExecution>> {
     if (!isAllowedModeForTab(input.topLevelTab, input.modeKey)) {
         return errRunExecution('invalid_mode', `Mode "${input.modeKey}" is invalid for tab "${input.topLevelTab}".`);
     }

@@ -9,12 +9,7 @@ import { KILO_GATEWAY_BASE_URL } from '@/app/backend/providers/kiloGatewayClient
 import type { ProviderRuntimeHandlers, ProviderRuntimeInput } from '@/app/backend/providers/types';
 import { appLog } from '@/app/main/logging';
 
-function throwKiloRuntimeError(
-    input: ProviderRuntimeInput,
-    context: string,
-    code: string,
-    error: string
-): never {
+function throwKiloRuntimeError(input: ProviderRuntimeInput, context: string, code: string, error: string): never {
     appLog.warn({
         tag: 'provider.kilo',
         message: `Kilo runtime ${context} failed.`,

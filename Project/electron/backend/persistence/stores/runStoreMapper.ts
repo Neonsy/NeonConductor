@@ -1,3 +1,4 @@
+import { parseEntityId } from '@/app/backend/persistence/stores/rowParsers';
 import type { RunRecord } from '@/app/backend/persistence/types';
 import { assertSupportedProviderId } from '@/app/backend/providers/registry';
 import {
@@ -8,7 +9,7 @@ import {
     runtimeReasoningEfforts,
     runtimeReasoningSummaries,
 } from '@/app/backend/runtime/contracts';
-import type { EntityId, ProviderAuthMethod, RunStatus, RuntimeProviderId } from '@/app/backend/runtime/contracts';
+import type { ProviderAuthMethod, RunStatus, RuntimeProviderId } from '@/app/backend/runtime/contracts';
 
 function isOneOf<T extends string>(value: string, allowed: readonly T[]): value is T {
     return allowed.some((candidate) => candidate === value);
@@ -162,8 +163,8 @@ export function mapRunRecord(row: RunRow): RunRecord {
     const transportSelected = parseSelectedTransport(row.transport_selected);
 
     return {
-        id: row.id as EntityId<'run'>,
-        sessionId: row.session_id as EntityId<'sess'>,
+        id: parseEntityId(row.id, 'runs.id', 'run'),
+        sessionId: parseEntityId(row.session_id, 'runs.session_id', 'sess'),
         profileId: row.profile_id,
         prompt: row.prompt,
         status: parseRunStatus(row.status),

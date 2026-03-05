@@ -39,7 +39,7 @@ interface OrchestratorView {
     }>;
 }
 
-interface ModeExecutionPanelProps {
+export interface ModeExecutionPanelProps {
     topLevelTab: TopLevelTab;
     modeKey: string;
     activePlan?: PlanView;
@@ -128,7 +128,10 @@ export function ModeExecutionPanel({
                                             type='button'
                                             size='sm'
                                             variant='outline'
-                                            disabled={isPlanMutating || (answerByQuestionId[question.id] ?? '').trim().length === 0}
+                                            disabled={
+                                                isPlanMutating ||
+                                                (answerByQuestionId[question.id] ?? '').trim().length === 0
+                                            }
                                             onClick={() => {
                                                 const answer = (answerByQuestionId[question.id] ?? '').trim();
                                                 if (!answer) {
@@ -193,7 +196,10 @@ export function ModeExecutionPanel({
                                 <Button
                                     type='button'
                                     size='sm'
-                                    disabled={isPlanMutating || (activePlan.status !== 'approved' && activePlan.status !== 'implementing')}
+                                    disabled={
+                                        isPlanMutating ||
+                                        (activePlan.status !== 'approved' && activePlan.status !== 'implementing')
+                                    }
                                     onClick={() => {
                                         onImplementPlan(activePlan.id);
                                     }}>
