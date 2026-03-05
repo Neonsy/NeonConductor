@@ -1,3 +1,4 @@
+import type { MessageTimelineEntry } from '@/web/components/conversation/messageTimelineModel';
 import { ComposerActionPanel } from '@/web/components/conversation/panels/composerActionPanel';
 import { MessageTimelinePanel } from '@/web/components/conversation/panels/messageTimelinePanel';
 import { Button } from '@/web/components/ui/button';
@@ -36,6 +37,8 @@ interface SessionWorkspacePanelProps {
     onCreateSession: () => void;
     onPromptChange: (nextPrompt: string) => void;
     onSubmitPrompt: () => void;
+    onEditMessage?: (entry: MessageTimelineEntry) => void;
+    onBranchFromMessage?: (entry: MessageTimelineEntry) => void;
 }
 
 export function SessionWorkspacePanel({
@@ -63,6 +66,8 @@ export function SessionWorkspacePanel({
     onCreateSession,
     onPromptChange,
     onSubmitPrompt,
+    onEditMessage,
+    onBranchFromMessage,
 }: SessionWorkspacePanelProps) {
     return (
         <div className='grid min-h-0 flex-1 grid-cols-[280px_1fr]'>
@@ -123,7 +128,12 @@ export function SessionWorkspacePanel({
 
                 {modePanel}
 
-                <MessageTimelinePanel messages={messages} partsByMessageId={partsByMessageId} />
+                <MessageTimelinePanel
+                    messages={messages}
+                    partsByMessageId={partsByMessageId}
+                    {...(onEditMessage ? { onEditMessage } : {})}
+                    {...(onBranchFromMessage ? { onBranchFromMessage } : {})}
+                />
 
                 <ComposerActionPanel
                     prompt={prompt}

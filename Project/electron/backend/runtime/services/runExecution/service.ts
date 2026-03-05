@@ -9,6 +9,7 @@ import type { ProviderRuntimeInput, ProviderRuntimeTransportSelection } from '@/
 import type { EntityId, ProviderAuthMethod, RuntimeProviderId } from '@/app/backend/runtime/contracts';
 import { resolveRunCache } from '@/app/backend/runtime/services/runExecution/cacheKey';
 import { validateRunCapabilities } from '@/app/backend/runtime/services/runExecution/capabilities';
+import { buildChatReplayContext } from '@/app/backend/runtime/services/runExecution/chatContext';
 import type { RunExecutionError } from '@/app/backend/runtime/services/runExecution/errors';
 import {
     emitCacheResolutionEvent,
@@ -21,6 +22,7 @@ import { resolveFirstRunnableRunTarget } from '@/app/backend/runtime/services/ru
 import { resolveRunTarget } from '@/app/backend/runtime/services/runExecution/resolveRunTarget';
 import { resolveInitialRunTransport } from '@/app/backend/runtime/services/runExecution/transport';
 import type {
+    ChatContextMessage,
     ResolvedRunAuth,
     RunCacheResolution,
     StartRunInput,
@@ -183,9 +185,18 @@ export class RunExecutionService {
             providerId: activeTarget.providerId,
             runtimeOptions: input.runtimeOptions,
         });
+        const chatContext =
+            input.topLevelTab === 'chat'
+                ? await buildChatReplayContext({
+                      profileId: input.profileId,
+                      sessionId: input.sessionId,
+                      prompt: input.prompt,
+                  })
+                : undefined;
         const resolvedCacheResult = resolveRunCache({
             profileId: input.profileId,
             sessionId: input.sessionId,
+            ...(chatContext ? { cacheScopeKey: chatContext.digest } : {}),
             providerId: activeTarget.providerId,
             modelId: activeTarget.modelId,
             runtimeOptions: input.runtimeOptions,
@@ -341,6 +352,7 @@ export class RunExecutionService {
             ...(resolvedAuth.accessToken ? { accessToken: resolvedAuth.accessToken } : {}),
             ...(resolvedAuth.organizationId ? { organizationId: resolvedAuth.organizationId } : {}),
             ...(kiloRouting ? { kiloRouting } : {}),
+            ...(chatContext ? { contextMessages: chatContext.messages } : {}),
             assistantMessageId: assistantMessage.id,
             signal: controller.signal,
         }).finally(() => {
@@ -459,6 +471,7 @@ export class RunExecutionService {
                   mode: 'pinned';
                   providerId: string;
               };
+        contextMessages?: ChatContextMessage[];
         assistantMessageId: string;
         signal: AbortSignal;
     }): Promise<void> {

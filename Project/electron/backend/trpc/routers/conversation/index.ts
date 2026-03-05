@@ -1,7 +1,9 @@
 import { conversationStore, settingsStore, tagStore, threadStore } from '@/app/backend/persistence/stores';
 import {
     conversationCreateThreadInputSchema,
+    conversationGetEditPreferenceInputSchema,
     conversationListBucketsInputSchema,
+    conversationSetEditPreferenceInputSchema,
     conversationListTagsInputSchema,
     conversationListThreadsInputSchema,
     conversationRenameThreadInputSchema,
@@ -13,6 +15,8 @@ import { publicProcedure, router } from '@/app/backend/trpc/init';
 
 const THREAD_SORT_SETTING_KEY = 'conversation_thread_sort';
 const DEFAULT_THREAD_SORT = 'latest' as const;
+const EDIT_RESOLUTION_SETTING_KEY = 'conversation_edit_resolution';
+const DEFAULT_EDIT_RESOLUTION = 'ask' as const;
 
 function isThreadSort(value: string | undefined): value is 'latest' | 'alphabetical' {
     return value === 'latest' || value === 'alphabetical';
@@ -117,5 +121,18 @@ export const conversationRouter = router({
         return {
             threadTags,
         };
+    }),
+    getEditPreference: publicProcedure.input(conversationGetEditPreferenceInputSchema).query(async ({ input }) => {
+        const value = await settingsStore.getString(
+            input.profileId,
+            EDIT_RESOLUTION_SETTING_KEY,
+            DEFAULT_EDIT_RESOLUTION
+        );
+        const resolved = value === 'truncate' || value === 'branch' ? value : DEFAULT_EDIT_RESOLUTION;
+        return { value: resolved };
+    }),
+    setEditPreference: publicProcedure.input(conversationSetEditPreferenceInputSchema).mutation(async ({ input }) => {
+        await settingsStore.setString(input.profileId, EDIT_RESOLUTION_SETTING_KEY, input.value);
+        return { value: input.value };
     }),
 });

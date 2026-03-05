@@ -10,20 +10,35 @@ interface ProfileSettingsViewProps {
 }
 
 export function ProfileSettingsView({ activeProfileId, onProfileActivated }: ProfileSettingsViewProps) {
+    const [selectedProfileId, setSelectedProfileId] = useState<string | undefined>(undefined);
+    const [newProfileName, setNewProfileName] = useState('');
+    const [renameValue, setRenameValue] = useState('');
+    const [statusMessage, setStatusMessage] = useState<string | undefined>(undefined);
+    const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+
     const profilesQuery = trpc.profile.list.useQuery(undefined, { refetchOnWindowFocus: false });
     const createMutation = trpc.profile.create.useMutation();
     const renameMutation = trpc.profile.rename.useMutation();
     const duplicateMutation = trpc.profile.duplicate.useMutation();
     const deleteMutation = trpc.profile.delete.useMutation();
     const setActiveMutation = trpc.profile.setActive.useMutation();
+    const selectedProfileIdForSettings = selectedProfileId ?? activeProfileId;
+    const editPreferenceQuery = trpc.conversation.getEditPreference.useQuery(
+        {
+            profileId: selectedProfileIdForSettings,
+        },
+        {
+            enabled: Boolean(selectedProfileIdForSettings),
+            refetchOnWindowFocus: false,
+        }
+    );
+    const setEditPreferenceMutation = trpc.conversation.setEditPreference.useMutation({
+        onSuccess: () => {
+            void editPreferenceQuery.refetch();
+        },
+    });
 
     const profiles = profilesQuery.data?.profiles ?? [];
-
-    const [selectedProfileId, setSelectedProfileId] = useState<string | undefined>(undefined);
-    const [newProfileName, setNewProfileName] = useState('');
-    const [renameValue, setRenameValue] = useState('');
-    const [statusMessage, setStatusMessage] = useState<string | undefined>(undefined);
-    const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
     useEffect(() => {
         if (profiles.length === 0) {
@@ -225,6 +240,36 @@ export function ProfileSettingsView({ activeProfileId, onProfileActivated }: Pro
                                         ? 'Cannot delete the last remaining profile.'
                                         : 'Deletion removes local profile-scoped data.'}
                                 </span>
+                            </div>
+
+                            <div className='space-y-1 pt-2'>
+                                <p className='text-sm font-semibold'>Conversation Edit Behavior</p>
+                                <p className='text-muted-foreground text-xs'>
+                                    Controls default behavior when editing earlier user messages.
+                                </p>
+                                <select
+                                    className='border-border bg-background h-9 w-full max-w-sm rounded-md border px-2 text-sm'
+                                    value={editPreferenceQuery.data?.value ?? 'ask'}
+                                    disabled={setEditPreferenceMutation.isPending}
+                                    onChange={(event) => {
+                                        const nextValue = event.target.value;
+                                        if (nextValue !== 'ask' && nextValue !== 'truncate' && nextValue !== 'branch') {
+                                            return;
+                                        }
+
+                                        void setEditPreferenceMutation
+                                            .mutateAsync({
+                                                profileId: selectedProfile.id,
+                                                value: nextValue,
+                                            })
+                                            .then(() => {
+                                                setStatusMessage('Updated conversation edit behavior.');
+                                            });
+                                    }}>
+                                    <option value='ask'>Ask every time</option>
+                                    <option value='truncate'>Always truncate</option>
+                                    <option value='branch'>Always branch</option>
+                                </select>
                             </div>
                         </section>
                     ) : null}

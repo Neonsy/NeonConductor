@@ -1,7 +1,8 @@
-import { sessionKinds, topLevelTabs } from '@/app/backend/runtime/contracts/enums';
+import { sessionEditModes, sessionKinds, topLevelTabs } from '@/app/backend/runtime/contracts/enums';
 import {
     createParser,
     parseRuntimeRunOptions,
+    readBoolean,
     readEntityId,
     readEnumValue,
     readObject,
@@ -13,8 +14,10 @@ import {
 import type {
     SessionByIdInput,
     SessionCreateInput,
+    SessionEditInput,
     SessionListMessagesInput,
     SessionListRunsInput,
+    SessionRevertInput,
     SessionStartRunInput,
 } from '@/app/backend/runtime/contracts/types';
 
@@ -34,6 +37,16 @@ export function parseSessionByIdInput(input: unknown): SessionByIdInput {
     return {
         profileId: readProfileId(source),
         sessionId: readEntityId(source.sessionId, 'sessionId', 'sess'),
+    };
+}
+
+export function parseSessionRevertInput(input: unknown): SessionRevertInput {
+    const source = readObject(input, 'input');
+
+    return {
+        profileId: readProfileId(source),
+        sessionId: readEntityId(source.sessionId, 'sessionId', 'sess'),
+        topLevelTab: readEnumValue(source.topLevelTab, 'topLevelTab', topLevelTabs),
     };
 }
 
@@ -72,8 +85,37 @@ export function parseSessionListMessagesInput(input: unknown): SessionListMessag
     };
 }
 
+export function parseSessionEditInput(input: unknown): SessionEditInput {
+    const source = readObject(input, 'input');
+    const providerId = source.providerId !== undefined ? readProviderId(source.providerId, 'providerId') : undefined;
+    const modelId = readOptionalString(source.modelId, 'modelId');
+    const workspaceFingerprint = readOptionalString(source.workspaceFingerprint, 'workspaceFingerprint');
+    const runtimeOptions =
+        source.runtimeOptions !== undefined ? parseRuntimeRunOptions(source.runtimeOptions) : undefined;
+    const modeKey = readOptionalString(source.modeKey, 'modeKey');
+    const autoStartRun =
+        source.autoStartRun !== undefined ? readBoolean(source.autoStartRun, 'autoStartRun') : undefined;
+
+    return {
+        profileId: readProfileId(source),
+        sessionId: readEntityId(source.sessionId, 'sessionId', 'sess'),
+        topLevelTab: readEnumValue(source.topLevelTab, 'topLevelTab', topLevelTabs),
+        messageId: readEntityId(source.messageId, 'messageId', 'msg'),
+        replacementText: readString(source.replacementText, 'replacementText'),
+        editMode: readEnumValue(source.editMode, 'editMode', sessionEditModes),
+        ...(modeKey ? { modeKey } : {}),
+        ...(autoStartRun !== undefined ? { autoStartRun } : {}),
+        ...(workspaceFingerprint ? { workspaceFingerprint } : {}),
+        ...(runtimeOptions ? { runtimeOptions } : {}),
+        ...(providerId ? { providerId } : {}),
+        ...(modelId ? { modelId } : {}),
+    };
+}
+
 export const sessionCreateInputSchema = createParser(parseSessionCreateInput);
 export const sessionByIdInputSchema = createParser(parseSessionByIdInput);
+export const sessionRevertInputSchema = createParser(parseSessionRevertInput);
 export const sessionStartRunInputSchema = createParser(parseSessionStartRunInput);
 export const sessionListRunsInputSchema = createParser(parseSessionListRunsInput);
 export const sessionListMessagesInputSchema = createParser(parseSessionListMessagesInput);
+export const sessionEditInputSchema = createParser(parseSessionEditInput);

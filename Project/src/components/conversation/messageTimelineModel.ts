@@ -11,9 +11,11 @@ export interface MessageTimelineBodyEntry {
 
 export interface MessageTimelineEntry {
     id: string;
+    runId: MessageRecord['runId'];
     role: MessageRecord['role'];
     createdAt: string;
     body: MessageTimelineBodyEntry[];
+    editableText?: string;
 }
 
 export interface BottomThresholdInput {
@@ -69,11 +71,22 @@ export function buildTimelineEntries(
 ): MessageTimelineEntry[] {
     return messages.map((message) => {
         const parts = partsByMessageId.get(message.id) ?? [];
+        const body = buildBodyEntries(message, parts);
+        const editableText =
+            message.role === 'user'
+                ? body
+                      .filter((item) => item.type === 'user_text')
+                      .map((item) => item.text)
+                      .join('\n\n')
+                : undefined;
+
         return {
             id: message.id,
+            runId: message.runId,
             role: message.role,
             createdAt: message.createdAt,
-            body: buildBodyEntries(message, parts),
+            body,
+            ...(editableText && editableText.trim().length > 0 ? { editableText } : {}),
         };
     });
 }

@@ -7,11 +7,13 @@ export function useConversationShellMutations() {
         setThreadTagsMutation: trpc.conversation.setThreadTags.useMutation(),
         createSessionMutation: trpc.session.create.useMutation(),
         startRunMutation: trpc.session.startRun.useMutation(),
+        editSessionMutation: trpc.session.edit.useMutation(),
         planStartMutation: trpc.plan.start.useMutation(),
         planAnswerMutation: trpc.plan.answerQuestion.useMutation(),
         planReviseMutation: trpc.plan.revise.useMutation(),
         planApproveMutation: trpc.plan.approve.useMutation(),
         planImplementMutation: trpc.plan.implement.useMutation(),
         orchestratorAbortMutation: trpc.orchestrator.abort.useMutation(),
+        setEditPreferenceMutation: trpc.conversation.setEditPreference.useMutation(),
     };
 }

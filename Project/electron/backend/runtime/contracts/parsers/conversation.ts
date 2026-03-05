@@ -1,4 +1,8 @@
-import { conversationScopes, conversationThreadSorts } from '@/app/backend/runtime/contracts/enums';
+import {
+    conversationEditResolutions,
+    conversationScopes,
+    conversationThreadSorts,
+} from '@/app/backend/runtime/contracts/enums';
 import {
     createParser,
     readEntityId,
@@ -12,10 +16,12 @@ import {
 import { parseProfileInput } from '@/app/backend/runtime/contracts/parsers/profile';
 import type {
     ConversationCreateThreadInput,
+    ConversationGetEditPreferenceInput,
     ConversationListBucketsInput,
     ConversationListTagsInput,
     ConversationListThreadsInput,
     ConversationRenameThreadInput,
+    ConversationSetEditPreferenceInput,
     ConversationSetThreadTagsInput,
     ConversationUpsertTagInput,
 } from '@/app/backend/runtime/contracts/types';
@@ -96,6 +102,19 @@ export function parseConversationSetThreadTagsInput(input: unknown): Conversatio
     };
 }
 
+export function parseConversationGetEditPreferenceInput(input: unknown): ConversationGetEditPreferenceInput {
+    return parseProfileInput(input);
+}
+
+export function parseConversationSetEditPreferenceInput(input: unknown): ConversationSetEditPreferenceInput {
+    const source = readObject(input, 'input');
+
+    return {
+        profileId: readProfileId(source),
+        value: readEnumValue(source.value, 'value', conversationEditResolutions),
+    };
+}
+
 export const conversationListBucketsInputSchema = createParser(parseConversationListBucketsInput);
 export const conversationListThreadsInputSchema = createParser(parseConversationListThreadsInput);
 export const conversationCreateThreadInputSchema = createParser(parseConversationCreateThreadInput);
@@ -103,3 +122,5 @@ export const conversationRenameThreadInputSchema = createParser(parseConversatio
 export const conversationListTagsInputSchema = createParser(parseConversationListTagsInput);
 export const conversationUpsertTagInputSchema = createParser(parseConversationUpsertTagInput);
 export const conversationSetThreadTagsInputSchema = createParser(parseConversationSetThreadTagsInput);
+export const conversationGetEditPreferenceInputSchema = createParser(parseConversationGetEditPreferenceInput);
+export const conversationSetEditPreferenceInputSchema = createParser(parseConversationSetEditPreferenceInput);

@@ -9,8 +9,14 @@ export type SessionKind = (typeof sessionKinds)[number];
 export const conversationThreadSorts = ['latest', 'alphabetical'] as const;
 export type ConversationThreadSort = (typeof conversationThreadSorts)[number];
 
+export const conversationEditResolutions = ['ask', 'truncate', 'branch'] as const;
+export type ConversationEditResolution = (typeof conversationEditResolutions)[number];
+
 export const topLevelTabs = ['chat', 'agent', 'orchestrator'] as const;
 export type TopLevelTab = (typeof topLevelTabs)[number];
+
+export const sessionEditModes = ['truncate', 'branch'] as const;
+export type SessionEditMode = (typeof sessionEditModes)[number];
 
 export const agentModes = ['plan', 'debug', 'code', 'ask'] as const;
 export type AgentMode = (typeof agentModes)[number];

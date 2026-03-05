@@ -2,6 +2,7 @@ import { getPersistence } from '@/app/backend/persistence/db';
 import { parseEntityId, parseEnumValue, parseJsonRecord } from '@/app/backend/persistence/stores/rowParsers';
 import { nowIso } from '@/app/backend/persistence/stores/utils';
 import type { MessagePartRecord, MessageRecord } from '@/app/backend/persistence/types';
+import type { EntityId } from '@/app/backend/runtime/contracts';
 import { createEntityId } from '@/app/backend/runtime/contracts';
 import { runtimeMessagePartTypes } from '@/app/backend/runtime/contracts';
 
@@ -195,6 +196,53 @@ export class MessageStore {
 
         return rows.map(mapMessagePartRecord);
     }
+
+    async getEditableUserMessageTarget(input: {
+        profileId: string;
+        sessionId: string;
+        messageId: EntityId<'msg'>;
+    }): Promise<
+        | { found: false; reason: 'not_found' | 'not_user_message' | 'text_part_missing' }
+        | { found: true; runId: EntityId<'run'>; currentText: string }
+    > {
+        const { db } = getPersistence();
+        const message = await db
+            .selectFrom('messages')
+            .select(['id', 'run_id', 'role'])
+            .where('id', '=', input.messageId)
+            .where('profile_id', '=', input.profileId)
+            .where('session_id', '=', input.sessionId)
+            .executeTakeFirst();
+        if (!message) {
+            return { found: false, reason: 'not_found' };
+        }
+        if (message.role !== 'user') {
+            return { found: false, reason: 'not_user_message' };
+        }
+
+        const part = await db
+            .selectFrom('message_parts')
+            .select(['id', 'payload_json'])
+            .where('message_id', '=', message.id)
+            .where('part_type', '=', 'text')
+            .orderBy('sequence', 'asc')
+            .executeTakeFirst();
+        if (!part) {
+            return { found: false, reason: 'text_part_missing' };
+        }
+        const payload = parseJsonRecord(part.payload_json);
+        const text = payload['text'];
+        if (typeof text !== 'string' || text.trim().length === 0) {
+            return { found: false, reason: 'text_part_missing' };
+        }
+
+        return {
+            found: true,
+            runId: parseEntityId(message.run_id, 'messages.run_id', 'run'),
+            currentText: text,
+        };
+    }
+
 }
 
 export const messageStore = new MessageStore();

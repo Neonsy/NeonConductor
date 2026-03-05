@@ -38,6 +38,11 @@ export interface RunCacheResolution {
     reason?: string;
 }
 
+export interface ChatContextMessage {
+    role: 'system' | 'user' | 'assistant';
+    text: string;
+}
+
 export interface RunTransportResolution {
     requested: RuntimeRunOptions['transport']['openai'];
     selected: 'responses' | 'chat_completions';

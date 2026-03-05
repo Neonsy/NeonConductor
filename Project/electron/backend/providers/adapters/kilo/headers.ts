@@ -67,14 +67,16 @@ export function buildKiloRuntimeHeaders(input: {
 
 export function buildKiloRuntimeBody(input: ProviderRuntimeInput): Record<string, unknown> {
     const effort = mapReasoningEffort(input.runtimeOptions.reasoning.effort);
+    const contextMessages =
+        input.contextMessages && input.contextMessages.length > 0
+            ? input.contextMessages
+            : [{ role: 'user' as const, text: input.promptText }];
     const body: Record<string, unknown> = {
         model: input.modelId,
-        messages: [
-            {
-                role: 'user',
-                content: input.promptText,
-            },
-        ],
+        messages: contextMessages.map((message) => ({
+            role: message.role,
+            content: message.text,
+        })),
         stream: false,
         stream_options: {
             include_usage: true,

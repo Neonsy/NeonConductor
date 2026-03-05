@@ -4,7 +4,11 @@ import { getProviderRuntimeBehavior } from '@/app/backend/providers/behaviors';
 import type { ProviderRuntimeTransportSelection, ProviderRuntimeUsage } from '@/app/backend/providers/types';
 import type { KiloDynamicSort, ProviderAuthMethod, RuntimeProviderId } from '@/app/backend/runtime/contracts';
 import { emitPartEvents, emitTransportSelectionEvent } from '@/app/backend/runtime/services/runExecution/eventing';
-import type { RunCacheResolution, StartRunInput } from '@/app/backend/runtime/services/runExecution/types';
+import type {
+    ChatContextMessage,
+    RunCacheResolution,
+    StartRunInput,
+} from '@/app/backend/runtime/services/runExecution/types';
 import { mergeUsage } from '@/app/backend/runtime/services/runExecution/usage';
 import type { UsageAccumulator } from '@/app/backend/runtime/services/runExecution/usage';
 import { runtimeEventLogService } from '@/app/backend/runtime/services/runtimeEventLog';
@@ -32,6 +36,7 @@ export interface ExecuteRunInput {
     modelId: string;
     authMethod: ProviderAuthMethod | 'none';
     runtimeOptions: StartRunInput['runtimeOptions'];
+    contextMessages?: ChatContextMessage[];
     cache: RunCacheResolution;
     transportSelection: ProviderRuntimeTransportSelection;
     apiKey?: string;
@@ -68,6 +73,7 @@ export async function executeRun(input: ExecuteRunInput): Promise<void> {
             providerId: input.providerId,
             modelId: input.modelId,
             promptText: input.prompt,
+            ...(input.contextMessages ? { contextMessages: input.contextMessages } : {}),
             runtimeOptions: input.runtimeOptions,
             cache: input.cache,
             authMethod: input.authMethod,

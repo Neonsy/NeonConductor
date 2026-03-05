@@ -17,6 +17,7 @@ function isReasoningRequested(runtimeOptions: RuntimeRunOptions): boolean {
 function resolveCacheKey(input: {
     profileId: string;
     sessionId: string;
+    cacheScopeKey?: string;
     modelId: string;
     runtimeOptions: RuntimeRunOptions;
 }): string {
@@ -26,7 +27,7 @@ function resolveCacheKey(input: {
 
     return buildAutoCacheKey({
         profileId: input.profileId,
-        sessionId: input.sessionId,
+        scopeKey: input.cacheScopeKey ?? input.sessionId,
         providerId: 'openai',
         modelId: input.modelId,
     });
