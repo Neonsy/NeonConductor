@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { getPersistence } from '@/app/backend/persistence/db';
 import { nowIso } from '@/app/backend/persistence/stores/utils';
 import type { TagRecord, ThreadTagRecord } from '@/app/backend/persistence/types';
+import { errOp, okOp, type OperationalResult } from '@/app/backend/runtime/services/common/operationalError';
 
 function createTagId(): string {
     return `tag_${randomUUID()}`;
@@ -39,12 +40,12 @@ function mapThreadTagRecord(row: {
 }
 
 export class TagStore {
-    async upsert(profileId: string, label: string): Promise<TagRecord> {
+    async upsert(profileId: string, label: string): Promise<OperationalResult<TagRecord>> {
         const { db } = getPersistence();
         const now = nowIso();
         const normalizedLabel = label.trim();
         if (normalizedLabel.length === 0) {
-            throw new Error('Tag label must be a non-empty string.');
+            return errOp('invalid_input', 'Tag label must be a non-empty string.');
         }
 
         const existing = await db
@@ -55,7 +56,7 @@ export class TagStore {
             .executeTakeFirst();
 
         if (existing) {
-            return mapTagRecord(existing);
+            return okOp(mapTagRecord(existing));
         }
 
         const inserted = await db
@@ -70,7 +71,7 @@ export class TagStore {
             .returning(['id', 'profile_id', 'label', 'created_at', 'updated_at'])
             .executeTakeFirstOrThrow();
 
-        return mapTagRecord(inserted);
+        return okOp(mapTagRecord(inserted));
     }
 
     async listByProfile(profileId: string): Promise<TagRecord[]> {
@@ -113,7 +114,7 @@ export class TagStore {
         return rows.map(mapThreadTagRecord);
     }
 
-    async setThreadTags(profileId: string, threadId: string, tagIds: string[]): Promise<ThreadTagRecord[]> {
+    async setThreadTags(profileId: string, threadId: string, tagIds: string[]): Promise<OperationalResult<ThreadTagRecord[]>> {
         const { db } = getPersistence();
         const now = nowIso();
         const dedupedTagIds = [...new Set(tagIds)];
@@ -125,7 +126,7 @@ export class TagStore {
             .where('profile_id', '=', profileId)
             .executeTakeFirst();
         if (!thread) {
-            throw new Error(`Thread "${threadId}" does not exist for profile "${profileId}".`);
+            return errOp('thread_not_found', `Thread "${threadId}" does not exist for profile "${profileId}".`);
         }
 
         if (dedupedTagIds.length > 0) {
@@ -137,7 +138,10 @@ export class TagStore {
                 .execute();
 
             if (tags.length !== dedupedTagIds.length) {
-                throw new Error('setThreadTags received one or more tag IDs that are not owned by the target profile.');
+                return errOp(
+                    'invalid_input',
+                    'setThreadTags received one or more tag IDs that are not owned by the target profile.'
+                );
             }
         }
 
@@ -161,7 +165,7 @@ export class TagStore {
                 .execute();
         }
 
-        return this.listThreadTagsByThread(profileId, threadId);
+        return okOp(await this.listThreadTagsByThread(profileId, threadId));
     }
 }
 

@@ -199,11 +199,20 @@ export const conversationRouter = router({
         };
     }),
     upsertTag: publicProcedure.input(conversationUpsertTagInputSchema).mutation(async ({ input }) => {
-        const tag = await tagStore.upsert(input.profileId, input.label);
-        return { tag };
+        const result = await tagStore.upsert(input.profileId, input.label);
+        if (result.isErr()) {
+            throw toTrpcError(result.error);
+        }
+
+        return { tag: result.value };
     }),
     setThreadTags: publicProcedure.input(conversationSetThreadTagsInputSchema).mutation(async ({ input, ctx }) => {
-        const threadTags = await tagStore.setThreadTags(input.profileId, input.threadId, input.tagIds);
+        const result = await tagStore.setThreadTags(input.profileId, input.threadId, input.tagIds);
+        if (result.isErr()) {
+            throw toTrpcError(result.error);
+        }
+
+        const threadTags = result.value;
         await runtimeEventLogService.append(
             runtimeUpsertEvent({
             entityType: 'thread',

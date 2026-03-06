@@ -132,6 +132,24 @@ describe('persistence stores', () => {
         expect(defaults.providerId).toBe('openai');
     });
 
+    it('returns typed errors for invalid tag writes and missing session refreshes', async () => {
+        const profileId = getDefaultProfileId();
+
+        const invalidTag = await tagStore.upsert(profileId, '   ');
+        expect(invalidTag.isErr()).toBe(true);
+        if (invalidTag.isOk()) {
+            throw new Error('Expected empty tag label to fail.');
+        }
+        expect(invalidTag.error.code).toBe('invalid_input');
+
+        const missingRefresh = await sessionStore.refreshStatus(profileId, 'sess_missing' as `sess_${string}`);
+        expect(missingRefresh.isErr()).toBe(true);
+        if (missingRefresh.isOk()) {
+            throw new Error('Expected missing session refresh to fail.');
+        }
+        expect(missingRefresh.error.code).toBe('not_found');
+    });
+
     it('summarizes OpenAI subscription usage in 5h and 7d rolling windows', async () => {
         const profileId = getDefaultProfileId();
         const { db } = getPersistence();
@@ -460,8 +478,18 @@ describe('persistence stores', () => {
         if (thread.isErr()) {
             throw new Error(thread.error.message);
         }
-        const tag = await tagStore.upsert(profileId, 'backend');
-        const linked = await tagStore.setThreadTags(profileId, thread.value.id, [tag.id]);
+        const tagResult = await tagStore.upsert(profileId, 'backend');
+        expect(tagResult.isOk()).toBe(true);
+        if (tagResult.isErr()) {
+            throw new Error(tagResult.error.message);
+        }
+        const tag = tagResult.value;
+        const linkedResult = await tagStore.setThreadTags(profileId, thread.value.id, [tag.id]);
+        expect(linkedResult.isOk()).toBe(true);
+        if (linkedResult.isErr()) {
+            throw new Error(linkedResult.error.message);
+        }
+        const linked = linkedResult.value;
 
         const session = await sessionStore.create(profileId, thread.value.id, 'local');
         if (!session.created) {

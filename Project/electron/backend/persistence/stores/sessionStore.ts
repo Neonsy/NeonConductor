@@ -6,6 +6,7 @@ import { nowIso } from '@/app/backend/persistence/stores/utils';
 import type { SessionSummaryRecord } from '@/app/backend/persistence/types';
 import { createEntityId, runStatuses, sessionKinds } from '@/app/backend/runtime/contracts';
 import type { EntityId, RunStatus, SessionKind } from '@/app/backend/runtime/contracts';
+import { errOp, okOp, type OperationalResult } from '@/app/backend/runtime/services/common/operationalError';
 
 import type { Selectable } from 'kysely';
 
@@ -101,7 +102,7 @@ export class SessionStore {
         return row ?? null;
     }
 
-    async refreshStatus(profileId: string, sessionId: string): Promise<SessionSummaryRecord> {
+    async refreshStatus(profileId: string, sessionId: string): Promise<OperationalResult<SessionSummaryRecord>> {
         const { db } = getPersistence();
         const nextRun = await this.getLatestRun(profileId, sessionId);
         const nextStatus = mapRunStatusToSessionStatus(nextRun?.status ?? null);
@@ -120,10 +121,10 @@ export class SessionStore {
 
         const updatedSession = await this.getSessionSummaryRow(profileId, sessionId);
         if (!updatedSession) {
-            throw new Error(`Session "${sessionId}" not found while refreshing status.`);
+            return errOp('not_found', `Session "${sessionId}" not found while refreshing status.`);
         }
 
-        return mapSessionSummary(updatedSession, updatedSession.turn_count ?? 0);
+        return okOp(mapSessionSummary(updatedSession, updatedSession.turn_count ?? 0));
     }
 
     async create(

@@ -33,11 +33,14 @@ export class SessionHistoryService {
         await sessionHistoryStore.deleteRuns(profileId, deletedRunIds);
 
         const refreshed = await sessionStore.refreshStatus(profileId, session.id);
+        if (refreshed.isErr()) {
+            return { truncated: false, reason: 'session_not_found' };
+        }
         await threadStore.touchByThread(profileId, session.thread_id);
 
         return {
             truncated: true,
-            session: refreshed,
+            session: refreshed.value,
             deletedRunIds,
         };
     }
@@ -95,6 +98,9 @@ export class SessionHistoryService {
         }
 
         const summary = await sessionStore.refreshStatus(profileId, created.branchSessionId);
+        if (summary.isErr()) {
+            return { branched: false, reason: 'session_not_found' };
+        }
         await threadStore.touchByThread(profileId, sourceSession.thread_id);
         await threadStore.touchByThread(profileId, branchThread.value.id);
         if (created.latestAssistantAt) {
@@ -103,7 +109,7 @@ export class SessionHistoryService {
 
         return {
             branched: true,
-            session: summary,
+            session: summary.value,
             sourceRunCount: created.sourceRunCount,
             clonedRunCount: created.clonedRunCount,
             sourceThreadId: sourceThread.id,
@@ -137,11 +143,14 @@ export class SessionHistoryService {
         await sessionHistoryStore.deleteRuns(profileId, [latestRun.id]);
 
         const refreshed = await sessionStore.refreshStatus(profileId, session.id);
+        if (refreshed.isErr()) {
+            return { reverted: false, reason: 'not_found' };
+        }
         await threadStore.touchByThread(profileId, session.thread_id);
 
         return {
             reverted: true,
-            session: refreshed,
+            session: refreshed.value,
         };
     }
 }

@@ -4,6 +4,7 @@ import { nowIso } from '@/app/backend/persistence/stores/utils';
 import type { KiloModelRoutingPreferenceRecord } from '@/app/backend/persistence/types';
 import { kiloDynamicSorts, kiloRoutingModes } from '@/app/backend/runtime/contracts';
 import type { KiloModelRoutingPreference } from '@/app/backend/runtime/contracts';
+import { errOp, okOp, type OperationalResult } from '@/app/backend/runtime/services/common/operationalError';
 
 interface KiloRoutingPreferenceRow {
     profile_id: string;
@@ -65,36 +66,41 @@ function mapKiloRoutingPreference(row: KiloRoutingPreferenceRow): KiloModelRouti
     };
 }
 
-function toRowValues(input: KiloModelRoutingPreference) {
+function toRowValues(input: KiloModelRoutingPreference): OperationalResult<{
+    routing_mode: 'dynamic' | 'pinned';
+    sort: 'default' | 'price' | 'throughput' | 'latency' | null;
+    pinned_provider_id: string | null;
+}> {
     if (input.routingMode === 'dynamic') {
         if (!input.sort) {
-            throw new Error('Invalid routing preference: "sort" is required when routingMode is "dynamic".');
+            return errOp('invalid_payload', 'Invalid routing preference: "sort" is required when routingMode is "dynamic".');
         }
         if (input.pinnedProviderId !== undefined) {
-            throw new Error(
+            return errOp(
+                'invalid_payload',
                 'Invalid routing preference: "pinnedProviderId" is not allowed when routingMode is "dynamic".'
             );
         }
 
-        return {
+        return okOp({
             routing_mode: 'dynamic' as const,
             sort: input.sort,
             pinned_provider_id: null,
-        };
+        });
     }
 
     if (!input.pinnedProviderId) {
-        throw new Error('Invalid routing preference: "pinnedProviderId" is required when routingMode is "pinned".');
+        return errOp('invalid_payload', 'Invalid routing preference: "pinnedProviderId" is required when routingMode is "pinned".');
     }
     if (input.sort !== undefined) {
-        throw new Error('Invalid routing preference: "sort" is not allowed when routingMode is "pinned".');
+        return errOp('invalid_payload', 'Invalid routing preference: "sort" is not allowed when routingMode is "pinned".');
     }
 
-    return {
+    return okOp({
         routing_mode: 'pinned' as const,
         sort: null,
         pinned_provider_id: input.pinnedProviderId,
-    };
+    });
 }
 
 export class KiloRoutingPreferenceStore {
@@ -119,10 +125,14 @@ export class KiloRoutingPreferenceStore {
         return row ? mapKiloRoutingPreference(row) : null;
     }
 
-    async setPreference(input: KiloModelRoutingPreference): Promise<KiloModelRoutingPreferenceRecord> {
+    async setPreference(input: KiloModelRoutingPreference): Promise<OperationalResult<KiloModelRoutingPreferenceRecord>> {
         const { db } = getPersistence();
         const updatedAt = nowIso();
-        const values = toRowValues(input);
+        const valuesResult = toRowValues(input);
+        if (valuesResult.isErr()) {
+            return errOp(valuesResult.error.code, valuesResult.error.message);
+        }
+        const values = valuesResult.value;
         await db
             .insertInto('kilo_model_routing_preferences')
             .values({
@@ -148,7 +158,7 @@ export class KiloRoutingPreferenceStore {
         if (!row) {
             throw new Error('Failed to read persisted kilo routing preference after upsert.');
         }
-        return row;
+        return okOp(row);
     }
 
     async listPreferencesByProfile(profileId: string): Promise<KiloModelRoutingPreferenceRecord[]> {

@@ -272,8 +272,11 @@ export async function setModelRoutingPreference(
         ...(input.sort ? { sort: input.sort } : {}),
         ...(input.pinnedProviderId ? { pinnedProviderId: input.pinnedProviderId } : {}),
     });
+    if (saved.isErr()) {
+        return errProviderService('invalid_payload', saved.error.message);
+    }
 
-    return okProviderService(toContractPreference(saved));
+    return okProviderService(toContractPreference(saved.value));
 }
 
 export async function listModelProviders(

@@ -51,7 +51,8 @@
 - Prefer structured log events over free-form strings so issues are traceable.
 - Use `neverthrow` `Result` flows for recoverable failures to improve DX and explicit error handling.
 - Do not add new throw-based control flow for expected runtime errors; return typed error results instead.
-- Reserve `throw` for truly unrecoverable programmer/configuration faults only.
+- Reserve `throw` for parser-boundary validation failures, persisted-data corruption/invariant failures, impossible post-write readback failures, and missing required baseline-seeded configuration.
+- Treat missing user-owned data, invalid runtime/business-state transitions, and unsupported-but-expected operational outcomes as `Result` cases, not throw cases.
 
 ### 8) Trust React Compiler First
 - React Compiler is enabled; prefer plain React code and let the compiler optimize it.
