@@ -30,6 +30,7 @@ export interface RuntimeSnapshotService {
 
 class RuntimeSnapshotServiceImpl implements RuntimeSnapshotService {
     async getSnapshot(profileId: string): Promise<RuntimeSnapshotV1> {
+        // Diagnostic-only whole-runtime snapshot. Renderer app paths should stay on scoped contracts.
         const startedAt = Date.now();
         appLog.info({
             tag: 'runtime.snapshot',

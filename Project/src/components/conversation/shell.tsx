@@ -3,23 +3,24 @@ import { useEffectEvent, useState } from 'react';
 import { useConversationShellMutations } from '@/web/components/conversation/conversationShellMutations';
 import { buildConversationShellPlanOrchestrator } from '@/web/components/conversation/conversationShellPlanOrchestrator';
 import { useConversationShellQueries } from '@/web/components/conversation/conversationShellQueries';
+import { useConversationShellRefetch } from '@/web/components/conversation/conversationShellRefetch';
 import { useConversationShellRunTarget } from '@/web/components/conversation/conversationShellRunTarget';
 import { ConversationShellSidebarPane } from '@/web/components/conversation/conversationShellSidebarPane';
 import { useConversationShellSync } from '@/web/components/conversation/conversationShellSync';
 import { ConversationShellWorkspaceSection } from '@/web/components/conversation/conversationShellWorkspaceSection';
+import { useConversationShellComposer } from '@/web/components/conversation/hooks/useConversationShellComposer';
+import { useConversationShellEditFlow } from '@/web/components/conversation/hooks/useConversationShellEditFlow';
+import { useConversationShellRoutingBadge } from '@/web/components/conversation/hooks/useConversationShellRoutingBadge';
+import { useConversationShellSessionActions } from '@/web/components/conversation/hooks/useConversationShellSessionActions';
 import { useConversationUiState } from '@/web/components/conversation/hooks/useConversationUiState';
 import { useSessionRunSelection } from '@/web/components/conversation/hooks/useSessionRunSelection';
 import { useThreadSidebarState } from '@/web/components/conversation/hooks/useThreadSidebarState';
-import type { MessageTimelineEntry } from '@/web/components/conversation/messageTimelineModel';
 import { MessageEditDialog } from '@/web/components/conversation/panels/messageEditDialog';
 import { ModeExecutionPanel } from '@/web/components/conversation/panels/modeExecutionPanel';
-import { toEditFailureMessage, type PendingMessageEdit } from '@/web/components/conversation/shellEditFlow';
-import { DEFAULT_RUN_OPTIONS, isEntityId, isProviderId } from '@/web/components/conversation/shellHelpers';
-import { submitPrompt as submitPromptFromComposer } from '@/web/components/conversation/shellPromptSubmit';
+import { DEFAULT_RUN_OPTIONS, isProviderId } from '@/web/components/conversation/shellHelpers';
 import { useRuntimeEventStreamStore } from '@/web/lib/runtime/eventStream';
-import { trpc } from '@/web/trpc/client';
 
-import type { RuntimeProviderId, TopLevelTab } from '@/app/backend/runtime/contracts';
+import type { TopLevelTab } from '@/app/backend/runtime/contracts';
 
 interface ConversationShellProps {
     profileId: string;
@@ -29,13 +30,7 @@ interface ConversationShellProps {
 }
 
 export function ConversationShell({ profileId, topLevelTab, modeKey, onTopLevelTabChange }: ConversationShellProps) {
-    const [prompt, setPrompt] = useState('');
-    const [runSubmitError, setRunSubmitError] = useState<string | undefined>(undefined);
     const [tabSwitchNotice, setTabSwitchNotice] = useState<string | undefined>(undefined);
-    const [pendingMessageEdit, setPendingMessageEdit] = useState<PendingMessageEdit | undefined>(undefined);
-    const [sessionTargetBySessionId, setSessionTargetBySessionId] = useState<
-        Record<string, { providerId?: RuntimeProviderId; modelId?: string }>
-    >({});
     const uiState = useConversationUiState(profileId);
 
     const queries = useConversationShellQueries({
@@ -46,11 +41,12 @@ export function ConversationShell({ profileId, topLevelTab, modeKey, onTopLevelT
         topLevelTab,
     });
     const mutations = useConversationShellMutations();
+    const refetch = useConversationShellRefetch({ queries });
     const resetForProfile = useEffectEvent(() => {
-        setPrompt('');
-        setRunSubmitError(undefined);
         setTabSwitchNotice(undefined);
-        setSessionTargetBySessionId({});
+        composer.resetComposer();
+        sessionActions.resetSessionActions();
+        editFlow.resetEditFlow();
     });
 
     useConversationShellSync({
@@ -63,6 +59,25 @@ export function ConversationShell({ profileId, topLevelTab, modeKey, onTopLevelT
     });
 
     const streamState = useRuntimeEventStreamStore((state) => state.connectionState);
+    const selectedSessionId = uiState.selectedSessionId;
+    const selectedRunId = uiState.selectedRunId;
+    const sessionActions = useConversationShellSessionActions({
+        profileId,
+        selectedThreadId: uiState.selectedThreadId,
+        selectedSessionId,
+        createSession: mutations.createSessionMutation.mutateAsync,
+        onClearError: () => {
+            composer.clearRunSubmitError();
+        },
+        onError: (message) => {
+            composer.setRunSubmitError(message);
+        },
+        onSelectSessionId: uiState.setSelectedSessionId,
+        onSelectRunId: uiState.setSelectedRunId,
+        refetchSessionIndex: () => {
+            void refetch.refetchSessionIndex();
+        },
+    });
 
     const sidebarState = useThreadSidebarState({
         threads: queries.listThreadsQuery.data?.threads ?? [],
@@ -103,63 +118,65 @@ export function ConversationShell({ profileId, topLevelTab, modeKey, onTopLevelT
         },
     });
 
-    const selectedSessionId = uiState.selectedSessionId;
-    const selectedRunId = uiState.selectedRunId;
-    const sessionOverride = selectedSessionId ? sessionTargetBySessionId[selectedSessionId] : undefined;
     const runTargetState = useConversationShellRunTarget({
         providers: queries.shellBootstrapQuery.data?.providers ?? [],
         providerModels: queries.shellBootstrapQuery.data?.providerModels ?? [],
         defaults: queries.shellBootstrapQuery.data?.defaults,
         runs: sessionRunSelection.runs,
-        ...(sessionOverride ? { sessionOverride } : {}),
+        ...(sessionActions.sessionOverride ? { sessionOverride: sessionActions.sessionOverride } : {}),
     });
-    const isPlanningMode = modeKey === 'plan' && (topLevelTab === 'agent' || topLevelTab === 'orchestrator');
-    const kiloRoutingPreferenceQuery = trpc.provider.getModelRoutingPreference.useQuery(
-        {
-            profileId,
-            providerId: 'kilo',
-            modelId: runTargetState.selectedModelIdForComposer ?? '',
+    const composer = useConversationShellComposer({
+        profileId,
+        selectedSessionId,
+        isPlanningMode: modeKey === 'plan' && (topLevelTab === 'agent' || topLevelTab === 'orchestrator'),
+        topLevelTab,
+        modeKey,
+        workspaceFingerprint: selectedThread?.workspaceFingerprint,
+        resolvedRunTarget: runTargetState.resolvedRunTarget,
+        providerById: runTargetState.providerById,
+        runtimeOptions: DEFAULT_RUN_OPTIONS,
+        isStartingRun: mutations.startRunMutation.isPending,
+        startPlan: mutations.planStartMutation.mutateAsync,
+        startRun: mutations.startRunMutation.mutateAsync,
+        refetchActivePlan: () => {
+            void queries.activePlanQuery.refetch();
         },
-        {
-            enabled:
-                runTargetState.selectedProviderIdForComposer === 'kilo' &&
-                Boolean(runTargetState.selectedModelIdForComposer),
-            refetchOnWindowFocus: false,
-        }
-    );
-    const editPreferenceQuery = trpc.conversation.getEditPreference.useQuery(
-        {
-            profileId,
+        refetchSessionWorkspace: () => {
+            void refetch.refetchSessionWorkspace();
         },
-        {
-            refetchOnWindowFocus: false,
-        }
-    );
-    const editPreference: 'ask' | 'truncate' | 'branch' =
-        editPreferenceQuery.data?.value === 'truncate' || editPreferenceQuery.data?.value === 'branch'
-            ? editPreferenceQuery.data.value
-            : 'ask';
-    const routingBadge =
-        runTargetState.selectedProviderIdForComposer !== 'kilo'
-            ? undefined
-            : kiloRoutingPreferenceQuery.data?.preference.routingMode === 'pinned'
-              ? `Routing: Pinned (${kiloRoutingPreferenceQuery.data.preference.pinnedProviderId ?? 'unknown'})`
-              : `Routing: Dynamic (${
-                    kiloRoutingPreferenceQuery.data?.preference.sort === 'price'
-                        ? 'Lowest Price'
-                        : kiloRoutingPreferenceQuery.data?.preference.sort === 'throughput'
-                          ? 'Highest Throughput'
-                          : kiloRoutingPreferenceQuery.data?.preference.sort === 'latency'
-                            ? 'Lowest Latency'
-                            : 'Default'
-                })`;
+    });
+    const routingBadge = useConversationShellRoutingBadge({
+        profileId,
+        providerId: runTargetState.selectedProviderIdForComposer,
+        modelId: runTargetState.selectedModelIdForComposer,
+    });
+    const editFlow = useConversationShellEditFlow({
+        profileId,
+        topLevelTab,
+        modeKey,
+        selectedSessionId,
+        selectedThread,
+        resolvedRunTarget: runTargetState.resolvedRunTarget,
+        editSession: mutations.editSessionMutation.mutateAsync,
+        setEditPreference: mutations.setEditPreferenceMutation.mutateAsync,
+        uiState,
+        onTopLevelTabChange,
+        onClearError: composer.clearRunSubmitError,
+        onError: composer.setRunSubmitError,
+        onPromptReset: () => {
+            composer.resetComposer();
+        },
+        refetchSessionWorkspace: () => {
+            void refetch.refetchSessionWorkspace();
+        },
+    });
 
     const planOrchestrator = buildConversationShellPlanOrchestrator({
         profileId,
         activePlanRefetch: queries.activePlanQuery.refetch,
         orchestratorLatestRefetch: queries.orchestratorLatestQuery.refetch,
         sessionRunsRefetch: queries.runsQuery.refetch,
-        onError: setRunSubmitError,
+        onError: composer.setRunSubmitError,
         resolvedRunTarget: runTargetState.resolvedRunTarget,
         workspaceFingerprint: selectedThread?.workspaceFingerprint,
         activePlan: queries.activePlanQuery.data?.found ? queries.activePlanQuery.data.plan : undefined,
@@ -223,7 +240,7 @@ export function ConversationShell({ profileId, topLevelTab, modeKey, onTopLevelT
                 runs={sessionRunSelection.runs}
                 messages={sessionRunSelection.messages}
                 partsByMessageId={sessionRunSelection.partsByMessageId}
-                prompt={prompt}
+                prompt={composer.prompt}
                 isCreatingSession={mutations.createSessionMutation.isPending}
                 isStartingRun={mutations.startRunMutation.isPending || mutations.planStartMutation.isPending}
                 canCreateSession={Boolean(uiState.selectedThreadId)}
@@ -232,130 +249,27 @@ export function ConversationShell({ profileId, topLevelTab, modeKey, onTopLevelT
                 routingBadge={routingBadge}
                 providerOptions={runTargetState.providerOptions}
                 modelOptions={runTargetState.modelOptions}
-                runErrorMessage={runSubmitError}
-                onSelectSession={(sessionId) => {
-                    setRunSubmitError(undefined);
-                    uiState.setSelectedSessionId(sessionId);
-                }}
+                runErrorMessage={composer.runSubmitError}
+                onSelectSession={sessionActions.onSelectSession}
                 onSelectRun={uiState.setSelectedRunId}
                 onProviderChange={(providerId) => {
-                    if (!selectedSessionId || !isProviderId(providerId)) {
+                    if (!isProviderId(providerId)) {
                         return;
                     }
 
-                    const firstModelId = runTargetState.modelsByProvider.get(providerId)?.at(0)?.id;
-                    setSessionTargetBySessionId((current) => ({
-                        ...current,
-                        [selectedSessionId]: {
-                            providerId,
-                            ...(firstModelId ? { modelId: firstModelId } : {}),
-                        },
-                    }));
-                    setRunSubmitError(undefined);
+                    sessionActions.onProviderChange(
+                        providerId,
+                        runTargetState.modelsByProvider.get(providerId)?.at(0)?.id
+                    );
                 }}
                 onModelChange={(modelId) => {
-                    const providerId = runTargetState.selectedProviderIdForComposer;
-                    if (!selectedSessionId || !providerId || modelId.trim().length === 0) {
-                        return;
-                    }
-
-                    setSessionTargetBySessionId((current) => ({
-                        ...current,
-                        [selectedSessionId]: {
-                            providerId,
-                            modelId,
-                        },
-                    }));
-                    setRunSubmitError(undefined);
+                    sessionActions.onModelChange(runTargetState.selectedProviderIdForComposer, modelId);
                 }}
-                onCreateSession={() => {
-                    if (!isEntityId(uiState.selectedThreadId, 'thr')) {
-                        return;
-                    }
-
-                    void mutations.createSessionMutation
-                        .mutateAsync({
-                            profileId,
-                            threadId: uiState.selectedThreadId,
-                            kind: 'local',
-                        })
-                        .then((result) => {
-                            if (!result.created) {
-                                setRunSubmitError('Selected thread no longer exists.');
-                                return;
-                            }
-                            uiState.setSelectedSessionId(result.session.id);
-                            uiState.setSelectedRunId(undefined);
-                            setRunSubmitError(undefined);
-                            void Promise.all([queries.sessionsQuery.refetch(), queries.listThreadsQuery.refetch()]);
-                        });
-                }}
-                onPromptChange={(nextPrompt) => {
-                    setRunSubmitError(undefined);
-                    setPrompt(nextPrompt);
-                }}
-                onSubmitPrompt={() => {
-                    void submitPromptFromComposer({
-                        prompt,
-                        isStartingRun: mutations.startRunMutation.isPending,
-                        selectedSessionId,
-                        isPlanningMode,
-                        profileId,
-                        topLevelTab,
-                        modeKey,
-                        workspaceFingerprint: selectedThread?.workspaceFingerprint,
-                        resolvedRunTarget: runTargetState.resolvedRunTarget,
-                        runtimeOptions: DEFAULT_RUN_OPTIONS,
-                        providerById: runTargetState.providerById,
-                        startPlan: mutations.planStartMutation.mutateAsync,
-                        startRun: mutations.startRunMutation.mutateAsync,
-                        onPromptCleared: () => {
-                            setRunSubmitError(undefined);
-                            setPrompt('');
-                        },
-                        onPlanRefetch: () => {
-                            void queries.activePlanQuery.refetch();
-                        },
-                        onRuntimeRefetch: () => {
-                            void Promise.all([
-                                queries.sessionsQuery.refetch(),
-                                queries.runsQuery.refetch(),
-                                queries.messagesQuery.refetch(),
-                                queries.listThreadsQuery.refetch(),
-                            ]);
-                        },
-                        onError: (message) => {
-                            setRunSubmitError(message);
-                        },
-                    });
-                }}
-                onEditMessage={(entry: MessageTimelineEntry) => {
-                    if (!isEntityId(entry.id, 'msg')) {
-                        return;
-                    }
-                    const editableText = entry.editableText?.trim();
-                    if (!editableText) {
-                        return;
-                    }
-                    setPendingMessageEdit({
-                        messageId: entry.id,
-                        initialText: editableText,
-                    });
-                }}
-                onBranchFromMessage={(entry: MessageTimelineEntry) => {
-                    if (!isEntityId(entry.id, 'msg')) {
-                        return;
-                    }
-                    const editableText = entry.editableText?.trim();
-                    if (!editableText) {
-                        return;
-                    }
-                    setPendingMessageEdit({
-                        messageId: entry.id,
-                        initialText: editableText,
-                        forcedMode: 'branch',
-                    });
-                }}
+                onCreateSession={sessionActions.onCreateSession}
+                onPromptChange={composer.onPromptChange}
+                onSubmitPrompt={composer.onSubmitPrompt}
+                onEditMessage={editFlow.onEditMessage}
+                onBranchFromMessage={editFlow.onBranchFromMessage}
                 modePanel={
                     <ModeExecutionPanel
                         topLevelTab={topLevelTab}
@@ -377,85 +291,8 @@ export function ConversationShell({ profileId, topLevelTab, modeKey, onTopLevelT
             />
 
             <MessageEditDialog
-                open={Boolean(pendingMessageEdit)}
-                initialText={pendingMessageEdit?.initialText ?? ''}
-                preferredResolution={editPreference}
-                {...(pendingMessageEdit?.forcedMode ? { forcedMode: pendingMessageEdit.forcedMode } : {})}
+                {...editFlow.dialogProps}
                 busy={mutations.editSessionMutation.isPending || mutations.setEditPreferenceMutation.isPending}
-                onCancel={() => {
-                    setPendingMessageEdit(undefined);
-                }}
-                onSave={(input) => {
-                    if (!pendingMessageEdit) {
-                        return;
-                    }
-                    if (!isEntityId(selectedSessionId, 'sess')) {
-                        setRunSubmitError('Select a session before editing a message.');
-                        return;
-                    }
-
-                    setRunSubmitError(undefined);
-                    void mutations.editSessionMutation
-                        .mutateAsync({
-                            profileId,
-                            sessionId: selectedSessionId,
-                            topLevelTab,
-                            modeKey,
-                            messageId: pendingMessageEdit.messageId,
-                            replacementText: input.replacementText,
-                            editMode: input.editMode,
-                            autoStartRun: true,
-                            runtimeOptions: DEFAULT_RUN_OPTIONS,
-                            ...(runTargetState.resolvedRunTarget
-                                ? { providerId: runTargetState.resolvedRunTarget.providerId }
-                                : {}),
-                            ...(runTargetState.resolvedRunTarget
-                                ? { modelId: runTargetState.resolvedRunTarget.modelId }
-                                : {}),
-                            ...(selectedThread?.workspaceFingerprint
-                                ? { workspaceFingerprint: selectedThread.workspaceFingerprint }
-                                : {}),
-                        })
-                        .then(async (result) => {
-                            if (!result.edited) {
-                                setRunSubmitError(toEditFailureMessage(result.reason));
-                                return;
-                            }
-
-                            if (input.rememberChoice && editPreference === 'ask') {
-                                await mutations.setEditPreferenceMutation.mutateAsync({
-                                    profileId,
-                                    value: input.editMode,
-                                });
-                                void editPreferenceQuery.refetch();
-                            }
-
-                            if (result.threadId && isEntityId(result.threadId, 'thr')) {
-                                uiState.setSelectedThreadId(result.threadId);
-                            }
-                            if (result.topLevelTab && result.topLevelTab !== topLevelTab) {
-                                onTopLevelTabChange(result.topLevelTab);
-                            }
-                            uiState.setSelectedSessionId(result.sessionId);
-                            if (result.runId) {
-                                uiState.setSelectedRunId(result.runId);
-                            } else {
-                                uiState.setSelectedRunId(undefined);
-                            }
-                            setPendingMessageEdit(undefined);
-                            setPrompt('');
-                            void Promise.all([
-                                queries.sessionsQuery.refetch(),
-                                queries.runsQuery.refetch(),
-                                queries.messagesQuery.refetch(),
-                                queries.listThreadsQuery.refetch(),
-                            ]);
-                        })
-                        .catch((error: unknown) => {
-                            const message = error instanceof Error ? error.message : String(error);
-                            setRunSubmitError(`Edit failed: ${message}`);
-                        });
-                }}
             />
         </main>
     );

@@ -38,6 +38,7 @@ function waitForNextRuntimeEvent(cursor: number, signal: AbortSignal): Promise<R
 }
 
 export const runtimeRouter = router({
+    // Diagnostic-only whole-runtime inspection. Normal app rendering should use scoped reads.
     getDiagnosticSnapshot: publicProcedure.input(profileInputSchema).query(async ({ input }) => {
         return runtimeSnapshotService.getSnapshot(input.profileId);
     }),
