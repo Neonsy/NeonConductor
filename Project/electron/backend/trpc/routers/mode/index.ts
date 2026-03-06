@@ -5,6 +5,7 @@ import {
     modeSetActiveInputSchema,
 } from '@/app/backend/runtime/contracts';
 import type { TopLevelTab } from '@/app/backend/runtime/contracts';
+import { runtimeUpsertEvent } from '@/app/backend/runtime/services/runtimeEventEnvelope';
 import { runtimeEventLogService } from '@/app/backend/runtime/services/runtimeEventLog';
 import { publicProcedure, router } from '@/app/backend/trpc/init';
 
@@ -76,8 +77,10 @@ export const modeRouter = router({
         const activeKey = toActiveModeKey(input.topLevelTab, input.workspaceFingerprint);
         await settingsStore.setString(input.profileId, activeKey, mode.modeKey);
 
-        await runtimeEventLogService.append({
+        await runtimeEventLogService.append(
+            runtimeUpsertEvent({
             entityType: 'runtime',
+            domain: 'runtime',
             entityId: `mode:${input.topLevelTab}`,
             eventType: 'mode.active.set',
             payload: {
@@ -86,7 +89,8 @@ export const modeRouter = router({
                 modeKey: mode.modeKey,
                 workspaceFingerprint: input.workspaceFingerprint ?? null,
             },
-        });
+            })
+        );
 
         return {
             updated: true as const,

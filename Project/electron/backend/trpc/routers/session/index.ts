@@ -11,6 +11,7 @@ import {
 } from '@/app/backend/runtime/contracts';
 import { eventMetadata } from '@/app/backend/runtime/services/common/logContext';
 import { runExecutionService } from '@/app/backend/runtime/services/runExecution/service';
+import { runtimeStatusEvent, runtimeUpsertEvent } from '@/app/backend/runtime/services/runtimeEventEnvelope';
 import { runtimeEventLogService } from '@/app/backend/runtime/services/runtimeEventLog';
 import { sessionEditService } from '@/app/backend/runtime/services/sessionEdit/service';
 import { sessionHistoryService } from '@/app/backend/runtime/services/sessionHistory/service';
@@ -25,8 +26,10 @@ export const sessionRouter = router({
                 reason: session.reason,
             };
         }
-        await runtimeEventLogService.append({
+        await runtimeEventLogService.append(
+            runtimeUpsertEvent({
             entityType: 'session',
+            domain: 'session',
             entityId: session.session.id,
             eventType: 'session.created',
             payload: {
@@ -37,7 +40,8 @@ export const sessionRouter = router({
                 correlationId: ctx.correlationId,
                 origin: 'trpc.session.create',
             }),
-        });
+            })
+        );
 
         return { created: true as const, session: session.session };
     }),
@@ -55,8 +59,10 @@ export const sessionRouter = router({
         });
 
         if (result.accepted) {
-            await runtimeEventLogService.append({
+            await runtimeEventLogService.append(
+                runtimeStatusEvent({
                 entityType: 'session',
+                domain: 'session',
                 entityId: input.sessionId,
                 eventType: 'session.run.started',
                 payload: {
@@ -71,7 +77,8 @@ export const sessionRouter = router({
                     correlationId: ctx.correlationId,
                     origin: 'trpc.session.startRun',
                 }),
-            });
+                })
+            );
         }
 
         return result;
@@ -95,8 +102,10 @@ export const sessionRouter = router({
     abort: publicProcedure.input(sessionByIdInputSchema).mutation(async ({ input, ctx }) => {
         const result = await runExecutionService.abortRun(input.profileId, input.sessionId);
         if (result.aborted) {
-            await runtimeEventLogService.append({
+            await runtimeEventLogService.append(
+                runtimeStatusEvent({
                 entityType: 'session',
+                domain: 'session',
                 entityId: input.sessionId,
                 eventType: 'session.aborted',
                 payload: {
@@ -108,7 +117,8 @@ export const sessionRouter = router({
                     correlationId: ctx.correlationId,
                     origin: 'trpc.session.abort',
                 }),
-            });
+                })
+            );
         }
 
         return result;
@@ -138,8 +148,10 @@ export const sessionRouter = router({
 
         const result = await sessionHistoryService.revert(input.profileId, input.sessionId);
         if (result.reverted) {
-            await runtimeEventLogService.append({
+            await runtimeEventLogService.append(
+                runtimeUpsertEvent({
                 entityType: 'session',
+                domain: 'session',
                 entityId: input.sessionId,
                 eventType: 'session.reverted',
                 payload: {
@@ -151,7 +163,8 @@ export const sessionRouter = router({
                     correlationId: ctx.correlationId,
                     origin: 'trpc.session.revert',
                 }),
-            });
+                })
+            );
         }
 
         return result;
@@ -173,8 +186,10 @@ export const sessionRouter = router({
 
         const result = await sessionEditService.edit(input);
         if (result.edited) {
-            await runtimeEventLogService.append({
+            await runtimeEventLogService.append(
+                runtimeUpsertEvent({
                 entityType: 'session',
+                domain: 'session',
                 entityId: result.sessionId,
                 eventType: 'session.edited',
                 payload: {
@@ -190,7 +205,8 @@ export const sessionRouter = router({
                     correlationId: ctx.correlationId,
                     origin: 'trpc.session.edit',
                 }),
-            });
+                })
+            );
         }
 
         return result;

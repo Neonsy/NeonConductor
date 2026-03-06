@@ -1,4 +1,5 @@
 import { runStore, sessionStore } from '@/app/backend/persistence/stores';
+import { runtimeStatusEvent } from '@/app/backend/runtime/services/runtimeEventEnvelope';
 import { runtimeEventLogService } from '@/app/backend/runtime/services/runtimeEventLog';
 import { appLog } from '@/app/main/logging';
 
@@ -12,8 +13,10 @@ export async function moveRunToAbortedState(input: {
         status: 'aborted',
     });
     await sessionStore.markRunTerminal(input.profileId, input.sessionId, 'aborted');
-    await runtimeEventLogService.append({
+    await runtimeEventLogService.append(
+        runtimeStatusEvent({
         entityType: 'run',
+        domain: 'run',
         entityId: input.runId,
         eventType: 'run.aborted',
         payload: {
@@ -21,7 +24,8 @@ export async function moveRunToAbortedState(input: {
             sessionId: input.sessionId,
             profileId: input.profileId,
         },
-    });
+        })
+    );
     appLog.info({
         tag: 'run-execution',
         message: input.logMessage,
@@ -45,8 +49,10 @@ export async function moveRunToFailedState(input: {
         errorMessage: input.errorMessage,
     });
     await sessionStore.markRunTerminal(input.profileId, input.sessionId, 'error');
-    await runtimeEventLogService.append({
+    await runtimeEventLogService.append(
+        runtimeStatusEvent({
         entityType: 'run',
+        domain: 'run',
         entityId: input.runId,
         eventType: 'run.failed',
         payload: {
@@ -56,7 +62,8 @@ export async function moveRunToFailedState(input: {
             errorCode: input.errorCode,
             errorMessage: input.errorMessage,
         },
-    });
+        })
+    );
     appLog.warn({
         tag: 'run-execution',
         message: input.logMessage,

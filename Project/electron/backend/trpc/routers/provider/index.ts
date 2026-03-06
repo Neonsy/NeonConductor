@@ -21,6 +21,7 @@ import {
     providerStartAuthInputSchema,
     providerSyncCatalogInputSchema,
 } from '@/app/backend/runtime/contracts';
+import { runtimeStatusEvent, runtimeSyncEvent, runtimeUpsertEvent } from '@/app/backend/runtime/services/runtimeEventEnvelope';
 import { runtimeEventLogService } from '@/app/backend/runtime/services/runtimeEventLog';
 import { publicProcedure, router } from '@/app/backend/trpc/init';
 
@@ -99,8 +100,10 @@ export const providerRouter = router({
         if (result.isErr()) {
             throwWithCode(mapAuthErrorToOperationalCode(result.error.code), result.error.message);
         }
-        await runtimeEventLogService.append({
+        await runtimeEventLogService.append(
+            runtimeStatusEvent({
             entityType: 'provider',
+            domain: 'provider',
             entityId: input.providerId,
             eventType: 'provider.auth.started',
             payload: {
@@ -109,7 +112,8 @@ export const providerRouter = router({
                 method: input.method,
                 flowId: result.value.flow.id,
             },
-        });
+            })
+        );
 
         return result.value;
     }),
@@ -121,8 +125,10 @@ export const providerRouter = router({
         if (result.isErr()) {
             throwWithCode(mapAuthErrorToOperationalCode(result.error.code), result.error.message);
         }
-        await runtimeEventLogService.append({
+        await runtimeEventLogService.append(
+            runtimeStatusEvent({
             entityType: 'provider',
+            domain: 'provider',
             entityId: input.providerId,
             eventType: 'provider.auth.polled',
             payload: {
@@ -132,7 +138,8 @@ export const providerRouter = router({
                 flowStatus: result.value.flow.status,
                 authState: result.value.state.authState,
             },
-        });
+            })
+        );
 
         return result.value;
     }),
@@ -144,8 +151,10 @@ export const providerRouter = router({
         if (result.isErr()) {
             throwWithCode(mapAuthErrorToOperationalCode(result.error.code), result.error.message);
         }
-        await runtimeEventLogService.append({
+        await runtimeEventLogService.append(
+            runtimeStatusEvent({
             entityType: 'provider',
+            domain: 'provider',
             entityId: input.providerId,
             eventType: 'provider.auth.completed',
             payload: {
@@ -155,7 +164,8 @@ export const providerRouter = router({
                 flowStatus: result.value.flow.status,
                 authState: result.value.state.authState,
             },
-        });
+            })
+        );
 
         return result.value;
     }),
@@ -167,8 +177,10 @@ export const providerRouter = router({
         if (result.isErr()) {
             throwWithCode(mapAuthErrorToOperationalCode(result.error.code), result.error.message);
         }
-        await runtimeEventLogService.append({
+        await runtimeEventLogService.append(
+            runtimeStatusEvent({
             entityType: 'provider',
+            domain: 'provider',
             entityId: input.providerId,
             eventType: 'provider.auth.cancelled',
             payload: {
@@ -176,7 +188,8 @@ export const providerRouter = router({
                 providerId: input.providerId,
                 flowId: input.flowId,
             },
-        });
+            })
+        );
 
         return result.value;
     }),
@@ -189,8 +202,10 @@ export const providerRouter = router({
             throwWithCode(mapAuthErrorToOperationalCode(stateResult.error.code), stateResult.error.message);
         }
         const state = stateResult.value;
-        await runtimeEventLogService.append({
+        await runtimeEventLogService.append(
+            runtimeStatusEvent({
             entityType: 'provider',
+            domain: 'provider',
             entityId: input.providerId,
             eventType: 'provider.auth.refreshed',
             payload: {
@@ -198,7 +213,8 @@ export const providerRouter = router({
                 providerId: input.providerId,
                 authState: state.authState,
             },
-        });
+            })
+        );
 
         return { state };
     }),
@@ -234,8 +250,10 @@ export const providerRouter = router({
                 throwWithCode(endpointResult.error.code, endpointResult.error.message);
             }
             const endpointProfile = endpointResult.value;
-            await runtimeEventLogService.append({
+            await runtimeEventLogService.append(
+                runtimeUpsertEvent({
                 entityType: 'provider',
+                domain: 'provider',
                 entityId: input.providerId,
                 eventType: 'provider.endpoint-profile.set',
                 payload: {
@@ -243,7 +261,8 @@ export const providerRouter = router({
                     providerId: input.providerId,
                     value: endpointProfile.value,
                 },
-            });
+                })
+            );
 
             return { endpointProfile };
         }),
@@ -256,8 +275,10 @@ export const providerRouter = router({
         if (result.isErr()) {
             throwWithCode(mapAuthErrorToOperationalCode(result.error.code), result.error.message);
         }
-        await runtimeEventLogService.append({
+        await runtimeEventLogService.append(
+            runtimeUpsertEvent({
             entityType: 'provider',
+            domain: 'provider',
             entityId: input.providerId,
             eventType: 'provider.organization.set',
             payload: {
@@ -265,7 +286,8 @@ export const providerRouter = router({
                 providerId: input.providerId,
                 organizationId: input.organizationId ?? null,
             },
-        });
+            })
+        );
 
         return result.value;
     }),
@@ -280,8 +302,10 @@ export const providerRouter = router({
         .input(providerSetModelRoutingPreferenceInputSchema)
         .mutation(async ({ input }) => {
             const preference = await providerManagementService.setModelRoutingPreference(input);
-            await runtimeEventLogService.append({
+            await runtimeEventLogService.append(
+                runtimeUpsertEvent({
                 entityType: 'provider',
+                domain: 'provider',
                 entityId: input.providerId,
                 eventType: 'provider.kilo-routing.set',
                 payload: {
@@ -292,7 +316,8 @@ export const providerRouter = router({
                     sort: preference.sort ?? null,
                     pinnedProviderId: preference.pinnedProviderId ?? null,
                 },
-            });
+                })
+            );
 
             return { preference };
         }),
@@ -315,15 +340,18 @@ export const providerRouter = router({
             }
             throwWithCode(mapAuthErrorToOperationalCode(stateResult.error.code), stateResult.error.message);
         }
-        await runtimeEventLogService.append({
+        await runtimeEventLogService.append(
+            runtimeUpsertEvent({
             entityType: 'provider',
+            domain: 'provider',
             entityId: input.providerId,
             eventType: 'provider.auth.api-key-set',
             payload: {
                 profileId: input.profileId,
                 providerId: input.providerId,
             },
-        });
+            })
+        );
 
         return {
             success: true as const,
@@ -345,15 +373,18 @@ export const providerRouter = router({
             }
             throwWithCode(mapAuthErrorToOperationalCode(clearResult.error.code), clearResult.error.message);
         }
-        await runtimeEventLogService.append({
+        await runtimeEventLogService.append(
+            runtimeStatusEvent({
             entityType: 'provider',
+            domain: 'provider',
             entityId: input.providerId,
             eventType: 'provider.auth.cleared',
             payload: {
                 profileId: input.profileId,
                 providerId: input.providerId,
             },
-        });
+            })
+        );
 
         return {
             success: true as const,
@@ -378,8 +409,10 @@ export const providerRouter = router({
             }
             throwWithCode(result.error.code, result.error.message);
         }
-        await runtimeEventLogService.append({
+        await runtimeEventLogService.append(
+            runtimeSyncEvent({
             entityType: 'provider',
+            domain: 'provider',
             entityId: input.providerId,
             eventType: 'provider.catalog.sync',
             payload: {
@@ -390,15 +423,18 @@ export const providerRouter = router({
                 reason: result.value.reason ?? null,
                 modelCount: result.value.modelCount,
             },
-        });
+            })
+        );
         return result.value;
     }),
     setDefault: publicProcedure.input(providerSetDefaultInputSchema).mutation(async ({ input }) => {
         const result = await providerManagementService.setDefault(input.profileId, input.providerId, input.modelId);
 
         if (result.success) {
-            await runtimeEventLogService.append({
+            await runtimeEventLogService.append(
+                runtimeUpsertEvent({
                 entityType: 'provider',
+                domain: 'provider',
                 entityId: input.providerId,
                 eventType: 'provider.default-set',
                 payload: {
@@ -406,7 +442,8 @@ export const providerRouter = router({
                     providerId: input.providerId,
                     modelId: input.modelId,
                 },
-            });
+                })
+            );
         }
 
         return result;

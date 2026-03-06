@@ -16,6 +16,7 @@ import type {
 } from '@/app/backend/runtime/services/runExecution/types';
 import { mergeUsage } from '@/app/backend/runtime/services/runExecution/usage';
 import type { UsageAccumulator } from '@/app/backend/runtime/services/runExecution/usage';
+import { runtimeStatusEvent } from '@/app/backend/runtime/services/runtimeEventEnvelope';
 import { runtimeEventLogService } from '@/app/backend/runtime/services/runtimeEventLog';
 import { threadTitleService } from '@/app/backend/runtime/services/threadTitle/service';
 
@@ -169,8 +170,10 @@ export async function executeRun(input: ExecuteRunInput): Promise<RunExecutionRe
         modelId: input.modelId,
     });
 
-    await runtimeEventLogService.append({
+    await runtimeEventLogService.append(
+        runtimeStatusEvent({
         entityType: 'run',
+        domain: 'run',
         entityId: input.runId,
         eventType: 'run.completed',
         payload: {
@@ -178,7 +181,8 @@ export async function executeRun(input: ExecuteRunInput): Promise<RunExecutionRe
             sessionId: input.sessionId,
             profileId: input.profileId,
         },
-    });
+        })
+    );
 
     const usageRecordInput: RunUsageWriteInput = {
         runId: input.runId,
@@ -197,15 +201,18 @@ export async function executeRun(input: ExecuteRunInput): Promise<RunExecutionRe
 
     const recordedUsage = await runUsageStore.upsert(usageRecordInput);
 
-    await runtimeEventLogService.append({
+    await runtimeEventLogService.append(
+        runtimeStatusEvent({
         entityType: 'run',
+        domain: 'run',
         entityId: input.runId,
         eventType: 'run.usage.recorded',
         payload: {
             runId: input.runId,
             usage: recordedUsage,
         },
-    });
+        })
+    );
 
     return okRunExecution(undefined);
 }

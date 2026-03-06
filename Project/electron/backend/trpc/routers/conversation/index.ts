@@ -13,6 +13,7 @@ import {
     conversationUpsertTagInputSchema,
 } from '@/app/backend/runtime/contracts';
 import { eventMetadata } from '@/app/backend/runtime/services/common/logContext';
+import { runtimeUpsertEvent } from '@/app/backend/runtime/services/runtimeEventEnvelope';
 import { runtimeEventLogService } from '@/app/backend/runtime/services/runtimeEventLog';
 import { publicProcedure, router } from '@/app/backend/trpc/init';
 import { toTrpcError } from '@/app/backend/trpc/trpcErrorMap';
@@ -133,8 +134,10 @@ export const conversationRouter = router({
             throw toTrpcError(thread.error);
         }
 
-        await runtimeEventLogService.append({
+        await runtimeEventLogService.append(
+            runtimeUpsertEvent({
             entityType: 'thread',
+            domain: 'thread',
             entityId: thread.value.id,
             eventType: 'conversation.thread.created',
             payload: {
@@ -147,7 +150,8 @@ export const conversationRouter = router({
                 correlationId: ctx.correlationId,
                 origin: 'trpc.conversation.createThread',
             }),
-        });
+            })
+        );
 
         return {
             bucket: bucket.value,
@@ -166,8 +170,10 @@ export const conversationRouter = router({
             };
         }
 
-        await runtimeEventLogService.append({
+        await runtimeEventLogService.append(
+            runtimeUpsertEvent({
             entityType: 'thread',
+            domain: 'thread',
             entityId: thread.value.id,
             eventType: 'conversation.thread.renamed',
             payload: {
@@ -179,7 +185,8 @@ export const conversationRouter = router({
                 correlationId: ctx.correlationId,
                 origin: 'trpc.conversation.renameThread',
             }),
-        });
+            })
+        );
 
         return {
             renamed: true as const,
@@ -197,8 +204,10 @@ export const conversationRouter = router({
     }),
     setThreadTags: publicProcedure.input(conversationSetThreadTagsInputSchema).mutation(async ({ input, ctx }) => {
         const threadTags = await tagStore.setThreadTags(input.profileId, input.threadId, input.tagIds);
-        await runtimeEventLogService.append({
+        await runtimeEventLogService.append(
+            runtimeUpsertEvent({
             entityType: 'thread',
+            domain: 'thread',
             entityId: input.threadId,
             eventType: 'conversation.thread.tags.updated',
             payload: {
@@ -211,7 +220,8 @@ export const conversationRouter = router({
                 correlationId: ctx.correlationId,
                 origin: 'trpc.conversation.setThreadTags',
             }),
-        });
+            })
+        );
 
         return {
             threadTags,

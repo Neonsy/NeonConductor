@@ -345,14 +345,14 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
         confirm?: boolean;
     }>();
 
-    expectTypeOf<Inputs['runtime']['getSnapshot']>().toExtend<{
+    expectTypeOf<Inputs['runtime']['getDiagnosticSnapshot']>().toExtend<{
         profileId: string;
     }>();
     expectTypeOf<Inputs['runtime']['getShellBootstrap']>().toExtend<{
         profileId: string;
     }>();
 
-    expectTypeOf<Outputs['runtime']['getSnapshot']>().toExtend<{
+    expectTypeOf<Outputs['runtime']['getDiagnosticSnapshot']>().toExtend<{
         generatedAt: string;
         lastSequence: number;
         activeProfileId: string;

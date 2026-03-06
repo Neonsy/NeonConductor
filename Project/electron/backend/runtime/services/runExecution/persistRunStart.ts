@@ -2,6 +2,7 @@ import { messageStore, runStore, sessionStore } from '@/app/backend/persistence/
 import { eventMetadata } from '@/app/backend/runtime/services/common/logContext';
 import { emitCacheResolutionEvent, emitTransportSelectionEvent } from '@/app/backend/runtime/services/runExecution/eventing';
 import type { PreparedRunStart, StartRunInput } from '@/app/backend/runtime/services/runExecution/types';
+import { runtimeStatusEvent } from '@/app/backend/runtime/services/runtimeEventEnvelope';
 import { runtimeEventLogService } from '@/app/backend/runtime/services/runtimeEventLog';
 
 export async function persistRunStart(input: {
@@ -53,8 +54,10 @@ export async function persistRunStart(input: {
         role: 'assistant',
     });
 
-    await runtimeEventLogService.append({
+    await runtimeEventLogService.append(
+        runtimeStatusEvent({
         entityType: 'run',
+        domain: 'run',
         entityId: run.id,
         eventType: 'run.mode.context',
         payload: {
@@ -75,10 +78,13 @@ export async function persistRunStart(input: {
             correlationId: input.input.correlationId,
             origin: 'runtime.runExecution.startRun',
         }),
-    });
+        })
+    );
 
-    await runtimeEventLogService.append({
+    await runtimeEventLogService.append(
+        runtimeStatusEvent({
         entityType: 'run',
+        domain: 'run',
         entityId: run.id,
         eventType: 'run.started',
         payload: {
@@ -91,7 +97,8 @@ export async function persistRunStart(input: {
             correlationId: input.input.correlationId,
             origin: 'runtime.runExecution.startRun',
         }),
-    });
+        })
+    );
 
     await emitCacheResolutionEvent({
         runId: run.id,

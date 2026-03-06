@@ -1,6 +1,7 @@
 import { mcpStore } from '@/app/backend/persistence/stores';
 import type { McpServerRecord } from '@/app/backend/persistence/types';
 import { mcpByServerInputSchema } from '@/app/backend/runtime/contracts';
+import { runtimeStatusEvent } from '@/app/backend/runtime/services/runtimeEventEnvelope';
 import { runtimeEventLogService } from '@/app/backend/runtime/services/runtimeEventLog';
 import { publicProcedure, router } from '@/app/backend/trpc/init';
 
@@ -36,8 +37,10 @@ export const mcpRouter = router({
             return { connected: false, reason: 'not_found' as const };
         }
 
-        await runtimeEventLogService.append({
+        await runtimeEventLogService.append(
+            runtimeStatusEvent({
             entityType: 'mcp',
+            domain: 'mcp',
             entityId: server.id,
             eventType: 'mcp.lifecycle.unsupported',
             payload: {
@@ -46,7 +49,8 @@ export const mcpRouter = router({
                 reason: 'not_implemented',
                 message: 'MCP connect is not implemented yet.',
             },
-        });
+            })
+        );
 
         return {
             connected: false,
@@ -59,8 +63,10 @@ export const mcpRouter = router({
             return { disconnected: false, reason: 'not_found' as const };
         }
 
-        await runtimeEventLogService.append({
+        await runtimeEventLogService.append(
+            runtimeStatusEvent({
             entityType: 'mcp',
+            domain: 'mcp',
             entityId: server.id,
             eventType: 'mcp.lifecycle.unsupported',
             payload: {
@@ -69,7 +75,8 @@ export const mcpRouter = router({
                 reason: 'not_implemented',
                 message: 'MCP disconnect is not implemented yet.',
             },
-        });
+            })
+        );
 
         return {
             disconnected: false,

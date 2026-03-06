@@ -2,6 +2,10 @@ import { messageStore } from '@/app/backend/persistence/stores';
 import type { ProviderRuntimePart, ProviderRuntimeTransportSelection } from '@/app/backend/providers/types';
 import { isReasoningPart } from '@/app/backend/runtime/services/runExecution/parts';
 import type { RunCacheResolution } from '@/app/backend/runtime/services/runExecution/types';
+import {
+    runtimeAppendEvent,
+    runtimeStatusEvent,
+} from '@/app/backend/runtime/services/runtimeEventEnvelope';
 import { runtimeEventLogService } from '@/app/backend/runtime/services/runtimeEventLog';
 
 export async function emitCacheResolutionEvent(input: {
@@ -10,8 +14,10 @@ export async function emitCacheResolutionEvent(input: {
     sessionId: string;
     cache: RunCacheResolution;
 }): Promise<void> {
-    await runtimeEventLogService.append({
+    await runtimeEventLogService.append(
+        runtimeStatusEvent({
         entityType: 'run',
+        domain: 'run',
         entityId: input.runId,
         eventType: input.cache.applied ? 'run.cache.applied' : 'run.cache.skipped',
         payload: {
@@ -20,7 +26,8 @@ export async function emitCacheResolutionEvent(input: {
             sessionId: input.sessionId,
             cache: input.cache,
         },
-    });
+        })
+    );
 }
 
 export async function emitTransportSelectionEvent(input: {
@@ -29,8 +36,10 @@ export async function emitTransportSelectionEvent(input: {
     sessionId: string;
     selection: ProviderRuntimeTransportSelection;
 }): Promise<void> {
-    await runtimeEventLogService.append({
+    await runtimeEventLogService.append(
+        runtimeStatusEvent({
         entityType: 'run',
+        domain: 'run',
         entityId: input.runId,
         eventType: 'run.transport.selected',
         payload: {
@@ -39,7 +48,8 @@ export async function emitTransportSelectionEvent(input: {
             sessionId: input.sessionId,
             transport: input.selection,
         },
-    });
+        })
+    );
 }
 
 export async function emitPartEvents(input: {
@@ -55,8 +65,10 @@ export async function emitPartEvents(input: {
         payload: input.part.payload,
     });
 
-    await runtimeEventLogService.append({
+    await runtimeEventLogService.append(
+        runtimeAppendEvent({
         entityType: 'run',
+        domain: 'messagePart',
         entityId: input.runId,
         eventType: 'run.part.appended',
         payload: {
@@ -64,11 +76,14 @@ export async function emitPartEvents(input: {
             messageId: input.messageId,
             part: appended,
         },
-    });
+        })
+    );
 
     if (isReasoningPart(input.part.partType)) {
-        await runtimeEventLogService.append({
+        await runtimeEventLogService.append(
+            runtimeAppendEvent({
             entityType: 'run',
+            domain: 'messagePart',
             entityId: input.runId,
             eventType: 'run.reasoning.appended',
             payload: {
@@ -78,6 +93,7 @@ export async function emitPartEvents(input: {
                 partType: input.part.partType,
                 part: appended,
             },
-        });
+            })
+        );
     }
 }
