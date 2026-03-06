@@ -21,6 +21,7 @@ import {
     threadStore,
     toolStore,
 } from '@/app/backend/persistence/stores';
+import { sessionHistoryService } from '@/app/backend/runtime/services/sessionHistory/service';
 
 describe('persistence stores', () => {
     beforeEach(() => {
@@ -92,7 +93,7 @@ describe('persistence stores', () => {
         }
         expect(status.session.runStatus).toBe('completed');
 
-        const reverted = await sessionStore.revert(profileId, session.session.id);
+        const reverted = await sessionHistoryService.revert(profileId, session.session.id);
         expect(reverted.reverted).toBe(true);
     });
 

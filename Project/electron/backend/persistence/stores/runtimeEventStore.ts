@@ -2,24 +2,9 @@ import { getPersistence } from '@/app/backend/persistence/db';
 import { parseEntityId, parseEnumValue, parseJsonRecord } from '@/app/backend/persistence/stores/rowParsers';
 import { nowIso } from '@/app/backend/persistence/stores/utils';
 import type { RuntimeEntityType, RuntimeEventRecordV1 } from '@/app/backend/persistence/types';
+import { runtimeEntityTypes } from '@/app/backend/persistence/types';
 import { createEntityId } from '@/app/backend/runtime/contracts';
-
-const runtimeEntityTypes = [
-    'session',
-    'run',
-    'profile',
-    'permission',
-    'provider',
-    'tool',
-    'mcp',
-    'runtime',
-    'conversation',
-    'thread',
-    'tag',
-    'diff',
-    'plan',
-    'orchestrator',
-] as const;
+import { classifyRuntimeEventEnvelope } from '@/app/backend/runtime/services/runtimeEventEnvelope';
 
 export class RuntimeEventStore {
     async append(event: {
@@ -45,10 +30,18 @@ export class RuntimeEventStore {
             .returning(['sequence', 'event_id', 'entity_type', 'entity_id', 'event_type', 'payload_json', 'created_at'])
             .executeTakeFirstOrThrow();
 
+        const entityType = parseEnumValue(inserted.entity_type, 'runtime_events.entity_type', runtimeEntityTypes);
+        const envelope = classifyRuntimeEventEnvelope({
+            entityType,
+            eventType: inserted.event_type,
+        });
+
         return {
             sequence: inserted.sequence,
             eventId: parseEntityId(inserted.event_id, 'runtime_events.event_id', 'evt'),
-            entityType: parseEnumValue(inserted.entity_type, 'runtime_events.entity_type', runtimeEntityTypes),
+            entityType,
+            domain: envelope.domain,
+            operation: envelope.operation,
             entityId: inserted.entity_id,
             eventType: inserted.event_type,
             payload: parseJsonRecord(inserted.payload_json),
@@ -71,15 +64,25 @@ export class RuntimeEventStore {
 
         const rows = await query.execute();
 
-        return rows.map((row) => ({
-            sequence: row.sequence,
-            eventId: parseEntityId(row.event_id, 'runtime_events.event_id', 'evt'),
-            entityType: parseEnumValue(row.entity_type, 'runtime_events.entity_type', runtimeEntityTypes),
-            entityId: row.entity_id,
-            eventType: row.event_type,
-            payload: parseJsonRecord(row.payload_json),
-            createdAt: row.created_at,
-        }));
+        return rows.map((row) => {
+            const entityType = parseEnumValue(row.entity_type, 'runtime_events.entity_type', runtimeEntityTypes);
+            const envelope = classifyRuntimeEventEnvelope({
+                entityType,
+                eventType: row.event_type,
+            });
+
+            return {
+                sequence: row.sequence,
+                eventId: parseEntityId(row.event_id, 'runtime_events.event_id', 'evt'),
+                entityType,
+                domain: envelope.domain,
+                operation: envelope.operation,
+                entityId: row.entity_id,
+                eventType: row.event_type,
+                payload: parseJsonRecord(row.payload_json),
+                createdAt: row.created_at,
+            };
+        });
     }
 
     async getLastSequence(): Promise<number> {

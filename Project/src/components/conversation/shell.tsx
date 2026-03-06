@@ -1,25 +1,25 @@
-import { useEffect, useState } from 'react';
+import { useEffectEvent, useState } from 'react';
 
 import { useConversationShellMutations } from '@/web/components/conversation/conversationShellMutations';
 import { buildConversationShellPlanOrchestrator } from '@/web/components/conversation/conversationShellPlanOrchestrator';
 import { useConversationShellQueries } from '@/web/components/conversation/conversationShellQueries';
 import { useConversationShellRunTarget } from '@/web/components/conversation/conversationShellRunTarget';
+import { ConversationShellSidebarPane } from '@/web/components/conversation/conversationShellSidebarPane';
+import { useConversationShellSync } from '@/web/components/conversation/conversationShellSync';
+import { ConversationShellWorkspaceSection } from '@/web/components/conversation/conversationShellWorkspaceSection';
 import { useConversationUiState } from '@/web/components/conversation/hooks/useConversationUiState';
 import { useSessionRunSelection } from '@/web/components/conversation/hooks/useSessionRunSelection';
 import { useThreadSidebarState } from '@/web/components/conversation/hooks/useThreadSidebarState';
 import type { MessageTimelineEntry } from '@/web/components/conversation/messageTimelineModel';
 import { MessageEditDialog } from '@/web/components/conversation/panels/messageEditDialog';
 import { ModeExecutionPanel } from '@/web/components/conversation/panels/modeExecutionPanel';
-import { SessionWorkspacePanel } from '@/web/components/conversation/sessionWorkspacePanel';
 import { toEditFailureMessage, type PendingMessageEdit } from '@/web/components/conversation/shellEditFlow';
 import { DEFAULT_RUN_OPTIONS, isEntityId, isProviderId } from '@/web/components/conversation/shellHelpers';
 import { submitPrompt as submitPromptFromComposer } from '@/web/components/conversation/shellPromptSubmit';
-import { resolveTabSwitchNotice } from '@/web/components/conversation/shellTabSwitch';
-import { ConversationSidebar } from '@/web/components/conversation/sidebar';
 import { useRuntimeEventStreamStore } from '@/web/lib/runtime/eventStream';
 import { trpc } from '@/web/trpc/client';
 
-import type { EntityId, RuntimeProviderId, TopLevelTab } from '@/app/backend/runtime/contracts';
+import type { RuntimeProviderId, TopLevelTab } from '@/app/backend/runtime/contracts';
 
 interface ConversationShellProps {
     profileId: string;
@@ -46,68 +46,21 @@ export function ConversationShell({ profileId, topLevelTab, modeKey, onTopLevelT
         topLevelTab,
     });
     const mutations = useConversationShellMutations();
-
-    useEffect(() => {
+    const resetForProfile = useEffectEvent(() => {
         setPrompt('');
         setRunSubmitError(undefined);
         setTabSwitchNotice(undefined);
         setSessionTargetBySessionId({});
-    }, [profileId]);
+    });
 
-    useEffect(() => {
-        if (uiState.sort || !queries.listThreadsQuery.data?.sort) {
-            return;
-        }
-
-        uiState.setSort(queries.listThreadsQuery.data.sort);
-    }, [queries.listThreadsQuery.data?.sort, uiState]);
-
-    useEffect(() => {
-        if (queries.listThreadsQuery.data?.showAllModes === undefined) {
-            return;
-        }
-        if (uiState.showAllModes === queries.listThreadsQuery.data.showAllModes) {
-            return;
-        }
-        uiState.setShowAllModes(queries.listThreadsQuery.data.showAllModes);
-    }, [queries.listThreadsQuery.data?.showAllModes, uiState]);
-
-    useEffect(() => {
-        const nextGroupView = queries.listThreadsQuery.data?.groupView;
-        if (!nextGroupView) {
-            return;
-        }
-        if (uiState.groupView === nextGroupView) {
-            return;
-        }
-        uiState.setGroupView(nextGroupView);
-    }, [queries.listThreadsQuery.data?.groupView, uiState]);
-
-    useEffect(() => {
-        const selectedTagId = uiState.selectedTagId;
-        if (!selectedTagId) {
-            return;
-        }
-
-        const tagExists = (queries.listTagsQuery.data?.tags ?? []).some((tag) => tag.id === selectedTagId);
-        if (!tagExists) {
-            uiState.setSelectedTagId(undefined);
-        }
-    }, [queries.listTagsQuery.data?.tags, uiState]);
-
-    useEffect(() => {
-        const workspaceFilter = uiState.workspaceFilter;
-        if (!workspaceFilter) {
-            return;
-        }
-
-        const workspaceExists = (queries.listBucketsQuery.data?.buckets ?? [])
-            .filter((bucket) => bucket.scope === 'workspace')
-            .some((bucket) => bucket.workspaceFingerprint === workspaceFilter);
-        if (!workspaceExists) {
-            uiState.setWorkspaceFilter(undefined);
-        }
-    }, [queries.listBucketsQuery.data?.buckets, uiState]);
+    useConversationShellSync({
+        profileId,
+        uiState,
+        threads: queries.listThreadsQuery.data,
+        tags: queries.listTagsQuery.data?.tags,
+        buckets: queries.listBucketsQuery.data?.buckets,
+        onProfileReset: resetForProfile,
+    });
 
     const streamState = useRuntimeEventStreamStore((state) => state.connectionState);
 
@@ -150,11 +103,8 @@ export function ConversationShell({ profileId, topLevelTab, modeKey, onTopLevelT
         },
     });
 
-    const selectedThreadId = uiState.selectedThreadId;
     const selectedSessionId = uiState.selectedSessionId;
     const selectedRunId = uiState.selectedRunId;
-    const selectedTagId = uiState.selectedTagId;
-    const workspaceFilter = uiState.workspaceFilter;
     const sessionOverride = selectedSessionId ? sessionTargetBySessionId[selectedSessionId] : undefined;
     const runTargetState = useConversationShellRunTarget({
         providers: queries.shellBootstrapQuery.data?.providers ?? [],
@@ -226,269 +176,206 @@ export function ConversationShell({ profileId, topLevelTab, modeKey, onTopLevelT
 
     return (
         <main className='bg-background flex min-h-0 flex-1 overflow-hidden'>
-            <ConversationSidebar
+            <ConversationShellSidebarPane
+                profileId={profileId}
+                topLevelTab={topLevelTab}
                 buckets={queries.listBucketsQuery.data?.buckets ?? []}
                 threads={sidebarState.visibleThreads}
                 tags={queries.listTagsQuery.data?.tags ?? []}
                 threadTagIdsByThread={sidebarState.threadTagIdsByThread}
-                topLevelTab={topLevelTab}
-                {...(selectedThreadId ? { selectedThreadId } : {})}
-                {...(selectedTagId ? { selectedTagId } : {})}
+                selectedThreadId={uiState.selectedThreadId}
+                selectedTagId={uiState.selectedTagId}
                 scopeFilter={uiState.scopeFilter}
-                {...(workspaceFilter ? { workspaceFilter } : {})}
+                workspaceFilter={uiState.workspaceFilter}
                 sort={uiState.sort ?? 'latest'}
                 showAllModes={uiState.showAllModes}
                 groupView={uiState.groupView}
                 isCreatingThread={mutations.createThreadMutation.isPending}
                 isAddingTag={mutations.upsertTagMutation.isPending || mutations.setThreadTagsMutation.isPending}
-                onSelectThread={(threadId) => {
-                    const targetThread = sidebarState.visibleThreads.find((thread) => thread.id === threadId);
-                    const nextTab = targetThread?.topLevelTab ?? topLevelTab;
-                    const switchState = resolveTabSwitchNotice(topLevelTab, nextTab);
-                    if (switchState.shouldSwitch) {
-                        onTopLevelTabChange(nextTab);
-                        setTabSwitchNotice(switchState.notice);
-                        window.setTimeout(() => {
-                            setTabSwitchNotice(undefined);
-                        }, 2200);
-                    } else {
-                        setTabSwitchNotice(undefined);
-                    }
-                    uiState.setSelectedThreadId(threadId);
-                }}
-                onToggleTagFilter={(tagId) => {
-                    uiState.setSelectedTagId((current) => (current === tagId ? undefined : tagId));
-                }}
-                onScopeFilterChange={(nextScope) => {
-                    uiState.setScopeFilter(nextScope);
-                    if (nextScope !== 'workspace') {
-                        uiState.setWorkspaceFilter(undefined);
-                    }
-                }}
+                onTopLevelTabChange={onTopLevelTabChange}
+                onSetTabSwitchNotice={setTabSwitchNotice}
+                onSelectThreadId={uiState.setSelectedThreadId}
+                onSelectSessionId={uiState.setSelectedSessionId}
+                onSelectRunId={uiState.setSelectedRunId}
+                onSelectTagId={uiState.setSelectedTagId}
+                onScopeFilterChange={uiState.setScopeFilter}
                 onWorkspaceFilterChange={uiState.setWorkspaceFilter}
-                onSortChange={(nextSort) => {
-                    uiState.setSort(nextSort);
-                }}
-                onShowAllModesChange={(nextShowAllModes) => {
-                    uiState.setShowAllModes(nextShowAllModes);
-                }}
-                onGroupViewChange={(nextGroupView) => {
-                    uiState.setGroupView(nextGroupView);
-                }}
-                onCreateThread={async (input) => {
-                    const result = await mutations.createThreadMutation.mutateAsync({
-                        profileId,
-                        topLevelTab,
-                        ...input,
-                    });
-                    uiState.setSelectedThreadId(result.thread.id);
-                    uiState.setSelectedSessionId(undefined);
-                    uiState.setSelectedRunId(undefined);
-                    void queries.listBucketsQuery.refetch();
-                    void queries.listThreadsQuery.refetch();
-                }}
-                onAddTagToThread={async (threadId, label) => {
-                    if (!isEntityId(threadId, 'thr')) {
-                        return;
-                    }
-
-                    const upserted = await mutations.upsertTagMutation.mutateAsync({
-                        profileId,
-                        label,
-                    });
-                    const existing = sidebarState.threadTagIdsByThread.get(threadId) ?? [];
-                    const nextTagIds = [...new Set([...existing, upserted.tag.id])];
-                    const validTagIds = nextTagIds.filter((tagId): tagId is EntityId<'tag'> =>
-                        isEntityId(tagId, 'tag')
-                    );
-                    if (validTagIds.length !== nextTagIds.length) {
-                        return;
-                    }
-
-                    await mutations.setThreadTagsMutation.mutateAsync({
-                        profileId,
-                        threadId,
-                        tagIds: validTagIds,
-                    });
-                    void queries.listTagsQuery.refetch();
-                    void queries.shellBootstrapQuery.refetch();
-                }}
+                onSortChange={uiState.setSort}
+                onShowAllModesChange={uiState.setShowAllModes}
+                onGroupViewChange={uiState.setGroupView}
+                createThread={mutations.createThreadMutation.mutateAsync}
+                upsertTag={mutations.upsertTagMutation.mutateAsync}
+                setThreadTags={mutations.setThreadTagsMutation.mutateAsync}
+                refetchBuckets={queries.listBucketsQuery.refetch}
+                refetchThreads={queries.listThreadsQuery.refetch}
+                refetchTags={queries.listTagsQuery.refetch}
+                refetchShellBootstrap={queries.shellBootstrapQuery.refetch}
             />
 
-            <section className='flex min-h-0 flex-1 flex-col'>
-                <header className='border-border flex items-center justify-between border-b px-4 py-3'>
-                    <div className='min-w-0'>
-                        <p className='truncate text-sm font-semibold'>
-                            {selectedThread?.title ?? 'No Thread Selected'}
-                        </p>
-                        <p className='text-muted-foreground text-xs'>
-                            Stream: {streamState} · Events: {queries.shellBootstrapQuery.data?.lastSequence ?? 0}
-                        </p>
-                        {tabSwitchNotice ? <p className='text-primary text-xs'>{tabSwitchNotice}</p> : null}
-                    </div>
-                </header>
-
-                <SessionWorkspacePanel
-                    sessions={sessionRunSelection.sessions}
-                    runs={sessionRunSelection.runs}
-                    messages={sessionRunSelection.messages}
-                    partsByMessageId={sessionRunSelection.partsByMessageId}
-                    {...(selectedSessionId ? { selectedSessionId } : {})}
-                    {...(selectedRunId ? { selectedRunId } : {})}
-                    prompt={prompt}
-                    isCreatingSession={mutations.createSessionMutation.isPending}
-                    isStartingRun={mutations.startRunMutation.isPending || mutations.planStartMutation.isPending}
-                    canCreateSession={Boolean(selectedThreadId)}
-                    selectedProviderId={runTargetState.selectedProviderIdForComposer}
-                    selectedModelId={runTargetState.selectedModelIdForComposer}
-                    {...(routingBadge !== undefined ? { routingBadge } : {})}
-                    providerOptions={runTargetState.providerOptions}
-                    modelOptions={runTargetState.modelOptions}
-                    runErrorMessage={runSubmitError}
-                    onSelectSession={(sessionId) => {
-                        setRunSubmitError(undefined);
-                        uiState.setSelectedSessionId(sessionId);
-                    }}
-                    onSelectRun={(runId) => {
-                        uiState.setSelectedRunId(runId);
-                    }}
-                    onProviderChange={(providerId) => {
-                        if (!selectedSessionId || !isProviderId(providerId)) {
-                            return;
-                        }
-
-                        const firstModelId = runTargetState.modelsByProvider.get(providerId)?.at(0)?.id;
-                        setSessionTargetBySessionId((current) => ({
-                            ...current,
-                            [selectedSessionId]: {
-                                providerId,
-                                ...(firstModelId ? { modelId: firstModelId } : {}),
-                            },
-                        }));
-                        setRunSubmitError(undefined);
-                    }}
-                    onModelChange={(modelId) => {
-                        const providerId = runTargetState.selectedProviderIdForComposer;
-                        if (!selectedSessionId || !providerId || modelId.trim().length === 0) {
-                            return;
-                        }
-
-                        setSessionTargetBySessionId((current) => ({
-                            ...current,
-                            [selectedSessionId]: {
-                                providerId,
-                                modelId,
-                            },
-                        }));
-                        setRunSubmitError(undefined);
-                    }}
-                    onCreateSession={() => {
-                        if (!isEntityId(selectedThreadId, 'thr')) {
-                            return;
-                        }
-
-                        void mutations.createSessionMutation
-                            .mutateAsync({
-                                profileId,
-                                threadId: selectedThreadId,
-                                kind: 'local',
-                            })
-                            .then((result) => {
-                                if (!result.created) {
-                                    setRunSubmitError('Selected thread no longer exists.');
-                                    return;
-                                }
-                                uiState.setSelectedSessionId(result.session.id);
-                                uiState.setSelectedRunId(undefined);
-                                setRunSubmitError(undefined);
-                                void queries.sessionsQuery.refetch();
-                                void queries.listThreadsQuery.refetch();
-                            });
-                    }}
-                    onPromptChange={(nextPrompt) => {
-                        setRunSubmitError(undefined);
-                        setPrompt(nextPrompt);
-                    }}
-                    onSubmitPrompt={() => {
-                        void submitPromptFromComposer({
-                            prompt,
-                            isStartingRun: mutations.startRunMutation.isPending,
-                            selectedSessionId,
-                            isPlanningMode,
-                            profileId,
-                            topLevelTab,
-                            modeKey,
-                            workspaceFingerprint: selectedThread?.workspaceFingerprint,
-                            resolvedRunTarget: runTargetState.resolvedRunTarget,
-                            runtimeOptions: DEFAULT_RUN_OPTIONS,
-                            providerById: runTargetState.providerById,
-                            startPlan: mutations.planStartMutation.mutateAsync,
-                            startRun: mutations.startRunMutation.mutateAsync,
-                            onPromptCleared: () => {
-                                setRunSubmitError(undefined);
-                                setPrompt('');
-                            },
-                            onPlanRefetch: () => {
-                                void queries.activePlanQuery.refetch();
-                            },
-                            onRuntimeRefetch: () => {
-                                void queries.sessionsQuery.refetch();
-                                void queries.runsQuery.refetch();
-                                void queries.messagesQuery.refetch();
-                                void queries.listThreadsQuery.refetch();
-                            },
-                            onError: (message) => {
-                                setRunSubmitError(message);
-                            },
-                        });
-                    }}
-                    onEditMessage={(entry: MessageTimelineEntry) => {
-                        if (!isEntityId(entry.id, 'msg')) {
-                            return;
-                        }
-                        const editableText = entry.editableText?.trim();
-                        if (!editableText) {
-                            return;
-                        }
-                        setPendingMessageEdit({
-                            messageId: entry.id,
-                            initialText: editableText,
-                        });
-                    }}
-                    onBranchFromMessage={(entry: MessageTimelineEntry) => {
-                        if (!isEntityId(entry.id, 'msg')) {
-                            return;
-                        }
-                        const editableText = entry.editableText?.trim();
-                        if (!editableText) {
-                            return;
-                        }
-                        setPendingMessageEdit({
-                            messageId: entry.id,
-                            initialText: editableText,
-                            forcedMode: 'branch',
-                        });
-                    }}
-                    modePanel={
-                        <ModeExecutionPanel
-                            topLevelTab={topLevelTab}
-                            modeKey={modeKey}
-                            isLoadingPlan={queries.activePlanQuery.isLoading}
-                            isPlanMutating={planOrchestrator.isPlanMutating}
-                            isOrchestratorMutating={planOrchestrator.isOrchestratorMutating}
-                            onAnswerQuestion={planOrchestrator.onAnswerQuestion}
-                            onRevisePlan={planOrchestrator.onRevisePlan}
-                            onApprovePlan={planOrchestrator.onApprovePlan}
-                            onImplementPlan={planOrchestrator.onImplementPlan}
-                            onAbortOrchestrator={planOrchestrator.onAbortOrchestrator}
-                            {...(planOrchestrator.activePlan ? { activePlan: planOrchestrator.activePlan } : {})}
-                            {...(planOrchestrator.orchestratorView
-                                ? { orchestratorView: planOrchestrator.orchestratorView }
-                                : {})}
-                        />
+            <ConversationShellWorkspaceSection
+                selectedThread={selectedThread}
+                selectedSessionId={selectedSessionId}
+                selectedRunId={selectedRunId}
+                streamState={streamState}
+                lastSequence={queries.shellBootstrapQuery.data?.lastSequence ?? 0}
+                tabSwitchNotice={tabSwitchNotice}
+                sessions={sessionRunSelection.sessions}
+                runs={sessionRunSelection.runs}
+                messages={sessionRunSelection.messages}
+                partsByMessageId={sessionRunSelection.partsByMessageId}
+                prompt={prompt}
+                isCreatingSession={mutations.createSessionMutation.isPending}
+                isStartingRun={mutations.startRunMutation.isPending || mutations.planStartMutation.isPending}
+                canCreateSession={Boolean(uiState.selectedThreadId)}
+                selectedProviderId={runTargetState.selectedProviderIdForComposer}
+                selectedModelId={runTargetState.selectedModelIdForComposer}
+                routingBadge={routingBadge}
+                providerOptions={runTargetState.providerOptions}
+                modelOptions={runTargetState.modelOptions}
+                runErrorMessage={runSubmitError}
+                onSelectSession={(sessionId) => {
+                    setRunSubmitError(undefined);
+                    uiState.setSelectedSessionId(sessionId);
+                }}
+                onSelectRun={uiState.setSelectedRunId}
+                onProviderChange={(providerId) => {
+                    if (!selectedSessionId || !isProviderId(providerId)) {
+                        return;
                     }
-                />
-            </section>
+
+                    const firstModelId = runTargetState.modelsByProvider.get(providerId)?.at(0)?.id;
+                    setSessionTargetBySessionId((current) => ({
+                        ...current,
+                        [selectedSessionId]: {
+                            providerId,
+                            ...(firstModelId ? { modelId: firstModelId } : {}),
+                        },
+                    }));
+                    setRunSubmitError(undefined);
+                }}
+                onModelChange={(modelId) => {
+                    const providerId = runTargetState.selectedProviderIdForComposer;
+                    if (!selectedSessionId || !providerId || modelId.trim().length === 0) {
+                        return;
+                    }
+
+                    setSessionTargetBySessionId((current) => ({
+                        ...current,
+                        [selectedSessionId]: {
+                            providerId,
+                            modelId,
+                        },
+                    }));
+                    setRunSubmitError(undefined);
+                }}
+                onCreateSession={() => {
+                    if (!isEntityId(uiState.selectedThreadId, 'thr')) {
+                        return;
+                    }
+
+                    void mutations.createSessionMutation
+                        .mutateAsync({
+                            profileId,
+                            threadId: uiState.selectedThreadId,
+                            kind: 'local',
+                        })
+                        .then((result) => {
+                            if (!result.created) {
+                                setRunSubmitError('Selected thread no longer exists.');
+                                return;
+                            }
+                            uiState.setSelectedSessionId(result.session.id);
+                            uiState.setSelectedRunId(undefined);
+                            setRunSubmitError(undefined);
+                            void Promise.all([queries.sessionsQuery.refetch(), queries.listThreadsQuery.refetch()]);
+                        });
+                }}
+                onPromptChange={(nextPrompt) => {
+                    setRunSubmitError(undefined);
+                    setPrompt(nextPrompt);
+                }}
+                onSubmitPrompt={() => {
+                    void submitPromptFromComposer({
+                        prompt,
+                        isStartingRun: mutations.startRunMutation.isPending,
+                        selectedSessionId,
+                        isPlanningMode,
+                        profileId,
+                        topLevelTab,
+                        modeKey,
+                        workspaceFingerprint: selectedThread?.workspaceFingerprint,
+                        resolvedRunTarget: runTargetState.resolvedRunTarget,
+                        runtimeOptions: DEFAULT_RUN_OPTIONS,
+                        providerById: runTargetState.providerById,
+                        startPlan: mutations.planStartMutation.mutateAsync,
+                        startRun: mutations.startRunMutation.mutateAsync,
+                        onPromptCleared: () => {
+                            setRunSubmitError(undefined);
+                            setPrompt('');
+                        },
+                        onPlanRefetch: () => {
+                            void queries.activePlanQuery.refetch();
+                        },
+                        onRuntimeRefetch: () => {
+                            void Promise.all([
+                                queries.sessionsQuery.refetch(),
+                                queries.runsQuery.refetch(),
+                                queries.messagesQuery.refetch(),
+                                queries.listThreadsQuery.refetch(),
+                            ]);
+                        },
+                        onError: (message) => {
+                            setRunSubmitError(message);
+                        },
+                    });
+                }}
+                onEditMessage={(entry: MessageTimelineEntry) => {
+                    if (!isEntityId(entry.id, 'msg')) {
+                        return;
+                    }
+                    const editableText = entry.editableText?.trim();
+                    if (!editableText) {
+                        return;
+                    }
+                    setPendingMessageEdit({
+                        messageId: entry.id,
+                        initialText: editableText,
+                    });
+                }}
+                onBranchFromMessage={(entry: MessageTimelineEntry) => {
+                    if (!isEntityId(entry.id, 'msg')) {
+                        return;
+                    }
+                    const editableText = entry.editableText?.trim();
+                    if (!editableText) {
+                        return;
+                    }
+                    setPendingMessageEdit({
+                        messageId: entry.id,
+                        initialText: editableText,
+                        forcedMode: 'branch',
+                    });
+                }}
+                modePanel={
+                    <ModeExecutionPanel
+                        topLevelTab={topLevelTab}
+                        modeKey={modeKey}
+                        isLoadingPlan={queries.activePlanQuery.isLoading}
+                        isPlanMutating={planOrchestrator.isPlanMutating}
+                        isOrchestratorMutating={planOrchestrator.isOrchestratorMutating}
+                        onAnswerQuestion={planOrchestrator.onAnswerQuestion}
+                        onRevisePlan={planOrchestrator.onRevisePlan}
+                        onApprovePlan={planOrchestrator.onApprovePlan}
+                        onImplementPlan={planOrchestrator.onImplementPlan}
+                        onAbortOrchestrator={planOrchestrator.onAbortOrchestrator}
+                        {...(planOrchestrator.activePlan ? { activePlan: planOrchestrator.activePlan } : {})}
+                        {...(planOrchestrator.orchestratorView
+                            ? { orchestratorView: planOrchestrator.orchestratorView }
+                            : {})}
+                    />
+                }
+            />
+
             <MessageEditDialog
                 open={Boolean(pendingMessageEdit)}
                 initialText={pendingMessageEdit?.initialText ?? ''}
@@ -557,10 +444,12 @@ export function ConversationShell({ profileId, topLevelTab, modeKey, onTopLevelT
                             }
                             setPendingMessageEdit(undefined);
                             setPrompt('');
-                            void queries.sessionsQuery.refetch();
-                            void queries.runsQuery.refetch();
-                            void queries.messagesQuery.refetch();
-                            void queries.listThreadsQuery.refetch();
+                            void Promise.all([
+                                queries.sessionsQuery.refetch(),
+                                queries.runsQuery.refetch(),
+                                queries.messagesQuery.refetch(),
+                                queries.listThreadsQuery.refetch(),
+                            ]);
                         })
                         .catch((error: unknown) => {
                             const message = error instanceof Error ? error.message : String(error);

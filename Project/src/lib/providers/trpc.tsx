@@ -8,7 +8,12 @@ import { trpcClient as runtimeClient } from '@/web/lib/trpcClient';
 import { useWindowStateStreamStore } from '@/web/lib/window/stateStream';
 import { trpc } from '@/web/trpc/client';
 
-import type { RuntimeEventRecordV1 } from '@/app/backend/persistence/types';
+import {
+    runtimeEventDomains,
+    runtimeEventOperations,
+    runtimeEntityTypes,
+    type RuntimeEventRecordV1,
+} from '@/app/backend/persistence/types';
 import type { WindowStateEvent } from '@/app/backend/trpc/routers/system/windowControls';
 
 import type { ReactNode } from 'react';
@@ -34,6 +39,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
     return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
+function isOneOf<const T extends readonly string[]>(value: unknown, allowed: T): value is T[number] {
+    return typeof value === 'string' && (allowed as readonly string[]).includes(value);
+}
+
 function isRuntimeEventRecord(value: unknown): value is RuntimeEventRecordV1 {
     if (!isRecord(value) || !isRecord(value['payload'])) {
         return false;
@@ -42,7 +51,9 @@ function isRuntimeEventRecord(value: unknown): value is RuntimeEventRecordV1 {
     return (
         typeof value['sequence'] === 'number' &&
         typeof value['eventId'] === 'string' &&
-        typeof value['entityType'] === 'string' &&
+        isOneOf(value['entityType'], runtimeEntityTypes) &&
+        isOneOf(value['domain'], runtimeEventDomains) &&
+        isOneOf(value['operation'], runtimeEventOperations) &&
         typeof value['entityId'] === 'string' &&
         typeof value['eventType'] === 'string' &&
         typeof value['createdAt'] === 'string'

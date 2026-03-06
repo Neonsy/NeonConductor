@@ -1,5 +1,6 @@
 import type {
     EntityId,
+    ModeDefinition,
     ProviderAuthMethod,
     RuntimeProviderId,
     RuntimeRunOptions,
@@ -46,11 +47,38 @@ export interface ChatContextMessage {
     text: string;
 }
 
+export interface ChatReplayContext {
+    messages: ChatContextMessage[];
+    digest: string;
+}
+
 export interface RunTransportResolution {
     requested: RuntimeRunOptions['transport']['openai'];
     selected: 'responses' | 'chat_completions';
     degraded: boolean;
     degradedReason?: string;
+}
+
+export type ResolvedKiloRouting =
+    | {
+          mode: 'dynamic';
+          sort: 'default' | 'price' | 'throughput' | 'latency';
+      }
+    | {
+          mode: 'pinned';
+          providerId: string;
+      };
+
+export interface PreparedRunStart {
+    resolvedMode: {
+        mode: ModeDefinition;
+    };
+    activeTarget: ResolvedRunTarget;
+    resolvedAuth: ResolvedRunAuth;
+    resolvedCache: RunCacheResolution;
+    initialTransport: RunTransportResolution;
+    chatContext?: ChatReplayContext;
+    kiloRouting?: ResolvedKiloRouting;
 }
 
 export type StartRunResult =
