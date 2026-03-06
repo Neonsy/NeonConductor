@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 
-import { buildBranchRows, type ThreadRenderRow } from '@/web/components/conversation/sidebarBranchRows';
+import { useConversationSidebarState } from '@/web/components/conversation/hooks/useConversationSidebarState';
+import { buildConversationSidebarModel } from '@/web/components/conversation/sidebarModel';
 import { Button } from '@/web/components/ui/button';
 
 import type { ConversationRecord, TagRecord, ThreadListRecord } from '@/app/backend/persistence/types';
@@ -83,49 +84,36 @@ export function ConversationSidebar({
     onCreateThread,
     onAddTagToThread,
 }: ConversationSidebarProps) {
-    const [newThreadTitle, setNewThreadTitle] = useState('');
-    const [newThreadScope, setNewThreadScope] = useState<'detached' | 'workspace'>('detached');
-    const [newThreadWorkspace, setNewThreadWorkspace] = useState('');
-    const [newTagLabel, setNewTagLabel] = useState('');
+    const {
+        newThreadTitle,
+        setNewThreadTitle,
+        newThreadScope,
+        setNewThreadScope,
+        newThreadWorkspace,
+        setNewThreadWorkspace,
+        newTagLabel,
+        setNewTagLabel,
+        createThread,
+        addTagToThread,
+    } = useConversationSidebarState({
+        topLevelTab,
+        isCreatingThread,
+        isAddingTag,
+        onCreateThread,
+        onAddTagToThread,
+    });
 
-    const workspaceOptions = [
-        ...new Set(
-            buckets.filter((bucket) => bucket.scope === 'workspace').map((bucket) => bucket.workspaceFingerprint)
-        ),
-    ]
-        .filter((fingerprint): fingerprint is string => Boolean(fingerprint))
-        .sort((left, right) => left.localeCompare(right));
-
-    const tagLabelById = new Map(tags.map((tag) => [tag.id, tag.label]));
-    const selectedThread = selectedThreadId ? threads.find((thread) => thread.id === selectedThreadId) : undefined;
-
-    const groupedThreadRows = useMemo(() => {
-        const grouped = new Map<string, { label: string; rows: ThreadRenderRow[] }>();
-        for (const thread of threads) {
-            const anchorKey = thread.anchorKind === 'workspace' ? `ws:${thread.anchorId ?? ''}` : 'playground';
-            if (!grouped.has(anchorKey)) {
-                grouped.set(anchorKey, {
-                    label:
-                        thread.anchorKind === 'workspace' ? `Workspace: ${thread.anchorId ?? 'Unknown'}` : 'Playground',
-                    rows: [],
-                });
-            }
-        }
-
-        for (const [anchorKey, group] of grouped.entries()) {
-            const anchorThreads = threads.filter((thread) => {
-                const key = thread.anchorKind === 'workspace' ? `ws:${thread.anchorId ?? ''}` : 'playground';
-                return key === anchorKey;
-            });
-            if (groupView === 'branch') {
-                group.rows = buildBranchRows(anchorThreads);
-            } else {
-                group.rows = anchorThreads.map((thread) => ({ thread, depth: 0 }));
-            }
-        }
-
-        return Array.from(grouped.values());
-    }, [groupView, threads]);
+    const { workspaceOptions, tagLabelById, selectedThread, groupedThreadRows } = useMemo(
+        () =>
+            buildConversationSidebarModel({
+                buckets,
+                threads,
+                tags,
+                groupView,
+                ...(selectedThreadId ? { selectedThreadId } : {}),
+            }),
+        [buckets, groupView, selectedThreadId, tags, threads]
+    );
 
     return (
         <aside className='border-border bg-card/40 flex min-h-0 w-[360px] flex-col border-r'>
@@ -230,26 +218,7 @@ export function ConversationSidebar({
                             size='sm'
                             disabled={isCreatingThread || (newThreadScope === 'detached' && topLevelTab !== 'chat')}
                             onClick={() => {
-                                const generatedTitle =
-                                    newThreadTitle.trim().length > 0
-                                        ? newThreadTitle.trim()
-                                        : `New ${modeLabel(topLevelTab).toLowerCase()} thread`;
-                                if (newThreadScope === 'workspace' && newThreadWorkspace.trim().length === 0) {
-                                    return;
-                                }
-                                if (newThreadScope === 'detached' && topLevelTab !== 'chat') {
-                                    return;
-                                }
-
-                                void onCreateThread({
-                                    scope: newThreadScope,
-                                    title: generatedTitle,
-                                    ...(newThreadScope === 'workspace' && newThreadWorkspace.trim().length > 0
-                                        ? { workspaceFingerprint: newThreadWorkspace.trim() }
-                                        : {}),
-                                }).then(() => {
-                                    setNewThreadTitle('');
-                                });
+                                void createThread();
                             }}>
                             New Thread
                         </Button>
@@ -305,14 +274,7 @@ export function ConversationSidebar({
                             variant='outline'
                             disabled={isAddingTag}
                             onClick={() => {
-                                const label = newTagLabel.trim();
-                                if (label.length === 0) {
-                                    return;
-                                }
-
-                                void onAddTagToThread(selectedThread.id, label).then(() => {
-                                    setNewTagLabel('');
-                                });
+                                void addTagToThread(selectedThread.id);
                             }}>
                             Add
                         </Button>
