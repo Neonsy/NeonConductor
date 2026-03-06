@@ -20,6 +20,7 @@ export { runUsageStore } from '@/app/backend/persistence/stores/runUsageStore';
 export { rulesetStore } from '@/app/backend/persistence/stores/rulesetStore';
 export { runtimeEventStore } from '@/app/backend/persistence/stores/runtimeEventStore';
 export { secretReferenceStore } from '@/app/backend/persistence/stores/secretReferenceStore';
+export { sessionHistoryStore } from '@/app/backend/persistence/stores/sessionHistoryStore';
 export { sessionStore } from '@/app/backend/persistence/stores/sessionStore';
 export { settingsStore } from '@/app/backend/persistence/stores/settingsStore';
 export { skillfileStore } from '@/app/backend/persistence/stores/skillfileStore';

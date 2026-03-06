@@ -166,26 +166,57 @@ export interface McpServerRecord {
     authState: 'unauthenticated' | 'authenticated';
 }
 
-export type RuntimeEntityType =
-    | 'session'
-    | 'run'
-    | 'profile'
-    | 'permission'
-    | 'provider'
-    | 'tool'
-    | 'mcp'
-    | 'runtime'
-    | 'conversation'
-    | 'thread'
-    | 'tag'
-    | 'diff'
-    | 'plan'
-    | 'orchestrator';
+export const runtimeEntityTypes = [
+    'session',
+    'run',
+    'profile',
+    'permission',
+    'provider',
+    'tool',
+    'mcp',
+    'runtime',
+    'conversation',
+    'thread',
+    'tag',
+    'diff',
+    'plan',
+    'orchestrator',
+    'message',
+    'messagePart',
+] as const;
+
+export type RuntimeEntityType = (typeof runtimeEntityTypes)[number];
+
+export const runtimeEventDomains = [
+    'conversation',
+    'thread',
+    'session',
+    'run',
+    'message',
+    'messagePart',
+    'tag',
+    'provider',
+    'plan',
+    'orchestrator',
+    'profile',
+    'permission',
+    'tool',
+    'mcp',
+    'runtime',
+] as const;
+
+export type RuntimeEventDomain = (typeof runtimeEventDomains)[number];
+
+export const runtimeEventOperations = ['upsert', 'remove', 'status', 'append', 'reset', 'sync'] as const;
+
+export type RuntimeEventOperation = (typeof runtimeEventOperations)[number];
 
 export interface RuntimeEventRecordV1 {
     sequence: number;
     eventId: EntityId<'evt'>;
     entityType: RuntimeEntityType;
+    domain: RuntimeEventDomain;
+    operation: RuntimeEventOperation;
     entityId: string;
     eventType: string;
     payload: Record<string, unknown>;

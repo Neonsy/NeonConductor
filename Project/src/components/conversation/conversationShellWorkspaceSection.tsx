@@ -1,0 +1,122 @@
+import type { MessageTimelineEntry } from '@/web/components/conversation/messageTimelineModel';
+import { SessionWorkspacePanel } from '@/web/components/conversation/sessionWorkspacePanel';
+
+import type {
+    MessagePartRecord,
+    MessageRecord,
+    RunRecord,
+    SessionSummaryRecord,
+    ThreadListRecord,
+} from '@/app/backend/persistence/types';
+import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
+
+import type { ReactNode } from 'react';
+
+interface ConversationShellWorkspaceSectionProps {
+    selectedThread: ThreadListRecord | undefined;
+    selectedSessionId: string | undefined;
+    selectedRunId: string | undefined;
+    streamState: string;
+    lastSequence: number;
+    tabSwitchNotice: string | undefined;
+    sessions: SessionSummaryRecord[];
+    runs: RunRecord[];
+    messages: MessageRecord[];
+    partsByMessageId: Map<string, MessagePartRecord[]>;
+    prompt: string;
+    isCreatingSession: boolean;
+    isStartingRun: boolean;
+    canCreateSession: boolean;
+    selectedProviderId: RuntimeProviderId | undefined;
+    selectedModelId: string | undefined;
+    routingBadge: string | undefined;
+    providerOptions: Array<{ id: string; label: string; authState: string }>;
+    modelOptions: Array<{ id: string; label: string; price?: number; latency?: number; tps?: number }>;
+    runErrorMessage: string | undefined;
+    modePanel: ReactNode;
+    onSelectSession: (sessionId: string) => void;
+    onSelectRun: (runId: string) => void;
+    onProviderChange: (providerId: string) => void;
+    onModelChange: (modelId: string) => void;
+    onCreateSession: () => void;
+    onPromptChange: (prompt: string) => void;
+    onSubmitPrompt: () => void;
+    onEditMessage: (entry: MessageTimelineEntry) => void;
+    onBranchFromMessage: (entry: MessageTimelineEntry) => void;
+}
+
+export function ConversationShellWorkspaceSection({
+    selectedThread,
+    selectedSessionId,
+    selectedRunId,
+    streamState,
+    lastSequence,
+    tabSwitchNotice,
+    sessions,
+    runs,
+    messages,
+    partsByMessageId,
+    prompt,
+    isCreatingSession,
+    isStartingRun,
+    canCreateSession,
+    selectedProviderId,
+    selectedModelId,
+    routingBadge,
+    providerOptions,
+    modelOptions,
+    runErrorMessage,
+    modePanel,
+    onSelectSession,
+    onSelectRun,
+    onProviderChange,
+    onModelChange,
+    onCreateSession,
+    onPromptChange,
+    onSubmitPrompt,
+    onEditMessage,
+    onBranchFromMessage,
+}: ConversationShellWorkspaceSectionProps) {
+    return (
+        <section className='flex min-h-0 flex-1 flex-col'>
+            <header className='border-border flex items-center justify-between border-b px-4 py-3'>
+                <div className='min-w-0'>
+                    <p className='truncate text-sm font-semibold'>{selectedThread?.title ?? 'No Thread Selected'}</p>
+                    <p className='text-muted-foreground text-xs'>
+                        Stream: {streamState} · Events: {lastSequence}
+                    </p>
+                    {tabSwitchNotice ? <p className='text-primary text-xs'>{tabSwitchNotice}</p> : null}
+                </div>
+            </header>
+
+            <SessionWorkspacePanel
+                sessions={sessions}
+                runs={runs}
+                messages={messages}
+                partsByMessageId={partsByMessageId}
+                {...(selectedSessionId ? { selectedSessionId } : {})}
+                {...(selectedRunId ? { selectedRunId } : {})}
+                prompt={prompt}
+                isCreatingSession={isCreatingSession}
+                isStartingRun={isStartingRun}
+                canCreateSession={canCreateSession}
+                selectedProviderId={selectedProviderId}
+                selectedModelId={selectedModelId}
+                {...(routingBadge !== undefined ? { routingBadge } : {})}
+                providerOptions={providerOptions}
+                modelOptions={modelOptions}
+                runErrorMessage={runErrorMessage}
+                onSelectSession={onSelectSession}
+                onSelectRun={onSelectRun}
+                onProviderChange={onProviderChange}
+                onModelChange={onModelChange}
+                onCreateSession={onCreateSession}
+                onPromptChange={onPromptChange}
+                onSubmitPrompt={onSubmitPrompt}
+                onEditMessage={onEditMessage}
+                onBranchFromMessage={onBranchFromMessage}
+                modePanel={modePanel}
+            />
+        </section>
+    );
+}

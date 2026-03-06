@@ -13,6 +13,7 @@ import { eventMetadata } from '@/app/backend/runtime/services/common/logContext'
 import { runExecutionService } from '@/app/backend/runtime/services/runExecution/service';
 import { runtimeEventLogService } from '@/app/backend/runtime/services/runtimeEventLog';
 import { sessionEditService } from '@/app/backend/runtime/services/sessionEdit/service';
+import { sessionHistoryService } from '@/app/backend/runtime/services/sessionHistory/service';
 import { publicProcedure, router } from '@/app/backend/trpc/init';
 
 export const sessionRouter = router({
@@ -135,7 +136,7 @@ export const sessionRouter = router({
             };
         }
 
-        const result = await sessionStore.revert(input.profileId, input.sessionId);
+        const result = await sessionHistoryService.revert(input.profileId, input.sessionId);
         if (result.reverted) {
             await runtimeEventLogService.append({
                 entityType: 'session',

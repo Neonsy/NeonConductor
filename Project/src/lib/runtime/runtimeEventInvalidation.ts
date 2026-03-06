@@ -46,47 +46,52 @@ export async function invalidateQueriesForRuntimeEvent(
     utils: TrpcUtils,
     event: RuntimeEventRecordV1
 ): Promise<void> {
-    if (event.entityType === 'conversation' || event.entityType === 'thread' || event.entityType === 'tag') {
+    if (event.domain === 'conversation' || event.domain === 'thread' || event.domain === 'tag') {
         await invalidateConversationQueries(utils);
         return;
     }
 
-    if (event.entityType === 'session') {
+    if (event.domain === 'session') {
         await invalidateSessionQueries(utils);
         return;
     }
 
-    if (event.entityType === 'run') {
-        if (event.eventType === 'run.part.appended' || event.eventType === 'run.reasoning.appended') {
-            await invalidateRunPartQueries(utils);
-            return;
-        }
+    if (event.domain === 'messagePart' || event.operation === 'append') {
+        await invalidateRunPartQueries(utils);
+        return;
+    }
 
+    if (event.domain === 'run') {
         await invalidateSessionQueries(utils);
         return;
     }
 
-    if (event.entityType === 'provider') {
+    if (event.domain === 'provider') {
         await invalidateProviderQueries(utils);
         return;
     }
 
-    if (event.entityType === 'plan') {
+    if (event.domain === 'plan') {
         await utils.plan.getActive.invalidate();
         return;
     }
 
-    if (event.entityType === 'orchestrator') {
+    if (event.domain === 'orchestrator') {
         await utils.orchestrator.latestBySession.invalidate();
         return;
     }
 
-    if (event.entityType === 'profile') {
+    if (event.domain === 'profile') {
         await Promise.all([utils.profile.list.invalidate(), utils.runtime.getShellBootstrap.invalidate()]);
         return;
     }
 
-    if (event.entityType === 'runtime') {
-        await Promise.all([utils.runtime.getShellBootstrap.invalidate(), utils.runtime.getSnapshot.invalidate()]);
+    if (event.domain === 'runtime') {
+        if (event.operation === 'reset') {
+            await Promise.all([utils.runtime.getShellBootstrap.invalidate(), utils.runtime.getSnapshot.invalidate()]);
+            return;
+        }
+
+        await utils.runtime.getShellBootstrap.invalidate();
     }
 }

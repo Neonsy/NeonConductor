@@ -15,6 +15,8 @@ describe('runtimeEventBus', () => {
             sequence: 1,
             eventId: 'evt_first' as RuntimeEventRecordV1['eventId'],
             entityType: 'runtime',
+            domain: 'runtime',
+            operation: 'reset',
             entityId: 'runtime',
             eventType: 'runtime.reset.applied',
             payload: {},

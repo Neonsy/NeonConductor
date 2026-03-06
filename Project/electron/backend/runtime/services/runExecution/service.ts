@@ -1,40 +1,13 @@
-import {
-    kiloRoutingPreferenceStore,
-    messageStore,
-    providerStore,
-    runStore,
-    sessionStore,
-    threadStore,
-} from '@/app/backend/persistence/stores';
-import type { ProviderRuntimeInput, ProviderRuntimeTransportSelection } from '@/app/backend/providers/types';
-import type { EntityId, ProviderAuthMethod, RuntimeProviderId } from '@/app/backend/runtime/contracts';
-import { eventMetadata, withCorrelationContext } from '@/app/backend/runtime/services/common/logContext';
-import { resolveRunCache } from '@/app/backend/runtime/services/runExecution/cacheKey';
-import { validateRunCapabilities } from '@/app/backend/runtime/services/runExecution/capabilities';
-import { buildChatReplayContext } from '@/app/backend/runtime/services/runExecution/chatContext';
+import { sessionStore, threadStore } from '@/app/backend/persistence/stores';
+import type { ProviderRuntimeTransportSelection } from '@/app/backend/providers/types';
+import type { EntityId } from '@/app/backend/runtime/contracts';
+import { withCorrelationContext } from '@/app/backend/runtime/services/common/logContext';
 import type { RunExecutionError } from '@/app/backend/runtime/services/runExecution/errors';
-import {
-    emitCacheResolutionEvent,
-    emitTransportSelectionEvent,
-} from '@/app/backend/runtime/services/runExecution/eventing';
-import { executeRun, isAbortError } from '@/app/backend/runtime/services/runExecution/executeRun';
-import { resolveModeExecution } from '@/app/backend/runtime/services/runExecution/mode';
-import { resolveRunAuth } from '@/app/backend/runtime/services/runExecution/resolveRunAuth';
-import { resolveFirstRunnableRunTarget } from '@/app/backend/runtime/services/runExecution/resolveRunnableTarget';
-import { resolveRunTarget } from '@/app/backend/runtime/services/runExecution/resolveRunTarget';
-import {
-    moveRunToAbortedState,
-    moveRunToFailedState,
-} from '@/app/backend/runtime/services/runExecution/terminalState';
-import { resolveInitialRunTransport } from '@/app/backend/runtime/services/runExecution/transport';
-import type {
-    ChatContextMessage,
-    ResolvedRunAuth,
-    RunCacheResolution,
-    StartRunInput,
-    StartRunResult,
-} from '@/app/backend/runtime/services/runExecution/types';
-import { runtimeEventLogService } from '@/app/backend/runtime/services/runtimeEventLog';
+import { persistRunStart } from '@/app/backend/runtime/services/runExecution/persistRunStart';
+import { prepareRunStart } from '@/app/backend/runtime/services/runExecution/prepareRunStart';
+import { runToTerminalState } from '@/app/backend/runtime/services/runExecution/runToTerminalState';
+import { moveRunToAbortedState } from '@/app/backend/runtime/services/runExecution/terminalState';
+import type { StartRunInput, StartRunResult } from '@/app/backend/runtime/services/runExecution/types';
 import { appLog } from '@/app/main/logging';
 
 interface ActiveRun {
@@ -55,6 +28,20 @@ function toRejectedStartResult(error: RunExecutionError): Extract<StartRunResult
         reason: 'rejected',
         code: error.code,
         message: error.message,
+    };
+}
+
+function toTransportSelection(input: {
+    selected: 'responses' | 'chat_completions';
+    requested: StartRunInput['runtimeOptions']['transport']['openai'];
+    degraded: boolean;
+    degradedReason?: string;
+}): ProviderRuntimeTransportSelection {
+    return {
+        selected: input.selected,
+        requested: input.requested,
+        degraded: input.degraded,
+        ...(input.degradedReason ? { degradedReason: input.degradedReason } : {}),
     };
 }
 
@@ -82,6 +69,7 @@ export class RunExecutionService {
                 reason: runnable.reason,
             };
         }
+
         const sessionThread = await threadStore.getBySessionId(input.profileId, input.sessionId);
         if (!sessionThread) {
             return {
@@ -90,6 +78,11 @@ export class RunExecutionService {
             };
         }
         if (sessionThread.thread.topLevelTab !== input.topLevelTab) {
+            const error = {
+                code: 'invalid_mode',
+                message: `Thread mode "${sessionThread.thread.topLevelTab}" does not match tab "${input.topLevelTab}".`,
+            } satisfies RunExecutionError;
+
             appLog.warn({
                 tag: 'run-execution',
                 message: 'Rejected run start because session thread mode does not match selected tab.',
@@ -103,351 +96,78 @@ export class RunExecutionService {
                     }
                 ),
             });
-            return toRejectedStartResult({
-                code: 'invalid_mode',
-                message: `Thread mode "${sessionThread.thread.topLevelTab}" does not match tab "${input.topLevelTab}".`,
-            });
+
+            return toRejectedStartResult(error);
         }
 
-        const resolvedModeResult = await resolveModeExecution({
-            profileId: input.profileId,
-            topLevelTab: input.topLevelTab,
-            modeKey: input.modeKey,
-        });
-        if (resolvedModeResult.isErr()) {
-            return toRejectedStartResult(resolvedModeResult.error);
-        }
-        const resolvedMode = resolvedModeResult.value;
-
-        const resolvedTargetResult = await resolveRunTarget({
-            profileId: input.profileId,
-            ...(input.providerId ? { providerId: input.providerId } : {}),
-            ...(input.modelId ? { modelId: input.modelId } : {}),
-        });
-        if (resolvedTargetResult.isErr()) {
-            return toRejectedStartResult(resolvedTargetResult.error);
-        }
-        const resolvedTarget = resolvedTargetResult.value;
-        const explicitTargetRequested = input.providerId !== undefined || input.modelId !== undefined;
-        let activeTarget = resolvedTarget;
-        let resolvedAuth: ResolvedRunAuth;
-        const resolvedAuthResult = await resolveRunAuth({
-            profileId: input.profileId,
-            providerId: activeTarget.providerId,
-        });
-        if (resolvedAuthResult.isErr()) {
-            if (explicitTargetRequested) {
-                appLog.warn({
-                    tag: 'run-execution',
-                    message: 'Explicit provider/model target is not runnable with current auth state.',
-                    ...withCorrelationContext(
-                        { requestId: input.requestId, correlationId: input.correlationId },
-                        {
-                            profileId: input.profileId,
-                            sessionId: input.sessionId,
-                            providerId: activeTarget.providerId,
-                            modelId: activeTarget.modelId,
-                            error: resolvedAuthResult.error.message,
-                        }
-                    ),
-                });
-                return toRejectedStartResult(resolvedAuthResult.error);
-            }
-
-            const fallback = await resolveFirstRunnableRunTarget(input.profileId, {
-                providerId: activeTarget.providerId,
-                modelId: activeTarget.modelId,
-            });
-            if (!fallback) {
-                appLog.warn({
-                    tag: 'run-execution',
-                    message: 'No runnable provider/model fallback found for session run.',
-                    ...withCorrelationContext(
-                        { requestId: input.requestId, correlationId: input.correlationId },
-                        {
-                            profileId: input.profileId,
-                            sessionId: input.sessionId,
-                            providerId: activeTarget.providerId,
-                            modelId: activeTarget.modelId,
-                            error: resolvedAuthResult.error.message,
-                        }
-                    ),
-                });
-                return toRejectedStartResult(resolvedAuthResult.error);
-            }
-
-            appLog.info({
-                tag: 'run-execution',
-                message: 'Using provider/model fallback for session run.',
-                ...withCorrelationContext(
-                    { requestId: input.requestId, correlationId: input.correlationId },
-                    {
-                        profileId: input.profileId,
-                        sessionId: input.sessionId,
-                        requestedProviderId: activeTarget.providerId,
-                        requestedModelId: activeTarget.modelId,
-                        fallbackProviderId: fallback.target.providerId,
-                        fallbackModelId: fallback.target.modelId,
-                    }
-                ),
-            });
-
-            activeTarget = fallback.target;
-            resolvedAuth = fallback.auth;
-        } else {
-            resolvedAuth = resolvedAuthResult.value;
-        }
-        const modelCapabilities = await providerStore.getModelCapabilities(
-            input.profileId,
-            activeTarget.providerId,
-            activeTarget.modelId
-        );
-        if (!modelCapabilities) {
+        const preparedResult = await prepareRunStart(input);
+        if (preparedResult.isErr()) {
             appLog.warn({
                 tag: 'run-execution',
-                message: 'Model capabilities missing for run target.',
+                message: 'Rejected run start during run preparation.',
                 ...withCorrelationContext(
                     { requestId: input.requestId, correlationId: input.correlationId },
                     {
                         profileId: input.profileId,
                         sessionId: input.sessionId,
-                        providerId: activeTarget.providerId,
-                        modelId: activeTarget.modelId,
+                        providerId: input.providerId ?? null,
+                        modelId: input.modelId ?? null,
+                        errorCode: preparedResult.error.code,
+                        error: preparedResult.error.message,
                     }
                 ),
             });
-            return toRejectedStartResult({
-                code: 'provider_model_missing',
-                message: `Model "${activeTarget.modelId}" is missing runtime capabilities.`,
-            });
+            return toRejectedStartResult(preparedResult.error);
         }
 
-        const capabilityValidation = validateRunCapabilities({
-            providerId: activeTarget.providerId,
-            modelId: activeTarget.modelId,
-            modelCapabilities,
-            runtimeOptions: input.runtimeOptions,
+        const prepared = preparedResult.value;
+        const persisted = await persistRunStart({
+            input,
+            prepared,
         });
-        if (capabilityValidation.isErr()) {
-            appLog.warn({
-                tag: 'run-execution',
-                message: 'Rejected run start because runtime options are invalid for the selected model.',
-                ...withCorrelationContext(
-                    { requestId: input.requestId, correlationId: input.correlationId },
-                    {
-                        profileId: input.profileId,
-                        sessionId: input.sessionId,
-                        providerId: activeTarget.providerId,
-                        modelId: activeTarget.modelId,
-                        error: capabilityValidation.error.message,
-                    }
-                ),
-            });
-            return toRejectedStartResult(capabilityValidation.error);
-        }
-
-        const initialTransport = resolveInitialRunTransport({
-            providerId: activeTarget.providerId,
-            runtimeOptions: input.runtimeOptions,
-        });
-        const chatContext =
-            input.topLevelTab === 'chat'
-                ? await buildChatReplayContext({
-                      profileId: input.profileId,
-                      sessionId: input.sessionId,
-                      prompt: input.prompt,
-                  })
-                : undefined;
-        const resolvedCacheResult = resolveRunCache({
-            profileId: input.profileId,
-            sessionId: input.sessionId,
-            ...(chatContext ? { cacheScopeKey: chatContext.digest } : {}),
-            providerId: activeTarget.providerId,
-            modelId: activeTarget.modelId,
-            runtimeOptions: input.runtimeOptions,
-        });
-        if (resolvedCacheResult.isErr()) {
-            appLog.warn({
-                tag: 'run-execution',
-                message: 'Failed to resolve cache settings for run start.',
-                ...withCorrelationContext(
-                    { requestId: input.requestId, correlationId: input.correlationId },
-                    {
-                        profileId: input.profileId,
-                        sessionId: input.sessionId,
-                        providerId: activeTarget.providerId,
-                        modelId: activeTarget.modelId,
-                        error: resolvedCacheResult.error.message,
-                    }
-                ),
-            });
-            return toRejectedStartResult(resolvedCacheResult.error);
-        }
-        const resolvedCache = resolvedCacheResult.value;
-        const kiloRoutingPreference =
-            activeTarget.providerId === 'kilo'
-                ? await kiloRoutingPreferenceStore.getPreference(input.profileId, activeTarget.modelId)
-                : null;
-        const kiloRouting: ProviderRuntimeInput['kiloRouting'] =
-            activeTarget.providerId !== 'kilo'
-                ? undefined
-                : kiloRoutingPreference
-                  ? kiloRoutingPreference.routingMode === 'dynamic'
-                      ? {
-                            mode: 'dynamic' as const,
-                            sort: kiloRoutingPreference.sort ?? 'default',
-                        }
-                      : kiloRoutingPreference.pinnedProviderId
-                        ? {
-                              mode: 'pinned' as const,
-                              providerId: kiloRoutingPreference.pinnedProviderId,
-                          }
-                        : {
-                              mode: 'dynamic' as const,
-                              sort: 'default',
-                          }
-                  : {
-                        mode: 'dynamic' as const,
-                        sort: 'default',
-                    };
-
-        const run = await runStore.create({
-            profileId: input.profileId,
-            sessionId: input.sessionId,
-            prompt: input.prompt,
-            providerId: activeTarget.providerId,
-            modelId: activeTarget.modelId,
-            authMethod: resolvedAuth.authMethod,
-            runtimeOptions: input.runtimeOptions,
-            cache: resolvedCache,
-            transport: {
-                selected: initialTransport.selected,
-                ...(initialTransport.degraded
-                    ? {
-                          degradedReason: initialTransport.degradedReason,
-                      }
-                    : {}),
-            },
-        });
-
-        await sessionStore.markRunPending(input.profileId, input.sessionId, run.id);
-
-        const userMessage = await messageStore.createMessage({
-            profileId: input.profileId,
-            sessionId: input.sessionId,
-            runId: run.id,
-            role: 'user',
-        });
-        await messageStore.appendPart({
-            messageId: userMessage.id,
-            partType: 'text',
-            payload: {
-                text: input.prompt,
-            },
-        });
-
-        const assistantMessage = await messageStore.createMessage({
-            profileId: input.profileId,
-            sessionId: input.sessionId,
-            runId: run.id,
-            role: 'assistant',
-        });
-
-        await runtimeEventLogService.append({
-            entityType: 'run',
-            entityId: run.id,
-            eventType: 'run.mode.context',
-            payload: {
-                runId: run.id,
-                sessionId: input.sessionId,
-                profileId: input.profileId,
-                topLevelTab: input.topLevelTab,
-                modeKey: input.modeKey,
-                workspaceFingerprint: input.workspaceFingerprint ?? null,
-                mode: {
-                    id: resolvedMode.mode.id,
-                    label: resolvedMode.mode.label,
-                    executionPolicy: resolvedMode.mode.executionPolicy,
-                },
-            },
-            ...eventMetadata({
-                requestId: input.requestId,
-                correlationId: input.correlationId,
-                origin: 'runtime.runExecution.startRun',
-            }),
-        });
-
-        await runtimeEventLogService.append({
-            entityType: 'run',
-            entityId: run.id,
-            eventType: 'run.started',
-            payload: {
-                run,
-                sessionId: input.sessionId,
-                profileId: input.profileId,
-            },
-            ...eventMetadata({
-                requestId: input.requestId,
-                correlationId: input.correlationId,
-                origin: 'runtime.runExecution.startRun',
-            }),
-        });
-
-        await emitCacheResolutionEvent({
-            runId: run.id,
-            profileId: input.profileId,
-            sessionId: input.sessionId,
-            cache: resolvedCache,
-        });
-        await emitTransportSelectionEvent({
-            runId: run.id,
-            profileId: input.profileId,
-            sessionId: input.sessionId,
-            selection: {
-                selected: initialTransport.selected,
-                requested: initialTransport.requested,
-                degraded: initialTransport.degraded,
-                ...(initialTransport.degradedReason ? { degradedReason: initialTransport.degradedReason } : {}),
-            },
+        const transportSelection = toTransportSelection({
+            selected: prepared.initialTransport.selected,
+            requested: prepared.initialTransport.requested,
+            degraded: prepared.initialTransport.degraded,
+            ...(prepared.initialTransport.degradedReason
+                ? { degradedReason: prepared.initialTransport.degradedReason }
+                : {}),
         });
 
         const controller = new AbortController();
-        const completion = this.runToTerminalState({
+        const completion = runToTerminalState({
             profileId: input.profileId,
             sessionId: input.sessionId,
-            runId: run.id,
+            runId: persisted.run.id,
             prompt: input.prompt,
-            providerId: activeTarget.providerId,
-            modelId: activeTarget.modelId,
-            authMethod: resolvedAuth.authMethod,
+            providerId: prepared.activeTarget.providerId,
+            modelId: prepared.activeTarget.modelId,
+            authMethod: prepared.resolvedAuth.authMethod,
             runtimeOptions: input.runtimeOptions,
-            cache: resolvedCache,
-            transportSelection: {
-                selected: initialTransport.selected,
-                requested: initialTransport.requested,
-                degraded: initialTransport.degraded,
-                ...(initialTransport.degradedReason ? { degradedReason: initialTransport.degradedReason } : {}),
-            },
-            ...(resolvedAuth.apiKey ? { apiKey: resolvedAuth.apiKey } : {}),
-            ...(resolvedAuth.accessToken ? { accessToken: resolvedAuth.accessToken } : {}),
-            ...(resolvedAuth.organizationId ? { organizationId: resolvedAuth.organizationId } : {}),
-            ...(kiloRouting ? { kiloRouting } : {}),
-            ...(chatContext ? { contextMessages: chatContext.messages } : {}),
-            assistantMessageId: assistantMessage.id,
+            cache: prepared.resolvedCache,
+            transportSelection,
+            ...(prepared.resolvedAuth.apiKey ? { apiKey: prepared.resolvedAuth.apiKey } : {}),
+            ...(prepared.resolvedAuth.accessToken ? { accessToken: prepared.resolvedAuth.accessToken } : {}),
+            ...(prepared.resolvedAuth.organizationId
+                ? { organizationId: prepared.resolvedAuth.organizationId }
+                : {}),
+            ...(prepared.kiloRouting ? { kiloRouting: prepared.kiloRouting } : {}),
+            ...(prepared.chatContext ? { contextMessages: prepared.chatContext.messages } : {}),
+            assistantMessageId: persisted.assistantMessageId,
             signal: controller.signal,
         }).finally(() => {
-            this.activeRuns.delete(run.id);
+            this.activeRuns.delete(persisted.run.id);
             this.activeRunsBySession.delete(createSessionKey(input.profileId, input.sessionId));
         });
 
-        this.activeRuns.set(run.id, {
+        this.activeRuns.set(persisted.run.id, {
             profileId: input.profileId,
             sessionId: input.sessionId,
-            runId: run.id,
+            runId: persisted.run.id,
             controller,
             completion,
         });
-        this.activeRunsBySession.set(createSessionKey(input.profileId, input.sessionId), run.id);
+        this.activeRunsBySession.set(createSessionKey(input.profileId, input.sessionId), persisted.run.id);
 
         appLog.info({
             tag: 'run-execution',
@@ -457,9 +177,9 @@ export class RunExecutionService {
                 {
                     profileId: input.profileId,
                     sessionId: input.sessionId,
-                    runId: run.id,
-                    providerId: activeTarget.providerId,
-                    modelId: activeTarget.modelId,
+                    runId: persisted.run.id,
+                    providerId: prepared.activeTarget.providerId,
+                    modelId: prepared.activeTarget.modelId,
                     topLevelTab: input.topLevelTab,
                     modeKey: input.modeKey,
                 }
@@ -468,7 +188,7 @@ export class RunExecutionService {
 
         return {
             accepted: true,
-            runId: run.id,
+            runId: persisted.run.id,
             runStatus: 'running',
         };
     }
@@ -515,78 +235,6 @@ export class RunExecutionService {
             aborted: true,
             runId,
         };
-    }
-
-    private async runToTerminalState(input: {
-        profileId: string;
-        sessionId: string;
-        runId: string;
-        prompt: string;
-        providerId: RuntimeProviderId;
-        modelId: string;
-        authMethod: ProviderAuthMethod | 'none';
-        runtimeOptions: StartRunInput['runtimeOptions'];
-        cache: RunCacheResolution;
-        transportSelection: ProviderRuntimeTransportSelection;
-        apiKey?: string;
-        accessToken?: string;
-        organizationId?: string;
-        kiloRouting?:
-            | {
-                  mode: 'dynamic';
-                  sort: 'default' | 'price' | 'throughput' | 'latency';
-              }
-            | {
-                  mode: 'pinned';
-                  providerId: string;
-              };
-        contextMessages?: ChatContextMessage[];
-        assistantMessageId: string;
-        signal: AbortSignal;
-    }): Promise<void> {
-        try {
-            const executionResult = await executeRun(input);
-            if (executionResult.isErr()) {
-                if (input.signal.aborted) {
-                    await moveRunToAbortedState({
-                        profileId: input.profileId,
-                        sessionId: input.sessionId,
-                        runId: input.runId,
-                        logMessage: 'Run moved to aborted terminal state.',
-                    });
-                    return;
-                }
-                await moveRunToFailedState({
-                    profileId: input.profileId,
-                    sessionId: input.sessionId,
-                    runId: input.runId,
-                    errorCode: executionResult.error.code,
-                    errorMessage: executionResult.error.message,
-                    logMessage: 'Run moved to failed terminal state.',
-                });
-                return;
-            }
-        } catch (error) {
-            if (isAbortError(error) || input.signal.aborted) {
-                await moveRunToAbortedState({
-                    profileId: input.profileId,
-                    sessionId: input.sessionId,
-                    runId: input.runId,
-                    logMessage: 'Run moved to aborted terminal state.',
-                });
-                return;
-            }
-
-            const message = error instanceof Error ? error.message : String(error);
-            await moveRunToFailedState({
-                profileId: input.profileId,
-                sessionId: input.sessionId,
-                runId: input.runId,
-                errorCode: 'invariant_violation',
-                errorMessage: message,
-                logMessage: 'Run moved to failed terminal state.',
-            });
-        }
     }
 }
 

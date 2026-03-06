@@ -1,6 +1,7 @@
-import { messageStore, sessionStore } from '@/app/backend/persistence/stores';
+import { messageStore } from '@/app/backend/persistence/stores';
 import type { EntityId, RuntimeRunOptions, SessionEditInput } from '@/app/backend/runtime/contracts';
 import { runExecutionService } from '@/app/backend/runtime/services/runExecution/service';
+import { sessionHistoryService } from '@/app/backend/runtime/services/sessionHistory/service';
 
 const DEFAULT_RUNTIME_OPTIONS: RuntimeRunOptions = {
     reasoning: {
@@ -70,7 +71,7 @@ export class SessionEditService {
         let threadId: string | undefined;
         let threadTopLevelTab: 'chat' | 'agent' | 'orchestrator' | undefined;
         if (input.editMode === 'truncate') {
-            const truncated = await sessionStore.truncateFromRun(input.profileId, input.sessionId, target.runId);
+            const truncated = await sessionHistoryService.truncateFromRun(input.profileId, input.sessionId, target.runId);
             if (!truncated.truncated) {
                 return {
                     edited: false,
@@ -84,7 +85,11 @@ export class SessionEditService {
             }
             workingSessionId = truncated.session.id;
         } else {
-            const branched = await sessionStore.createBranchFromRun(input.profileId, input.sessionId, target.runId);
+            const branched = await sessionHistoryService.createBranchFromRun(
+                input.profileId,
+                input.sessionId,
+                target.runId
+            );
             if (!branched.branched) {
                 return {
                     edited: false,
