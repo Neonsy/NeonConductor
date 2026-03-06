@@ -3,6 +3,7 @@ import { err, ok, type Result } from 'neverthrow';
 export type ProviderServiceErrorCode =
     | 'provider_not_supported'
     | 'provider_not_registered'
+    | 'provider_model_missing'
     | 'invalid_payload'
     | 'request_failed'
     | 'request_unavailable';

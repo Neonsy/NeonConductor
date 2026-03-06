@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
 
+import { createProviderSettingsActions } from '@/web/components/settings/providerSettings/hooks/providerSettingsActions';
+import { createProviderSettingsRefetchers } from '@/web/components/settings/providerSettings/hooks/providerSettingsRefetch';
+import { resetProviderSettingsState } from '@/web/components/settings/providerSettings/hooks/providerSettingsState';
 import { useKiloRoutingDraft } from '@/web/components/settings/providerSettings/hooks/useKiloRoutingDraft';
 import { useProviderSettingsAuthPolling } from '@/web/components/settings/providerSettings/hooks/useProviderSettingsAuthPolling';
 import { useProviderSettingsMutations } from '@/web/components/settings/providerSettings/hooks/useProviderSettingsMutations';
@@ -33,9 +36,11 @@ export function useProviderSettingsController(profileId: string) {
     const kiloModelProviders = queries.kiloModelProvidersQuery.data?.providers ?? [];
 
     useEffect(() => {
-        setActiveAuthFlow(undefined);
-        setApiKeyInput('');
-        setStatusMessage(undefined);
+        resetProviderSettingsState({
+            setActiveAuthFlow,
+            setApiKeyInput,
+            setStatusMessage,
+        });
     }, [profileId]);
 
     useEffect(() => {
@@ -45,36 +50,14 @@ export function useProviderSettingsController(profileId: string) {
         }
     }, [providers, selectedProviderId]);
 
+    const refetchers = createProviderSettingsRefetchers(queries);
     const mutations = useProviderSettingsMutations({
         profileId,
         selectedProviderId,
         setStatusMessage,
         setApiKeyInput,
         setActiveAuthFlow,
-        refetchProviders: () => {
-            void queries.providersQuery.refetch();
-        },
-        refetchDefaults: () => {
-            void queries.defaultsQuery.refetch();
-        },
-        refetchAuthState: () => {
-            void queries.authStateQuery.refetch();
-        },
-        refetchListModels: () => {
-            void queries.listModelsQuery.refetch();
-        },
-        refetchKiloRoutingPreference: () => {
-            void queries.kiloRoutingPreferenceQuery.refetch();
-        },
-        refetchKiloModelProviders: () => {
-            void queries.kiloModelProvidersQuery.refetch();
-        },
-        refetchAccountContext: () => {
-            void queries.accountContextQuery.refetch();
-        },
-        refetchOpenAIRateLimits: () => {
-            void queries.openAISubscriptionRateLimitsQuery.refetch();
-        },
+        ...refetchers,
     });
 
     useProviderSettingsAuthPolling({
@@ -104,7 +87,7 @@ export function useProviderSettingsController(profileId: string) {
     const openAISubscriptionUsage = queries.openAISubscriptionUsageQuery.data?.usage;
     const openAISubscriptionRateLimits = queries.openAISubscriptionRateLimitsQuery.data?.rateLimits;
 
-    const { kiloRoutingDraft, saveKiloRoutingPreference } = useKiloRoutingDraft({
+    const { kiloRoutingDraft } = useKiloRoutingDraft({
         profileId,
         selectedProviderId,
         selectedModelId,
@@ -114,6 +97,18 @@ export function useProviderSettingsController(profileId: string) {
         savePreference: async (saveInput) => {
             await mutations.setModelRoutingPreferenceMutation.mutateAsync(saveInput);
         },
+    });
+    const actions = createProviderSettingsActions({
+        profileId,
+        selectedProviderId,
+        selectedModelId,
+        apiKeyInput,
+        activeAuthFlow,
+        kiloModelProviderIds: kiloModelProviders.map((provider) => provider.providerId),
+        kiloRoutingDraft,
+        setSelectedProviderId,
+        setStatusMessage,
+        mutations,
     });
 
     return {
@@ -134,144 +129,9 @@ export function useProviderSettingsController(profileId: string) {
         kiloRoutingDraft,
         queries,
         mutations,
-        selectProvider: (providerId: RuntimeProviderId) => {
-            setStatusMessage(undefined);
-            setSelectedProviderId(providerId);
-        },
+        ...actions,
         setSelectedModelId,
         setApiKeyInput,
         setStatusMessage,
-        setDefaultModel: async () => {
-            if (!selectedProviderId || !selectedModelId) {
-                return;
-            }
-
-            await mutations.setDefaultMutation.mutateAsync({
-                profileId,
-                providerId: selectedProviderId,
-                modelId: selectedModelId,
-            });
-        },
-        syncCatalog: async () => {
-            if (!selectedProviderId) {
-                return;
-            }
-
-            await mutations.syncCatalogMutation.mutateAsync({
-                profileId,
-                providerId: selectedProviderId,
-                force: true,
-            });
-        },
-        changeRoutingMode: async (mode: 'dynamic' | 'pinned') => {
-            if (!kiloRoutingDraft) {
-                return;
-            }
-
-            if (mode === 'dynamic') {
-                await saveKiloRoutingPreference({
-                    routingMode: 'dynamic',
-                    sort: kiloRoutingDraft.sort,
-                    pinnedProviderId: '',
-                });
-                return;
-            }
-
-            const pinnedProviderId = kiloRoutingDraft.pinnedProviderId || kiloModelProviders[0]?.providerId || '';
-            if (!pinnedProviderId) {
-                setStatusMessage('No available providers to pin for this model.');
-                return;
-            }
-
-            await saveKiloRoutingPreference({
-                routingMode: 'pinned',
-                sort: 'default',
-                pinnedProviderId,
-            });
-        },
-        changeRoutingSort: async (sort: 'default' | 'price' | 'throughput' | 'latency') => {
-            await saveKiloRoutingPreference({
-                routingMode: 'dynamic',
-                sort,
-                pinnedProviderId: '',
-            });
-        },
-        changePinnedProvider: async (providerId: string) => {
-            if (providerId.trim().length === 0) {
-                return;
-            }
-
-            await saveKiloRoutingPreference({
-                routingMode: 'pinned',
-                sort: 'default',
-                pinnedProviderId: providerId,
-            });
-        },
-        changeEndpointProfile: async (value: string) => {
-            if (!selectedProviderId) {
-                return;
-            }
-
-            await mutations.setEndpointProfileMutation.mutateAsync({
-                profileId,
-                providerId: selectedProviderId,
-                value,
-            });
-        },
-        saveApiKey: async () => {
-            if (!selectedProviderId) {
-                return;
-            }
-
-            await mutations.setApiKeyMutation.mutateAsync({
-                profileId,
-                providerId: selectedProviderId,
-                apiKey: apiKeyInput.trim(),
-            });
-        },
-        startOAuthDevice: async () => {
-            if (!selectedProviderId) {
-                return;
-            }
-
-            await mutations.startAuthMutation.mutateAsync({
-                profileId,
-                providerId: selectedProviderId,
-                method: 'oauth_device',
-            });
-        },
-        startDeviceCode: async () => {
-            if (!selectedProviderId) {
-                return;
-            }
-
-            await mutations.startAuthMutation.mutateAsync({
-                profileId,
-                providerId: selectedProviderId,
-                method: 'device_code',
-            });
-        },
-        pollNow: async () => {
-            if (!activeAuthFlow) {
-                return;
-            }
-
-            await mutations.pollAuthMutation.mutateAsync({
-                profileId,
-                providerId: activeAuthFlow.providerId,
-                flowId: activeAuthFlow.flowId,
-            });
-        },
-        cancelFlow: async () => {
-            if (!activeAuthFlow) {
-                return;
-            }
-
-            await mutations.cancelAuthMutation.mutateAsync({
-                profileId,
-                providerId: activeAuthFlow.providerId,
-                flowId: activeAuthFlow.flowId,
-            });
-        },
     };
 }

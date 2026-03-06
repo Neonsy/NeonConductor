@@ -209,17 +209,17 @@ class ProviderManagementService {
 
     async getModelRoutingPreference(
         input: ProviderGetModelRoutingPreferenceInput
-    ): Promise<KiloModelRoutingPreference> {
+    ): Promise<ProviderServiceResult<KiloModelRoutingPreference>> {
         return getModelRoutingPreference(input);
     }
 
     async setModelRoutingPreference(
         input: ProviderSetModelRoutingPreferenceInput
-    ): Promise<KiloModelRoutingPreference> {
+    ): Promise<ProviderServiceResult<KiloModelRoutingPreference>> {
         return setModelRoutingPreference(input);
     }
 
-    async listModelProviders(input: ProviderListModelProvidersInput): Promise<KiloModelProviderOption[]> {
+    async listModelProviders(input: ProviderListModelProvidersInput): Promise<ProviderServiceResult<KiloModelProviderOption[]>> {
         return listModelProviders(input);
     }
 }

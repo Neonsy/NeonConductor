@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { getPersistence } from '@/app/backend/persistence/db';
-import { nowIso, parseJsonValue } from '@/app/backend/persistence/stores/utils';
+import { isJsonRecord, nowIso, parseJsonValue } from '@/app/backend/persistence/stores/utils';
 import type { DiffRecord } from '@/app/backend/persistence/types';
 import type { EntityId } from '@/app/backend/runtime/contracts';
 
@@ -25,7 +25,7 @@ function mapDiffRecord(row: {
         sessionId: row.session_id,
         runId: row.run_id,
         summary: row.summary,
-        payload: parseJsonValue<Record<string, unknown>>(row.payload_json, {}),
+        payload: parseJsonValue(row.payload_json, {}, isJsonRecord),
         createdAt: row.created_at,
         updatedAt: row.updated_at,
     };

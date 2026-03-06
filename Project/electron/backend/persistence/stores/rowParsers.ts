@@ -4,13 +4,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
     return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
+function isAllowedString<const T extends readonly string[]>(value: string, allowedValues: T): value is T[number] {
+    return allowedValues.some((allowedValue) => allowedValue === value);
+}
+
 export function parseEnumValue<const T extends readonly string[]>(
     value: string,
     field: string,
     allowedValues: T
 ): T[number] {
-    if ((allowedValues as readonly string[]).includes(value)) {
-        return value as T[number];
+    if (isAllowedString(value, allowedValues)) {
+        return value;
     }
 
     throw new Error(`Invalid "${field}" in persistence row: "${value}".`);

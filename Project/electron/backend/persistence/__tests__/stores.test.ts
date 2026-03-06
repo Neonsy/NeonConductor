@@ -296,7 +296,12 @@ describe('persistence stores', () => {
     it('supports profile lifecycle with last-profile delete guard and secure duplication baseline', async () => {
         const profileId = getDefaultProfileId();
 
-        const created = await profileStore.create('Workspace Profile');
+        const createdResult = await profileStore.create('Workspace Profile');
+        expect(createdResult.isOk()).toBe(true);
+        if (createdResult.isErr()) {
+            throw new Error(createdResult.error.message);
+        }
+        const created = createdResult.value;
         expect(created.isActive).toBe(false);
 
         const renamed = await profileStore.rename(created.id, 'Workspace Profile Renamed');
@@ -310,7 +315,12 @@ describe('persistence stores', () => {
             status: 'configured',
         });
 
-        const duplicated = await profileStore.duplicate(profileId, 'Profile Duplicate');
+        const duplicatedResult = await profileStore.duplicate(profileId, 'Profile Duplicate');
+        expect(duplicatedResult.isOk()).toBe(true);
+        if (duplicatedResult.isErr()) {
+            throw new Error(duplicatedResult.error.message);
+        }
+        const duplicated = duplicatedResult.value;
         expect(duplicated).not.toBeNull();
         if (!duplicated) {
             throw new Error('Expected profile duplication to succeed.');
@@ -319,7 +329,12 @@ describe('persistence stores', () => {
         const duplicatedSecrets = await secretReferenceStore.listByProfile(duplicated.id);
         expect(duplicatedSecrets).toEqual([]);
 
-        const activated = await profileStore.setActive(duplicated.id);
+        const activatedResult = await profileStore.setActive(duplicated.id);
+        expect(activatedResult.isOk()).toBe(true);
+        if (activatedResult.isErr()) {
+            throw new Error(activatedResult.error.message);
+        }
+        const activated = activatedResult.value;
         expect(activated?.id).toBe(duplicated.id);
         expect(activated?.isActive).toBe(true);
 
@@ -339,6 +354,26 @@ describe('persistence stores', () => {
             throw new Error('Expected last profile deletion to be rejected.');
         }
         expect(lastProfileDelete.reason).toBe('last_profile');
+    });
+
+    it('returns typed profile-store errors when no profiles remain', async () => {
+        const { db } = getPersistence();
+
+        await db.deleteFrom('profiles').execute();
+
+        const activeResult = await profileStore.getActive();
+        expect(activeResult.isErr()).toBe(true);
+        if (activeResult.isOk()) {
+            throw new Error('Expected active profile resolution to fail without profiles.');
+        }
+        expect(activeResult.error.code).toBe('not_found');
+
+        const createResult = await profileStore.create('Recovered Profile');
+        expect(createResult.isErr()).toBe(true);
+        if (createResult.isOk()) {
+            throw new Error('Expected create to fail without a template profile.');
+        }
+        expect(createResult.error.code).toBe('not_found');
     });
 
     it('applies Kilo-only ranking policy when ranking metadata exists', async () => {

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { getPersistence } from '@/app/backend/persistence/db';
-import { nowIso, parseJsonValue } from '@/app/backend/persistence/stores/utils';
+import { isJsonString, nowIso, parseJsonValue } from '@/app/backend/persistence/stores/utils';
 
 export class SettingsStore {
     async getStringOptional(profileId: string, key: string): Promise<string | undefined> {
@@ -18,7 +18,7 @@ export class SettingsStore {
             return undefined;
         }
 
-        return parseJsonValue<string | undefined>(row.value_json, undefined);
+        return parseJsonValue(row.value_json, undefined, isJsonString);
     }
 
     async getString(profileId: string, key: string, fallback: string): Promise<string> {

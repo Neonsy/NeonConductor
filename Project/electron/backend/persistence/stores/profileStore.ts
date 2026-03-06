@@ -1,4 +1,5 @@
 import { getPersistence } from '@/app/backend/persistence/db';
+import { errProfileStore, okProfileStore, type ProfileStoreResult } from '@/app/backend/persistence/stores/profileStoreErrors';
 import {
     createProfileId,
     createTimestamp,
@@ -37,7 +38,7 @@ export class ProfileStore {
         return row ? mapProfile(row) : null;
     }
 
-    async getActive(): Promise<ActiveProfileState> {
+    async getActive(): Promise<ProfileStoreResult<ActiveProfileState>> {
         const { db } = getPersistence();
 
         const activeRow = await db
@@ -48,10 +49,10 @@ export class ProfileStore {
 
         if (activeRow) {
             const profile = mapProfile(activeRow);
-            return {
+            return okProfileStore({
                 activeProfileId: profile.id,
                 profile,
-            };
+            });
         }
 
         const fallback = await db
@@ -62,25 +63,30 @@ export class ProfileStore {
             .executeTakeFirst();
 
         if (!fallback) {
-            throw new Error('No profiles exist; unable to resolve active profile.');
+            return errProfileStore('No profiles exist; unable to resolve active profile.');
         }
 
-        const activated = await this.setActive(fallback.id);
+        const activatedResult = await this.setActive(fallback.id);
+        if (activatedResult.isErr()) {
+            return errProfileStore(activatedResult.error.message);
+        }
+
+        const activated = activatedResult.value;
         if (!activated) {
             throw new Error(`Failed to activate fallback profile "${fallback.id}".`);
         }
 
-        return {
+        return okProfileStore({
             activeProfileId: activated.id,
             profile: activated,
-        };
+        });
     }
 
-    async setActive(profileId: string): Promise<ProfileRecord | null> {
+    async setActive(profileId: string): Promise<ProfileStoreResult<ProfileRecord | null>> {
         const { db } = getPersistence();
         const timestamp = createTimestamp();
 
-        return db.transaction().execute(async (tx) => {
+        const updated = await db.transaction().execute(async (tx) => {
             const profile = await tx
                 .selectFrom('profiles')
                 .select(['id'])
@@ -111,15 +117,21 @@ export class ProfileStore {
 
             return updated ? mapProfile(updated) : null;
         });
+
+        return okProfileStore(updated);
     }
 
-    async create(name?: string): Promise<ProfileRecord> {
+    async create(name?: string): Promise<ProfileStoreResult<ProfileRecord>> {
         const { db } = getPersistence();
         const timestamp = createTimestamp();
         const profileId = createProfileId();
 
-        return db.transaction().execute(async (tx) => {
-            const templateProfileId = await resolveTemplateProfileId(tx);
+        const created = await db.transaction().execute<ProfileStoreResult<ProfileRecord>>(async (tx) => {
+            const templateProfileIdResult = await resolveTemplateProfileId(tx);
+            if (templateProfileIdResult.isErr()) {
+                return errProfileStore(templateProfileIdResult.error.message);
+            }
+
             const profileName = normalizeName(name, DEFAULT_PROFILE_NAME);
 
             await tx
@@ -133,7 +145,7 @@ export class ProfileStore {
                 })
                 .execute();
 
-            await initializeProfileBaseline(tx, profileId, templateProfileId, {
+            await initializeProfileBaseline(tx, profileId, templateProfileIdResult.value, {
                 copyAllSettings: false,
                 timestamp,
             });
@@ -148,8 +160,10 @@ export class ProfileStore {
                 throw new Error(`Failed to create profile "${profileId}".`);
             }
 
-            return mapProfile(created);
+            return okProfileStore(mapProfile(created));
         });
+
+        return created;
     }
 
     async rename(profileId: string, name: string): Promise<ProfileRecord | null> {
@@ -171,12 +185,12 @@ export class ProfileStore {
         return updated ? mapProfile(updated) : null;
     }
 
-    async duplicate(profileId: string, name?: string): Promise<ProfileRecord | null> {
+    async duplicate(profileId: string, name?: string): Promise<ProfileStoreResult<ProfileRecord | null>> {
         const { db } = getPersistence();
         const timestamp = createTimestamp();
         const duplicateId = createProfileId();
 
-        return db.transaction().execute(async (tx) => {
+        const duplicate = await db.transaction().execute(async (tx) => {
             const source = await tx
                 .selectFrom('profiles')
                 .select(['id', 'name'])
@@ -217,6 +231,8 @@ export class ProfileStore {
 
             return mapProfile(duplicate);
         });
+
+        return okProfileStore(duplicate);
     }
 
     async delete(profileId: string): Promise<ProfileDeletionGuardResult> {

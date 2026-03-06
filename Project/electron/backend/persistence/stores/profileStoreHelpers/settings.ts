@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import type { ProfileStoreDb } from '@/app/backend/persistence/stores/profileStoreHelpers/types';
-import { parseJsonValue } from '@/app/backend/persistence/stores/utils';
+import { isJsonString, parseJsonValue } from '@/app/backend/persistence/stores/utils';
 
 const FALLBACK_DEFAULT_PROVIDER_ID = 'kilo';
 const FALLBACK_DEFAULT_MODEL_ID = 'kilo/auto';
@@ -24,11 +24,11 @@ async function resolveDefaultProviderAndModel(
 
     const providerId =
         typeof providerRaw === 'string'
-            ? parseJsonValue<string>(providerRaw, FALLBACK_DEFAULT_PROVIDER_ID)
+            ? parseJsonValue(providerRaw, FALLBACK_DEFAULT_PROVIDER_ID, isJsonString)
             : FALLBACK_DEFAULT_PROVIDER_ID;
     const modelId =
         typeof modelRaw === 'string'
-            ? parseJsonValue<string>(modelRaw, FALLBACK_DEFAULT_MODEL_ID)
+            ? parseJsonValue(modelRaw, FALLBACK_DEFAULT_MODEL_ID, isJsonString)
             : FALLBACK_DEFAULT_MODEL_ID;
 
     return {

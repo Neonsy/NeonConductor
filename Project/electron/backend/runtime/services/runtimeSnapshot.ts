@@ -20,6 +20,7 @@ import {
     threadStore,
     toolStore,
 } from '@/app/backend/persistence/stores';
+import { toProfileStoreException } from '@/app/backend/persistence/stores/profileStoreErrors';
 import type { RuntimeSnapshotV1 } from '@/app/backend/persistence/types';
 import { providerManagementService } from '@/app/backend/providers/service';
 import { appLog } from '@/app/main/logging';
@@ -85,7 +86,14 @@ class RuntimeSnapshotServiceImpl implements RuntimeSnapshotService {
             secretReferences,
         ] = await Promise.all([
             loadSlice('profiles', () => profileStore.list()),
-            loadSlice('active-profile', () => profileStore.getActive()),
+            loadSlice('active-profile', async () => {
+                const activeProfileResult = await profileStore.getActive();
+                if (activeProfileResult.isErr()) {
+                    throw toProfileStoreException(activeProfileResult.error);
+                }
+
+                return activeProfileResult.value;
+            }),
             loadSlice('sessions', () => sessionStore.list(profileId)),
             loadSlice('runs', () => runStore.listByProfile(profileId)),
             loadSlice('messages', () => messageStore.listMessagesByProfile(profileId)),

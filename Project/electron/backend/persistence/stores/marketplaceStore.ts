@@ -1,5 +1,5 @@
 import { getPersistence } from '@/app/backend/persistence/db';
-import { parseJsonValue } from '@/app/backend/persistence/stores/utils';
+import { isJsonRecord, parseJsonValue } from '@/app/backend/persistence/stores/utils';
 import type { MarketplacePackageRecord } from '@/app/backend/persistence/types';
 
 export class MarketplaceStore {
@@ -48,7 +48,7 @@ export class MarketplaceStore {
             version: packageRow.version,
             enabled: packageRow.enabled === 1,
             pinned: packageRow.pinned === 1,
-            source: parseJsonValue(packageRow.source_json, {}),
+            source: parseJsonValue(packageRow.source_json, {}, isJsonRecord),
             installedAt: packageRow.installed_at,
             updatedAt: packageRow.updated_at,
             assets: assetsByPackageId.get(packageRow.id) ?? [],

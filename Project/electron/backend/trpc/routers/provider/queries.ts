@@ -80,13 +80,23 @@ export const providerQueryProcedures = {
     getModelRoutingPreference: publicProcedure
         .input(providerGetModelRoutingPreferenceInputSchema)
         .query(async ({ input }) => {
+            const result = await providerManagementService.getModelRoutingPreference(input);
+            if (result.isErr()) {
+                throwWithCode(result.error.code, result.error.message);
+            }
+
             return {
-                preference: await providerManagementService.getModelRoutingPreference(input),
+                preference: result.value,
             };
         }),
     listModelProviders: publicProcedure.input(providerListModelProvidersInputSchema).query(async ({ input }) => {
+        const result = await providerManagementService.listModelProviders(input);
+        if (result.isErr()) {
+            throwWithCode(result.error.code, result.error.message);
+        }
+
         return {
-            providers: await providerManagementService.listModelProviders(input),
+            providers: result.value,
         };
     }),
 };

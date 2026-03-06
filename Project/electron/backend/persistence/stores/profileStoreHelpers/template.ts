@@ -1,6 +1,10 @@
+import { errProfileStore, okProfileStore, type ProfileStoreResult } from '@/app/backend/persistence/stores/profileStoreErrors';
 import type { ProfileStoreDb } from '@/app/backend/persistence/stores/profileStoreHelpers/types';
 
-export async function resolveTemplateProfileId(tx: ProfileStoreDb, preferredProfileId?: string): Promise<string> {
+export async function resolveTemplateProfileId(
+    tx: ProfileStoreDb,
+    preferredProfileId?: string
+): Promise<ProfileStoreResult<string>> {
     if (preferredProfileId) {
         const preferred = await tx
             .selectFrom('profiles')
@@ -8,7 +12,7 @@ export async function resolveTemplateProfileId(tx: ProfileStoreDb, preferredProf
             .where('id', '=', preferredProfileId)
             .executeTakeFirst();
         if (preferred) {
-            return preferred.id;
+            return okProfileStore(preferred.id);
         }
     }
 
@@ -19,7 +23,7 @@ export async function resolveTemplateProfileId(tx: ProfileStoreDb, preferredProf
         .executeTakeFirst();
 
     if (defaultProfile) {
-        return defaultProfile.id;
+        return okProfileStore(defaultProfile.id);
     }
 
     const oldest = await tx
@@ -30,8 +34,8 @@ export async function resolveTemplateProfileId(tx: ProfileStoreDb, preferredProf
         .executeTakeFirst();
 
     if (!oldest) {
-        throw new Error('Cannot resolve template profile because no profiles exist.');
+        return errProfileStore('Cannot resolve template profile because no profiles exist.');
     }
 
-    return oldest.id;
+    return okProfileStore(oldest.id);
 }

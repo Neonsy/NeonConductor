@@ -185,7 +185,12 @@ export const providerMutationProcedures = {
     setModelRoutingPreference: publicProcedure
         .input(providerSetModelRoutingPreferenceInputSchema)
         .mutation(async ({ input }) => {
-            const preference = await providerManagementService.setModelRoutingPreference(input);
+            const result = await providerManagementService.setModelRoutingPreference(input);
+            if (result.isErr()) {
+                throwWithCode(result.error.code, result.error.message);
+            }
+
+            const preference = result.value;
 
             await emitProviderUpsertEvent({
                 providerId: input.providerId,

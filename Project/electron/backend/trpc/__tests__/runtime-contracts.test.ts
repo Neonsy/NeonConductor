@@ -164,6 +164,22 @@ describe('runtime contracts', () => {
         expect(mcpServers.servers.length).toBeGreaterThan(0);
     });
 
+    it('returns a typed not-found error when no enabled modes exist for a tab', async () => {
+        const caller = createCaller();
+        const { db } = getPersistence();
+
+        await db
+            .updateTable('mode_definitions')
+            .set({ enabled: 0 })
+            .where('profile_id', '=', profileId)
+            .where('top_level_tab', '=', 'agent')
+            .execute();
+
+        await expect(caller.mode.getActive({ profileId, topLevelTab: 'agent' })).rejects.toMatchObject({
+            message: `No enabled modes found for tab "agent" on profile "${profileId}".`,
+        });
+    });
+
     it('supports profile lifecycle with active switching, secure duplication, and last-profile guard', async () => {
         const caller = createCaller();
 

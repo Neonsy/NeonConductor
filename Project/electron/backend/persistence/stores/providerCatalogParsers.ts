@@ -1,5 +1,5 @@
 import { parseEnumValue, parseJsonRecord } from '@/app/backend/persistence/stores/rowParsers';
-import { parseJsonValue } from '@/app/backend/persistence/stores/utils';
+import { isJsonUnknownArray, parseJsonValue } from '@/app/backend/persistence/stores/utils';
 import type { ProviderModelModality } from '@/app/backend/providers/types';
 import { providerIds } from '@/app/backend/runtime/contracts';
 import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
@@ -32,11 +32,7 @@ export function parseModalities(value: string | null): ProviderModelModality[] {
         return ['text'];
     }
 
-    const parsed = parseJsonValue<unknown>(value, []);
-    if (!Array.isArray(parsed)) {
-        return ['text'];
-    }
-
+    const parsed = parseJsonValue(value, [], isJsonUnknownArray);
     const normalized = parsed.filter(isModelModality);
     if (!normalized.includes('text')) {
         normalized.unshift('text');

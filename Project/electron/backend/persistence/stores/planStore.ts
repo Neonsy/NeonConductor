@@ -1,6 +1,6 @@
 import { getPersistence } from '@/app/backend/persistence/db';
 import { parseEntityId, parseEnumValue, parseJsonRecord } from '@/app/backend/persistence/stores/rowParsers';
-import { nowIso, parseJsonValue } from '@/app/backend/persistence/stores/utils';
+import { isJsonRecord, isJsonUnknownArray, nowIso, parseJsonValue } from '@/app/backend/persistence/stores/utils';
 import type { PlanItemRecord, PlanQuestionRecord, PlanRecord } from '@/app/backend/persistence/types';
 import { createEntityId, planItemStatuses, planStatuses, topLevelTabs } from '@/app/backend/runtime/contracts';
 import type { EntityId, TopLevelTab } from '@/app/backend/runtime/contracts';
@@ -38,8 +38,8 @@ function mapPlanRecord(row: {
     created_at: string;
     updated_at: string;
 }): PlanRecord {
-    const rawQuestions = parseJsonValue<unknown>(row.questions_json, []);
-    const questions = Array.isArray(rawQuestions) ? rawQuestions.filter(isPlanQuestionRecord) : [];
+    const rawQuestions = parseJsonValue(row.questions_json, [], isJsonUnknownArray);
+    const questions = rawQuestions.filter(isPlanQuestionRecord);
 
     const rawAnswers = parseJsonRecord(row.answers_json);
     const answers: Record<string, string> = {};
@@ -225,8 +225,14 @@ export class PlanStore {
         }
 
         const now = nowIso();
-        const questions = parseJsonValue<PlanQuestionRecord[]>(row.questions_json, []);
-        const answers = parseJsonValue<Record<string, string>>(row.answers_json, {});
+        const questions = parseJsonValue(row.questions_json, [], isJsonUnknownArray).filter(isPlanQuestionRecord);
+        const rawAnswers = parseJsonValue(row.answers_json, {}, isJsonRecord);
+        const answers: Record<string, string> = {};
+        for (const [key, value] of Object.entries(rawAnswers)) {
+            if (typeof value === 'string') {
+                answers[key] = value;
+            }
+        }
         answers[questionId] = answer;
         const hasUnanswered = questions.some((question) => {
             const response = answers[question.id];

@@ -208,6 +208,26 @@ describe('kilo routing', () => {
         ).rejects.toThrow('required when routingMode is "pinned"');
     });
 
+    it('returns not-found errors for missing kilo models through the service boundary', async () => {
+        const caller = createCaller();
+
+        await expect(
+            caller.provider.getModelRoutingPreference({
+                profileId,
+                providerId: 'kilo',
+                modelId: 'openai/does-not-exist',
+            })
+        ).rejects.toThrow('Model "openai/does-not-exist" is not available for provider "kilo".');
+
+        await expect(
+            caller.provider.listModelProviders({
+                profileId,
+                providerId: 'kilo',
+                modelId: 'openai/does-not-exist',
+            })
+        ).rejects.toThrow('Model "openai/does-not-exist" is not available for provider "kilo".');
+    });
+
     it('maps dynamic and pinned routing preferences into Kilo runtime provider request envelope', async () => {
         const caller = createCaller();
         const requestBodies: Record<string, unknown>[] = [];

@@ -9,6 +9,7 @@ import {
 import { runtimeRemoveEvent, runtimeStatusEvent, runtimeUpsertEvent } from '@/app/backend/runtime/services/runtimeEventEnvelope';
 import { runtimeEventLogService } from '@/app/backend/runtime/services/runtimeEventLog';
 import { publicProcedure, router } from '@/app/backend/trpc/init';
+import { throwWithCode } from '@/app/backend/trpc/routers/provider/shared';
 
 export const profileRouter = router({
     list: publicProcedure.query(async () => {
@@ -17,10 +18,20 @@ export const profileRouter = router({
         };
     }),
     getActive: publicProcedure.query(async () => {
-        return profileStore.getActive();
+        const result = await profileStore.getActive();
+        if (result.isErr()) {
+            throwWithCode(result.error.code, result.error.message);
+        }
+
+        return result.value;
     }),
     setActive: publicProcedure.input(profileSetActiveInputSchema).mutation(async ({ input }) => {
-        const profile = await profileStore.setActive(input.profileId);
+        const result = await profileStore.setActive(input.profileId);
+        if (result.isErr()) {
+            throwWithCode(result.error.code, result.error.message);
+        }
+
+        const profile = result.value;
         if (!profile) {
             return {
                 updated: false as const,
@@ -46,7 +57,12 @@ export const profileRouter = router({
         };
     }),
     create: publicProcedure.input(profileCreateInputSchema).mutation(async ({ input }) => {
-        const profile = await profileStore.create(input.name);
+        const result = await profileStore.create(input.name);
+        if (result.isErr()) {
+            throwWithCode(result.error.code, result.error.message);
+        }
+
+        const profile = result.value;
 
         await runtimeEventLogService.append(
             runtimeUpsertEvent({
@@ -91,7 +107,12 @@ export const profileRouter = router({
         };
     }),
     duplicate: publicProcedure.input(profileDuplicateInputSchema).mutation(async ({ input }) => {
-        const profile = await profileStore.duplicate(input.profileId, input.name);
+        const result = await profileStore.duplicate(input.profileId, input.name);
+        if (result.isErr()) {
+            throwWithCode(result.error.code, result.error.message);
+        }
+
+        const profile = result.value;
         if (!profile) {
             return {
                 duplicated: false as const,

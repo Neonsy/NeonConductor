@@ -37,6 +37,11 @@ const TRPC_CODE_BY_OPERATIONAL_ERROR_CODE = new Map<OperationalErrorCode, TRPCEr
     ['invariant_violation', 'INTERNAL_SERVER_ERROR'],
     ['data_corruption', 'INTERNAL_SERVER_ERROR'],
 ]);
+const OPERATIONAL_ERROR_CODES = Array.from(TRPC_CODE_BY_OPERATIONAL_ERROR_CODE.keys());
+
+function isOperationalErrorCode(value: string): value is OperationalErrorCode {
+    return OPERATIONAL_ERROR_CODES.some((code) => code === value);
+}
 
 export function mapOperationalErrorCodeToTrpcCode(code: OperationalErrorCode): TRPCError['code'] {
     return TRPC_CODE_BY_OPERATIONAL_ERROR_CODE.get(code) ?? 'INTERNAL_SERVER_ERROR';
@@ -96,7 +101,5 @@ export function extractErrorCode(error: unknown): OperationalErrorCode | undefin
         return undefined;
     }
 
-    return TRPC_CODE_BY_OPERATIONAL_ERROR_CODE.has(code as OperationalErrorCode)
-        ? (code as OperationalErrorCode)
-        : undefined;
+    return isOperationalErrorCode(code) ? code : undefined;
 }

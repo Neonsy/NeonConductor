@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 
+import { createProfileSettingsActions } from '@/web/components/settings/profileSettings/actions';
+import { refetchProfilePreference } from '@/web/components/settings/profileSettings/refetch';
 import { resolveSelectedProfileId } from '@/web/components/settings/profileSettings/selection';
 import { trpc } from '@/web/trpc/client';
 
@@ -44,7 +46,7 @@ export function useProfileSettingsController(input: {
     );
     const setEditPreferenceMutation = trpc.conversation.setEditPreference.useMutation({
         onSuccess: () => {
-            void editPreferenceQuery.refetch();
+            refetchProfilePreference(editPreferenceQuery);
         },
     });
     const threadTitlePreferenceQuery = trpc.conversation.getThreadTitlePreference.useQuery(
@@ -58,7 +60,7 @@ export function useProfileSettingsController(input: {
     );
     const setThreadTitlePreferenceMutation = trpc.conversation.setThreadTitlePreference.useMutation({
         onSuccess: () => {
-            void threadTitlePreferenceQuery.refetch();
+            refetchProfilePreference(threadTitlePreferenceQuery);
         },
     });
 
@@ -71,9 +73,26 @@ export function useProfileSettingsController(input: {
         setThreadTitleAiModelInput(aiModel);
     }, [threadTitlePreferenceQuery.data?.aiModel, threadTitlePreferenceQuery.data?.mode]);
 
-    async function refetchProfiles(): Promise<void> {
-        await profilesQuery.refetch();
-    }
+    const actions = createProfileSettingsActions({
+        activeProfileId: input.activeProfileId,
+        selectedProfile,
+        newProfileName,
+        renameValue,
+        threadTitleAiModelInput,
+        profilesQuery,
+        createMutation,
+        renameMutation,
+        duplicateMutation,
+        deleteMutation,
+        setActiveMutation,
+        setEditPreferenceMutation,
+        setThreadTitlePreferenceMutation,
+        setNewProfileName,
+        setSelectedProfileId,
+        setStatusMessage,
+        setConfirmDeleteOpen,
+        onProfileActivated: input.onProfileActivated,
+    });
 
     return {
         profiles,
@@ -104,133 +123,6 @@ export function useProfileSettingsController(input: {
         setThreadTitleAiModelInput,
         setStatusMessage,
         setConfirmDeleteOpen,
-        createProfile: async () => {
-            const result = await createMutation.mutateAsync({
-                ...(newProfileName.trim() ? { name: newProfileName.trim() } : {}),
-            });
-            setStatusMessage(`Created profile "${result.profile.name}".`);
-            setNewProfileName('');
-            setSelectedProfileId(result.profile.id);
-            await refetchProfiles();
-        },
-        renameProfile: async () => {
-            if (!selectedProfile) {
-                return;
-            }
-
-            const result = await renameMutation.mutateAsync({
-                profileId: selectedProfile.id,
-                name: renameValue.trim(),
-            });
-            if (!result.updated) {
-                setStatusMessage('Rename failed: profile not found.');
-                return;
-            }
-
-            setStatusMessage(`Renamed profile to "${result.profile.name}".`);
-            await refetchProfiles();
-        },
-        duplicateProfile: async () => {
-            if (!selectedProfile) {
-                return;
-            }
-
-            const result = await duplicateMutation.mutateAsync({
-                profileId: selectedProfile.id,
-            });
-            if (!result.duplicated) {
-                setStatusMessage('Duplicate failed: profile not found.');
-                return;
-            }
-
-            setStatusMessage(`Duplicated as "${result.profile.name}".`);
-            setSelectedProfileId(result.profile.id);
-            await refetchProfiles();
-        },
-        activateProfile: async () => {
-            if (!selectedProfile) {
-                return;
-            }
-
-            const result = await setActiveMutation.mutateAsync({
-                profileId: selectedProfile.id,
-            });
-            if (!result.updated) {
-                setStatusMessage('Set active failed: profile not found.');
-                return;
-            }
-
-            setStatusMessage(`Active profile set to "${result.profile.name}".`);
-            input.onProfileActivated(result.profile.id);
-            await refetchProfiles();
-        },
-        updateEditPreference: async (value: 'ask' | 'truncate' | 'branch') => {
-            if (!selectedProfile) {
-                return;
-            }
-
-            await setEditPreferenceMutation.mutateAsync({
-                profileId: selectedProfile.id,
-                value,
-            });
-            setStatusMessage('Updated conversation edit behavior.');
-        },
-        updateThreadTitleMode: async (mode: 'template' | 'ai_optional') => {
-            if (!selectedProfile) {
-                return;
-            }
-
-            if (mode === 'ai_optional' && threadTitleAiModelInput.trim().length === 0) {
-                setStatusMessage(
-                    'Set a title AI model (for example "openai/gpt-5-mini") before enabling AI optional mode.'
-                );
-                return;
-            }
-
-            await setThreadTitlePreferenceMutation.mutateAsync({
-                profileId: selectedProfile.id,
-                mode,
-                ...(mode === 'ai_optional' ? { aiModel: threadTitleAiModelInput.trim() } : {}),
-            });
-            setStatusMessage('Updated thread title generation settings.');
-        },
-        saveThreadTitleAiModel: async () => {
-            if (!selectedProfile || threadTitleAiModelInput.trim().length === 0) {
-                return;
-            }
-
-            await setThreadTitlePreferenceMutation.mutateAsync({
-                profileId: selectedProfile.id,
-                mode: 'ai_optional',
-                aiModel: threadTitleAiModelInput.trim(),
-            });
-            setStatusMessage('Updated title AI model.');
-        },
-        deleteProfile: async () => {
-            if (!selectedProfile) {
-                setConfirmDeleteOpen(false);
-                return;
-            }
-
-            const result = await deleteMutation.mutateAsync({
-                profileId: selectedProfile.id,
-            });
-            setConfirmDeleteOpen(false);
-            if (!result.deleted) {
-                setStatusMessage(
-                    result.reason === 'last_profile'
-                        ? 'Cannot delete the last remaining profile.'
-                        : 'Delete failed: profile not found.'
-                );
-                return;
-            }
-
-            setStatusMessage('Profile deleted.');
-            if (result.activeProfileId) {
-                input.onProfileActivated(result.activeProfileId);
-            }
-            setSelectedProfileId(undefined);
-            await refetchProfiles();
-        },
+        ...actions,
     };
 }

@@ -1,5 +1,5 @@
 import { getPersistence } from '@/app/backend/persistence/db';
-import { nowIso, parseJsonValue } from '@/app/backend/persistence/stores/utils';
+import { isJsonRecord, nowIso, parseJsonValue } from '@/app/backend/persistence/stores/utils';
 import type { KiloAccountContextRecord } from '@/app/backend/persistence/types';
 
 const EMPTY_SNAPSHOT_UPDATED_AT = '1970-01-01T00:00:00.000Z';
@@ -60,7 +60,7 @@ export class AccountSnapshotStore {
                     organizationId: organizationRow.organization_id,
                     name: organizationRow.name,
                     isActive: organizationRow.is_active === 1,
-                    entitlement: parseJsonValue(organizationRow.entitlement_json, {}),
+                    entitlement: parseJsonValue(organizationRow.entitlement_json, {}, isJsonRecord),
                 })),
                 updatedAt: EMPTY_SNAPSHOT_UPDATED_AT,
             };
@@ -78,7 +78,7 @@ export class AccountSnapshotStore {
                 organizationId: organizationRow.organization_id,
                 name: organizationRow.name,
                 isActive: organizationRow.is_active === 1,
-                entitlement: parseJsonValue(organizationRow.entitlement_json, {}),
+                entitlement: parseJsonValue(organizationRow.entitlement_json, {}, isJsonRecord),
             })),
             updatedAt: accountRow.updated_at,
         };

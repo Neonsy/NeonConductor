@@ -1,5 +1,6 @@
 import { kiloRoutingPreferenceStore, providerCatalogStore, providerStore } from '@/app/backend/persistence/stores';
 import type { ProviderDiscoverySnapshotRecord } from '@/app/backend/persistence/types';
+import { errProviderService, okProviderService, type ProviderServiceResult } from '@/app/backend/providers/service/errors';
 import type { KiloModelProviderOption } from '@/app/backend/providers/service/types';
 import type {
     KiloModelRoutingPreference,
@@ -153,11 +154,13 @@ function mapModelProviderOption(input: {
     };
 }
 
-async function assertKiloModelExists(profileId: string, modelId: string): Promise<void> {
+async function assertKiloModelExists(profileId: string, modelId: string): Promise<ProviderServiceResult<void>> {
     const exists = await providerStore.modelExists(profileId, 'kilo', modelId);
     if (!exists) {
-        throw new Error(`Model "${modelId}" is not available for provider "kilo".`);
+        return errProviderService('provider_model_missing', `Model "${modelId}" is not available for provider "kilo".`);
     }
+
+    return okProviderService(undefined);
 }
 
 function toContractPreference(input: {
@@ -186,6 +189,39 @@ function toContractPreference(input: {
     };
 }
 
+function validateRoutingPreferenceInput(
+    input: ProviderSetModelRoutingPreferenceInput
+): ProviderServiceResult<void> {
+    if (input.routingMode === 'dynamic') {
+        if (!input.sort) {
+            return errProviderService('invalid_payload', 'Invalid routing preference: "sort" is required when routingMode is "dynamic".');
+        }
+        if (input.pinnedProviderId !== undefined) {
+            return errProviderService(
+                'invalid_payload',
+                'Invalid routing preference: "pinnedProviderId" is not allowed when routingMode is "dynamic".'
+            );
+        }
+
+        return okProviderService(undefined);
+    }
+
+    if (!input.pinnedProviderId) {
+        return errProviderService(
+            'invalid_payload',
+            'Invalid routing preference: "pinnedProviderId" is required when routingMode is "pinned".'
+        );
+    }
+    if (input.sort !== undefined) {
+        return errProviderService(
+            'invalid_payload',
+            'Invalid routing preference: "sort" is not allowed when routingMode is "pinned".'
+        );
+    }
+
+    return okProviderService(undefined);
+}
+
 async function findLatestKiloProvidersSnapshot(
     profileId: string
 ): Promise<ProviderDiscoverySnapshotRecord | undefined> {
@@ -195,27 +231,38 @@ async function findLatestKiloProvidersSnapshot(
 
 export async function getModelRoutingPreference(
     input: ProviderGetModelRoutingPreferenceInput
-): Promise<KiloModelRoutingPreference> {
-    await assertKiloModelExists(input.profileId, input.modelId);
+): Promise<ProviderServiceResult<KiloModelRoutingPreference>> {
+    const modelResult = await assertKiloModelExists(input.profileId, input.modelId);
+    if (modelResult.isErr()) {
+        return errProviderService(modelResult.error.code, modelResult.error.message);
+    }
 
     const existing = await kiloRoutingPreferenceStore.getPreference(input.profileId, input.modelId);
     if (!existing) {
-        return {
+        return okProviderService({
             profileId: input.profileId,
             providerId: 'kilo',
             modelId: input.modelId,
             routingMode: 'dynamic',
             sort: 'default',
-        };
+        });
     }
 
-    return toContractPreference(existing);
+    return okProviderService(toContractPreference(existing));
 }
 
 export async function setModelRoutingPreference(
     input: ProviderSetModelRoutingPreferenceInput
-): Promise<KiloModelRoutingPreference> {
-    await assertKiloModelExists(input.profileId, input.modelId);
+): Promise<ProviderServiceResult<KiloModelRoutingPreference>> {
+    const validationResult = validateRoutingPreferenceInput(input);
+    if (validationResult.isErr()) {
+        return errProviderService(validationResult.error.code, validationResult.error.message);
+    }
+
+    const modelResult = await assertKiloModelExists(input.profileId, input.modelId);
+    if (modelResult.isErr()) {
+        return errProviderService(modelResult.error.code, modelResult.error.message);
+    }
 
     const saved = await kiloRoutingPreferenceStore.setPreference({
         profileId: input.profileId,
@@ -226,15 +273,20 @@ export async function setModelRoutingPreference(
         ...(input.pinnedProviderId ? { pinnedProviderId: input.pinnedProviderId } : {}),
     });
 
-    return toContractPreference(saved);
+    return okProviderService(toContractPreference(saved));
 }
 
-export async function listModelProviders(input: ProviderListModelProvidersInput): Promise<KiloModelProviderOption[]> {
-    await assertKiloModelExists(input.profileId, input.modelId);
+export async function listModelProviders(
+    input: ProviderListModelProvidersInput
+): Promise<ProviderServiceResult<KiloModelProviderOption[]>> {
+    const modelResult = await assertKiloModelExists(input.profileId, input.modelId);
+    if (modelResult.isErr()) {
+        return errProviderService(modelResult.error.code, modelResult.error.message);
+    }
 
     const snapshot = await findLatestKiloProvidersSnapshot(input.profileId);
     if (!snapshot || snapshot.status !== 'ok') {
-        return [];
+        return okProviderService([]);
     }
 
     const providersRaw = Array.isArray(snapshot.payload['providers']) ? snapshot.payload['providers'] : [];
@@ -290,5 +342,5 @@ export async function listModelProviders(input: ProviderListModelProvidersInput)
     }
 
     rows.sort((left, right) => left.label.localeCompare(right.label));
-    return rows;
+    return okProviderService(rows);
 }
