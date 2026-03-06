@@ -7,20 +7,24 @@ import {
     permissionSetWorkspaceOverrideInputSchema,
 } from '@/app/backend/runtime/contracts';
 import { resolveEffectivePermissionPolicy } from '@/app/backend/runtime/services/permissions/policyResolver';
+import { runtimeStatusEvent, runtimeUpsertEvent } from '@/app/backend/runtime/services/runtimeEventEnvelope';
 import { runtimeEventLogService } from '@/app/backend/runtime/services/runtimeEventLog';
 import { publicProcedure, router } from '@/app/backend/trpc/init';
 
 export const permissionRouter = router({
     request: publicProcedure.input(permissionRequestInputSchema).mutation(async ({ input }) => {
         const record = await permissionStore.create(input);
-        await runtimeEventLogService.append({
+        await runtimeEventLogService.append(
+            runtimeStatusEvent({
             entityType: 'permission',
+            domain: 'permission',
             entityId: record.id,
             eventType: 'permission.requested',
             payload: {
                 request: record,
             },
-        });
+            })
+        );
 
         return { request: record };
     }),
@@ -56,8 +60,10 @@ export const permissionRouter = router({
             input.resource,
             input.policy
         );
-        await runtimeEventLogService.append({
+        await runtimeEventLogService.append(
+            runtimeUpsertEvent({
             entityType: 'permission',
+            domain: 'permission',
             entityId: input.resource,
             eventType: 'permission.override.profile.set',
             payload: {
@@ -65,7 +71,8 @@ export const permissionRouter = router({
                 resource: input.resource,
                 policy: input.policy,
             },
-        });
+            })
+        );
 
         return {
             override,
@@ -80,8 +87,10 @@ export const permissionRouter = router({
                 input.resource,
                 input.policy
             );
-            await runtimeEventLogService.append({
+            await runtimeEventLogService.append(
+                runtimeUpsertEvent({
                 entityType: 'permission',
+                domain: 'permission',
                 entityId: input.resource,
                 eventType: 'permission.override.workspace.set',
                 payload: {
@@ -90,7 +99,8 @@ export const permissionRouter = router({
                     resource: input.resource,
                     policy: input.policy,
                 },
-            });
+                })
+            );
 
             return {
                 override,
@@ -110,14 +120,17 @@ export const permissionRouter = router({
             return { updated: false as const, reason: 'not_found' as const };
         }
 
-        await runtimeEventLogService.append({
+        await runtimeEventLogService.append(
+            runtimeStatusEvent({
             entityType: 'permission',
+            domain: 'permission',
             entityId: updatedRecord.id,
             eventType: 'permission.granted',
             payload: {
                 request: updatedRecord,
             },
-        });
+            })
+        );
 
         return { updated: true as const, reason: null, request: updatedRecord };
     }),
@@ -135,14 +148,17 @@ export const permissionRouter = router({
             return { updated: false as const, reason: 'not_found' as const };
         }
 
-        await runtimeEventLogService.append({
+        await runtimeEventLogService.append(
+            runtimeStatusEvent({
             entityType: 'permission',
+            domain: 'permission',
             entityId: updatedRecord.id,
             eventType: 'permission.denied',
             payload: {
                 request: updatedRecord,
             },
-        });
+            })
+        );
 
         return { updated: true as const, reason: null, request: updatedRecord };
     }),

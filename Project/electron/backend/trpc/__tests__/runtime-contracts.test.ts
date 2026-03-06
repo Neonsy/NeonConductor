@@ -125,7 +125,7 @@ describe('runtime contracts', () => {
     it('exposes all new runtime domains in root router', async () => {
         const caller = createCaller();
 
-        const snapshot = await caller.runtime.getSnapshot({ profileId });
+        const snapshot = await caller.runtime.getDiagnosticSnapshot({ profileId });
         const shellBootstrap = await caller.runtime.getShellBootstrap({ profileId });
         const sessions = await caller.session.list({ profileId });
         const providers = await caller.provider.listProviders({ profileId });
@@ -200,7 +200,7 @@ describe('runtime contracts', () => {
             throw new Error('Expected profile duplication to succeed.');
         }
 
-        const duplicatedSnapshot = await caller.runtime.getSnapshot({
+        const duplicatedSnapshot = await caller.runtime.getDiagnosticSnapshot({
             profileId: duplicated.profile.id,
         });
         expect(duplicatedSnapshot.secretReferences).toEqual([]);
@@ -1223,7 +1223,7 @@ describe('runtime contracts', () => {
         }
         expect(configured.state.authState).toBe('configured');
 
-        const snapshotAfterSet = await caller.runtime.getSnapshot({ profileId });
+        const snapshotAfterSet = await caller.runtime.getDiagnosticSnapshot({ profileId });
         expect(snapshotAfterSet.secretReferences.some((ref) => ref.providerId === 'openai')).toBe(true);
 
         const syncResult = await caller.provider.syncCatalog({
@@ -1244,7 +1244,7 @@ describe('runtime contracts', () => {
         }
         expect(cleared.authState.authState).toBe('logged_out');
 
-        const snapshotAfterClear = await caller.runtime.getSnapshot({ profileId });
+        const snapshotAfterClear = await caller.runtime.getDiagnosticSnapshot({ profileId });
         expect(snapshotAfterClear.secretReferences.some((ref) => ref.providerId === 'openai')).toBe(false);
     });
 
@@ -1798,7 +1798,7 @@ describe('runtime contracts', () => {
         const sessions = await caller.session.list({ profileId });
         expect(sessions.sessions.some((item) => item.id === created.session.id)).toBe(false);
 
-        const snapshot = await caller.runtime.getSnapshot({ profileId });
+        const snapshot = await caller.runtime.getDiagnosticSnapshot({ profileId });
         expect(snapshot.lastSequence).toBeGreaterThan(0);
 
         const remainingRulesetCount = sqlite
@@ -1935,7 +1935,7 @@ describe('runtime contracts', () => {
         });
         expect(applied.applied).toBe(true);
 
-        const snapshot = await caller.runtime.getSnapshot({ profileId });
+        const snapshot = await caller.runtime.getDiagnosticSnapshot({ profileId });
         expect(snapshot.modeDefinitions.length).toBe(8);
         expect(snapshot.kiloAccountContext.authState).toBe('logged_out');
         expect(snapshot.secretReferences).toEqual([]);

@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
-const RUNTIME_BASELINE_VERSION = 'runtime-baseline-v3';
+const RUNTIME_BASELINE_VERSION = 'runtime-baseline-v4';
 const BASELINE_MARKER_FILENAME = 'runtime-baseline.version';
 
 function getBaselineMarkerPath(dbPath: string): string {

@@ -120,6 +120,8 @@ export interface RuntimeEventsTable {
     sequence: Generated<number>;
     event_id: string;
     entity_type: string;
+    domain: string;
+    operation: string;
     entity_id: string;
     event_type: string;
     payload_json: string;

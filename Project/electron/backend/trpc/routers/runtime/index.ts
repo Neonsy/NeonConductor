@@ -5,6 +5,7 @@ import {
     runtimeResetInputSchema,
 } from '@/app/backend/runtime/contracts';
 import { runtimeEventBus } from '@/app/backend/runtime/services/runtimeEventBus';
+import { runtimeResetEvent } from '@/app/backend/runtime/services/runtimeEventEnvelope';
 import { runtimeEventLogService } from '@/app/backend/runtime/services/runtimeEventLog';
 import { runtimeResetService } from '@/app/backend/runtime/services/runtimeReset';
 import { runtimeShellBootstrapService } from '@/app/backend/runtime/services/runtimeShellBootstrap';
@@ -37,7 +38,7 @@ function waitForNextRuntimeEvent(cursor: number, signal: AbortSignal): Promise<R
 }
 
 export const runtimeRouter = router({
-    getSnapshot: publicProcedure.input(profileInputSchema).query(async ({ input }) => {
+    getDiagnosticSnapshot: publicProcedure.input(profileInputSchema).query(async ({ input }) => {
         return runtimeSnapshotService.getSnapshot(input.profileId);
     }),
     getShellBootstrap: publicProcedure.input(profileInputSchema).query(async ({ input }) => {
@@ -76,8 +77,10 @@ export const runtimeRouter = router({
         const result = await runtimeResetService.reset(input);
 
         if (result.applied) {
-            await runtimeEventLogService.append({
+            await runtimeEventLogService.append(
+                runtimeResetEvent({
                 entityType: 'runtime',
+                domain: 'runtime',
                 entityId: 'runtime',
                 eventType: 'runtime.reset.applied',
                 payload: {
@@ -87,7 +90,8 @@ export const runtimeRouter = router({
                     profileId: input.profileId ?? null,
                     workspaceFingerprint: input.workspaceFingerprint ?? null,
                 },
-            });
+                })
+            );
         }
 
         return result;

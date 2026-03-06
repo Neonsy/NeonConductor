@@ -6,6 +6,7 @@ import { permissionStore, toolStore } from '@/app/backend/persistence/stores';
 import type { ToolRecord } from '@/app/backend/persistence/types';
 import type { ToolInvokeInput } from '@/app/backend/runtime/contracts';
 import { resolveEffectivePermissionPolicy } from '@/app/backend/runtime/services/permissions/policyResolver';
+import { runtimeStatusEvent } from '@/app/backend/runtime/services/runtimeEventEnvelope';
 import { runtimeEventLogService } from '@/app/backend/runtime/services/runtimeEventLog';
 import { appLog } from '@/app/main/logging';
 
@@ -244,8 +245,10 @@ export class ToolExecutionService {
         });
 
         if (resolvedPolicy.policy === 'deny') {
-            await runtimeEventLogService.append({
+            await runtimeEventLogService.append(
+                runtimeStatusEvent({
                 entityType: 'tool',
+                domain: 'tool',
                 entityId: tool.id,
                 eventType: 'tool.invocation.blocked',
                 payload: {
@@ -256,7 +259,8 @@ export class ToolExecutionService {
                     source: resolvedPolicy.source,
                     reason: 'policy_denied',
                 },
-            });
+                })
+            );
 
             appLog.warn({
                 tag: 'tool-execution',
@@ -288,8 +292,10 @@ export class ToolExecutionService {
                 rationale: `Tool invocation requires confirmation (${tool.id}).`,
             });
 
-            await runtimeEventLogService.append({
+            await runtimeEventLogService.append(
+                runtimeStatusEvent({
                 entityType: 'permission',
+                domain: 'permission',
                 entityId: request.id,
                 eventType: 'permission.requested',
                 payload: {
@@ -297,10 +303,13 @@ export class ToolExecutionService {
                     source: 'tool.invoke',
                     toolId: tool.id,
                 },
-            });
+                })
+            );
 
-            await runtimeEventLogService.append({
+            await runtimeEventLogService.append(
+                runtimeStatusEvent({
                 entityType: 'tool',
+                domain: 'tool',
                 entityId: tool.id,
                 eventType: 'tool.invocation.blocked',
                 payload: {
@@ -312,7 +321,8 @@ export class ToolExecutionService {
                     reason: 'permission_required',
                     requestId: request.id,
                 },
-            });
+                })
+            );
 
             appLog.info({
                 tag: 'tool-execution',
@@ -342,8 +352,10 @@ export class ToolExecutionService {
         const execution = await executeTool(tool, args);
         if (execution.isOk()) {
             const output = execution.value;
-            await runtimeEventLogService.append({
+            await runtimeEventLogService.append(
+                runtimeStatusEvent({
                 entityType: 'tool',
+                domain: 'tool',
                 entityId: tool.id,
                 eventType: 'tool.invocation.completed',
                 payload: {
@@ -353,7 +365,8 @@ export class ToolExecutionService {
                     policy: resolvedPolicy.policy,
                     source: resolvedPolicy.source,
                 },
-            });
+                })
+            );
 
             appLog.debug({
                 tag: 'tool-execution',
@@ -379,8 +392,10 @@ export class ToolExecutionService {
         const code = execution.error.code;
         const message = execution.error.message;
 
-        await runtimeEventLogService.append({
+        await runtimeEventLogService.append(
+            runtimeStatusEvent({
             entityType: 'tool',
+            domain: 'tool',
             entityId: tool.id,
             eventType: 'tool.invocation.failed',
             payload: {
@@ -391,7 +406,8 @@ export class ToolExecutionService {
                 source: resolvedPolicy.source,
                 error: message,
             },
-        });
+            })
+        );
 
         appLog.warn({
             tag: 'tool-execution',

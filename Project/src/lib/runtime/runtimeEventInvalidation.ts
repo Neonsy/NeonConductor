@@ -88,7 +88,10 @@ export async function invalidateQueriesForRuntimeEvent(
 
     if (event.domain === 'runtime') {
         if (event.operation === 'reset') {
-            await Promise.all([utils.runtime.getShellBootstrap.invalidate(), utils.runtime.getSnapshot.invalidate()]);
+            await Promise.all([
+                utils.runtime.getShellBootstrap.invalidate(),
+                utils.runtime.getDiagnosticSnapshot.invalidate(),
+            ]);
             return;
         }
 

@@ -191,6 +191,10 @@ export function initializePersistence(options: InitializePersistenceOptions = {}
     const dbPath = resolveDbPath(options);
     const resetForBaseline = shouldResetPersistenceBaseline(dbPath);
 
+    if (persistenceContext && (options.forceReinitialize || persistenceContext.dbPath !== dbPath)) {
+        closePersistence();
+    }
+
     if (options.resetDb && !isMemoryDbPath(dbPath)) {
         rmSync(dbPath, { force: true });
     }
@@ -205,10 +209,6 @@ export function initializePersistence(options: InitializePersistenceOptions = {}
 
     if (persistenceContext && !options.forceReinitialize && persistenceContext.dbPath === dbPath) {
         return persistenceContext;
-    }
-
-    if (persistenceContext) {
-        closePersistence();
     }
 
     persistenceContext = createPersistenceContext(dbPath);

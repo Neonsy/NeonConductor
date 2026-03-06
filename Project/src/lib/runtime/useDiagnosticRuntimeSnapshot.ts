@@ -1,7 +1,7 @@
 import { trpc } from '@/web/trpc/client';
 
-export function useRuntimeSnapshot(profileId: string) {
-    return trpc.runtime.getSnapshot.useQuery(
+export function useDiagnosticRuntimeSnapshot(profileId: string) {
+    return trpc.runtime.getDiagnosticSnapshot.useQuery(
         { profileId },
         {
             refetchOnWindowFocus: false,

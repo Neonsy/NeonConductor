@@ -6,6 +6,7 @@ import {
     profileRenameInputSchema,
     profileSetActiveInputSchema,
 } from '@/app/backend/runtime/contracts';
+import { runtimeRemoveEvent, runtimeStatusEvent, runtimeUpsertEvent } from '@/app/backend/runtime/services/runtimeEventEnvelope';
 import { runtimeEventLogService } from '@/app/backend/runtime/services/runtimeEventLog';
 import { publicProcedure, router } from '@/app/backend/trpc/init';
 
@@ -27,14 +28,17 @@ export const profileRouter = router({
             };
         }
 
-        await runtimeEventLogService.append({
+        await runtimeEventLogService.append(
+            runtimeStatusEvent({
             entityType: 'profile',
+            domain: 'profile',
             entityId: profile.id,
             eventType: 'profile.activated',
             payload: {
                 profile,
             },
-        });
+            })
+        );
 
         return {
             updated: true as const,
@@ -44,14 +48,17 @@ export const profileRouter = router({
     create: publicProcedure.input(profileCreateInputSchema).mutation(async ({ input }) => {
         const profile = await profileStore.create(input.name);
 
-        await runtimeEventLogService.append({
+        await runtimeEventLogService.append(
+            runtimeUpsertEvent({
             entityType: 'profile',
+            domain: 'profile',
             entityId: profile.id,
             eventType: 'profile.created',
             payload: {
                 profile,
             },
-        });
+            })
+        );
 
         return {
             profile,
@@ -66,14 +73,17 @@ export const profileRouter = router({
             };
         }
 
-        await runtimeEventLogService.append({
+        await runtimeEventLogService.append(
+            runtimeUpsertEvent({
             entityType: 'profile',
+            domain: 'profile',
             entityId: profile.id,
             eventType: 'profile.renamed',
             payload: {
                 profile,
             },
-        });
+            })
+        );
 
         return {
             updated: true as const,
@@ -89,15 +99,18 @@ export const profileRouter = router({
             };
         }
 
-        await runtimeEventLogService.append({
+        await runtimeEventLogService.append(
+            runtimeUpsertEvent({
             entityType: 'profile',
+            domain: 'profile',
             entityId: profile.id,
             eventType: 'profile.duplicated',
             payload: {
                 sourceProfileId: input.profileId,
                 profile,
             },
-        });
+            })
+        );
 
         return {
             duplicated: true as const,
@@ -110,8 +123,10 @@ export const profileRouter = router({
             return result;
         }
 
-        await runtimeEventLogService.append({
+        await runtimeEventLogService.append(
+            runtimeRemoveEvent({
             entityType: 'profile',
+            domain: 'profile',
             entityId: input.profileId,
             eventType: 'profile.deleted',
             payload: {
@@ -119,7 +134,8 @@ export const profileRouter = router({
                 activeProfileId: result.activeProfileId,
                 promotedProfileId: result.promotedProfileId ?? null,
             },
-        });
+            })
+        );
 
         return result;
     }),

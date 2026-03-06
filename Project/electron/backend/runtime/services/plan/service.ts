@@ -1,7 +1,4 @@
-import { err, ok, type Result } from 'neverthrow';
-
-import { planStore, runStore } from '@/app/backend/persistence/stores';
-import type { PlanQuestionRecord } from '@/app/backend/persistence/types';
+import { planStore } from '@/app/backend/persistence/stores';
 import type {
     EntityId,
     PlanAnswerQuestionInput,
@@ -10,130 +7,17 @@ import type {
     PlanReviseInput,
     PlanStartInput,
 } from '@/app/backend/runtime/contracts';
-import { orchestratorExecutionService } from '@/app/backend/runtime/services/orchestrator/executionService';
-import { runExecutionService } from '@/app/backend/runtime/services/runExecution/service';
+import {
+    type PlanServiceError,
+    toPlanException,
+    validatePlanStartInput,
+} from '@/app/backend/runtime/services/plan/errors';
+import { implementApprovedPlan } from '@/app/backend/runtime/services/plan/implementation';
+import { refreshActivePlanView, refreshPlanViewById } from '@/app/backend/runtime/services/plan/status';
+import { createDefaultQuestions, requirePlanView } from '@/app/backend/runtime/services/plan/views';
+import { runtimeStatusEvent } from '@/app/backend/runtime/services/runtimeEventEnvelope';
 import { runtimeEventLogService } from '@/app/backend/runtime/services/runtimeEventLog';
 import { appLog } from '@/app/main/logging';
-
-type PlanServiceErrorCode =
-    | 'invalid_mode'
-    | 'invalid_tab'
-    | 'unanswered_questions'
-    | 'not_approved'
-    | 'run_start_failed'
-    | 'unsupported_tab';
-
-interface PlanServiceError {
-    code: PlanServiceErrorCode;
-    message: string;
-}
-
-class PlanServiceException extends Error {
-    readonly code: PlanServiceErrorCode;
-
-    constructor(error: PlanServiceError) {
-        super(error.message);
-        this.name = 'PlanServiceException';
-        this.code = error.code;
-    }
-}
-
-function okPlan<T>(value: T): Result<T, PlanServiceError> {
-    return ok(value);
-}
-
-function errPlan(code: PlanServiceErrorCode, message: string): Result<never, PlanServiceError> {
-    return err({
-        code,
-        message,
-    });
-}
-
-function toPlanException(error: PlanServiceError): Error {
-    return new PlanServiceException(error);
-}
-
-function validatePlanStartInput(input: PlanStartInput): Result<void, PlanServiceError> {
-    if (input.modeKey !== 'plan') {
-        return errPlan('invalid_mode', `Plan flow only supports "plan" mode, received "${input.modeKey}".`);
-    }
-    if (input.topLevelTab === 'chat') {
-        return errPlan('invalid_tab', 'Planning flow is only available in agent or orchestrator tabs.');
-    }
-
-    return okPlan(undefined);
-}
-
-function createDefaultQuestions(prompt: string): PlanQuestionRecord[] {
-    const normalized = prompt.trim();
-    if (normalized.length === 0) {
-        return [];
-    }
-
-    return [
-        {
-            id: 'scope',
-            question: 'What exact output should this plan produce first?',
-        },
-        {
-            id: 'constraints',
-            question: 'Which constraints are non-negotiable for implementation?',
-        },
-    ];
-}
-
-function toPlanView(
-    plan: Awaited<ReturnType<typeof planStore.getById>>,
-    items: Awaited<ReturnType<typeof planStore.listItems>>
-): PlanRecordView | null {
-    if (!plan) {
-        return null;
-    }
-
-    return {
-        id: plan.id,
-        profileId: plan.profileId,
-        sessionId: plan.sessionId,
-        topLevelTab: plan.topLevelTab,
-        modeKey: plan.modeKey,
-        status: plan.status,
-        sourcePrompt: plan.sourcePrompt,
-        summaryMarkdown: plan.summaryMarkdown,
-        questions: plan.questions.map((question) => ({
-            id: question.id,
-            question: question.question,
-            ...(plan.answers[question.id] ? { answer: plan.answers[question.id] } : {}),
-        })),
-        items: items.map((item) => ({
-            id: item.id,
-            sequence: item.sequence,
-            description: item.description,
-            status: item.status,
-            ...(item.runId ? { runId: item.runId } : {}),
-            ...(item.errorMessage ? { errorMessage: item.errorMessage } : {}),
-        })),
-        ...(plan.workspaceFingerprint ? { workspaceFingerprint: plan.workspaceFingerprint } : {}),
-        ...(plan.implementationRunId ? { implementationRunId: plan.implementationRunId } : {}),
-        ...(plan.orchestratorRunId ? { orchestratorRunId: plan.orchestratorRunId } : {}),
-        ...(plan.approvedAt ? { approvedAt: plan.approvedAt } : {}),
-        ...(plan.implementedAt ? { implementedAt: plan.implementedAt } : {}),
-        createdAt: plan.createdAt,
-        updatedAt: plan.updatedAt,
-    };
-}
-
-function requirePlanView(
-    plan: Awaited<ReturnType<typeof planStore.getById>>,
-    items: Awaited<ReturnType<typeof planStore.listItems>>,
-    context: string
-): PlanRecordView {
-    const view = toPlanView(plan, items);
-    if (!view) {
-        throw new Error(`Invariant violation: expected plan view during ${context}.`);
-    }
-
-    return view;
-}
 
 export class PlanService {
     async start(input: PlanStartInput): Promise<{ plan: PlanRecordView }> {
@@ -165,8 +49,10 @@ export class PlanService {
             ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
         });
 
-        await runtimeEventLogService.append({
+        await runtimeEventLogService.append(
+            runtimeStatusEvent({
             entityType: 'plan',
+            domain: 'plan',
             entityId: plan.id,
             eventType: 'plan.started',
             payload: {
@@ -175,11 +61,14 @@ export class PlanService {
                 topLevelTab: input.topLevelTab,
                 planId: plan.id,
             },
-        });
+            })
+        );
 
         for (const question of questions) {
-            await runtimeEventLogService.append({
+            await runtimeEventLogService.append(
+                runtimeStatusEvent({
                 entityType: 'plan',
+                domain: 'plan',
                 entityId: plan.id,
                 eventType: 'plan.question.requested',
                 payload: {
@@ -187,7 +76,8 @@ export class PlanService {
                     questionId: question.id,
                     question: question.question,
                 },
-            });
+                })
+            );
         }
 
         appLog.info({
@@ -208,31 +98,10 @@ export class PlanService {
         profileId: string,
         planId: EntityId<'plan'>
     ): Promise<{ found: false } | { found: true; plan: PlanRecordView }> {
-        const plan = await planStore.getById(profileId, planId);
-        if (!plan) {
-            return { found: false };
-        }
-
-        if (plan.status === 'implementing' && plan.implementationRunId) {
-            const run = await runStore.getById(plan.implementationRunId);
-            if (run?.status === 'completed') {
-                await planStore.markImplemented(plan.id);
-            } else if (run?.status === 'aborted' || run?.status === 'error') {
-                await planStore.markFailed(plan.id);
-            }
-        }
-
-        const refreshed = await planStore.getById(profileId, planId);
-        const items = await planStore.listItems(planId);
-        const view = toPlanView(refreshed, items);
-        if (!view) {
-            return { found: false };
-        }
-
-        return {
-            found: true,
-            plan: view,
-        };
+        return refreshPlanViewById({
+            profileId,
+            planId,
+        });
     }
 
     async getActiveBySession(input: {
@@ -240,28 +109,7 @@ export class PlanService {
         sessionId: EntityId<'sess'>;
         topLevelTab: 'chat' | 'agent' | 'orchestrator';
     }): Promise<{ found: false } | { found: true; plan: PlanRecordView }> {
-        const plan = await planStore.getLatestBySession(input.profileId, input.sessionId, input.topLevelTab);
-        if (!plan) {
-            return { found: false };
-        }
-
-        if (plan.status === 'implementing' && plan.implementationRunId) {
-            const run = await runStore.getById(plan.implementationRunId);
-            if (run?.status === 'completed') {
-                await planStore.markImplemented(plan.id);
-            } else if (run?.status === 'aborted' || run?.status === 'error') {
-                await planStore.markFailed(plan.id);
-            }
-        }
-
-        const refreshed = await planStore.getById(input.profileId, plan.id);
-        const items = await planStore.listItems(plan.id);
-        const view = toPlanView(refreshed, items);
-        if (!view) {
-            return { found: false };
-        }
-
-        return { found: true, plan: view };
+        return refreshActivePlanView(input);
     }
 
     async answerQuestion(
@@ -272,15 +120,18 @@ export class PlanService {
             return { found: false };
         }
 
-        await runtimeEventLogService.append({
+        await runtimeEventLogService.append(
+            runtimeStatusEvent({
             entityType: 'plan',
+            domain: 'plan',
             entityId: input.planId,
             eventType: 'plan.question.answered',
             payload: {
                 planId: input.planId,
                 questionId: input.questionId,
             },
-        });
+            })
+        );
 
         const items = await planStore.listItems(input.planId);
         return {
@@ -338,15 +189,18 @@ export class PlanService {
         const approved = await planStore.approve(planId);
         const items = await planStore.listItems(planId);
 
-        await runtimeEventLogService.append({
+        await runtimeEventLogService.append(
+            runtimeStatusEvent({
             entityType: 'plan',
+            domain: 'plan',
             entityId: planId,
             eventType: 'plan.approved',
             payload: {
                 planId,
                 profileId,
             },
-        });
+            })
+        );
 
         appLog.info({
             tag: 'plan',
@@ -391,134 +245,28 @@ export class PlanService {
             });
             throw toPlanException(validation);
         }
-
-        if (plan.topLevelTab === 'agent') {
-            const items = await planStore.listItems(plan.id);
-            const taskList = items.map((item) => `- ${item.description}`).join('\n');
-            const implementationPrompt = [
-                'Implement the approved plan.',
-                '',
-                'Plan summary:',
-                plan.summaryMarkdown,
-                '',
-                'Plan steps:',
-                taskList.length > 0 ? taskList : '- No explicit steps were provided.',
-            ].join('\n');
-
-            const result = await runExecutionService.startRun({
-                profileId: input.profileId,
-                sessionId: plan.sessionId,
-                prompt: implementationPrompt,
-                topLevelTab: 'agent',
-                modeKey: 'code',
-                runtimeOptions: input.runtimeOptions,
-                ...(input.providerId ? { providerId: input.providerId } : {}),
-                ...(input.modelId ? { modelId: input.modelId } : {}),
-                ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
-            });
-
-            if (!result.accepted) {
-                const failure: PlanServiceError = {
-                    code: 'run_start_failed',
-                    message: `Plan implementation failed to start: ${result.reason}.`,
-                };
-                appLog.warn({
-                    tag: 'plan',
-                    message: 'Failed to start implementation run for approved plan.',
-                    profileId: input.profileId,
-                    planId: plan.id,
-                    code: failure.code,
-                    error: failure.message,
-                    reason: result.reason,
-                });
-                throw toPlanException(failure);
-            }
-
-            const implementing = await planStore.markImplementing(plan.id, result.runId);
-            await runtimeEventLogService.append({
-                entityType: 'plan',
-                entityId: plan.id,
-                eventType: 'plan.implementation.started',
-                payload: {
-                    planId: plan.id,
-                    profileId: input.profileId,
-                    mode: 'agent.code',
-                    runId: result.runId,
-                },
-            });
-
-            appLog.info({
+        const implementation = await implementApprovedPlan({
+            profileId: input.profileId,
+            plan,
+            implementationInput: input,
+        });
+        if ('code' in implementation) {
+            appLog.warn({
                 tag: 'plan',
-                message: 'Started agent implementation run from approved plan.',
-                profileId: input.profileId,
-                planId: plan.id,
-                runId: result.runId,
-            });
-
-            return {
-                found: true,
-                started: true,
-                mode: 'agent.code',
-                runId: result.runId,
-                plan: requirePlanView(implementing, items, 'plan.implement.agent'),
-            };
-        }
-
-        if (plan.topLevelTab === 'orchestrator') {
-            const started = await orchestratorExecutionService.start({
+                message: 'Rejected unsupported or failed plan implementation request.',
                 profileId: input.profileId,
                 planId: input.planId,
-                runtimeOptions: input.runtimeOptions,
-                ...(input.providerId ? { providerId: input.providerId } : {}),
-                ...(input.modelId ? { modelId: input.modelId } : {}),
-                ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
+                code: implementation.code,
+                error: implementation.message,
+                topLevelTab: plan.topLevelTab,
             });
-            const implementing = await planStore.markImplementing(plan.id, undefined, started.run.id);
-            const items = await planStore.listItems(plan.id);
-
-            await runtimeEventLogService.append({
-                entityType: 'plan',
-                entityId: plan.id,
-                eventType: 'plan.implementation.started',
-                payload: {
-                    planId: plan.id,
-                    profileId: input.profileId,
-                    mode: 'orchestrator.orchestrate',
-                    orchestratorRunId: started.run.id,
-                },
-            });
-
-            appLog.info({
-                tag: 'plan',
-                message: 'Started orchestrator implementation run from approved plan.',
-                profileId: input.profileId,
-                planId: plan.id,
-                orchestratorRunId: started.run.id,
-            });
-
-            return {
-                found: true,
-                started: true,
-                mode: 'orchestrator.orchestrate',
-                orchestratorRunId: started.run.id,
-                plan: requirePlanView(implementing, items, 'plan.implement.orchestrator'),
-            };
+            throw toPlanException(implementation);
         }
 
-        const unsupported: PlanServiceError = {
-            code: 'unsupported_tab',
-            message: 'Chat plans cannot be implemented through plan.implement.',
+        return {
+            found: true,
+            ...implementation,
         };
-        appLog.warn({
-            tag: 'plan',
-            message: 'Rejected unsupported plan implementation tab.',
-            profileId: input.profileId,
-            planId: input.planId,
-            code: unsupported.code,
-            error: unsupported.message,
-            topLevelTab: plan.topLevelTab,
-        });
-        throw toPlanException(unsupported);
     }
 }
 
