@@ -1,0 +1,48 @@
+import type { RuntimeEventContext, TrpcUtils } from '@/web/lib/runtime/invalidation/shared';
+import {
+    addInvalidation,
+    hasSelectedWorkspaceImpact,
+    invalidateSelectedMessages,
+    invalidateSessionList,
+    invalidateSessionRuns,
+    invalidateSessionStatus,
+    invalidateThreadList,
+} from '@/web/lib/runtime/invalidation/shared';
+
+export async function invalidateSessionQueries(utils: TrpcUtils, context: RuntimeEventContext): Promise<void> {
+    const invalidations: Array<Promise<unknown>> = [
+        invalidateSessionList(utils, context.profileId),
+        invalidateSessionStatus(utils, context.profileId, context.sessionId),
+        invalidateThreadList(utils, context.profileId),
+    ];
+
+    if (hasSelectedWorkspaceImpact(context)) {
+        addInvalidation(invalidations, invalidateSessionRuns(utils, context.profileId, context.selection.selectedSessionId));
+        addInvalidation(invalidations, invalidateSelectedMessages(utils, context));
+    }
+
+    await Promise.all(invalidations);
+}
+
+export async function invalidateRunQueries(utils: TrpcUtils, context: RuntimeEventContext): Promise<void> {
+    const invalidations: Array<Promise<unknown>> = [
+        invalidateSessionList(utils, context.profileId),
+        invalidateSessionStatus(utils, context.profileId, context.sessionId),
+        invalidateThreadList(utils, context.profileId),
+        invalidateSessionRuns(utils, context.profileId, context.sessionId),
+    ];
+
+    if (hasSelectedWorkspaceImpact(context)) {
+        addInvalidation(invalidations, invalidateSelectedMessages(utils, context));
+    }
+
+    await Promise.all(invalidations);
+}
+
+export async function invalidateMessageQueries(utils: TrpcUtils, context: RuntimeEventContext): Promise<void> {
+    if (!hasSelectedWorkspaceImpact(context)) {
+        return;
+    }
+
+    await invalidateSelectedMessages(utils, context);
+}

@@ -6,10 +6,9 @@ import type {
 } from '@/app/backend/runtime/contracts';
 import { orchestratorExecutionService } from '@/app/backend/runtime/services/orchestrator/executionService';
 import type { PlanServiceError } from '@/app/backend/runtime/services/plan/errors';
+import { appendPlanImplementationStartedEvent } from '@/app/backend/runtime/services/plan/events';
 import { requirePlanView } from '@/app/backend/runtime/services/plan/views';
 import { runExecutionService } from '@/app/backend/runtime/services/runExecution/service';
-import { runtimeStatusEvent } from '@/app/backend/runtime/services/runtimeEventEnvelope';
-import { runtimeEventLogService } from '@/app/backend/runtime/services/runtimeEventLog';
 import { appLog } from '@/app/main/logging';
 
 type StoredPlan = NonNullable<Awaited<ReturnType<typeof planStore.getById>>>;
@@ -18,6 +17,22 @@ export type PlanImplementationResult =
     | { started: true; mode: 'agent.code'; runId: EntityId<'run'>; plan: PlanRecordView }
     | { started: true; mode: 'orchestrator.orchestrate'; orchestratorRunId: EntityId<'orch'>; plan: PlanRecordView };
 
+function buildAgentImplementationPrompt(input: {
+    summaryMarkdown: string;
+    itemDescriptions: string[];
+}): string {
+    const taskList = input.itemDescriptions.map((description) => `- ${description}`).join('\n');
+    return [
+        'Implement the approved plan.',
+        '',
+        'Plan summary:',
+        input.summaryMarkdown,
+        '',
+        'Plan steps:',
+        taskList.length > 0 ? taskList : '- No explicit steps were provided.',
+    ].join('\n');
+}
+
 export async function implementApprovedPlan(input: {
     profileId: string;
     plan: StoredPlan;
@@ -25,16 +40,10 @@ export async function implementApprovedPlan(input: {
 }): Promise<PlanImplementationResult | PlanServiceError> {
     if (input.plan.topLevelTab === 'agent') {
         const items = await planStore.listItems(input.plan.id);
-        const taskList = items.map((item) => `- ${item.description}`).join('\n');
-        const implementationPrompt = [
-            'Implement the approved plan.',
-            '',
-            'Plan summary:',
-            input.plan.summaryMarkdown,
-            '',
-            'Plan steps:',
-            taskList.length > 0 ? taskList : '- No explicit steps were provided.',
-        ].join('\n');
+        const implementationPrompt = buildAgentImplementationPrompt({
+            summaryMarkdown: input.plan.summaryMarkdown,
+            itemDescriptions: items.map((item) => item.description),
+        });
 
         const result = await runExecutionService.startRun({
             profileId: input.profileId,
@@ -68,20 +77,12 @@ export async function implementApprovedPlan(input: {
         }
 
         const implementing = await planStore.markImplementing(input.plan.id, result.runId);
-        await runtimeEventLogService.append(
-            runtimeStatusEvent({
-                entityType: 'plan',
-                domain: 'plan',
-                entityId: input.plan.id,
-                eventType: 'plan.implementation.started',
-                payload: {
-                    planId: input.plan.id,
-                    profileId: input.profileId,
-                    mode: 'agent.code',
-                    runId: result.runId,
-                },
-            })
-        );
+        await appendPlanImplementationStartedEvent({
+            profileId: input.profileId,
+            planId: input.plan.id,
+            mode: 'agent.code',
+            runId: result.runId,
+        });
 
         appLog.info({
             tag: 'plan',
@@ -113,20 +114,12 @@ export async function implementApprovedPlan(input: {
         const implementing = await planStore.markImplementing(input.plan.id, undefined, started.run.id);
         const items = await planStore.listItems(input.plan.id);
 
-        await runtimeEventLogService.append(
-            runtimeStatusEvent({
-                entityType: 'plan',
-                domain: 'plan',
-                entityId: input.plan.id,
-                eventType: 'plan.implementation.started',
-                payload: {
-                    planId: input.plan.id,
-                    profileId: input.profileId,
-                    mode: 'orchestrator.orchestrate',
-                    orchestratorRunId: started.run.id,
-                },
-            })
-        );
+        await appendPlanImplementationStartedEvent({
+            profileId: input.profileId,
+            planId: input.plan.id,
+            mode: 'orchestrator.orchestrate',
+            orchestratorRunId: started.run.id,
+        });
 
         appLog.info({
             tag: 'plan',

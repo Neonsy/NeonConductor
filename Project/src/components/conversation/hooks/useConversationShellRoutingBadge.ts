@@ -1,3 +1,4 @@
+import { formatRoutingBadge } from '@/web/components/conversation/routingBadge';
 import { trpc } from '@/web/trpc/client';
 
 interface UseConversationShellRoutingBadgeInput {
@@ -19,21 +20,5 @@ export function useConversationShellRoutingBadge(input: UseConversationShellRout
         }
     );
 
-    if (input.providerId !== 'kilo') {
-        return undefined;
-    }
-
-    if (kiloRoutingPreferenceQuery.data?.preference.routingMode === 'pinned') {
-        return `Routing: Pinned (${kiloRoutingPreferenceQuery.data.preference.pinnedProviderId ?? 'unknown'})`;
-    }
-
-    return `Routing: Dynamic (${
-        kiloRoutingPreferenceQuery.data?.preference.sort === 'price'
-            ? 'Lowest Price'
-            : kiloRoutingPreferenceQuery.data?.preference.sort === 'throughput'
-              ? 'Highest Throughput'
-              : kiloRoutingPreferenceQuery.data?.preference.sort === 'latency'
-                ? 'Lowest Latency'
-                : 'Default'
-    })`;
+    return formatRoutingBadge(input.providerId, kiloRoutingPreferenceQuery.data?.preference);
 }

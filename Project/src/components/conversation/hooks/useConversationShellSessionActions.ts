@@ -1,5 +1,9 @@
 import { useState } from 'react';
 
+import {
+    applySessionModelOverride,
+    applySessionProviderOverride,
+} from '@/web/components/conversation/sessionTargetState';
 import { isEntityId } from '@/web/components/conversation/shellHelpers';
 
 import type { SessionCreateInput, RuntimeProviderId } from '@/app/backend/runtime/contracts';
@@ -45,13 +49,7 @@ export function useConversationShellSessionActions(input: UseConversationShellSe
             }
 
             const sessionId = input.selectedSessionId;
-            setSessionTargetBySessionId((current) => ({
-                ...current,
-                [sessionId]: {
-                    providerId,
-                    ...(firstModelId ? { modelId: firstModelId } : {}),
-                },
-            }));
+            setSessionTargetBySessionId((current) => applySessionProviderOverride(current, sessionId, providerId, firstModelId));
             input.onClearError();
         },
         onModelChange: (providerId: RuntimeProviderId | undefined, modelId: string) => {
@@ -60,13 +58,7 @@ export function useConversationShellSessionActions(input: UseConversationShellSe
             }
 
             const sessionId = input.selectedSessionId;
-            setSessionTargetBySessionId((current) => ({
-                ...current,
-                [sessionId]: {
-                    providerId,
-                    modelId,
-                },
-            }));
+            setSessionTargetBySessionId((current) => applySessionModelOverride(current, sessionId, providerId, modelId));
             input.onClearError();
         },
         onCreateSession: () => {

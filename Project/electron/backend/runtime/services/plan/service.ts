@@ -7,22 +7,18 @@ import type {
     PlanReviseInput,
     PlanStartInput,
 } from '@/app/backend/runtime/contracts';
-import {
-    type PlanServiceError,
-    toPlanException,
-    validatePlanStartInput,
-} from '@/app/backend/runtime/services/plan/errors';
+import { approvePlan } from '@/app/backend/runtime/services/plan/approval';
+import { type PlanServiceError, toPlanException } from '@/app/backend/runtime/services/plan/errors';
 import { implementApprovedPlan } from '@/app/backend/runtime/services/plan/implementation';
+import { answerPlanQuestion, revisePlan } from '@/app/backend/runtime/services/plan/lifecycle';
+import { startPlanFlow } from '@/app/backend/runtime/services/plan/start';
 import { refreshActivePlanView, refreshPlanViewById } from '@/app/backend/runtime/services/plan/status';
-import { createDefaultQuestions, requirePlanView } from '@/app/backend/runtime/services/plan/views';
-import { runtimeStatusEvent } from '@/app/backend/runtime/services/runtimeEventEnvelope';
-import { runtimeEventLogService } from '@/app/backend/runtime/services/runtimeEventLog';
 import { appLog } from '@/app/main/logging';
 
 export class PlanService {
     async start(input: PlanStartInput): Promise<{ plan: PlanRecordView }> {
-        const validation = validatePlanStartInput(input);
-        if (validation.isErr()) {
+        const result = await startPlanFlow(input);
+        if (result.isErr()) {
             appLog.warn({
                 tag: 'plan',
                 message: 'Rejected plan.start request.',
@@ -30,68 +26,13 @@ export class PlanService {
                 sessionId: input.sessionId,
                 topLevelTab: input.topLevelTab,
                 modeKey: input.modeKey,
-                code: validation.error.code,
-                error: validation.error.message,
+                code: result.error.code,
+                error: result.error.message,
             });
-            throw toPlanException(validation.error);
+            throw toPlanException(result.error);
         }
 
-        const questions = createDefaultQuestions(input.prompt);
-        const summaryMarkdown = `# Plan\n\n${input.prompt.trim()}`;
-        const plan = await planStore.create({
-            profileId: input.profileId,
-            sessionId: input.sessionId,
-            topLevelTab: input.topLevelTab,
-            modeKey: input.modeKey,
-            sourcePrompt: input.prompt.trim(),
-            summaryMarkdown,
-            questions,
-            ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
-        });
-
-        await runtimeEventLogService.append(
-            runtimeStatusEvent({
-            entityType: 'plan',
-            domain: 'plan',
-            entityId: plan.id,
-            eventType: 'plan.started',
-            payload: {
-                profileId: input.profileId,
-                sessionId: input.sessionId,
-                topLevelTab: input.topLevelTab,
-                planId: plan.id,
-            },
-            })
-        );
-
-        for (const question of questions) {
-            await runtimeEventLogService.append(
-                runtimeStatusEvent({
-                entityType: 'plan',
-                domain: 'plan',
-                entityId: plan.id,
-                eventType: 'plan.question.requested',
-                payload: {
-                    planId: plan.id,
-                    questionId: question.id,
-                    question: question.question,
-                },
-                })
-            );
-        }
-
-        appLog.info({
-            tag: 'plan',
-            message: 'Started planning flow.',
-            profileId: input.profileId,
-            sessionId: input.sessionId,
-            planId: plan.id,
-            topLevelTab: input.topLevelTab,
-        });
-
-        return {
-            plan: requirePlanView(plan, [], 'plan.start'),
-        };
+        return result.value;
     }
 
     async getById(
@@ -115,104 +56,31 @@ export class PlanService {
     async answerQuestion(
         input: PlanAnswerQuestionInput
     ): Promise<{ found: false } | { found: true; plan: PlanRecordView }> {
-        const updated = await planStore.setAnswer(input.planId, input.questionId, input.answer);
-        if (!updated || updated.profileId !== input.profileId) {
-            return { found: false };
-        }
-
-        await runtimeEventLogService.append(
-            runtimeStatusEvent({
-            entityType: 'plan',
-            domain: 'plan',
-            entityId: input.planId,
-            eventType: 'plan.question.answered',
-            payload: {
-                planId: input.planId,
-                questionId: input.questionId,
-            },
-            })
-        );
-
-        const items = await planStore.listItems(input.planId);
-        return {
-            found: true,
-            plan: requirePlanView(updated, items, 'plan.answerQuestion'),
-        };
+        return answerPlanQuestion(input);
     }
 
     async revise(input: PlanReviseInput): Promise<{ found: false } | { found: true; plan: PlanRecordView }> {
-        const revised = await planStore.revise(input.planId, input.summaryMarkdown);
-        if (!revised || revised.profileId !== input.profileId) {
-            return { found: false };
-        }
-
-        const descriptions = input.items
-            .map((item) => item.description.trim())
-            .filter((description) => description.length > 0);
-        const items = await planStore.replaceItems(input.planId, descriptions);
-
-        return {
-            found: true,
-            plan: requirePlanView(revised, items, 'plan.revise'),
-        };
+        return revisePlan(input);
     }
 
     async approve(
         profileId: string,
         planId: EntityId<'plan'>
     ): Promise<{ found: false } | { found: true; plan: PlanRecordView }> {
-        const existing = await planStore.getById(profileId, planId);
-        if (!existing) {
-            return { found: false };
-        }
-
-        const hasUnanswered = existing.questions.some((question) => {
-            const answer = existing.answers[question.id];
-            return typeof answer !== 'string' || answer.trim().length === 0;
-        });
-        if (hasUnanswered) {
-            const validation: PlanServiceError = {
-                code: 'unanswered_questions',
-                message: 'Cannot approve plan before answering all clarifying questions.',
-            };
+        const result = await approvePlan(profileId, planId);
+        if (result.isErr()) {
             appLog.warn({
                 tag: 'plan',
                 message: 'Rejected plan.approve request.',
                 profileId,
                 planId,
-                code: validation.code,
-                error: validation.message,
+                code: result.error.code,
+                error: result.error.message,
             });
-            throw toPlanException(validation);
+            throw toPlanException(result.error);
         }
 
-        const approved = await planStore.approve(planId);
-        const items = await planStore.listItems(planId);
-
-        await runtimeEventLogService.append(
-            runtimeStatusEvent({
-            entityType: 'plan',
-            domain: 'plan',
-            entityId: planId,
-            eventType: 'plan.approved',
-            payload: {
-                planId,
-                profileId,
-            },
-            })
-        );
-
-        appLog.info({
-            tag: 'plan',
-            message: 'Approved plan.',
-            profileId,
-            planId,
-        });
-
-        return {
-            found: true,
-            plan: requirePlanView(approved, items, 'plan.approve'),
-        };
+        return result.value;
     }
 
     async implement(input: PlanImplementInput): Promise<

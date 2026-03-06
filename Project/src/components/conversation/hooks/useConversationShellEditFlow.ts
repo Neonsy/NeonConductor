@@ -2,6 +2,7 @@ import { useState } from 'react';
 
 import type { ConversationUiState } from '@/web/components/conversation/hooks/useConversationUiState';
 import type { MessageTimelineEntry } from '@/web/components/conversation/messageTimelineModel';
+import { createPendingMessageEdit } from '@/web/components/conversation/pendingMessageEdit';
 import { toEditFailureMessage, type PendingMessageEdit } from '@/web/components/conversation/shellEditFlow';
 import { DEFAULT_RUN_OPTIONS, isEntityId } from '@/web/components/conversation/shellHelpers';
 import { trpc } from '@/web/trpc/client';
@@ -66,31 +67,16 @@ export function useConversationShellEditFlow(input: UseConversationShellEditFlow
             setPendingMessageEdit(undefined);
         },
         onEditMessage: (entry: MessageTimelineEntry) => {
-            if (!isEntityId(entry.id, 'msg')) {
-                return;
+            const pendingEdit = createPendingMessageEdit(entry);
+            if (pendingEdit) {
+                setPendingMessageEdit(pendingEdit);
             }
-            const editableText = entry.editableText?.trim();
-            if (!editableText) {
-                return;
-            }
-            setPendingMessageEdit({
-                messageId: entry.id,
-                initialText: editableText,
-            });
         },
         onBranchFromMessage: (entry: MessageTimelineEntry) => {
-            if (!isEntityId(entry.id, 'msg')) {
-                return;
+            const pendingEdit = createPendingMessageEdit(entry, 'branch');
+            if (pendingEdit) {
+                setPendingMessageEdit(pendingEdit);
             }
-            const editableText = entry.editableText?.trim();
-            if (!editableText) {
-                return;
-            }
-            setPendingMessageEdit({
-                messageId: entry.id,
-                initialText: editableText,
-                forcedMode: 'branch',
-            });
         },
         dialogProps: {
             open: Boolean(pendingMessageEdit),
