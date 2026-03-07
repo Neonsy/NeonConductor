@@ -23,6 +23,14 @@ function isEntityId<P extends string>(value: string, prefix: P): value is `${P}_
     return value.startsWith(`${prefix}_`) && value.length > prefix.length + 1;
 }
 
+function requireEntityId<P extends string>(value: string | undefined, prefix: P, message: string): `${P}_${string}` {
+    if (!value || !isEntityId(value, prefix)) {
+        throw new Error(message);
+    }
+
+    return value;
+}
+
 async function createSessionInScope(
     caller: ReturnType<typeof createCaller>,
     profileId: string,
@@ -2289,6 +2297,386 @@ name: Docs Lookup
         const disconnected = await caller.mcp.disconnect({ serverId: 'github' });
         expect(disconnected.disconnected).toBe(false);
         expect(disconnected.reason).toBe('not_implemented');
+    });
+
+    it('executes run_command with prefix-scoped approvals and bounded shell output', async () => {
+        const caller = createCaller();
+        const { sqlite } = getPersistence();
+        const now = new Date().toISOString();
+        const generalWorkspacePath = mkdtempSync(path.join(os.tmpdir(), 'neonconductor-shell-general-'));
+        const specificWorkspacePath = mkdtempSync(path.join(os.tmpdir(), 'neonconductor-shell-specific-'));
+        const insertWorkspaceRoot = (targetProfileId: string, fingerprint: string, absolutePath: string) => {
+            sqlite
+                .prepare(
+                    `
+                        INSERT OR IGNORE INTO workspace_roots
+                            (fingerprint, profile_id, absolute_path, path_key, label, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    `
+                )
+                .run(
+                    fingerprint,
+                    targetProfileId,
+                    absolutePath,
+                    process.platform === 'win32' ? absolutePath.toLowerCase() : absolutePath,
+                    path.basename(absolutePath),
+                    now,
+                    now
+                );
+        };
+
+        insertWorkspaceRoot(profileId, 'ws_run_command_general', generalWorkspacePath);
+        insertWorkspaceRoot(profileId, 'ws_run_command_specific', specificWorkspacePath);
+
+        const tools = await caller.tool.list();
+        const runCommand = tools.tools.find((tool) => tool.id === 'run_command');
+        expect(runCommand?.availability).toBe('available');
+        expect(runCommand?.capabilities).toContain('shell');
+
+        const detachedDenied = await caller.tool.invoke({
+            profileId,
+            toolId: 'run_command',
+            topLevelTab: 'agent',
+            modeKey: 'code',
+            args: {
+                command: 'node --version',
+            },
+        });
+        expect(detachedDenied.ok).toBe(false);
+        if (detachedDenied.ok) {
+            throw new Error('Expected detached run_command invocation to be blocked.');
+        }
+        expect(detachedDenied.error).toBe('policy_denied');
+        expect(detachedDenied.message).toContain('workspace-bound');
+
+        const chatDenied = await caller.tool.invoke({
+            profileId,
+            toolId: 'run_command',
+            topLevelTab: 'chat',
+            modeKey: 'chat',
+            workspaceFingerprint: 'ws_run_command_general',
+            args: {
+                command: 'node --version',
+            },
+        });
+        expect(chatDenied.ok).toBe(false);
+        if (chatDenied.ok) {
+            throw new Error('Expected chat run_command invocation to be blocked.');
+        }
+        expect(chatDenied.error).toBe('policy_denied');
+
+        const orchestratorDenied = await caller.tool.invoke({
+            profileId,
+            toolId: 'run_command',
+            topLevelTab: 'orchestrator',
+            modeKey: 'debug',
+            workspaceFingerprint: 'ws_run_command_general',
+            args: {
+                command: 'node --version',
+            },
+        });
+        expect(orchestratorDenied.ok).toBe(false);
+        if (orchestratorDenied.ok) {
+            throw new Error('Expected orchestrator run_command invocation to be blocked.');
+        }
+        expect(orchestratorDenied.error).toBe('policy_denied');
+
+        const firstAsk = await caller.tool.invoke({
+            profileId,
+            toolId: 'run_command',
+            topLevelTab: 'agent',
+            modeKey: 'code',
+            workspaceFingerprint: 'ws_run_command_general',
+            args: {
+                command: 'node --version',
+            },
+        });
+        expect(firstAsk.ok).toBe(false);
+        if (firstAsk.ok) {
+            throw new Error('Expected standard preset to ask before unseen shell execution.');
+        }
+        expect(firstAsk.error).toBe('permission_required');
+        const firstPermissionRequestId = requireEntityId(
+            firstAsk.requestId,
+            'perm',
+            'Expected permission request id for first shell request.'
+        );
+
+        const firstPendingRequest = (await caller.permission.listPending()).requests.find(
+            (request) => request.id === firstPermissionRequestId
+        );
+        expect(firstPendingRequest?.commandText).toBe('node --version');
+        expect(firstPendingRequest?.approvalCandidates?.map((candidate) => candidate.label)).toEqual([
+            'node --version',
+            'node',
+        ]);
+
+        const allowOnce = await caller.permission.resolve({
+            profileId,
+            requestId: firstPermissionRequestId,
+            resolution: 'allow_once',
+        });
+        expect(allowOnce.updated).toBe(true);
+
+        const onceAllowed = await caller.tool.invoke({
+            profileId,
+            toolId: 'run_command',
+            topLevelTab: 'agent',
+            modeKey: 'code',
+            workspaceFingerprint: 'ws_run_command_general',
+            args: {
+                command: 'node --version',
+            },
+        });
+        expect(onceAllowed.ok).toBe(true);
+        if (!onceAllowed.ok) {
+            throw new Error('Expected allow_once shell approval to allow one invocation.');
+        }
+        expect(String(onceAllowed.output['stdout'])).toContain('v');
+
+        const askedAgain = await caller.tool.invoke({
+            profileId,
+            toolId: 'run_command',
+            topLevelTab: 'agent',
+            modeKey: 'code',
+            workspaceFingerprint: 'ws_run_command_general',
+            args: {
+                command: 'node --version',
+            },
+        });
+        expect(askedAgain.ok).toBe(false);
+        if (askedAgain.ok) {
+            throw new Error('Expected allow_once to expire after one shell invocation.');
+        }
+        expect(askedAgain.error).toBe('permission_required');
+        const repeatedPermissionRequestId = requireEntityId(
+            askedAgain.requestId,
+            'perm',
+            'Expected permission request id for repeated shell request.'
+        );
+
+        const askedAgainRequest = (await caller.permission.listPending()).requests.find(
+            (request) => request.id === repeatedPermissionRequestId
+        );
+        const generalNodeResource = askedAgainRequest?.approvalCandidates?.find(
+            (candidate) => candidate.label === 'node'
+        )?.resource;
+        if (!generalNodeResource) {
+            throw new Error('Expected general node approval candidate.');
+        }
+
+        const allowWorkspaceNode = await caller.permission.resolve({
+            profileId,
+            requestId: repeatedPermissionRequestId,
+            resolution: 'allow_workspace',
+            selectedApprovalResource: generalNodeResource,
+        });
+        expect(allowWorkspaceNode.updated).toBe(true);
+
+        const generalPrefixAllowed = await caller.tool.invoke({
+            profileId,
+            toolId: 'run_command',
+            topLevelTab: 'agent',
+            modeKey: 'code',
+            workspaceFingerprint: 'ws_run_command_general',
+            args: {
+                command: 'node -p "40+2"',
+            },
+        });
+        expect(generalPrefixAllowed.ok).toBe(true);
+        if (!generalPrefixAllowed.ok) {
+            throw new Error('Expected executable-prefix approval to allow another node command.');
+        }
+        expect(String(generalPrefixAllowed.output['stdout']).trim()).toBe('42');
+
+        const largeOutput = await caller.tool.invoke({
+            profileId,
+            toolId: 'run_command',
+            topLevelTab: 'agent',
+            modeKey: 'code',
+            workspaceFingerprint: 'ws_run_command_general',
+            args: {
+                command: 'node -e "process.stdout.write(\'x\'.repeat(50000))"',
+            },
+        });
+        expect(largeOutput.ok).toBe(true);
+        if (!largeOutput.ok) {
+            throw new Error('Expected large-output shell command to execute.');
+        }
+        expect(largeOutput.output['stdoutTruncated']).toBe(true);
+        expect(String(largeOutput.output['stdout']).length).toBeLessThan(50_000);
+
+        const timeoutOutput = await caller.tool.invoke({
+            profileId,
+            toolId: 'run_command',
+            topLevelTab: 'agent',
+            modeKey: 'code',
+            workspaceFingerprint: 'ws_run_command_general',
+            args: {
+                command: 'node -e "setTimeout(() => {}, 2000)"',
+                timeoutMs: 50,
+            },
+        });
+        expect(timeoutOutput.ok).toBe(true);
+        if (!timeoutOutput.ok) {
+            throw new Error('Expected timed shell command to return bounded output.');
+        }
+        expect(timeoutOutput.output['timedOut']).toBe(true);
+
+        const specificAsk = await caller.tool.invoke({
+            profileId,
+            toolId: 'run_command',
+            topLevelTab: 'agent',
+            modeKey: 'debug',
+            workspaceFingerprint: 'ws_run_command_specific',
+            args: {
+                command: 'node --version',
+            },
+        });
+        expect(specificAsk.ok).toBe(false);
+        if (specificAsk.ok) {
+            throw new Error('Expected specific-prefix workspace to ask first.');
+        }
+        expect(specificAsk.error).toBe('permission_required');
+        const specificPermissionRequestId = requireEntityId(
+            specificAsk.requestId,
+            'perm',
+            'Expected permission request id for specific-prefix request.'
+        );
+
+        const specificRequest = (await caller.permission.listPending()).requests.find(
+            (request) => request.id === specificPermissionRequestId
+        );
+        const specificResource = specificRequest?.approvalCandidates?.find(
+            (candidate) => candidate.label === 'node --version'
+        )?.resource;
+        if (!specificResource) {
+            throw new Error('Expected specific node --version approval candidate.');
+        }
+
+        const allowSpecific = await caller.permission.resolve({
+            profileId,
+            requestId: specificPermissionRequestId,
+            resolution: 'allow_workspace',
+            selectedApprovalResource: specificResource,
+        });
+        expect(allowSpecific.updated).toBe(true);
+
+        const specificAllowed = await caller.tool.invoke({
+            profileId,
+            toolId: 'run_command',
+            topLevelTab: 'agent',
+            modeKey: 'debug',
+            workspaceFingerprint: 'ws_run_command_specific',
+            args: {
+                command: 'node --version',
+            },
+        });
+        expect(specificAllowed.ok).toBe(true);
+
+        const specificStillBlocked = await caller.tool.invoke({
+            profileId,
+            toolId: 'run_command',
+            topLevelTab: 'agent',
+            modeKey: 'debug',
+            workspaceFingerprint: 'ws_run_command_specific',
+            args: {
+                command: 'node -p "1+1"',
+            },
+        });
+        expect(specificStillBlocked.ok).toBe(false);
+        if (specificStillBlocked.ok) {
+            throw new Error('Expected verb-prefix approval to stay narrower than executable approval.');
+        }
+        expect(specificStillBlocked.error).toBe('permission_required');
+
+        const privacyProfile = await caller.profile.create({ name: 'Privacy Shell Profile' });
+        const yoloProfile = await caller.profile.create({ name: 'Yolo Shell Profile' });
+        const privacyWorkspacePath = mkdtempSync(path.join(os.tmpdir(), 'neonconductor-shell-privacy-'));
+        const yoloWorkspacePath = mkdtempSync(path.join(os.tmpdir(), 'neonconductor-shell-yolo-'));
+        insertWorkspaceRoot(privacyProfile.profile.id, 'ws_run_command_privacy', privacyWorkspacePath);
+        insertWorkspaceRoot(yoloProfile.profile.id, 'ws_run_command_yolo', yoloWorkspacePath);
+
+        await caller.profile.setExecutionPreset({
+            profileId: privacyProfile.profile.id,
+            preset: 'privacy',
+        });
+
+        const privacyAsk = await caller.tool.invoke({
+            profileId: privacyProfile.profile.id,
+            toolId: 'run_command',
+            topLevelTab: 'agent',
+            modeKey: 'code',
+            workspaceFingerprint: 'ws_run_command_privacy',
+            args: {
+                command: 'node --version',
+            },
+        });
+        expect(privacyAsk.ok).toBe(false);
+        if (privacyAsk.ok) {
+            throw new Error('Expected privacy preset to ask before shell execution.');
+        }
+        expect(privacyAsk.error).toBe('permission_required');
+        const privacyPermissionRequestId = requireEntityId(
+            privacyAsk.requestId,
+            'perm',
+            'Expected privacy request id.'
+        );
+
+        const privacyRequest = (await caller.permission.listPending()).requests.find(
+            (request) => request.id === privacyPermissionRequestId
+        );
+        const privacyNodeResource = privacyRequest?.approvalCandidates?.find(
+            (candidate) => candidate.label === 'node'
+        )?.resource;
+        if (!privacyNodeResource) {
+            throw new Error('Expected general node approval candidate for privacy profile.');
+        }
+
+        const privacyResolve = await caller.permission.resolve({
+            profileId: privacyProfile.profile.id,
+            requestId: privacyPermissionRequestId,
+            resolution: 'allow_profile',
+            selectedApprovalResource: privacyNodeResource,
+        });
+        expect(privacyResolve.updated).toBe(true);
+
+        const privacyAllowed = await caller.tool.invoke({
+            profileId: privacyProfile.profile.id,
+            toolId: 'run_command',
+            topLevelTab: 'agent',
+            modeKey: 'debug',
+            workspaceFingerprint: 'ws_run_command_privacy',
+            args: {
+                command: 'node -p "5+5"',
+            },
+        });
+        expect(privacyAllowed.ok).toBe(true);
+        if (!privacyAllowed.ok) {
+            throw new Error('Expected matching profile shell override to bypass privacy ask.');
+        }
+        expect(String(privacyAllowed.output['stdout']).trim()).toBe('10');
+
+        await caller.profile.setExecutionPreset({
+            profileId: yoloProfile.profile.id,
+            preset: 'yolo',
+        });
+
+        const yoloAsk = await caller.tool.invoke({
+            profileId: yoloProfile.profile.id,
+            toolId: 'run_command',
+            topLevelTab: 'agent',
+            modeKey: 'code',
+            workspaceFingerprint: 'ws_run_command_yolo',
+            args: {
+                command: 'node --version',
+            },
+        });
+        expect(yoloAsk.ok).toBe(false);
+        if (yoloAsk.ok) {
+            throw new Error('Expected yolo preset to still ask for unseen shell prefixes.');
+        }
+        expect(yoloAsk.error).toBe('permission_required');
     });
 
     it('supports workspace-scoped runtime reset dry-run and apply', async () => {

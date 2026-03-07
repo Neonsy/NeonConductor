@@ -64,6 +64,12 @@ export interface ProfileDeletionGuardResult {
     promotedProfileId?: string;
 }
 
+export interface PermissionApprovalCandidate {
+    label: string;
+    resource: string;
+    detail?: string;
+}
+
 export interface PermissionRecord {
     id: EntityId<'perm'>;
     profileId: string;
@@ -76,6 +82,9 @@ export interface PermissionRecord {
         title: string;
         detail: string;
     };
+    commandText?: string;
+    approvalCandidates?: PermissionApprovalCandidate[];
+    selectedApprovalResource?: string;
     decision: 'pending' | 'granted' | 'denied';
     resolvedScope?: 'once' | 'profile' | 'workspace';
     createdAt: string;

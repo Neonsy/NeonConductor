@@ -8,7 +8,10 @@ import type { ToolExecutionFailure, ToolExecutionOutput } from '@/app/backend/ru
 
 export function invokeToolHandler(
     tool: ToolRecord,
-    args: Record<string, unknown>
+    args: Record<string, unknown>,
+    context?: {
+        cwd?: string;
+    }
 ): Promise<Result<ToolExecutionOutput, ToolExecutionFailure>> {
     if (tool.id === 'list_files') {
         return listFilesToolHandler(args);
@@ -19,7 +22,16 @@ export function invokeToolHandler(
     }
 
     if (tool.id === 'run_command') {
-        return runCommandToolHandler();
+        if (!context?.cwd) {
+            return Promise.resolve(
+                err({
+                    code: 'execution_failed',
+                    message: 'Tool "run_command" requires a resolved workspace root.',
+                })
+            );
+        }
+
+        return runCommandToolHandler(args, { cwd: context.cwd });
     }
 
     return Promise.resolve(

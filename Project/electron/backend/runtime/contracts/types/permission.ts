@@ -12,6 +12,12 @@ export interface PermissionRequestSummary {
     detail: string;
 }
 
+export interface PermissionApprovalCandidate {
+    label: string;
+    resource: string;
+    detail?: string;
+}
+
 export interface PermissionRequestInput extends ProfileInput {
     policy: PermissionPolicy;
     resource: string;
@@ -19,12 +25,15 @@ export interface PermissionRequestInput extends ProfileInput {
     scopeKind: PermissionScopeKind;
     summary: PermissionRequestSummary;
     workspaceFingerprint?: string;
+    commandText?: string;
+    approvalCandidates?: PermissionApprovalCandidate[];
     rationale?: string;
 }
 
 export interface PermissionResolveInput extends ProfileInput {
     requestId: EntityId<'perm'>;
     resolution: PermissionResolution;
+    selectedApprovalResource?: string;
 }
 
 export interface PermissionGetEffectivePolicyInput extends ProfileInput {

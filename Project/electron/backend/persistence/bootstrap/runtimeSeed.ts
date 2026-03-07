@@ -68,7 +68,7 @@ const TOOL_SEED = [
         id: 'run_command',
         label: 'Run Command',
         description: 'Run a command in a sandboxed shell.',
-        permissionPolicy: 'deny',
+        permissionPolicy: 'ask',
     },
 ] as const;
 

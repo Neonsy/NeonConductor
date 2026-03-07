@@ -125,7 +125,32 @@ export const permissionRouter = router({
             return { updated: false as const, reason: 'workspace_scope_missing' as const, request: record };
         }
 
-        const updatedRecord = await permissionStore.resolve(input.requestId, input.resolution);
+        const selectedApprovalResource =
+            record.approvalCandidates && record.approvalCandidates.length > 0
+                ? input.selectedApprovalResource
+                : undefined;
+        if (
+            (input.resolution === 'allow_profile' || input.resolution === 'allow_workspace') &&
+            record.approvalCandidates &&
+            record.approvalCandidates.length > 0
+        ) {
+            if (!selectedApprovalResource) {
+                return { updated: false as const, reason: 'approval_resource_missing' as const, request: record };
+            }
+
+            const isValidSelection = record.approvalCandidates.some(
+                (candidate) => candidate.resource === selectedApprovalResource
+            );
+            if (!isValidSelection) {
+                return { updated: false as const, reason: 'approval_resource_invalid' as const, request: record };
+            }
+        }
+
+        const updatedRecord = await permissionStore.resolve(
+            input.requestId,
+            input.resolution,
+            selectedApprovalResource
+        );
         if (!updatedRecord) {
             return { updated: false as const, reason: 'not_found' as const };
         }
@@ -134,7 +159,7 @@ export const permissionRouter = router({
             await permissionPolicyOverrideStore.upsert(
                 input.profileId,
                 permissionPolicyOverrideStore.toProfileScopeKey(),
-                record.resource,
+                selectedApprovalResource ?? record.resource,
                 'allow'
             );
         }
@@ -142,7 +167,7 @@ export const permissionRouter = router({
             await permissionPolicyOverrideStore.upsert(
                 input.profileId,
                 permissionPolicyOverrideStore.toWorkspaceScopeKey(record.workspaceFingerprint),
-                record.resource,
+                selectedApprovalResource ?? record.resource,
                 'allow'
             );
         }

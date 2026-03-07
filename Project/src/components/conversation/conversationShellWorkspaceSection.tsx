@@ -36,6 +36,13 @@ interface ConversationShellWorkspaceSectionProps {
               absolutePath: string;
           };
     pendingPermissions: PermissionRecord[];
+    permissionWorkspaces?: Record<
+        string,
+        {
+            label: string;
+            absolutePath: string;
+        }
+    >;
     prompt: string;
     isCreatingSession: boolean;
     isStartingRun: boolean;
@@ -81,7 +88,8 @@ interface ConversationShellWorkspaceSectionProps {
     onSubmitPrompt: () => void;
     onResolvePermission: (
         requestId: PermissionRecord['id'],
-        resolution: 'deny' | 'allow_once' | 'allow_profile' | 'allow_workspace'
+        resolution: 'deny' | 'allow_once' | 'allow_profile' | 'allow_workspace',
+        selectedApprovalResource?: string
     ) => void;
     onEditMessage: (entry: MessageTimelineEntry) => void;
     onBranchFromMessage: (entry: MessageTimelineEntry) => void;
@@ -101,6 +109,7 @@ export function ConversationShellWorkspaceSection({
     executionPreset,
     workspaceScope,
     pendingPermissions,
+    permissionWorkspaces,
     prompt,
     isCreatingSession,
     isStartingRun,
@@ -152,6 +161,7 @@ export function ConversationShellWorkspaceSection({
                 executionPreset={executionPreset}
                 workspaceScope={workspaceScope}
                 pendingPermissions={pendingPermissions}
+                {...(permissionWorkspaces ? { permissionWorkspaces } : {})}
                 prompt={prompt}
                 isCreatingSession={isCreatingSession}
                 isStartingRun={isStartingRun}

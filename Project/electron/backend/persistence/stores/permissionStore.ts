@@ -1,6 +1,12 @@
 import { getPersistence } from '@/app/backend/persistence/db';
 import { parseEntityId, parseEnumValue } from '@/app/backend/persistence/stores/rowParsers';
-import { isJsonRecord, isJsonString, nowIso, parseJsonValue } from '@/app/backend/persistence/stores/utils';
+import {
+    isJsonRecord,
+    isJsonString,
+    isJsonUnknownArray,
+    nowIso,
+    parseJsonValue,
+} from '@/app/backend/persistence/stores/utils';
 import type { PermissionRecord } from '@/app/backend/persistence/types';
 import {
     createEntityId,
@@ -12,6 +18,32 @@ import {
 
 const permissionDecisions = ['pending', 'granted', 'denied'] as const;
 const permissionResolvedScopes = ['once', 'profile', 'workspace'] as const;
+
+function mapApprovalCandidates(value: string): PermissionRecord['approvalCandidates'] {
+    const parsed = parseJsonValue(value, [], isJsonUnknownArray);
+    const candidates = parsed.flatMap((item) => {
+        if (!isJsonRecord(item)) {
+            return [];
+        }
+
+        const label = item['label'];
+        const resource = item['resource'];
+        const detail = item['detail'];
+        if (!isJsonString(label) || !isJsonString(resource)) {
+            return [];
+        }
+
+        return [
+            {
+                label,
+                resource,
+                ...(isJsonString(detail) ? { detail } : {}),
+            },
+        ];
+    });
+
+    return candidates.length > 0 ? candidates : undefined;
+}
 
 function mapPermissionSummary(value: string): PermissionRecord['summary'] {
     const parsed = parseJsonValue(value, {}, isJsonRecord);
@@ -33,6 +65,9 @@ function mapPermissionRecord(row: {
     workspace_fingerprint: string | null;
     scope_kind: string;
     summary_json: string;
+    command_text: string | null;
+    approval_candidates_json: string;
+    selected_approval_resource: string | null;
     decision: string;
     resolved_scope: string | null;
     consumed_at: string | null;
@@ -40,6 +75,8 @@ function mapPermissionRecord(row: {
     created_at: string;
     updated_at: string;
 }): PermissionRecord {
+    const approvalCandidates = mapApprovalCandidates(row.approval_candidates_json);
+
     return {
         id: parseEntityId(row.id, 'permissions.id', 'perm'),
         profileId: row.profile_id,
@@ -49,6 +86,9 @@ function mapPermissionRecord(row: {
         ...(row.workspace_fingerprint ? { workspaceFingerprint: row.workspace_fingerprint } : {}),
         scopeKind: parseEnumValue(row.scope_kind, 'permissions.scope_kind', permissionScopeKinds),
         summary: mapPermissionSummary(row.summary_json),
+        ...(row.command_text ? { commandText: row.command_text } : {}),
+        ...(approvalCandidates ? { approvalCandidates } : {}),
+        ...(row.selected_approval_resource ? { selectedApprovalResource: row.selected_approval_resource } : {}),
         decision: parseEnumValue(row.decision, 'permissions.decision', permissionDecisions),
         ...(row.resolved_scope
             ? {
@@ -75,6 +115,8 @@ export class PermissionStore {
         scopeKind: PermissionRecord['scopeKind'];
         summary: PermissionRecord['summary'];
         workspaceFingerprint?: string;
+        commandText?: string;
+        approvalCandidates?: NonNullable<PermissionRecord['approvalCandidates']>;
         rationale?: string;
     }): Promise<PermissionRecord> {
         const { db } = getPersistence();
@@ -91,6 +133,9 @@ export class PermissionStore {
                 workspace_fingerprint: input.workspaceFingerprint ?? null,
                 scope_kind: input.scopeKind,
                 summary_json: JSON.stringify(input.summary),
+                command_text: input.commandText ?? null,
+                approval_candidates_json: JSON.stringify(input.approvalCandidates ?? []),
+                selected_approval_resource: null,
                 decision: 'pending',
                 resolved_scope: null,
                 consumed_at: null,
@@ -107,6 +152,9 @@ export class PermissionStore {
                 'workspace_fingerprint',
                 'scope_kind',
                 'summary_json',
+                'command_text',
+                'approval_candidates_json',
+                'selected_approval_resource',
                 'decision',
                 'resolved_scope',
                 'consumed_at',
@@ -133,6 +181,9 @@ export class PermissionStore {
                 'workspace_fingerprint',
                 'scope_kind',
                 'summary_json',
+                'command_text',
+                'approval_candidates_json',
+                'selected_approval_resource',
                 'decision',
                 'resolved_scope',
                 'consumed_at',
@@ -161,6 +212,9 @@ export class PermissionStore {
                 'workspace_fingerprint',
                 'scope_kind',
                 'summary_json',
+                'command_text',
+                'approval_candidates_json',
+                'selected_approval_resource',
                 'decision',
                 'resolved_scope',
                 'consumed_at',
@@ -174,10 +228,7 @@ export class PermissionStore {
         return row ? mapPermissionRecord(row) : null;
     }
 
-    async resolve(
-        id: string,
-        resolution: PermissionResolution
-    ): Promise<PermissionRecord | null> {
+    async resolve(id: string, resolution: PermissionResolution, selectedApprovalResource?: string): Promise<PermissionRecord | null> {
         const { db } = getPersistence();
         const now = nowIso();
         const decision = resolution === 'deny' ? 'denied' : 'granted';
@@ -195,6 +246,7 @@ export class PermissionStore {
             .set({
                 decision,
                 resolved_scope: resolvedScope,
+                selected_approval_resource: selectedApprovalResource ?? null,
                 updated_at: now,
             })
             .where('id', '=', id)
@@ -207,6 +259,9 @@ export class PermissionStore {
                 'workspace_fingerprint',
                 'scope_kind',
                 'summary_json',
+                'command_text',
+                'approval_candidates_json',
+                'selected_approval_resource',
                 'decision',
                 'resolved_scope',
                 'consumed_at',
@@ -238,6 +293,9 @@ export class PermissionStore {
                 'workspace_fingerprint',
                 'scope_kind',
                 'summary_json',
+                'command_text',
+                'approval_candidates_json',
+                'selected_approval_resource',
                 'decision',
                 'resolved_scope',
                 'consumed_at',
@@ -277,6 +335,9 @@ export class PermissionStore {
                 'workspace_fingerprint',
                 'scope_kind',
                 'summary_json',
+                'command_text',
+                'approval_candidates_json',
+                'selected_approval_resource',
                 'decision',
                 'resolved_scope',
                 'consumed_at',
@@ -303,6 +364,9 @@ export class PermissionStore {
                 'workspace_fingerprint',
                 'scope_kind',
                 'summary_json',
+                'command_text',
+                'approval_candidates_json',
+                'selected_approval_resource',
                 'decision',
                 'resolved_scope',
                 'consumed_at',

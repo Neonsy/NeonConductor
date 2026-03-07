@@ -4,6 +4,7 @@ import type { ExecutionPreset, PermissionPolicy, ToolCapability, TopLevelTab } f
 export interface ResolvedPermissionPolicy {
     policy: PermissionPolicy;
     source: 'mode' | 'workspace_override' | 'profile_override' | 'execution_preset' | 'tool_default';
+    resource: string;
 }
 
 function extractToolIdFromResource(resource: string): string | null {
@@ -43,6 +44,14 @@ function resolveModePolicy(
         return 'deny';
     }
 
+    if (toolId === 'run_command') {
+        if (topLevelTab !== 'agent') {
+            return 'deny';
+        }
+
+        return modeKey === 'code' || modeKey === 'debug' ? null : 'deny';
+    }
+
     if (topLevelTab === 'agent' && modeKey === 'ask') {
         return isMutatingTool(toolId) || !isReadOnlyCapabilitySet(capabilities) ? 'deny' : 'allow';
     }
@@ -69,6 +78,7 @@ function resolvePresetPolicy(input: {
 export async function resolveEffectivePermissionPolicy(input: {
     profileId: string;
     resource: string;
+    resourceCandidates?: string[];
     topLevelTab: TopLevelTab;
     modeKey: string;
     executionPreset: ExecutionPreset;
@@ -81,30 +91,41 @@ export async function resolveEffectivePermissionPolicy(input: {
         return {
             policy: modePolicy,
             source: 'mode',
+            resource: input.resource,
         };
     }
+
+    const candidateResources = input.resourceCandidates && input.resourceCandidates.length > 0
+        ? input.resourceCandidates
+        : [input.resource];
 
     if (input.workspaceFingerprint) {
         const scopeKey = permissionPolicyOverrideStore.toWorkspaceScopeKey(input.workspaceFingerprint);
-        const workspaceOverride = await permissionPolicyOverrideStore.get(input.profileId, scopeKey, input.resource);
-        if (workspaceOverride) {
-            return {
-                policy: workspaceOverride.policy,
-                source: 'workspace_override',
-            };
+        for (const resource of candidateResources) {
+            const workspaceOverride = await permissionPolicyOverrideStore.get(input.profileId, scopeKey, resource);
+            if (workspaceOverride) {
+                return {
+                    policy: workspaceOverride.policy,
+                    source: 'workspace_override',
+                    resource,
+                };
+            }
         }
     }
 
-    const profileOverride = await permissionPolicyOverrideStore.get(
-        input.profileId,
-        permissionPolicyOverrideStore.toProfileScopeKey(),
-        input.resource
-    );
-    if (profileOverride) {
-        return {
-            policy: profileOverride.policy,
-            source: 'profile_override',
-        };
+    for (const resource of candidateResources) {
+        const profileOverride = await permissionPolicyOverrideStore.get(
+            input.profileId,
+            permissionPolicyOverrideStore.toProfileScopeKey(),
+            resource
+        );
+        if (profileOverride) {
+            return {
+                policy: profileOverride.policy,
+                source: 'profile_override',
+                resource,
+            };
+        }
     }
 
     const presetPolicy = resolvePresetPolicy({
@@ -116,11 +137,13 @@ export async function resolveEffectivePermissionPolicy(input: {
         return {
             policy: presetPolicy,
             source: 'execution_preset',
+            resource: input.resource,
         };
     }
 
     return {
         policy: input.toolDefaultPolicy,
         source: 'tool_default',
+        resource: input.resource,
     };
 }

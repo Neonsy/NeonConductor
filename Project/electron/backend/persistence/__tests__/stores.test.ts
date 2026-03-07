@@ -109,8 +109,21 @@ describe('persistence stores', () => {
                 title: 'Run Command Request',
                 detail: 'Need shell command access.',
             },
+            commandText: 'node --version',
+            approvalCandidates: [
+                {
+                    label: 'node --version',
+                    resource: 'tool:run_command:prefix:node --version',
+                },
+                {
+                    label: 'node',
+                    resource: 'tool:run_command:prefix:node',
+                },
+            ],
         });
         expect(created.decision).toBe('pending');
+        expect(created.commandText).toBe('node --version');
+        expect(created.approvalCandidates?.map((candidate) => candidate.label)).toEqual(['node --version', 'node']);
 
         const granted = await permissionStore.resolve(created.id, 'allow_once');
         expect(granted?.decision).toBe('granted');

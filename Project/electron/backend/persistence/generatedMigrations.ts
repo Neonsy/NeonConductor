@@ -746,4 +746,16 @@ CREATE INDEX idx_session_attached_skills_profile_session
     ON session_attached_skills(profile_id, session_id, created_at);
 `,
     },
+    {
+        name: '007_run_command_shell_approvals.sql',
+        sql: `
+ALTER TABLE permissions ADD COLUMN command_text TEXT NULL;
+ALTER TABLE permissions ADD COLUMN approval_candidates_json TEXT NOT NULL DEFAULT '[]';
+ALTER TABLE permissions ADD COLUMN selected_approval_resource TEXT NULL;
+
+UPDATE tools_catalog
+SET permission_policy = 'ask'
+WHERE id = 'run_command';
+`,
+    },
 ];

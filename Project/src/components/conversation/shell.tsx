@@ -123,6 +123,15 @@ export function ConversationShell({
     );
     const pendingPermissions =
         queries.pendingPermissionsQuery.data?.requests.filter((request) => request.profileId === profileId) ?? [];
+    const permissionWorkspaces = Object.fromEntries(
+        (queries.shellBootstrapQuery.data?.workspaceRoots ?? []).map((workspaceRoot) => [
+            workspaceRoot.fingerprint,
+            {
+                label: workspaceRoot.label,
+                absolutePath: workspaceRoot.absolutePath,
+            },
+        ])
+    );
 
     useEffect(() => {
         onSelectedWorkspaceFingerprintChange?.(selectedThread?.workspaceFingerprint);
@@ -311,6 +320,7 @@ export function ConversationShell({
                           }
                 }
                 pendingPermissions={pendingPermissions}
+                permissionWorkspaces={permissionWorkspaces}
                 prompt={composer.prompt}
                 isCreatingSession={mutations.createSessionMutation.isPending}
                 isStartingRun={mutations.startRunMutation.isPending || mutations.planStartMutation.isPending}
@@ -371,12 +381,13 @@ export function ConversationShell({
                 onCreateSession={sessionActions.onCreateSession}
                 onPromptChange={composer.onPromptChange}
                 onSubmitPrompt={composer.onSubmitPrompt}
-                onResolvePermission={(requestId, resolution) => {
+                onResolvePermission={(requestId, resolution, selectedApprovalResource) => {
                     void mutations.resolvePermissionMutation
                         .mutateAsync({
                             profileId,
                             requestId,
                             resolution,
+                            ...(selectedApprovalResource ? { selectedApprovalResource } : {}),
                         })
                         .then(() => queries.pendingPermissionsQuery.refetch());
                 }}

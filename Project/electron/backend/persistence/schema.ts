@@ -114,6 +114,9 @@ export interface PermissionsTable {
     workspace_fingerprint: string | null;
     scope_kind: string;
     summary_json: string;
+    command_text: string | null;
+    approval_candidates_json: string;
+    selected_approval_resource: string | null;
     decision: string;
     resolved_scope: string | null;
     consumed_at: string | null;

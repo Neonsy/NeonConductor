@@ -298,6 +298,18 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
     expectTypeOf<Inputs['permission']['request']>().toExtend<{
         policy: 'ask' | 'allow' | 'deny';
         resource: string;
+        commandText?: string;
+        approvalCandidates?: Array<{
+            label: string;
+            resource: string;
+            detail?: string;
+        }>;
+    }>();
+    expectTypeOf<Inputs['permission']['resolve']>().toExtend<{
+        profileId: string;
+        requestId: string;
+        resolution: 'deny' | 'allow_once' | 'allow_profile' | 'allow_workspace';
+        selectedApprovalResource?: string;
     }>();
 
     expectTypeOf<Inputs['permission']['getEffectivePolicy']>().toExtend<{
@@ -453,6 +465,17 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
             name: string;
         }>;
         missingAssetKeys?: string[];
+    }>();
+    expectTypeOf<Outputs['permission']['listPending']>().toExtend<{
+        requests: Array<{
+            commandText?: string;
+            approvalCandidates?: Array<{
+                label: string;
+                resource: string;
+                detail?: string;
+            }>;
+            selectedApprovalResource?: string;
+        }>;
     }>();
 
     expect(true).toBe(true);

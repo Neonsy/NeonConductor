@@ -34,6 +34,13 @@ interface SessionWorkspacePanelProps {
               absolutePath: string;
           };
     pendingPermissions: PermissionRecord[];
+    permissionWorkspaces?: Record<
+        string,
+        {
+            label: string;
+            absolutePath: string;
+        }
+    >;
     prompt: string;
     isCreatingSession: boolean;
     isStartingRun: boolean;
@@ -79,7 +86,8 @@ interface SessionWorkspacePanelProps {
     onSubmitPrompt: () => void;
     onResolvePermission: (
         requestId: PermissionRecord['id'],
-        resolution: 'deny' | 'allow_once' | 'allow_profile' | 'allow_workspace'
+        resolution: 'deny' | 'allow_once' | 'allow_profile' | 'allow_workspace',
+        selectedApprovalResource?: string
     ) => void;
     onEditMessage?: (entry: MessageTimelineEntry) => void;
     onBranchFromMessage?: (entry: MessageTimelineEntry) => void;
@@ -95,6 +103,7 @@ export function SessionWorkspacePanel({
     executionPreset,
     workspaceScope,
     pendingPermissions,
+    permissionWorkspaces,
     prompt,
     isCreatingSession,
     isStartingRun,
@@ -199,6 +208,7 @@ export function SessionWorkspacePanel({
 
                 <PendingPermissionsPanel
                     requests={pendingPermissions}
+                    {...(permissionWorkspaces ? { workspaceByFingerprint: permissionWorkspaces } : {})}
                     busy={isResolvingPermission}
                     onResolve={onResolvePermission}
                 />

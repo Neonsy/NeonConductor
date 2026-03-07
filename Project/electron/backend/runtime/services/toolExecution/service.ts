@@ -11,6 +11,7 @@ import {
 import { invokeToolHandler } from '@/app/backend/runtime/services/toolExecution/handlers';
 import { findToolById } from '@/app/backend/runtime/services/toolExecution/lookup';
 import { errorToolResult, okToolResult } from '@/app/backend/runtime/services/toolExecution/results';
+import { buildShellApprovalContext } from '@/app/backend/runtime/services/toolExecution/shellApproval';
 import { isIgnoredWorkspacePath, isPathInsideWorkspace, resolveWorkspaceToolPath } from '@/app/backend/runtime/services/toolExecution/safety';
 import type { ToolExecutionResult } from '@/app/backend/runtime/services/toolExecution/types';
 import { appLog } from '@/app/main/logging';
@@ -29,6 +30,7 @@ type ToolDecision =
     | {
           kind: 'allow';
           policy: { effective: 'allow'; source: string };
+          resource: string;
       }
     | {
           kind: 'deny';
@@ -51,6 +53,8 @@ type ToolDecision =
               title: string;
               detail: string;
           };
+          approvalCandidates?: NonNullable<Awaited<ReturnType<typeof permissionStore.create>>['approvalCandidates']>;
+          commandText?: string;
           message: string;
       };
 
@@ -88,14 +92,20 @@ export class ToolExecutionService {
         }
 
         const executionPreset = await getExecutionPreset(input.profileId);
+        let workspaceRootPath: string | undefined;
+        let workspaceLabel: string | undefined;
         const resolveDecision = async (decisionInput: {
             resource: string;
+            resourceCandidates?: string[];
+            onceResource?: string;
             scopeKind: 'tool' | 'boundary';
             defaultPolicy: 'ask' | 'allow' | 'deny';
             summary: {
                 title: string;
                 detail: string;
             };
+            approvalCandidates?: NonNullable<Awaited<ReturnType<typeof permissionStore.create>>['approvalCandidates']>;
+            commandText?: string;
             denyMessage: string;
             askMessage: string;
             denyReason?: 'policy_denied' | 'outside_workspace' | 'ignored_path';
@@ -103,6 +113,7 @@ export class ToolExecutionService {
             const resolvedPolicy = await resolveEffectivePermissionPolicy({
                 profileId: input.profileId,
                 resource: decisionInput.resource,
+                ...(decisionInput.resourceCandidates ? { resourceCandidates: decisionInput.resourceCandidates } : {}),
                 topLevelTab: input.topLevelTab,
                 modeKey: input.modeKey,
                 executionPreset,
@@ -114,7 +125,7 @@ export class ToolExecutionService {
             if (resolvedPolicy.policy === 'ask') {
                 const onceApproval = await permissionStore.consumeGrantedOnce({
                     profileId: input.profileId,
-                    resource: decisionInput.resource,
+                    resource: decisionInput.onceResource ?? decisionInput.resource,
                     ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
                 });
                 if (onceApproval) {
@@ -124,6 +135,7 @@ export class ToolExecutionService {
                             effective: 'allow',
                             source: 'one_time_approval',
                         },
+                        resource: decisionInput.onceResource ?? decisionInput.resource,
                     };
                 }
 
@@ -133,9 +145,11 @@ export class ToolExecutionService {
                         effective: 'ask',
                         source: resolvedPolicy.source,
                     },
-                    resource: decisionInput.resource,
+                    resource: decisionInput.onceResource ?? decisionInput.resource,
                     scopeKind: decisionInput.scopeKind,
                     summary: decisionInput.summary,
+                    ...(decisionInput.approvalCandidates ? { approvalCandidates: decisionInput.approvalCandidates } : {}),
+                    ...(decisionInput.commandText ? { commandText: decisionInput.commandText } : {}),
                     message: decisionInput.askMessage,
                 };
             }
@@ -147,7 +161,7 @@ export class ToolExecutionService {
                         effective: 'deny',
                         source: resolvedPolicy.source,
                     },
-                    resource: decisionInput.resource,
+                    resource: resolvedPolicy.resource,
                     reason: decisionInput.denyReason ?? 'policy_denied',
                     message: decisionInput.denyMessage,
                 };
@@ -159,6 +173,7 @@ export class ToolExecutionService {
                     effective: 'allow',
                     source: resolvedPolicy.source,
                 },
+                resource: resolvedPolicy.resource,
             };
         };
 
@@ -212,6 +227,9 @@ export class ToolExecutionService {
                     policy,
                 });
             }
+
+            workspaceRootPath = workspaceRoot.absolutePath;
+            workspaceLabel = workspaceRoot.label;
 
             if (definition.tool.id === 'read_file' || definition.tool.id === 'list_files') {
                 const requestedPath = typeof args['path'] === 'string' ? args['path'] : undefined;
@@ -375,16 +393,53 @@ export class ToolExecutionService {
             }
         }
 
+        const shellApprovalContext =
+            definition.tool.id === 'run_command'
+                ? (() => {
+                      const commandArg = typeof args['command'] === 'string' ? args['command'].trim() : '';
+                      return commandArg.length > 0 ? buildShellApprovalContext(commandArg) : null;
+                  })()
+                : null;
+        if (definition.tool.id === 'run_command' && !shellApprovalContext) {
+            return errorToolResult({
+                toolId: definition.tool.id,
+                error: 'invalid_args',
+                message: 'Missing "command" argument.',
+                args,
+                at,
+            });
+        }
+
         const decision = await resolveDecision({
-            resource: definition.resource,
+            resource: shellApprovalContext?.commandResource ?? definition.resource,
+            ...(shellApprovalContext?.overrideResources.length
+                ? { resourceCandidates: shellApprovalContext.overrideResources }
+                : {}),
+            ...(shellApprovalContext?.commandResource ? { onceResource: shellApprovalContext.commandResource } : {}),
             scopeKind: 'tool',
             defaultPolicy: definition.tool.permissionPolicy,
             summary: {
-                title: `${definition.tool.label} Request`,
-                detail: `${definition.tool.label} wants to run in ${input.topLevelTab}/${input.modeKey}.`,
+                title:
+                    definition.tool.id === 'run_command'
+                        ? 'Shell Command Approval'
+                        : `${definition.tool.label} Request`,
+                detail:
+                    definition.tool.id === 'run_command'
+                        ? `${executionPreset} preset requires approval for "${shellApprovalContext?.commandText ?? ''}" in ${workspaceLabel ?? 'the active workspace'}.`
+                        : `${definition.tool.label} wants to run in ${input.topLevelTab}/${input.modeKey}.`,
             },
-            denyMessage: `Tool "${definition.tool.id}" is denied by current safety policy.`,
-            askMessage: `Tool "${definition.tool.id}" requires permission approval.`,
+            ...(shellApprovalContext?.approvalCandidates
+                ? { approvalCandidates: shellApprovalContext.approvalCandidates }
+                : {}),
+            ...(shellApprovalContext?.commandText ? { commandText: shellApprovalContext.commandText } : {}),
+            denyMessage:
+                definition.tool.id === 'run_command'
+                    ? 'Tool "run_command" is only available in workspace-bound agent.code and agent.debug sessions.'
+                    : `Tool "${definition.tool.id}" is denied by current safety policy.`,
+            askMessage:
+                definition.tool.id === 'run_command'
+                    ? `Shell approval is required before running "${shellApprovalContext?.commandText ?? ''}"${workspaceRootPath ? ` in ${workspaceRootPath}` : ''}.`
+                    : `Tool "${definition.tool.id}" requires permission approval.`,
         });
 
         if (decision.kind === 'deny') {
@@ -420,6 +475,8 @@ export class ToolExecutionService {
                 toolId: definition.tool.id,
                 scopeKind: decision.scopeKind,
                 summary: decision.summary,
+                ...(decision.commandText ? { commandText: decision.commandText } : {}),
+                ...(decision.approvalCandidates ? { approvalCandidates: decision.approvalCandidates } : {}),
                 ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
                 rationale: decision.message,
             });
@@ -455,12 +512,14 @@ export class ToolExecutionService {
             });
         }
 
-        const execution = await invokeToolHandler(definition.tool, executionArgs);
+        const execution = await invokeToolHandler(definition.tool, executionArgs, {
+            ...(workspaceRootPath ? { cwd: workspaceRootPath } : {}),
+        });
         if (execution.isOk()) {
             await emitToolCompletedEvent({
                 toolId: definition.tool.id,
                 profileId: input.profileId,
-                resource: definition.resource,
+                resource: decision.resource,
                 policy: 'allow',
                 source: decision.policy.source,
             });
@@ -481,7 +540,7 @@ export class ToolExecutionService {
         await emitToolFailedEvent({
             toolId: definition.tool.id,
             profileId: input.profileId,
-            resource: definition.resource,
+            resource: decision.resource,
             policy: 'allow',
             source: decision.policy.source,
             error: execution.error.message,
