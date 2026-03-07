@@ -10,7 +10,7 @@ import {
 } from '@/app/backend/runtime/services/runExecution/errors';
 import { emitPartEvents, emitTransportSelectionEvent } from '@/app/backend/runtime/services/runExecution/eventing';
 import type {
-    ChatContextMessage,
+    RunContextMessage,
     RunCacheResolution,
     StartRunInput,
 } from '@/app/backend/runtime/services/runExecution/types';
@@ -60,7 +60,7 @@ export interface ExecuteRunInput {
     modelId: string;
     authMethod: ProviderAuthMethod | 'none';
     runtimeOptions: StartRunInput['runtimeOptions'];
-    contextMessages?: ChatContextMessage[];
+    contextMessages?: RunContextMessage[];
     cache: RunCacheResolution;
     transportSelection: ProviderRuntimeTransportSelection;
     apiKey?: string;

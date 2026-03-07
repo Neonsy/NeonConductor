@@ -2,7 +2,7 @@ import { kiloRoutingPreferenceStore, providerStore } from '@/app/backend/persist
 import type { ProviderRuntimeInput } from '@/app/backend/providers/types';
 import { resolveRunCache } from '@/app/backend/runtime/services/runExecution/cacheKey';
 import { validateRunCapabilities } from '@/app/backend/runtime/services/runExecution/capabilities';
-import { buildChatReplayContext } from '@/app/backend/runtime/services/runExecution/chatContext';
+import { buildRunContext } from '@/app/backend/runtime/services/runExecution/contextBuilder';
 import type { RunExecutionResult } from '@/app/backend/runtime/services/runExecution/errors';
 import { errRunExecution, okRunExecution } from '@/app/backend/runtime/services/runExecution/errors';
 import { resolveModeExecution } from '@/app/backend/runtime/services/runExecution/mode';
@@ -85,18 +85,23 @@ export async function prepareRunStart(input: StartRunInput): Promise<RunExecutio
         providerId: activeTarget.providerId,
         runtimeOptions: input.runtimeOptions,
     });
-    const chatContext =
-        input.topLevelTab === 'chat'
-            ? await buildChatReplayContext({
-                  profileId: input.profileId,
-                  sessionId: input.sessionId,
-                  prompt: input.prompt,
-              })
-            : undefined;
+    const runContextResult = await buildRunContext({
+        profileId: input.profileId,
+        sessionId: input.sessionId,
+        prompt: input.prompt,
+        topLevelTab: input.topLevelTab,
+        ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
+        resolvedMode: resolvedModeResult.value,
+    });
+    if (runContextResult.isErr()) {
+        return errRunExecution(runContextResult.error.code, runContextResult.error.message);
+    }
+
+    const runContext = runContextResult.value;
     const resolvedCacheResult = resolveRunCache({
         profileId: input.profileId,
         sessionId: input.sessionId,
-        ...(chatContext ? { cacheScopeKey: chatContext.digest } : {}),
+        ...(runContext ? { cacheScopeKey: runContext.digest } : {}),
         providerId: activeTarget.providerId,
         modelId: activeTarget.modelId,
         runtimeOptions: input.runtimeOptions,
@@ -138,7 +143,7 @@ export async function prepareRunStart(input: StartRunInput): Promise<RunExecutio
             resolvedAuth,
             resolvedCache: resolvedCacheResult.value,
             initialTransport,
-            ...(chatContext ? { chatContext } : {}),
+            ...(runContext ? { runContext } : {}),
             ...(kiloRouting ? { kiloRouting } : {}),
         });
 }

@@ -1084,6 +1084,265 @@ tags:
         ).toBe('Repo Search');
     });
 
+    it('assembles agent run context from resolved modes, rules, and attached skills', async () => {
+        const caller = createCaller();
+        const workspaceFingerprint = 'wsf_registry_agent_context';
+        const requestBodies: Array<Record<string, unknown>> = [];
+        vi.stubGlobal(
+            'fetch',
+            vi.fn((_url: string, init?: RequestInit) => {
+                const body = init?.body;
+                if (typeof body === 'string') {
+                    requestBodies.push(JSON.parse(body) as Record<string, unknown>);
+                }
+
+                return Promise.resolve({
+                    ok: true,
+                    status: 200,
+                    statusText: 'OK',
+                    json: () => ({
+                        choices: [
+                            {
+                                message: {
+                                    content: 'Registry-backed agent response',
+                                },
+                            },
+                        ],
+                        usage: {
+                            prompt_tokens: 15,
+                            completion_tokens: 9,
+                            total_tokens: 24,
+                        },
+                    }),
+                });
+            })
+        );
+
+        const configured = await caller.provider.setApiKey({
+            profileId,
+            providerId: 'openai',
+            apiKey: 'openai-registry-agent-key',
+        });
+        expect(configured.success).toBe(true);
+
+        const created = await createSessionInScope(caller, profileId, {
+            scope: 'workspace',
+            workspaceFingerprint,
+            title: 'Registry Agent Context',
+            kind: 'local',
+            topLevelTab: 'agent',
+        });
+        const registryPaths = await caller.registry.listResolved({
+            profileId,
+            workspaceFingerprint,
+        });
+        const globalAssetsRoot = registryPaths.paths.globalAssetsRoot;
+        const workspaceAssetsRoot = registryPaths.paths.workspaceAssetsRoot;
+        if (!workspaceAssetsRoot) {
+            throw new Error('Expected workspace asset root for registry-backed agent context test.');
+        }
+
+        rmSync(globalAssetsRoot, { recursive: true, force: true });
+        rmSync(workspaceAssetsRoot, { recursive: true, force: true });
+        mkdirSync(path.join(globalAssetsRoot, 'modes'), { recursive: true });
+        mkdirSync(path.join(globalAssetsRoot, 'rules'), { recursive: true });
+        mkdirSync(path.join(globalAssetsRoot, 'skills'), { recursive: true });
+        mkdirSync(path.join(workspaceAssetsRoot, 'modes'), { recursive: true });
+        mkdirSync(path.join(workspaceAssetsRoot, 'rules'), { recursive: true });
+        mkdirSync(path.join(workspaceAssetsRoot, 'skills'), { recursive: true });
+
+        writeFileSync(
+            path.join(globalAssetsRoot, 'modes', 'review.md'),
+            `---
+modeKey: review
+label: Global Review
+---
+# Global Review Mode
+
+- This global review mode should be overridden.
+`,
+            'utf8'
+        );
+        writeFileSync(
+            path.join(workspaceAssetsRoot, 'modes', 'review.md'),
+            `---
+modeKey: review
+label: Workspace Review
+precedence: 5
+---
+# Workspace Review Mode
+
+- Prefer workspace-specific review instructions.
+`,
+            'utf8'
+        );
+        writeFileSync(
+            path.join(globalAssetsRoot, 'rules', 'coding-rules.md'),
+            `---
+key: coding_rules
+name: Global Rules
+---
+# Global Rules
+
+- This global rule should be overridden.
+`,
+            'utf8'
+        );
+        writeFileSync(
+            path.join(workspaceAssetsRoot, 'rules', 'coding-rules.md'),
+            `---
+key: coding_rules
+name: Workspace Rules
+precedence: 5
+---
+# Workspace Rules
+
+- Enforce the local repository constraints first.
+`,
+            'utf8'
+        );
+        writeFileSync(
+            path.join(workspaceAssetsRoot, 'skills', 'repo-search.md'),
+            `---
+key: repo_search
+name: Workspace Search
+---
+# Workspace Search
+
+- Use ripgrep from the workspace root first.
+`,
+            'utf8'
+        );
+        writeFileSync(
+            path.join(globalAssetsRoot, 'skills', 'docs-lookup.md'),
+            `---
+key: docs_lookup
+name: Docs Lookup
+---
+# Docs Lookup
+
+- This skill is available but should stay unattached.
+`,
+            'utf8'
+        );
+
+        const refreshed = await caller.registry.refresh({
+            profileId,
+            workspaceFingerprint,
+        });
+        expect(refreshed.refreshed.workspace?.modes).toBe(1);
+        expect(refreshed.refreshed.workspace?.rulesets).toBe(1);
+        expect(refreshed.refreshed.workspace?.skillfiles).toBe(1);
+
+        const attached = await caller.session.setAttachedSkills({
+            profileId,
+            sessionId: created.session.id,
+            assetKeys: ['repo_search'],
+        });
+        expect(attached.skillfiles.map((skillfile) => skillfile.assetKey)).toEqual(['repo_search']);
+
+        const attachedSkills = await caller.session.getAttachedSkills({
+            profileId,
+            sessionId: created.session.id,
+        });
+        expect(attachedSkills.skillfiles.map((skillfile) => skillfile.name)).toEqual(['Workspace Search']);
+        expect(attachedSkills.missingAssetKeys).toBeUndefined();
+
+        const started = await caller.session.startRun({
+            profileId,
+            sessionId: created.session.id,
+            prompt: 'Review the changed files',
+            topLevelTab: 'agent',
+            modeKey: 'review',
+            workspaceFingerprint,
+            runtimeOptions: {
+                ...defaultRuntimeOptions,
+                transport: {
+                    openai: 'chat',
+                },
+            },
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
+        });
+        expect(started.accepted).toBe(true);
+        if (!started.accepted) {
+            throw new Error('Expected registry-backed agent run to start.');
+        }
+        await waitForRunStatus(caller, profileId, created.session.id, 'completed');
+
+        const requestBody = requestBodies.at(-1);
+        expect(requestBody).toBeDefined();
+        if (!requestBody) {
+            throw new Error('Expected provider request body for registry-backed agent run.');
+        }
+        const messages = requestBody['messages'];
+        expect(Array.isArray(messages)).toBe(true);
+        if (!Array.isArray(messages)) {
+            throw new Error('Expected chat completions request messages array.');
+        }
+        const contents = messages
+            .map((message) => {
+                if (typeof message !== 'object' || message === null) {
+                    return '';
+                }
+                const content = (message as { content?: unknown }).content;
+                return typeof content === 'string' ? content : '';
+            })
+            .filter((content) => content.length > 0);
+
+        expect(contents.some((content) => content.includes('Workspace Review Mode'))).toBe(true);
+        expect(contents.some((content) => content.includes('Workspace Rules'))).toBe(true);
+        expect(contents.some((content) => content.includes('Workspace Search'))).toBe(true);
+        expect(contents.some((content) => content.includes('Review the changed files'))).toBe(true);
+        expect(contents.some((content) => content.includes('Docs Lookup'))).toBe(false);
+        expect(contents.some((content) => content.includes('Global Review Mode'))).toBe(false);
+        expect(contents.some((content) => content.includes('This global rule should be overridden'))).toBe(false);
+
+        rmSync(path.join(workspaceAssetsRoot, 'skills', 'repo-search.md'));
+        await caller.registry.refresh({
+            profileId,
+            workspaceFingerprint,
+        });
+
+        const afterPrune = await caller.session.getAttachedSkills({
+            profileId,
+            sessionId: created.session.id,
+        });
+        expect(afterPrune.skillfiles).toEqual([]);
+        expect(afterPrune.missingAssetKeys).toEqual(['repo_search']);
+
+        const blockedRun = await caller.session.startRun({
+            profileId,
+            sessionId: created.session.id,
+            prompt: 'Try the missing skill again',
+            topLevelTab: 'agent',
+            modeKey: 'review',
+            workspaceFingerprint,
+            runtimeOptions: defaultRuntimeOptions,
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
+        });
+        expect(blockedRun.accepted).toBe(false);
+        if (blockedRun.accepted) {
+            throw new Error('Expected missing attached skill to block the run.');
+        }
+        expect(blockedRun.code).toBe('invalid_payload');
+        expect(blockedRun.message).toContain('repo_search');
+
+        const detached = await createSessionInScope(caller, profileId, {
+            scope: 'detached',
+            title: 'Detached Skill Guard',
+            kind: 'local',
+        });
+        await expect(
+            caller.session.setAttachedSkills({
+                profileId,
+                sessionId: detached.session.id,
+                assetKeys: ['repo_search'],
+            })
+        ).rejects.toThrow('repo_search');
+    });
+
     it('supports agent planning lifecycle with explicit approve then implement transition', async () => {
         const caller = createCaller();
         const completionFetchMock = vi.fn().mockResolvedValue({

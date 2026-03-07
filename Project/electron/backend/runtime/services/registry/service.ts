@@ -662,6 +662,43 @@ export async function searchResolvedSkillfiles(input: {
     });
 }
 
+export async function resolveSkillfilesByAssetKeys(input: {
+    profileId: string;
+    assetKeys: string[];
+    workspaceFingerprint?: string;
+}): Promise<{ skillfiles: SkillfileDefinitionRecord[]; missingAssetKeys: string[] }> {
+    const uniqueAssetKeys = Array.from(
+        new Set(input.assetKeys.map((assetKey) => assetKey.trim()).filter((assetKey) => assetKey.length > 0))
+    );
+    if (uniqueAssetKeys.length === 0) {
+        return {
+            skillfiles: [],
+            missingAssetKeys: [],
+        };
+    }
+
+    const resolved = await listResolvedRegistry(input);
+    const skillfileByAssetKey = new Map(
+        resolved.resolved.skillfiles.map((skillfile) => [skillfile.assetKey, skillfile] as const)
+    );
+
+    const skillfiles: SkillfileDefinitionRecord[] = [];
+    const missingAssetKeys: string[] = [];
+    for (const assetKey of uniqueAssetKeys) {
+        const skillfile = skillfileByAssetKey.get(assetKey);
+        if (!skillfile) {
+            missingAssetKeys.push(assetKey);
+            continue;
+        }
+        skillfiles.push(skillfile);
+    }
+
+    return {
+        skillfiles,
+        missingAssetKeys,
+    };
+}
+
 export async function refreshRegistry(input: {
     profileId: string;
     workspaceFingerprint?: string;

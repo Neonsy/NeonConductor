@@ -731,4 +731,19 @@ CREATE UNIQUE INDEX idx_skillfiles_profile_registry_asset
     ON skillfiles(profile_id, scope, ifnull(workspace_fingerprint, ''), asset_key);
 `,
     },
+    {
+        name: '006_session_attached_skills.sql',
+        sql: `
+CREATE TABLE session_attached_skills (
+    session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    asset_key TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (session_id, asset_key)
+);
+
+CREATE INDEX idx_session_attached_skills_profile_session
+    ON session_attached_skills(profile_id, session_id, created_at);
+`,
+    },
 ];

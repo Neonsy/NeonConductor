@@ -42,13 +42,13 @@ export interface RunCacheResolution {
     reason?: string;
 }
 
-export interface ChatContextMessage {
+export interface RunContextMessage {
     role: 'system' | 'user' | 'assistant';
     text: string;
 }
 
-export interface ChatReplayContext {
-    messages: ChatContextMessage[];
+export interface RunContext {
+    messages: RunContextMessage[];
     digest: string;
 }
 
@@ -77,7 +77,7 @@ export interface PreparedRunStart {
     resolvedAuth: ResolvedRunAuth;
     resolvedCache: RunCacheResolution;
     initialTransport: RunTransportResolution;
-    chatContext?: ChatReplayContext;
+    runContext?: RunContext;
     kiloRouting?: ResolvedKiloRouting;
 }
 

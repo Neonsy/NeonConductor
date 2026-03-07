@@ -69,6 +69,16 @@ export function useConversationShellQueries(input: UseConversationShellQueriesIn
             refetchOnWindowFocus: false,
         }
     );
+    const attachedSkillsQuery = trpc.session.getAttachedSkills.useQuery(
+        {
+            profileId: input.profileId,
+            sessionId: selectedSessionIdForQueries,
+        },
+        {
+            enabled: isEntityId(input.selectedSessionId, 'sess') && input.topLevelTab === 'agent',
+            refetchOnWindowFocus: false,
+        }
+    );
     const usageSummaryQuery = trpc.provider.getUsageSummary.useQuery(
         { profileId: input.profileId },
         { refetchOnWindowFocus: false }
@@ -108,6 +118,7 @@ export function useConversationShellQueries(input: UseConversationShellQueriesIn
         sessionsQuery,
         runsQuery,
         messagesQuery,
+        attachedSkillsQuery,
         usageSummaryQuery,
         pendingPermissionsQuery,
         activePlanQuery,

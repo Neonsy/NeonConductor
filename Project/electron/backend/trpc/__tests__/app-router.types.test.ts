@@ -96,6 +96,15 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
         editMode: 'truncate' | 'branch';
         autoStartRun?: boolean;
     }>();
+    expectTypeOf<Inputs['session']['getAttachedSkills']>().toExtend<{
+        profileId: string;
+        sessionId: string;
+    }>();
+    expectTypeOf<Inputs['session']['setAttachedSkills']>().toExtend<{
+        profileId: string;
+        sessionId: string;
+        assetKeys: string[];
+    }>();
 
     expectTypeOf<Inputs['mode']['list']>().toExtend<{
         profileId: string;
@@ -428,6 +437,22 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
             name: string;
             tags?: string[];
         }>;
+    }>();
+    expectTypeOf<Outputs['session']['getAttachedSkills']>().toExtend<{
+        sessionId: string;
+        skillfiles: Array<{
+            assetKey: string;
+            name: string;
+        }>;
+        missingAssetKeys?: string[];
+    }>();
+    expectTypeOf<Outputs['session']['setAttachedSkills']>().toExtend<{
+        sessionId: string;
+        skillfiles: Array<{
+            assetKey: string;
+            name: string;
+        }>;
+        missingAssetKeys?: string[];
     }>();
 
     expect(true).toBe(true);

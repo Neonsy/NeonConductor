@@ -60,10 +60,18 @@ interface ConversationShellWorkspaceSectionProps {
               skillfiles: number;
           }
         | undefined;
+    agentContextSummary?:
+        | {
+              modeLabel: string;
+              rulesetCount: number;
+              attachedSkillCount: number;
+          }
+        | undefined;
     providerOptions: Array<{ id: string; label: string; authState: string }>;
     modelOptions: Array<{ id: string; label: string; price?: number; latency?: number; tps?: number }>;
     runErrorMessage: string | undefined;
     modePanel: ReactNode;
+    attachedSkillsPanel?: ReactNode;
     onSelectSession: (sessionId: string) => void;
     onSelectRun: (runId: string) => void;
     onProviderChange: (providerId: string) => void;
@@ -105,10 +113,12 @@ export function ConversationShellWorkspaceSection({
     selectedModelLabel,
     selectedUsageSummary,
     registrySummary,
+    agentContextSummary,
     providerOptions,
     modelOptions,
     runErrorMessage,
     modePanel,
+    attachedSkillsPanel,
     onSelectSession,
     onSelectRun,
     onProviderChange,
@@ -154,6 +164,7 @@ export function ConversationShellWorkspaceSection({
                 {...(selectedModelLabel ? { selectedModelLabel } : {})}
                 {...(selectedUsageSummary ? { selectedUsageSummary } : {})}
                 {...(registrySummary ? { registrySummary } : {})}
+                {...(agentContextSummary ? { agentContextSummary } : {})}
                 providerOptions={providerOptions}
                 modelOptions={modelOptions}
                 runErrorMessage={runErrorMessage}
@@ -168,6 +179,7 @@ export function ConversationShellWorkspaceSection({
                 onEditMessage={onEditMessage}
                 onBranchFromMessage={onBranchFromMessage}
                 modePanel={modePanel}
+                {...(attachedSkillsPanel ? { attachedSkillsPanel } : {})}
             />
         </section>
     );

@@ -15,9 +15,11 @@ import type {
     SessionByIdInput,
     SessionCreateInput,
     SessionEditInput,
+    SessionGetAttachedSkillsInput,
     SessionListMessagesInput,
     SessionListRunsInput,
     SessionRevertInput,
+    SessionSetAttachedSkillsInput,
     SessionStartRunInput,
 } from '@/app/backend/runtime/contracts/types';
 
@@ -85,6 +87,24 @@ export function parseSessionListMessagesInput(input: unknown): SessionListMessag
     };
 }
 
+export function parseSessionGetAttachedSkillsInput(input: unknown): SessionGetAttachedSkillsInput {
+    return parseSessionByIdInput(input);
+}
+
+export function parseSessionSetAttachedSkillsInput(input: unknown): SessionSetAttachedSkillsInput {
+    const source = readObject(input, 'input');
+    const rawAssetKeys = source.assetKeys;
+    if (!Array.isArray(rawAssetKeys)) {
+        throw new Error('Invalid "assetKeys": expected array.');
+    }
+
+    return {
+        profileId: readProfileId(source),
+        sessionId: readEntityId(source.sessionId, 'sessionId', 'sess'),
+        assetKeys: rawAssetKeys.map((value, index) => readString(value, `assetKeys[${String(index)}]`)),
+    };
+}
+
 export function parseSessionEditInput(input: unknown): SessionEditInput {
     const source = readObject(input, 'input');
     const providerId = source.providerId !== undefined ? readProviderId(source.providerId, 'providerId') : undefined;
@@ -118,4 +138,6 @@ export const sessionRevertInputSchema = createParser(parseSessionRevertInput);
 export const sessionStartRunInputSchema = createParser(parseSessionStartRunInput);
 export const sessionListRunsInputSchema = createParser(parseSessionListRunsInput);
 export const sessionListMessagesInputSchema = createParser(parseSessionListMessagesInput);
+export const sessionGetAttachedSkillsInputSchema = createParser(parseSessionGetAttachedSkillsInput);
+export const sessionSetAttachedSkillsInputSchema = createParser(parseSessionSetAttachedSkillsInput);
 export const sessionEditInputSchema = createParser(parseSessionEditInput);

@@ -4,9 +4,11 @@ import {
     sessionByIdInputSchema,
     sessionCreateInputSchema,
     sessionEditInputSchema,
+    sessionGetAttachedSkillsInputSchema,
     sessionListMessagesInputSchema,
     sessionListRunsInputSchema,
     sessionRevertInputSchema,
+    sessionSetAttachedSkillsInputSchema,
     sessionStartRunInputSchema,
 } from '@/app/backend/runtime/contracts';
 import { eventMetadata } from '@/app/backend/runtime/services/common/logContext';
@@ -15,6 +17,7 @@ import { runtimeStatusEvent, runtimeUpsertEvent } from '@/app/backend/runtime/se
 import { runtimeEventLogService } from '@/app/backend/runtime/services/runtimeEventLog';
 import { sessionEditService } from '@/app/backend/runtime/services/sessionEdit/service';
 import { sessionHistoryService } from '@/app/backend/runtime/services/sessionHistory/service';
+import { getAttachedSkills, setAttachedSkills } from '@/app/backend/runtime/services/sessionSkills/service';
 import { publicProcedure, router } from '@/app/backend/trpc/init';
 
 export const sessionRouter = router({
@@ -50,6 +53,33 @@ export const sessionRouter = router({
     }),
     status: publicProcedure.input(sessionByIdInputSchema).query(async ({ input }) => {
         return sessionStore.status(input.profileId, input.sessionId);
+    }),
+    getAttachedSkills: publicProcedure.input(sessionGetAttachedSkillsInputSchema).query(async ({ input }) => {
+        return getAttachedSkills(input);
+    }),
+    setAttachedSkills: publicProcedure.input(sessionSetAttachedSkillsInputSchema).mutation(async ({ input, ctx }) => {
+        const result = await setAttachedSkills(input);
+        await runtimeEventLogService.append(
+            runtimeUpsertEvent({
+                entityType: 'session',
+                domain: 'session',
+                entityId: input.sessionId,
+                eventType: 'session.attached_skills.updated',
+                payload: {
+                    profileId: input.profileId,
+                    sessionId: input.sessionId,
+                    assetKeys: result.skillfiles.map((skillfile) => skillfile.assetKey),
+                    ...(result.missingAssetKeys ? { missingAssetKeys: result.missingAssetKeys } : {}),
+                },
+                ...eventMetadata({
+                    requestId: ctx.requestId,
+                    correlationId: ctx.correlationId,
+                    origin: 'trpc.session.setAttachedSkills',
+                }),
+            })
+        );
+
+        return result;
     }),
     startRun: publicProcedure.input(sessionStartRunInputSchema).mutation(async ({ input, ctx }) => {
         const result = await runExecutionService.startRun({

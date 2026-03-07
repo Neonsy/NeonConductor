@@ -37,6 +37,13 @@ export interface SessionSummaryRecord {
     updatedAt: string;
 }
 
+export interface SessionAttachedSkillRecord {
+    sessionId: EntityId<'sess'>;
+    profileId: string;
+    assetKey: string;
+    createdAt: string;
+}
+
 export interface ProfileRecord {
     id: string;
     name: string;

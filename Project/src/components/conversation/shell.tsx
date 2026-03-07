@@ -15,9 +15,10 @@ import { useConversationShellSessionActions } from '@/web/components/conversatio
 import { useConversationUiState } from '@/web/components/conversation/hooks/useConversationUiState';
 import { useSessionRunSelection } from '@/web/components/conversation/hooks/useSessionRunSelection';
 import { useThreadSidebarState } from '@/web/components/conversation/hooks/useThreadSidebarState';
+import { AttachedSkillsPanel } from '@/web/components/conversation/panels/attachedSkillsPanel';
 import { MessageEditDialog } from '@/web/components/conversation/panels/messageEditDialog';
 import { ModeExecutionPanel } from '@/web/components/conversation/panels/modeExecutionPanel';
-import { DEFAULT_RUN_OPTIONS, isProviderId } from '@/web/components/conversation/shellHelpers';
+import { DEFAULT_RUN_OPTIONS, isEntityId, isProviderId } from '@/web/components/conversation/shellHelpers';
 import { useRuntimeEventStreamStore } from '@/web/lib/runtime/eventStream';
 import { trpc } from '@/web/trpc/client';
 
@@ -193,6 +194,14 @@ export function ConversationShell({
     const selectedUsageSummary = queries.usageSummaryQuery.data?.summaries.find(
         (summary) => summary.providerId === runTargetState.selectedProviderIdForComposer
     );
+    const attachedSkills = queries.attachedSkillsQuery.data?.skillfiles ?? [];
+    const missingAttachedSkillKeys = queries.attachedSkillsQuery.data?.missingAssetKeys ?? [];
+    const activeModeLabel =
+        topLevelTab === 'agent'
+            ? registryResolvedQuery.data?.resolved.modes.find(
+                  (resolvedMode) => resolvedMode.topLevelTab === 'agent' && resolvedMode.modeKey === modeKey
+              )?.label ?? modeKey
+            : undefined;
     const editFlow = useConversationShellEditFlow({
         profileId,
         topLevelTab,
@@ -332,6 +341,15 @@ export function ConversationShell({
                           },
                       }
                     : {})}
+                {...(topLevelTab === 'agent' && activeModeLabel
+                    ? {
+                          agentContextSummary: {
+                              modeLabel: activeModeLabel,
+                              rulesetCount: registryResolvedQuery.data?.resolved.rulesets.length ?? 0,
+                              attachedSkillCount: attachedSkills.length,
+                          },
+                      }
+                    : {})}
                 providerOptions={runTargetState.providerOptions}
                 modelOptions={runTargetState.modelOptions}
                 runErrorMessage={composer.runSubmitError}
@@ -381,6 +399,19 @@ export function ConversationShell({
                             ? { orchestratorView: planOrchestrator.orchestratorView }
                             : {})}
                     />
+                }
+                attachedSkillsPanel={
+                    topLevelTab === 'agent' && isEntityId(selectedSessionId, 'sess') ? (
+                        <AttachedSkillsPanel
+                            profileId={profileId}
+                            sessionId={selectedSessionId}
+                            {...(selectedThread?.workspaceFingerprint
+                                ? { workspaceFingerprint: selectedThread.workspaceFingerprint }
+                                : {})}
+                            attachedSkills={attachedSkills}
+                            missingAssetKeys={missingAttachedSkillKeys}
+                        />
+                    ) : undefined
                 }
             />
 

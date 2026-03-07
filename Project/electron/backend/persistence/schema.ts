@@ -36,6 +36,13 @@ export interface SessionsTable {
     updated_at: string;
 }
 
+export interface SessionAttachedSkillsTable {
+    session_id: string;
+    profile_id: string;
+    asset_key: string;
+    created_at: string;
+}
+
 export interface RunsTable {
     id: string;
     session_id: string;
@@ -481,6 +488,7 @@ export interface DatabaseSchema {
     providers: ProvidersTable;
     provider_models: ProviderModelsTable;
     sessions: SessionsTable;
+    session_attached_skills: SessionAttachedSkillsTable;
     runs: RunsTable;
     messages: MessagesTable;
     message_parts: MessagePartsTable;

@@ -10,6 +10,7 @@ import type {
 } from '@/app/backend/runtime/contracts/enums';
 import type { EntityId } from '@/app/backend/runtime/contracts/ids';
 import type { ProfileInput } from '@/app/backend/runtime/contracts/types/common';
+import type { SkillfileDefinition } from '@/app/backend/runtime/contracts/types/mode';
 
 export interface SessionCreateInput extends ProfileInput {
     threadId: EntityId<'thr'>;
@@ -72,4 +73,16 @@ export type SessionListRunsInput = SessionByIdInput;
 
 export interface SessionListMessagesInput extends SessionByIdInput {
     runId?: EntityId<'run'>;
+}
+
+export type SessionGetAttachedSkillsInput = SessionByIdInput;
+
+export interface SessionSetAttachedSkillsInput extends SessionByIdInput {
+    assetKeys: string[];
+}
+
+export interface SessionAttachedSkillsResult {
+    sessionId: EntityId<'sess'>;
+    skillfiles: SkillfileDefinition[];
+    missingAssetKeys?: string[];
 }

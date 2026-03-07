@@ -2,7 +2,7 @@ import type { ProviderRuntimeTransportSelection } from '@/app/backend/providers/
 import type { ProviderAuthMethod, RuntimeProviderId } from '@/app/backend/runtime/contracts';
 import { executeRun, isAbortError } from '@/app/backend/runtime/services/runExecution/executeRun';
 import { moveRunToAbortedState, moveRunToFailedState } from '@/app/backend/runtime/services/runExecution/terminalState';
-import type { ChatContextMessage, ResolvedKiloRouting, RunCacheResolution, StartRunInput } from '@/app/backend/runtime/services/runExecution/types';
+import type { ResolvedKiloRouting, RunCacheResolution, RunContextMessage, StartRunInput } from '@/app/backend/runtime/services/runExecution/types';
 
 export async function runToTerminalState(input: {
     profileId: string;
@@ -19,7 +19,7 @@ export async function runToTerminalState(input: {
     accessToken?: string;
     organizationId?: string;
     kiloRouting?: ResolvedKiloRouting;
-    contextMessages?: ChatContextMessage[];
+    contextMessages?: RunContextMessage[];
     assistantMessageId: string;
     signal: AbortSignal;
 }): Promise<void> {

@@ -152,7 +152,7 @@ export class RunExecutionService {
                 ? { organizationId: prepared.resolvedAuth.organizationId }
                 : {}),
             ...(prepared.kiloRouting ? { kiloRouting: prepared.kiloRouting } : {}),
-            ...(prepared.chatContext ? { contextMessages: prepared.chatContext.messages } : {}),
+            ...(prepared.runContext ? { contextMessages: prepared.runContext.messages } : {}),
             assistantMessageId: persisted.assistantMessageId,
             signal: controller.signal,
         }).finally(() => {

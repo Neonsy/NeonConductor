@@ -11,6 +11,7 @@ describe('generated migrations', () => {
             '003_runtime_safety_foundation.sql',
             '004_registry_metadata.sql',
             '005_registry_precedence_indexes.sql',
+            '006_session_attached_skills.sql',
         ]);
     });
 });
