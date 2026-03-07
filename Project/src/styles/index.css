@@ -92,3 +92,60 @@ body {
     background-color: hsl(var(--background));
     color: hsl(var(--foreground));
 }
+
+.privacy-redacted {
+    filter: blur(1.4px);
+    opacity: 0.92;
+    user-select: none;
+}
+
+.message-code-surface {
+    background:
+        linear-gradient(180deg, color-mix(in srgb, var(--color-card) 94%, transparent), color-mix(in srgb, var(--color-background) 100%, transparent));
+}
+
+.message-code-line {
+    display: grid;
+    grid-template-columns: 2.5rem minmax(0, 1fr);
+    gap: 0.75rem;
+    align-items: baseline;
+}
+
+.message-code-line-number {
+    color: color-mix(in srgb, var(--color-muted-foreground) 82%, transparent);
+    text-align: right;
+    user-select: none;
+}
+
+.message-token-keyword {
+    color: color-mix(in srgb, var(--color-primary) 88%, white 12%);
+}
+
+.message-token-string {
+    color: #10b981;
+}
+
+.dark .message-token-string {
+    color: #6ee7b7;
+}
+
+.message-token-number {
+    color: #d97706;
+}
+
+.dark .message-token-number {
+    color: #fbbf24;
+}
+
+.message-token-comment {
+    color: color-mix(in srgb, var(--color-muted-foreground) 90%, transparent);
+    font-style: italic;
+}
+
+.message-token-operator {
+    color: #e11d48;
+}
+
+.dark .message-token-operator {
+    color: #fb7185;
+}

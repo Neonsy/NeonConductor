@@ -1,6 +1,7 @@
 import { ProviderAuthenticationSection } from '@/web/components/settings/providerSettings/authenticationSection';
 import { ProviderDefaultModelSection } from '@/web/components/settings/providerSettings/defaultModelSection';
 import { useProviderSettingsController } from '@/web/components/settings/providerSettings/hooks/useProviderSettingsController';
+import { KiloAccountSection } from '@/web/components/settings/providerSettings/kiloAccountSection';
 import { KiloRoutingSection } from '@/web/components/settings/providerSettings/kiloRoutingSection';
 import {
     OpenAIAccountLimitsSection,
@@ -113,17 +114,18 @@ export function ProviderSettingsView({ profileId }: ProviderSettingsViewProps) {
                         />
 
                         {controller.selectedProvider.id === 'kilo' ? (
-                            <section className='space-y-1'>
-                                <p className='text-sm font-semibold'>Kilo Extras</p>
-                                <p className='text-muted-foreground text-xs'>
-                                    Cloud sessions and marketplace remain Kilo-gated and unlock after Kilo login.
-                                </p>
-                                <p className='text-muted-foreground text-xs'>
-                                    Account state:{' '}
-                                    {controller.queries.accountContextQuery.data?.authState.authState ??
-                                        controller.selectedProvider.authState}
-                                </p>
-                            </section>
+                            <KiloAccountSection
+                                authState={
+                                    controller.queries.accountContextQuery.data?.authState.authState ??
+                                    controller.selectedProvider.authState
+                                }
+                                accountContext={controller.kiloAccountContext}
+                                isLoading={controller.queries.accountContextQuery.isLoading}
+                                isSavingOrganization={controller.mutations.setOrganizationMutation.isPending}
+                                onOrganizationChange={(organizationId) => {
+                                    void controller.changeOrganization(organizationId);
+                                }}
+                            />
                         ) : null}
 
                         {controller.selectedProvider.id === 'openai' ? (

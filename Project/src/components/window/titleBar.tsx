@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { ConfirmDialog } from '@/web/components/ui/confirmDialog';
+import PrivacyModeToggle from '@/web/components/window/privacyModeToggle';
 import ThemeToggle from '@/web/components/window/themeToggle';
 import { MacTitleBarButtons, WindowsTitleBarButtons } from '@/web/components/window/titlebar/platformButtons';
 import { useTitleBarWindowControls } from '@/web/components/window/titlebar/useTitleBarWindowControls';
@@ -62,6 +63,7 @@ export default function TitleBar() {
                     disabled={controls.controlsDisabled}>
                     Help
                 </button>
+                <PrivacyModeToggle />
                 <ThemeToggle />
             </div>
 

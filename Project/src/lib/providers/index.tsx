@@ -1,3 +1,4 @@
+import { PrivacyProvider } from '@/web/lib/providers/privacy';
 import { ThemeProvider } from '@/web/lib/providers/theme';
 import { TRPCProvider } from '@/web/lib/providers/trpc';
 
@@ -10,7 +11,9 @@ interface ProvidersProps {
 export default function Providers({ children }: ProvidersProps): ReactNode {
     return (
         <ThemeProvider>
-            <TRPCProvider>{children}</TRPCProvider>
+            <PrivacyProvider>
+                <TRPCProvider>{children}</TRPCProvider>
+            </PrivacyProvider>
         </ThemeProvider>
     );
 }

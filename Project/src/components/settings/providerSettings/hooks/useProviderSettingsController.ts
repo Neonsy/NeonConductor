@@ -82,6 +82,10 @@ export function useProviderSettingsController(profileId: string) {
     const selectedAuthState: ProviderAuthStateView | undefined = queries.authStateQuery.data?.found
         ? queries.authStateQuery.data.state
         : undefined;
+    const kiloAccountContext =
+        queries.accountContextQuery.data?.providerId === 'kilo'
+            ? queries.accountContextQuery.data.kiloAccountContext
+            : undefined;
     const selectedIsDefaultProvider = defaults?.providerId === selectedProviderId;
     const selectedIsDefaultModel = selectedIsDefaultProvider && defaults?.modelId === selectedModelId;
     const openAISubscriptionUsage = queries.openAISubscriptionUsageQuery.data?.usage;
@@ -123,6 +127,7 @@ export function useProviderSettingsController(profileId: string) {
         methods: selectedProvider?.availableAuthMethods ?? [],
         kiloModelProviders,
         selectedAuthState,
+        kiloAccountContext,
         selectedIsDefaultModel,
         openAISubscriptionUsage,
         openAISubscriptionRateLimits,

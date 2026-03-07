@@ -38,7 +38,12 @@ describe('message timeline model', () => {
     it('projects assistant text and reasoning parts while omitting encrypted reasoning', () => {
         const message = createMessage({ id: 'msg_assistant', role: 'assistant' });
         const parts = [
-            createPart({ id: 'part_text', messageId: message.id, partType: 'text', text: 'Answer body' }),
+            createPart({
+                id: 'part_text',
+                messageId: message.id,
+                partType: 'text',
+                text: ['Answer body', '', '```ts', 'const total = 7', '```'].join('\n'),
+            }),
             createPart({ id: 'part_reasoning', messageId: message.id, partType: 'reasoning', text: 'Thinking steps' }),
             createPart({
                 id: 'part_summary',
@@ -58,6 +63,10 @@ describe('message timeline model', () => {
         expect(entries).toHaveLength(1);
         expect(entries[0]?.body.map((item) => item.id)).toEqual(['part_text', 'part_reasoning', 'part_summary']);
         expect(entries[0]?.body[2]?.providerLimitedReasoning).toBe(true);
+        expect(entries[0]?.body[0]?.blocks[1]).toMatchObject({
+            kind: 'code',
+            language: 'typescript',
+        });
     });
 
     it('projects user message text parts only', () => {

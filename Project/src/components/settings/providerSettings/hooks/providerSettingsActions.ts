@@ -34,6 +34,9 @@ export function createProviderSettingsActions(input: {
         setEndpointProfileMutation: {
             mutateAsync: (input: { profileId: string; providerId: RuntimeProviderId; value: string }) => Promise<unknown>;
         };
+        setOrganizationMutation: {
+            mutateAsync: (input: { profileId: string; providerId: 'kilo'; organizationId?: string | null }) => Promise<unknown>;
+        };
         setApiKeyMutation: {
             mutateAsync: (input: { profileId: string; providerId: RuntimeProviderId; apiKey: string }) => Promise<unknown>;
         };
@@ -155,6 +158,17 @@ export function createProviderSettingsActions(input: {
                 profileId: input.profileId,
                 providerId: input.selectedProviderId,
                 value,
+            });
+        },
+        changeOrganization: async (organizationId?: string) => {
+            if (input.selectedProviderId !== 'kilo') {
+                return;
+            }
+
+            await input.mutations.setOrganizationMutation.mutateAsync({
+                profileId: input.profileId,
+                providerId: 'kilo',
+                ...(organizationId ? { organizationId } : { organizationId: null }),
             });
         },
         saveApiKey: async () => {

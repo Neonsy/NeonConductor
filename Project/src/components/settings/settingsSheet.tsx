@@ -3,6 +3,7 @@ import { useState } from 'react';
 
 import { ProfileSettingsView } from '@/web/components/settings/profileSettingsView';
 import { ProviderSettingsView } from '@/web/components/settings/providerSettingsView';
+import { usePrivacyMode } from '@/web/lib/privacy/privacyContext';
 
 interface SettingsSheetProps {
     open: boolean;
@@ -20,6 +21,7 @@ const SECTION_LABELS: Record<SettingsSection, string> = {
 
 export function SettingsSheet({ open, profileId, onClose, onProfileActivated }: SettingsSheetProps) {
     const [activeSection, setActiveSection] = useState<SettingsSection>('providers');
+    const privacyMode = usePrivacyMode();
 
     if (!open) {
         return null;
@@ -55,6 +57,11 @@ export function SettingsSheet({ open, profileId, onClose, onProfileActivated }: 
                             <p className='text-muted-foreground text-xs'>
                                 Core runtime is provider-neutral. Kilo-only features stay gated until Kilo login.
                             </p>
+                            {privacyMode.enabled ? (
+                                <p className='text-primary mt-1 text-[11px] font-semibold tracking-[0.12em] uppercase'>
+                                    Privacy mode active
+                                </p>
+                            ) : null}
                         </div>
                         <button
                             type='button'

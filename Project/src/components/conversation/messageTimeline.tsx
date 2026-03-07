@@ -1,3 +1,4 @@
+import { MessageRenderBlocks } from '@/web/components/conversation/messageRender';
 import type { MessageTimelineEntry } from '@/web/components/conversation/messageTimelineModel';
 
 interface MessageTimelineItemProps {
@@ -9,8 +10,8 @@ interface MessageTimelineItemProps {
 
 export function MessageTimelineEmptyState() {
     return (
-        <div className='text-muted-foreground border-border bg-card/60 rounded-lg border p-4 text-sm'>
-            No messages yet for this session.
+        <div className='text-muted-foreground border-border bg-card/60 rounded-xl border p-5 text-sm'>
+            No messages yet for this session. Start a run to populate the timeline.
         </div>
     );
 }
@@ -24,7 +25,7 @@ export function MessageTimelineItem({
     const canEdit = entry.role === 'user' && typeof entry.editableText === 'string' && entry.editableText.length > 0;
 
     return (
-        <article className='border-border bg-card rounded-lg border p-3'>
+        <article className='border-border bg-card rounded-xl border p-4 shadow-sm'>
             <header className='mb-2 flex items-center justify-between gap-2'>
                 <div className='flex items-center gap-2'>
                     <span className='bg-secondary text-secondary-foreground rounded px-2 py-0.5 text-[10px] font-semibold tracking-wide uppercase'>
@@ -57,10 +58,10 @@ export function MessageTimelineItem({
                     </div>
                 ) : null}
             </header>
-            <div className='space-y-2 text-sm leading-relaxed'>
+            <div className='space-y-3'>
                 {entry.body.length > 0 ? (
                     entry.body.map((item) => (
-                        <div key={item.id} className='space-y-1'>
+                        <div key={item.id} className='space-y-2'>
                             {item.type === 'assistant_reasoning' ? (
                                 <div className='text-primary inline-flex items-center gap-1.5 text-xs font-semibold tracking-wide uppercase'>
                                     Reasoning
@@ -71,7 +72,7 @@ export function MessageTimelineItem({
                                     ) : null}
                                 </div>
                             ) : null}
-                            <p className='whitespace-pre-wrap'>{item.text}</p>
+                            <MessageRenderBlocks blocks={item.blocks} />
                         </div>
                     ))
                 ) : (

@@ -84,6 +84,17 @@ export function useProviderSettingsMutations(input: UseProviderSettingsMutations
         },
     });
 
+    const setOrganizationMutation = trpc.provider.setOrganization.useMutation({
+        onSuccess: () => {
+            input.setStatusMessage('Kilo organization updated.');
+            input.refetchAccountContext();
+            input.refetchAuthState();
+            input.refetchProviders();
+            input.refetchDefaults();
+            input.refetchListModels();
+        },
+    });
+
     const startAuthMutation = trpc.provider.startAuth.useMutation({
         onSuccess: (result, variables) => {
             input.setStatusMessage(`${methodLabel(variables.method)} flow started.`);
@@ -140,6 +151,7 @@ export function useProviderSettingsMutations(input: UseProviderSettingsMutations
         setEndpointProfileMutation,
         syncCatalogMutation,
         setModelRoutingPreferenceMutation,
+        setOrganizationMutation,
         startAuthMutation,
         pollAuthMutation,
         cancelAuthMutation,

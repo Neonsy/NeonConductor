@@ -83,3 +83,16 @@ export function formatResetCountdown(resetAtMs: number | undefined): string {
 
     return `in ${String(minutes)}m`;
 }
+
+export function formatDateTime(value: string | undefined): string {
+    if (!value) {
+        return '-';
+    }
+
+    const date = new Date(value);
+    if (Number.isNaN(date.valueOf())) {
+        return value;
+    }
+
+    return date.toLocaleString();
+}
