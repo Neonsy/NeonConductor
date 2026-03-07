@@ -1,16 +1,30 @@
-import type { PermissionPolicy } from '@/app/backend/runtime/contracts/enums';
-import type { TopLevelTab } from '@/app/backend/runtime/contracts/enums';
+import type {
+    PermissionPolicy,
+    PermissionResolution,
+    PermissionScopeKind,
+    TopLevelTab,
+} from '@/app/backend/runtime/contracts/enums';
 import type { EntityId } from '@/app/backend/runtime/contracts/ids';
 import type { ProfileInput } from '@/app/backend/runtime/contracts/types/common';
 
-export interface PermissionRequestInput {
+export interface PermissionRequestSummary {
+    title: string;
+    detail: string;
+}
+
+export interface PermissionRequestInput extends ProfileInput {
     policy: PermissionPolicy;
     resource: string;
+    toolId: string;
+    scopeKind: PermissionScopeKind;
+    summary: PermissionRequestSummary;
+    workspaceFingerprint?: string;
     rationale?: string;
 }
 
-export interface PermissionDecisionInput {
+export interface PermissionResolveInput extends ProfileInput {
     requestId: EntityId<'perm'>;
+    resolution: PermissionResolution;
 }
 
 export interface PermissionGetEffectivePolicyInput extends ProfileInput {

@@ -45,6 +45,12 @@ export const runtimeRouter = router({
     getShellBootstrap: publicProcedure.input(profileInputSchema).query(async ({ input }) => {
         return runtimeShellBootstrapService.getShellBootstrap(input.profileId);
     }),
+    listWorkspaceRoots: publicProcedure.input(profileInputSchema).query(async ({ input }) => {
+        const shellBootstrap = await runtimeShellBootstrapService.getShellBootstrap(input.profileId);
+        return {
+            workspaceRoots: shellBootstrap.workspaceRoots,
+        };
+    }),
     subscribeEvents: publicProcedure.input(runtimeEventsSubscriptionInputSchema).subscription(async function* ({
         input,
         signal,

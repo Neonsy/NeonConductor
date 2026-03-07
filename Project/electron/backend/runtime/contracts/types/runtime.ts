@@ -1,6 +1,12 @@
 import type { ProviderModelRecord, ThreadTagRecord } from '@/app/backend/persistence/types';
 import type { ProviderListItem } from '@/app/backend/providers/service/types';
-import type { ContextBudget, RuntimeResetTarget, StreamEventType } from '@/app/backend/runtime/contracts/enums';
+import type {
+    ContextBudget,
+    ExecutionPreset,
+    RuntimeResetTarget,
+    StreamEventType,
+    ToolCapability,
+} from '@/app/backend/runtime/contracts/enums';
 import type { EntityId } from '@/app/backend/runtime/contracts/ids';
 import type { ProfileInput } from '@/app/backend/runtime/contracts/types/common';
 
@@ -19,11 +25,33 @@ export interface RuntimeEventsSubscriptionInput {
 
 export type RuntimeShellBootstrapInput = ProfileInput;
 
+export interface WorkspaceRootRecord {
+    fingerprint: string;
+    profileId: string;
+    absolutePath: string;
+    label: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface ToolCatalogEntry {
+    id: string;
+    label: string;
+    description: string;
+    permissionPolicy: 'ask' | 'allow' | 'deny';
+    capabilities: ToolCapability[];
+    requiresWorkspace: boolean;
+    allowsExternalPaths: boolean;
+    allowsIgnoredPaths: boolean;
+}
+
 export interface RuntimeShellBootstrap {
     lastSequence: number;
     providers: ProviderListItem[];
     providerModels: ProviderModelRecord[];
     threadTags: ThreadTagRecord[];
+    executionPreset: ExecutionPreset;
+    workspaceRoots: WorkspaceRootRecord[];
     defaults: {
         providerId: string;
         modelId: string;

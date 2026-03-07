@@ -34,6 +34,18 @@ export type OrchestratorMode = (typeof orchestratorModes)[number];
 export const permissionPolicies = ['ask', 'allow', 'deny'] as const;
 export type PermissionPolicy = (typeof permissionPolicies)[number];
 
+export const executionPresets = ['privacy', 'standard', 'yolo'] as const;
+export type ExecutionPreset = (typeof executionPresets)[number];
+
+export const permissionScopeKinds = ['tool', 'boundary'] as const;
+export type PermissionScopeKind = (typeof permissionScopeKinds)[number];
+
+export const permissionResolutions = ['deny', 'allow_once', 'allow_profile', 'allow_workspace'] as const;
+export type PermissionResolution = (typeof permissionResolutions)[number];
+
+export const toolCapabilities = ['filesystem_read', 'filesystem_write', 'shell', 'git'] as const;
+export type ToolCapability = (typeof toolCapabilities)[number];
+
 export const contextBudgets = ['low', 'balanced', 'high'] as const;
 export type ContextBudget = (typeof contextBudgets)[number];
 

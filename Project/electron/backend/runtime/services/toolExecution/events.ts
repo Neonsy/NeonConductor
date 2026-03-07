@@ -7,7 +7,13 @@ export async function emitToolBlockedEvent(input: {
     resource: string;
     policy: 'ask' | 'allow' | 'deny';
     source: string;
-    reason: 'policy_denied' | 'permission_required';
+    reason:
+        | 'policy_denied'
+        | 'permission_required'
+        | 'detached_scope'
+        | 'outside_workspace'
+        | 'ignored_path'
+        | 'workspace_unresolved';
     requestId?: string;
 }) {
     await runtimeEventLogService.append(

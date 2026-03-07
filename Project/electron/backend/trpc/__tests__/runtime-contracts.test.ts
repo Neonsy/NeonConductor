@@ -34,11 +34,35 @@ async function createSessionInScope(
         topLevelTab?: 'chat' | 'agent' | 'orchestrator';
     }
 ) {
+    let workspacePath: string | undefined;
+    if (input.scope === 'workspace' && input.workspaceFingerprint) {
+        workspacePath = mkdtempSync(path.join(os.tmpdir(), `${input.workspaceFingerprint}-`));
+        const now = new Date().toISOString();
+        const { sqlite } = getPersistence();
+        sqlite
+            .prepare(
+                `
+                    INSERT OR IGNORE INTO workspace_roots
+                        (fingerprint, profile_id, absolute_path, path_key, label, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                `
+            )
+            .run(
+                input.workspaceFingerprint,
+                profileId,
+                workspacePath,
+                process.platform === 'win32' ? workspacePath.toLowerCase() : workspacePath,
+                path.basename(workspacePath),
+                now,
+                now
+            );
+    }
+
     const threadResult = await caller.conversation.createThread({
         profileId,
         ...(input.topLevelTab ? { topLevelTab: input.topLevelTab } : {}),
         scope: input.scope,
-        ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
+        ...(workspacePath ? { workspacePath } : {}),
         title: input.title,
     });
 
@@ -1167,8 +1191,15 @@ describe('runtime contracts', () => {
         const caller = createCaller();
 
         const requested = await caller.permission.request({
+            profileId,
             policy: 'ask',
             resource: 'tool:run_command',
+            toolId: 'run_command',
+            scopeKind: 'tool',
+            summary: {
+                title: 'Run Command Request',
+                detail: 'Need shell command access',
+            },
             rationale: 'Need shell command access',
         });
         const requestId = requested.request.id;
@@ -1176,19 +1207,28 @@ describe('runtime contracts', () => {
         const pending = await caller.permission.listPending();
         expect(pending.requests.some((item) => item.id === requestId)).toBe(true);
 
-        const granted = await caller.permission.grant({ requestId });
+        const granted = await caller.permission.resolve({
+            profileId,
+            requestId,
+            resolution: 'allow_once',
+        });
         expect(granted.updated).toBe(true);
 
-        const grantedAgain = await caller.permission.grant({ requestId });
+        const grantedAgain = await caller.permission.resolve({
+            profileId,
+            requestId,
+            resolution: 'allow_once',
+        });
         expect(grantedAgain.updated).toBe(false);
-        expect(grantedAgain.reason).toBe('already_granted');
+        expect(grantedAgain.reason).toBe('already_resolved');
 
-        const deniedAfterGrant = await caller.permission.deny({ requestId });
-        expect(deniedAfterGrant.updated).toBe(true);
-
-        const deniedAgain = await caller.permission.deny({ requestId });
+        const deniedAgain = await caller.permission.resolve({
+            profileId,
+            requestId,
+            resolution: 'deny',
+        });
         expect(deniedAgain.updated).toBe(false);
-        expect(deniedAgain.reason).toBe('already_denied');
+        expect(deniedAgain.reason).toBe('already_resolved');
     });
 
     it('persists provider default in memory and lists models', async () => {
@@ -1617,17 +1657,41 @@ describe('runtime contracts', () => {
         const caller = createCaller();
         const tempDir = mkdtempSync(path.join(os.tmpdir(), 'neonconductor-tool-test-'));
         const tempFile = path.join(tempDir, 'readme.txt');
+        const workspaceFingerprint = 'ws_tool_runtime_contracts';
+        const now = new Date().toISOString();
+        const { sqlite } = getPersistence();
         // eslint-disable-next-line security/detect-non-literal-fs-filename -- test uses isolated mkdtemp path to validate runtime tool behavior.
         writeFileSync(tempFile, 'hello from tool execution test', 'utf8');
+        sqlite
+            .prepare(
+                `
+                    INSERT OR IGNORE INTO workspace_roots
+                        (fingerprint, profile_id, absolute_path, path_key, label, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                `
+            )
+            .run(
+                workspaceFingerprint,
+                profileId,
+                tempDir,
+                process.platform === 'win32' ? tempDir.toLowerCase() : tempDir,
+                path.basename(tempDir),
+                now,
+                now
+            );
 
         const tools = await caller.tool.list();
         expect(tools.tools.map((item) => item.id)).toContain('read_file');
+        const readTool = tools.tools.find((item) => item.id === 'read_file');
+        expect(readTool?.requiresWorkspace).toBe(true);
+        expect(readTool?.capabilities).toContain('filesystem_read');
 
         const allowedRead = await caller.tool.invoke({
             profileId,
             toolId: 'read_file',
             topLevelTab: 'agent',
             modeKey: 'ask',
+            workspaceFingerprint,
             args: {
                 path: tempFile,
             },
@@ -1660,11 +1724,17 @@ describe('runtime contracts', () => {
         }
         expect(deniedMutation.error).toBe('policy_denied');
 
+        await caller.profile.setExecutionPreset({
+            profileId,
+            preset: 'privacy',
+        });
+
         const askDecision = await caller.tool.invoke({
             profileId,
             toolId: 'read_file',
             topLevelTab: 'agent',
             modeKey: 'code',
+            workspaceFingerprint,
             args: {
                 path: tempFile,
             },
@@ -1674,19 +1744,29 @@ describe('runtime contracts', () => {
             throw new Error('Expected read_file to require permission in agent.code mode by default policy.');
         }
         expect(askDecision.error).toBe('permission_required');
+        expect(askDecision.requestId).toBeDefined();
+        const permissionRequestId: EntityId<'perm'> = (() => {
+            const requestId = askDecision.requestId;
+            if (!isEntityId(requestId ?? '', 'perm')) {
+                throw new Error('Expected permission request id with "perm_" prefix.');
+            }
 
-        const profileOverride = await caller.permission.setProfileOverride({
+            return requestId as EntityId<'perm'>;
+        })();
+
+        const profileOverride = await caller.permission.resolve({
             profileId,
-            resource: 'tool:read_file',
-            policy: 'allow',
+            requestId: permissionRequestId,
+            resolution: 'allow_profile',
         });
-        expect(profileOverride.override.policy).toBe('allow');
+        expect(profileOverride.updated).toBe(true);
 
         const allowedByOverride = await caller.tool.invoke({
             profileId,
             toolId: 'read_file',
             topLevelTab: 'agent',
             modeKey: 'code',
+            workspaceFingerprint,
             args: {
                 path: tempFile,
             },

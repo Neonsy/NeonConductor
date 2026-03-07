@@ -73,6 +73,7 @@ export function useConversationShellQueries(input: UseConversationShellQueriesIn
         { profileId: input.profileId },
         { refetchOnWindowFocus: false }
     );
+    const pendingPermissionsQuery = trpc.permission.listPending.useQuery(undefined, { refetchOnWindowFocus: false });
 
     const activePlanQuery = trpc.plan.getActive.useQuery(
         {
@@ -108,6 +109,7 @@ export function useConversationShellQueries(input: UseConversationShellQueriesIn
         runsQuery,
         messagesQuery,
         usageSummaryQuery,
+        pendingPermissionsQuery,
         activePlanQuery,
         orchestratorLatestQuery,
     };

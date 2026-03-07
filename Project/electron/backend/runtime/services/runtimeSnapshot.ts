@@ -19,10 +19,12 @@ import {
     tagStore,
     threadStore,
     toolStore,
+    workspaceRootStore,
 } from '@/app/backend/persistence/stores';
 import { toProfileStoreException } from '@/app/backend/persistence/stores/profileStoreErrors';
 import type { RuntimeSnapshotV1 } from '@/app/backend/persistence/types';
 import { providerManagementService } from '@/app/backend/providers/service';
+import { getExecutionPreset } from '@/app/backend/runtime/services/profile/executionPreset';
 import { appLog } from '@/app/main/logging';
 
 export interface RuntimeSnapshotService {
@@ -64,6 +66,7 @@ class RuntimeSnapshotServiceImpl implements RuntimeSnapshotService {
             runUsage,
             providerUsageSummaries,
             permissions,
+            executionPreset,
             providers,
             providerModels,
             providerAuthStates,
@@ -74,6 +77,7 @@ class RuntimeSnapshotServiceImpl implements RuntimeSnapshotService {
             defaults,
             lastSequence,
             conversations,
+            workspaceRoots,
             threads,
             tags,
             threadTags,
@@ -101,6 +105,7 @@ class RuntimeSnapshotServiceImpl implements RuntimeSnapshotService {
             loadSlice('run-usage', () => runUsageStore.listByProfile(profileId)),
             loadSlice('provider-usage', () => runUsageStore.summarizeByProfile(profileId)),
             loadSlice('permissions', () => permissionStore.listAll()),
+            loadSlice('execution-preset', () => getExecutionPreset(profileId)),
             loadSlice('providers', () => providerManagementService.listProviders(profileId)),
             loadSlice('provider-models', () => providerManagementService.listModelsByProfile(profileId)),
             loadSlice('provider-auth-states', () => providerManagementService.listAuthStates(profileId)),
@@ -113,6 +118,7 @@ class RuntimeSnapshotServiceImpl implements RuntimeSnapshotService {
             loadSlice('provider-defaults', () => providerManagementService.getDefaults(profileId)),
             loadSlice('runtime-last-sequence', () => runtimeEventStore.getLastSequence()),
             loadSlice('conversations', () => conversationStore.listBuckets(profileId)),
+            loadSlice('workspace-roots', () => workspaceRootStore.listByProfile(profileId)),
             loadSlice('threads', () =>
                 threadStore.list({
                     profileId,
@@ -145,6 +151,7 @@ class RuntimeSnapshotServiceImpl implements RuntimeSnapshotService {
             runUsage,
             providerUsageSummaries,
             permissions,
+            executionPreset,
             providers,
             providerModels,
             providerAuthStates,
@@ -153,6 +160,7 @@ class RuntimeSnapshotServiceImpl implements RuntimeSnapshotService {
             tools,
             mcpServers,
             conversations,
+            workspaceRoots,
             threads,
             tags,
             threadTags,

@@ -1,12 +1,14 @@
 import type { MessageTimelineEntry } from '@/web/components/conversation/messageTimelineModel';
 import { ComposerActionPanel } from '@/web/components/conversation/panels/composerActionPanel';
 import { MessageTimelinePanel } from '@/web/components/conversation/panels/messageTimelinePanel';
+import { PendingPermissionsPanel } from '@/web/components/conversation/panels/pendingPermissionsPanel';
 import { WorkspaceStatusPanel } from '@/web/components/conversation/panels/workspaceStatusPanel';
 import { Button } from '@/web/components/ui/button';
 
 import type {
     MessagePartRecord,
     MessageRecord,
+    PermissionRecord,
     ProviderUsageSummary,
     RunRecord,
     SessionSummaryRecord,
@@ -21,9 +23,21 @@ interface SessionWorkspacePanelProps {
     partsByMessageId: Map<string, MessagePartRecord[]>;
     selectedSessionId?: string;
     selectedRunId?: string;
+    executionPreset: 'privacy' | 'standard' | 'yolo';
+    workspaceScope:
+        | {
+              kind: 'detached';
+          }
+        | {
+              kind: 'workspace';
+              label: string;
+              absolutePath: string;
+          };
+    pendingPermissions: PermissionRecord[];
     prompt: string;
     isCreatingSession: boolean;
     isStartingRun: boolean;
+    isResolvingPermission: boolean;
     canCreateSession: boolean;
     selectedProviderId: string | undefined;
     selectedModelId: string | undefined;
@@ -48,6 +62,10 @@ interface SessionWorkspacePanelProps {
     onCreateSession: () => void;
     onPromptChange: (nextPrompt: string) => void;
     onSubmitPrompt: () => void;
+    onResolvePermission: (
+        requestId: PermissionRecord['id'],
+        resolution: 'deny' | 'allow_once' | 'allow_profile' | 'allow_workspace'
+    ) => void;
     onEditMessage?: (entry: MessageTimelineEntry) => void;
     onBranchFromMessage?: (entry: MessageTimelineEntry) => void;
 }
@@ -59,9 +77,13 @@ export function SessionWorkspacePanel({
     partsByMessageId,
     selectedSessionId,
     selectedRunId,
+    executionPreset,
+    workspaceScope,
+    pendingPermissions,
     prompt,
     isCreatingSession,
     isStartingRun,
+    isResolvingPermission,
     canCreateSession,
     selectedProviderId,
     selectedModelId,
@@ -80,6 +102,7 @@ export function SessionWorkspacePanel({
     onCreateSession,
     onPromptChange,
     onSubmitPrompt,
+    onResolvePermission,
     onEditMessage,
     onBranchFromMessage,
 }: SessionWorkspacePanelProps) {
@@ -144,10 +167,18 @@ export function SessionWorkspacePanel({
 
                 <WorkspaceStatusPanel
                     run={runs.find((run) => run.id === selectedRunId) ?? runs.at(-1)}
+                    executionPreset={executionPreset}
+                    workspaceScope={workspaceScope}
                     provider={selectedProviderStatus}
                     modelLabel={selectedModelLabel}
                     usageSummary={selectedUsageSummary}
                     routingBadge={routingBadge}
+                />
+
+                <PendingPermissionsPanel
+                    requests={pendingPermissions}
+                    busy={isResolvingPermission}
+                    onResolve={onResolvePermission}
                 />
 
                 <MessageTimelinePanel

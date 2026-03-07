@@ -36,7 +36,7 @@ interface ConversationShellSidebarPaneProps {
         profileId: string;
         topLevelTab: TopLevelTab;
         scope: 'detached' | 'workspace';
-        workspaceFingerprint?: string;
+        workspacePath?: string;
         title: string;
     }) => Promise<{ thread: { id: string } }>;
     upsertTag: (input: { profileId: string; label: string }) => Promise<{ tag: { id: string } }>;

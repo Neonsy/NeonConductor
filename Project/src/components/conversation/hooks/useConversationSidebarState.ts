@@ -4,7 +4,7 @@ import type { TopLevelTab } from '@/app/backend/runtime/contracts';
 
 interface CreateThreadInput {
     scope: 'detached' | 'workspace';
-    workspaceFingerprint?: string;
+    workspacePath?: string;
     title: string;
 }
 
@@ -52,7 +52,7 @@ export function useConversationSidebarState(input: UseConversationSidebarStateIn
             scope: newThreadScope,
             title: generatedTitle,
             ...(newThreadScope === 'workspace' && newThreadWorkspace.trim().length > 0
-                ? { workspaceFingerprint: newThreadWorkspace.trim() }
+                ? { workspacePath: newThreadWorkspace.trim() }
                 : {}),
         });
         setNewThreadTitle('');

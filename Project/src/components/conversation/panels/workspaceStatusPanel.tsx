@@ -4,6 +4,16 @@ import type { ProviderUsageSummary, RunRecord } from '@/app/backend/persistence/
 
 interface WorkspaceStatusPanelProps {
     run: RunRecord | undefined;
+    executionPreset: 'privacy' | 'standard' | 'yolo';
+    workspaceScope:
+        | {
+              kind: 'detached';
+          }
+        | {
+              kind: 'workspace';
+              label: string;
+              absolutePath: string;
+          };
     provider:
         | {
               label: string;
@@ -44,6 +54,8 @@ function StatusCard({
 
 export function WorkspaceStatusPanel({
     run,
+    executionPreset,
+    workspaceScope,
     provider,
     modelLabel,
     usageSummary,
@@ -57,6 +69,15 @@ export function WorkspaceStatusPanel({
                 detail={run ? `${run.id}${run.errorMessage ? ` · ${run.errorMessage}` : ''}` : 'No run selected'}
             />
             <StatusCard
+                label='Scope'
+                value={workspaceScope.kind === 'workspace' ? workspaceScope.label : 'Detached'}
+                detail={
+                    workspaceScope.kind === 'workspace'
+                        ? `${executionPreset} preset · ${workspaceScope.absolutePath}`
+                        : `${executionPreset} preset · detached chat has no file authority`
+                }
+            />
+            <StatusCard
                 label='Provider'
                 value={provider?.label ?? 'Unresolved'}
                 detail={
@@ -66,11 +87,6 @@ export function WorkspaceStatusPanel({
                 }
             />
             <StatusCard
-                label='Model'
-                value={modelLabel ?? 'Unresolved'}
-                detail={run?.modelId ?? 'Composer target model'}
-            />
-            <StatusCard
                 label='Local Usage'
                 value={usageSummary ? `${formatInteger(usageSummary.totalTokens)} tokens` : 'No usage'}
                 detail={
@@ -78,6 +94,11 @@ export function WorkspaceStatusPanel({
                         ? `${formatInteger(usageSummary.runCount)} runs · ${formatMicrounits(usageSummary.totalCostMicrounits)}`
                         : 'No local telemetry for this provider yet'
                 }
+            />
+            <StatusCard
+                label='Model'
+                value={modelLabel ?? 'Unresolved'}
+                detail={run?.modelId ?? 'Composer target model'}
             />
         </section>
     );

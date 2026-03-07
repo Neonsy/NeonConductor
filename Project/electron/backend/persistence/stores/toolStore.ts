@@ -2,6 +2,7 @@ import { getPersistence } from '@/app/backend/persistence/db';
 import { parseEnumValue } from '@/app/backend/persistence/stores/rowParsers';
 import type { ToolRecord } from '@/app/backend/persistence/types';
 import { permissionPolicies } from '@/app/backend/runtime/contracts';
+import { getToolSafetyMetadata } from '@/app/backend/runtime/services/toolExecution/catalog';
 
 function mapToolRecord(row: { id: string; label: string; description: string; permission_policy: string }): ToolRecord {
     return {
@@ -9,6 +10,7 @@ function mapToolRecord(row: { id: string; label: string; description: string; pe
         label: row.label,
         description: row.description,
         permissionPolicy: parseEnumValue(row.permission_policy, 'tools_catalog.permission_policy', permissionPolicies),
+        ...getToolSafetyMetadata(row.id),
     };
 }
 

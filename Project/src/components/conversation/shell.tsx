@@ -95,6 +95,13 @@ export function ConversationShell({ profileId, topLevelTab, modeKey, onTopLevelT
     const selectedThread = uiState.selectedThreadId
         ? sidebarState.visibleThreads.find((thread) => thread.id === uiState.selectedThreadId)
         : undefined;
+    const selectedWorkspaceRoot = selectedThread?.workspaceFingerprint
+        ? queries.shellBootstrapQuery.data?.workspaceRoots.find(
+              (workspaceRoot) => workspaceRoot.fingerprint === selectedThread.workspaceFingerprint
+          )
+        : undefined;
+    const pendingPermissions =
+        queries.pendingPermissionsQuery.data?.requests.filter((request) => request.profileId === profileId) ?? [];
 
     const sessionRunSelection = useSessionRunSelection({
         allSessions: queries.sessionsQuery.data?.sessions ?? [],
@@ -252,9 +259,29 @@ export function ConversationShell({ profileId, topLevelTab, modeKey, onTopLevelT
                 runs={sessionRunSelection.runs}
                 messages={sessionRunSelection.messages}
                 partsByMessageId={sessionRunSelection.partsByMessageId}
+                executionPreset={queries.shellBootstrapQuery.data?.executionPreset ?? 'standard'}
+                workspaceScope={
+                    selectedThread?.workspaceFingerprint
+                        ? selectedWorkspaceRoot
+                            ? {
+                                  kind: 'workspace',
+                                  label: selectedWorkspaceRoot.label,
+                                  absolutePath: selectedWorkspaceRoot.absolutePath,
+                              }
+                            : {
+                                  kind: 'workspace',
+                                  label: selectedThread.workspaceFingerprint,
+                                  absolutePath: 'Unresolved workspace root',
+                              }
+                        : {
+                              kind: 'detached',
+                          }
+                }
+                pendingPermissions={pendingPermissions}
                 prompt={composer.prompt}
                 isCreatingSession={mutations.createSessionMutation.isPending}
                 isStartingRun={mutations.startRunMutation.isPending || mutations.planStartMutation.isPending}
+                isResolvingPermission={mutations.resolvePermissionMutation.isPending}
                 canCreateSession={Boolean(uiState.selectedThreadId)}
                 selectedProviderId={runTargetState.selectedProviderIdForComposer}
                 selectedModelId={runTargetState.selectedModelIdForComposer}
@@ -291,6 +318,15 @@ export function ConversationShell({ profileId, topLevelTab, modeKey, onTopLevelT
                 onCreateSession={sessionActions.onCreateSession}
                 onPromptChange={composer.onPromptChange}
                 onSubmitPrompt={composer.onSubmitPrompt}
+                onResolvePermission={(requestId, resolution) => {
+                    void mutations.resolvePermissionMutation
+                        .mutateAsync({
+                            profileId,
+                            requestId,
+                            resolution,
+                        })
+                        .then(() => queries.pendingPermissionsQuery.refetch());
+                }}
                 onEditMessage={editFlow.onEditMessage}
                 onBranchFromMessage={editFlow.onBranchFromMessage}
                 modePanel={

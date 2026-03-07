@@ -1,3 +1,4 @@
+import type { ExecutionPreset } from '@/app/backend/runtime/contracts/enums';
 import type { ProfileInput } from '@/app/backend/runtime/contracts/types/common';
 
 export interface ProfileCreateInput {
@@ -15,3 +16,9 @@ export interface ProfileDuplicateInput extends ProfileInput {
 export type ProfileDeleteInput = ProfileInput;
 
 export type ProfileSetActiveInput = ProfileInput;
+
+export type ProfileGetExecutionPresetInput = ProfileInput;
+
+export interface ProfileSetExecutionPresetInput extends ProfileInput {
+    preset: ExecutionPreset;
+}

@@ -69,21 +69,21 @@ export function parseConversationCreateThreadInput(input: unknown): Conversation
     const topLevelTab =
         source.topLevelTab !== undefined ? readEnumValue(source.topLevelTab, 'topLevelTab', topLevelTabs) : undefined;
     const scope = readEnumValue(source.scope, 'scope', conversationScopes);
-    const workspaceFingerprint = readOptionalString(source.workspaceFingerprint, 'workspaceFingerprint');
+    const workspacePath = readOptionalString(source.workspacePath, 'workspacePath');
 
-    if (scope === 'workspace' && !workspaceFingerprint) {
-        throw new Error('Invalid "workspaceFingerprint": required when scope is "workspace".');
+    if (scope === 'workspace' && !workspacePath) {
+        throw new Error('Invalid "workspacePath": required when scope is "workspace".');
     }
 
-    if (scope !== 'workspace' && workspaceFingerprint) {
-        throw new Error('Invalid "workspaceFingerprint": allowed only when scope is "workspace".');
+    if (scope !== 'workspace' && workspacePath) {
+        throw new Error('Invalid "workspacePath": allowed only when scope is "workspace".');
     }
 
     return {
         profileId: readProfileId(source),
         ...(topLevelTab ? { topLevelTab } : {}),
         scope,
-        ...(workspaceFingerprint ? { workspaceFingerprint } : {}),
+        ...(workspacePath ? { workspacePath } : {}),
         title: readString(source.title, 'title'),
     };
 }

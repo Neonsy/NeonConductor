@@ -1,5 +1,6 @@
 import type {
     EntityId,
+    ExecutionPreset,
     KiloDynamicSort,
     KiloRoutingMode,
     KiloAccountContext,
@@ -10,6 +11,7 @@ import type {
     ProviderAuthMethod,
     ProviderAuthState,
     PermissionPolicy,
+    PermissionScopeKind,
     RuntimeOpenAITransport,
     RuntimeMessagePartType,
     RuntimeReasoningEffort,
@@ -19,6 +21,8 @@ import type {
     RunStatus,
     SecretReference,
     SkillfileDefinition,
+    ToolCapability,
+    WorkspaceRootRecord as RuntimeWorkspaceRootRecord,
 } from '@/app/backend/runtime/contracts';
 
 export interface SessionSummaryRecord {
@@ -55,11 +59,21 @@ export interface ProfileDeletionGuardResult {
 
 export interface PermissionRecord {
     id: EntityId<'perm'>;
+    profileId: string;
     policy: PermissionPolicy;
     resource: string;
+    toolId: string;
+    workspaceFingerprint?: string;
+    scopeKind: PermissionScopeKind;
+    summary: {
+        title: string;
+        detail: string;
+    };
     decision: 'pending' | 'granted' | 'denied';
+    resolvedScope?: 'once' | 'profile' | 'workspace';
     createdAt: string;
     updatedAt: string;
+    consumedAt?: string;
     rationale?: string;
 }
 
@@ -156,6 +170,10 @@ export interface ToolRecord {
     label: string;
     description: string;
     permissionPolicy: PermissionPolicy;
+    capabilities: ToolCapability[];
+    requiresWorkspace: boolean;
+    allowsExternalPaths: boolean;
+    allowsIgnoredPaths: boolean;
 }
 
 export interface McpServerRecord {
@@ -232,6 +250,8 @@ export interface ConversationRecord {
     createdAt: string;
     updatedAt: string;
 }
+
+export type WorkspaceRootRecord = RuntimeWorkspaceRootRecord;
 
 export interface ThreadRecord {
     id: string;
@@ -499,6 +519,7 @@ export interface RuntimeSnapshotV1 {
     runUsage: RunUsageRecord[];
     providerUsageSummaries: ProviderUsageSummary[];
     permissions: PermissionRecord[];
+    executionPreset: ExecutionPreset;
     providers: Array<
         ProviderRecord & {
             isDefault: boolean;
@@ -513,6 +534,7 @@ export interface RuntimeSnapshotV1 {
     tools: ToolRecord[];
     mcpServers: McpServerRecord[];
     conversations: ConversationRecord[];
+    workspaceRoots: WorkspaceRootRecord[];
     threads: ThreadRecord[];
     tags: TagRecord[];
     threadTags: ThreadTagRecord[];

@@ -15,5 +15,6 @@ export function useConversationShellMutations() {
         planImplementMutation: trpc.plan.implement.useMutation(),
         orchestratorAbortMutation: trpc.orchestrator.abort.useMutation(),
         setEditPreferenceMutation: trpc.conversation.setEditPreference.useMutation(),
+        resolvePermissionMutation: trpc.permission.resolve.useMutation(),
     };
 }

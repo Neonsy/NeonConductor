@@ -1,4 +1,9 @@
-import { permissionPolicies, topLevelTabs } from '@/app/backend/runtime/contracts/enums';
+import {
+    permissionPolicies,
+    permissionResolutions,
+    permissionScopeKinds,
+    topLevelTabs,
+} from '@/app/backend/runtime/contracts/enums';
 import {
     createParser,
     readEntityId,
@@ -9,9 +14,9 @@ import {
     readString,
 } from '@/app/backend/runtime/contracts/parsers/helpers';
 import type {
-    PermissionDecisionInput,
     PermissionGetEffectivePolicyInput,
     PermissionRequestInput,
+    PermissionResolveInput,
     PermissionSetProfileOverrideInput,
     PermissionSetWorkspaceOverrideInput,
 } from '@/app/backend/runtime/contracts/types';
@@ -19,19 +24,31 @@ import type {
 export function parsePermissionRequestInput(input: unknown): PermissionRequestInput {
     const source = readObject(input, 'input');
     const rationale = readOptionalString(source.rationale, 'rationale');
+    const workspaceFingerprint = readOptionalString(source.workspaceFingerprint, 'workspaceFingerprint');
+    const summary = readObject(source.summary, 'summary');
 
     return {
+        profileId: readProfileId(source),
         policy: readEnumValue(source.policy, 'policy', permissionPolicies),
         resource: readString(source.resource, 'resource'),
+        toolId: readString(source.toolId, 'toolId'),
+        scopeKind: readEnumValue(source.scopeKind, 'scopeKind', permissionScopeKinds),
+        summary: {
+            title: readString(summary.title, 'summary.title'),
+            detail: readString(summary.detail, 'summary.detail'),
+        },
+        ...(workspaceFingerprint ? { workspaceFingerprint } : {}),
         ...(rationale ? { rationale } : {}),
     };
 }
 
-export function parsePermissionDecisionInput(input: unknown): PermissionDecisionInput {
+export function parsePermissionResolveInput(input: unknown): PermissionResolveInput {
     const source = readObject(input, 'input');
 
     return {
+        profileId: readProfileId(source),
         requestId: readEntityId(source.requestId, 'requestId', 'perm'),
+        resolution: readEnumValue(source.resolution, 'resolution', permissionResolutions),
     };
 }
 
@@ -70,7 +87,7 @@ export function parsePermissionSetWorkspaceOverrideInput(input: unknown): Permis
 }
 
 export const permissionRequestInputSchema = createParser(parsePermissionRequestInput);
-export const permissionDecisionInputSchema = createParser(parsePermissionDecisionInput);
+export const permissionResolveInputSchema = createParser(parsePermissionResolveInput);
 export const permissionGetEffectivePolicyInputSchema = createParser(parsePermissionGetEffectivePolicyInput);
 export const permissionSetProfileOverrideInputSchema = createParser(parsePermissionSetProfileOverrideInput);
 export const permissionSetWorkspaceOverrideInputSchema = createParser(parsePermissionSetWorkspaceOverrideInput);

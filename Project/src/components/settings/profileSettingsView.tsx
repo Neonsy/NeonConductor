@@ -141,6 +141,33 @@ export function ProfileSettingsView({ activeProfileId, onProfileActivated }: Pro
                             </div>
 
                             <div className='space-y-1 pt-2'>
+                                <p className='text-sm font-semibold'>Execution Preset</p>
+                                <p className='text-muted-foreground text-xs'>
+                                    Controls default runtime approval behavior for workspace-scoped tool access.
+                                </p>
+                                <select
+                                    className='border-border bg-background h-9 w-full max-w-sm rounded-md border px-2 text-sm'
+                                    value={controller.executionPresetQuery.data?.preset ?? 'standard'}
+                                    disabled={controller.setExecutionPresetMutation.isPending}
+                                    onChange={(event) => {
+                                        const nextPreset = event.target.value;
+                                        if (
+                                            nextPreset !== 'privacy' &&
+                                            nextPreset !== 'standard' &&
+                                            nextPreset !== 'yolo'
+                                        ) {
+                                            return;
+                                        }
+
+                                        void controller.updateExecutionPreset(nextPreset);
+                                    }}>
+                                    <option value='privacy'>Privacy: ask on every tool</option>
+                                    <option value='standard'>Standard: allow safe workspace reads</option>
+                                    <option value='yolo'>Yolo: auto-allow safe reads, deny unsafe boundaries</option>
+                                </select>
+                            </div>
+
+                            <div className='space-y-1 pt-2'>
                                 <p className='text-sm font-semibold'>Conversation Edit Behavior</p>
                                 <p className='text-muted-foreground text-xs'>
                                     Controls default behavior when editing earlier user messages.
