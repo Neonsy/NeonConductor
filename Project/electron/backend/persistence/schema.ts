@@ -267,6 +267,9 @@ export interface KiloAccountSnapshotsTable {
     email_masked: string;
     auth_state: string;
     token_expires_at: string | null;
+    balance_amount: number | null;
+    balance_currency: string | null;
+    balance_updated_at: string | null;
     updated_at: string;
 }
 

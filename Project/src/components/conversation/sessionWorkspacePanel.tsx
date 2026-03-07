@@ -1,13 +1,15 @@
 import type { MessageTimelineEntry } from '@/web/components/conversation/messageTimelineModel';
 import { ComposerActionPanel } from '@/web/components/conversation/panels/composerActionPanel';
 import { MessageTimelinePanel } from '@/web/components/conversation/panels/messageTimelinePanel';
+import { WorkspaceStatusPanel } from '@/web/components/conversation/panels/workspaceStatusPanel';
 import { Button } from '@/web/components/ui/button';
 
 import type {
     MessagePartRecord,
     MessageRecord,
-    SessionSummaryRecord,
+    ProviderUsageSummary,
     RunRecord,
+    SessionSummaryRecord,
 } from '@/app/backend/persistence/types';
 
 import type { ReactNode } from 'react';
@@ -26,6 +28,15 @@ interface SessionWorkspacePanelProps {
     selectedProviderId: string | undefined;
     selectedModelId: string | undefined;
     routingBadge?: string;
+    selectedProviderStatus?:
+        | {
+              label: string;
+              authState: string;
+              authMethod: string;
+          }
+        | undefined;
+    selectedModelLabel?: string;
+    selectedUsageSummary?: ProviderUsageSummary;
     providerOptions: Array<{ id: string; label: string; authState: string }>;
     modelOptions: Array<{ id: string; label: string; price?: number; latency?: number; tps?: number }>;
     runErrorMessage: string | undefined;
@@ -55,6 +66,9 @@ export function SessionWorkspacePanel({
     selectedProviderId,
     selectedModelId,
     routingBadge,
+    selectedProviderStatus,
+    selectedModelLabel,
+    selectedUsageSummary,
     providerOptions,
     modelOptions,
     runErrorMessage,
@@ -127,6 +141,14 @@ export function SessionWorkspacePanel({
                 </div>
 
                 {modePanel}
+
+                <WorkspaceStatusPanel
+                    run={runs.find((run) => run.id === selectedRunId) ?? runs.at(-1)}
+                    provider={selectedProviderStatus}
+                    modelLabel={selectedModelLabel}
+                    usageSummary={selectedUsageSummary}
+                    routingBadge={routingBadge}
+                />
 
                 <MessageTimelinePanel
                     messages={messages}

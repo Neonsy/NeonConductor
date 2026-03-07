@@ -69,6 +69,10 @@ export function useConversationShellQueries(input: UseConversationShellQueriesIn
             refetchOnWindowFocus: false,
         }
     );
+    const usageSummaryQuery = trpc.provider.getUsageSummary.useQuery(
+        { profileId: input.profileId },
+        { refetchOnWindowFocus: false }
+    );
 
     const activePlanQuery = trpc.plan.getActive.useQuery(
         {
@@ -103,6 +107,7 @@ export function useConversationShellQueries(input: UseConversationShellQueriesIn
         sessionsQuery,
         runsQuery,
         messagesQuery,
+        usageSummaryQuery,
         activePlanQuery,
         orchestratorLatestQuery,
     };

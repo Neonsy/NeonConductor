@@ -48,6 +48,7 @@ export async function setOrganization(
             profileId,
             accessToken,
             ...(organizationId ? { organizationId } : {}),
+            ...(authState.tokenExpiresAt ? { tokenExpiresAt: authState.tokenExpiresAt } : {}),
         });
     }
 

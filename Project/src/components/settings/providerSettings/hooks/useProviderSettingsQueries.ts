@@ -75,6 +75,16 @@ export function useProviderSettingsQueries(input: UseProviderSettingsQueriesInpu
         }
     );
 
+    const usageSummaryQuery = trpc.provider.getUsageSummary.useQuery(
+        {
+            profileId: input.profileId,
+        },
+        {
+            enabled: Boolean(input.selectedProviderId),
+            refetchOnWindowFocus: false,
+        }
+    );
+
     const openAISubscriptionUsageQuery = trpc.provider.getOpenAISubscriptionUsage.useQuery(
         {
             profileId: input.profileId,
@@ -103,6 +113,7 @@ export function useProviderSettingsQueries(input: UseProviderSettingsQueriesInpu
         kiloRoutingPreferenceQuery,
         kiloModelProvidersQuery,
         accountContextQuery,
+        usageSummaryQuery,
         openAISubscriptionUsageQuery,
         openAISubscriptionRateLimitsQuery,
     };

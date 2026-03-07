@@ -1,14 +1,14 @@
-import { parseMessageRenderBlocks } from '@/web/components/conversation/messageRenderModel';
+import { parseRichContentBlocks } from '@/web/components/content/richContentModel';
 import { projectConversationParts } from '@/web/lib/runtime/reasoningProjection';
 
 import type { MessagePartRecord, MessageRecord } from '@/app/backend/persistence/types';
-import type { MessageRenderBlock } from '@/web/components/conversation/messageRenderModel';
+import type { RichContentBlock } from '@/web/components/content/richContentModel';
 
 export interface MessageTimelineBodyEntry {
     id: string;
     type: 'assistant_reasoning' | 'assistant_text' | 'user_text';
     text: string;
-    blocks: MessageRenderBlock[];
+    blocks: RichContentBlock[];
     providerLimitedReasoning: boolean;
 }
 
@@ -46,7 +46,7 @@ function buildBodyEntries(message: MessageRecord, parts: MessagePartRecord[]): M
             id: item.id,
             type: item.role,
             text: item.text,
-            blocks: parseMessageRenderBlocks(item.text),
+            blocks: parseRichContentBlocks(item.text),
             providerLimitedReasoning: item.providerLimitedReasoning,
         }));
     }
@@ -62,7 +62,7 @@ function buildBodyEntries(message: MessageRecord, parts: MessagePartRecord[]): M
             id: part.id,
             type: message.role === 'user' ? 'user_text' : 'assistant_text',
             text,
-            blocks: parseMessageRenderBlocks(text),
+            blocks: parseRichContentBlocks(text),
             providerLimitedReasoning: false,
         });
     }

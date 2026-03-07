@@ -1,13 +1,20 @@
-import type { MessageRenderBlock, MessageRenderCodeLine, MessageRenderToken } from '@/web/components/conversation/messageRenderModel';
 import { cn } from '@/web/lib/utils';
 
 import type { ReactNode } from 'react';
 
-interface MessageRenderBlocksProps {
-    blocks: MessageRenderBlock[];
+import type {
+    RichContentBlock,
+    RichContentCodeLine,
+    RichContentInlineSegment,
+    RichContentToken,
+} from '@/web/components/content/richContentModel';
+
+interface RichContentBlocksProps {
+    blocks: RichContentBlock[];
+    className?: string;
 }
 
-function tokenClassName(kind: MessageRenderToken['kind']): string {
+function tokenClassName(kind: RichContentToken['kind']): string {
     if (kind === 'keyword') {
         return 'message-token-keyword';
     }
@@ -31,7 +38,21 @@ function tokenClassName(kind: MessageRenderToken['kind']): string {
     return '';
 }
 
-function CodeLine({ line }: { line: MessageRenderCodeLine }): ReactNode {
+function InlineSegments({ segments }: { segments: RichContentInlineSegment[] }): ReactNode {
+    return segments.map((segment, segmentIndex) =>
+        segment.kind === 'inline_code' ? (
+            <code
+                key={`segment:${String(segmentIndex)}`}
+                className='border-border bg-background/80 text-foreground rounded px-1.5 py-0.5 font-mono text-[0.92em]'>
+                {segment.text}
+            </code>
+        ) : (
+            <span key={`segment:${String(segmentIndex)}`}>{segment.text}</span>
+        )
+    );
+}
+
+function CodeLine({ line }: { line: RichContentCodeLine }): ReactNode {
     return (
         <div className='message-code-line'>
             <span className='message-code-line-number text-[11px]'>{String(line.lineNumber)}</span>
@@ -46,25 +67,42 @@ function CodeLine({ line }: { line: MessageRenderCodeLine }): ReactNode {
     );
 }
 
-export function MessageRenderBlocks({ blocks }: MessageRenderBlocksProps): ReactNode {
+export function RichContentBlocks({ blocks, className }: RichContentBlocksProps): ReactNode {
     return (
-        <div className='space-y-3'>
+        <div className={cn('space-y-3', className)}>
             {blocks.map((block, index) => {
                 if (block.kind === 'paragraph') {
                     return (
                         <p key={`paragraph:${String(index)}`} className='text-sm leading-7 whitespace-pre-wrap break-words'>
-                            {block.segments.map((segment, segmentIndex) =>
-                                segment.kind === 'inline_code' ? (
-                                    <code
-                                        key={`segment:${String(segmentIndex)}`}
-                                        className='border-border bg-background/80 text-foreground rounded px-1.5 py-0.5 font-mono text-[0.92em]'>
-                                        {segment.text}
-                                    </code>
-                                ) : (
-                                    <span key={`segment:${String(segmentIndex)}`}>{segment.text}</span>
-                                )
-                            )}
+                            <InlineSegments segments={block.segments} />
                         </p>
+                    );
+                }
+
+                if (block.kind === 'heading') {
+                    const headingClassName =
+                        block.level === 1
+                            ? 'text-base font-semibold'
+                            : block.level === 2
+                              ? 'text-sm font-semibold'
+                              : 'text-xs font-semibold tracking-[0.08em] uppercase';
+
+                    return (
+                        <p key={`heading:${String(index)}`} className={headingClassName}>
+                            <InlineSegments segments={block.segments} />
+                        </p>
+                    );
+                }
+
+                if (block.kind === 'list') {
+                    return (
+                        <ul key={`list:${String(index)}`} className='space-y-2 pl-5 text-sm leading-6 list-disc'>
+                            {block.items.map((item, itemIndex) => (
+                                <li key={`list-item:${String(itemIndex)}`} className='break-words'>
+                                    <InlineSegments segments={item.segments} />
+                                </li>
+                            ))}
+                        </ul>
                     );
                 }
 

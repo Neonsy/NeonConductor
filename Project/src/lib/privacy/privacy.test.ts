@@ -41,5 +41,6 @@ describe('privacy helpers', () => {
         expect(redactSensitiveValue('alice@example.com', 'email')).toBe(redactSensitiveValue('alice@example.com', 'email'));
         expect(redactSensitiveValue('org_primary', 'account_id')).toBe(redactSensitiveValue('org_primary', 'account_id'));
         expect(redactSensitiveValue('Team Mercury', 'organization')).not.toBe('');
+        expect(redactSensitiveValue('245.12 USD', 'balance')).toBe(redactSensitiveValue('245.12 USD', 'balance'));
     });
 });

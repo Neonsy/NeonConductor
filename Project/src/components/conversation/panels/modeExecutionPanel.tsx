@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 
+import { RichContentBlocks } from '@/web/components/content/richContent';
+import { parseRichContentBlocks } from '@/web/components/content/richContentModel';
 import { Button } from '@/web/components/ui/button';
 
 import type { EntityId, TopLevelTab } from '@/app/backend/runtime/contracts';
@@ -91,6 +93,16 @@ export function ModeExecutionPanel({
         return null;
     }
 
+    const summaryPreviewBlocks = parseRichContentBlocks(summaryDraft);
+    const itemPreviewBlocks = parseRichContentBlocks(
+        itemsDraft
+            .split('\n')
+            .map((item) => item.trim())
+            .filter((item) => item.length > 0)
+            .map((item) => `- ${item}`)
+            .join('\n')
+    );
+
     return (
         <section className='border-border bg-card mb-3 rounded-md border p-3'>
             {modeKey === 'plan' ? (
@@ -155,6 +167,13 @@ export function ModeExecutionPanel({
                                         setSummaryDraft(event.target.value);
                                     }}
                                 />
+                                <div className='border-border bg-background rounded-md border p-3'>
+                                    {summaryPreviewBlocks.length > 0 ? (
+                                        <RichContentBlocks blocks={summaryPreviewBlocks} />
+                                    ) : (
+                                        <p className='text-muted-foreground text-xs'>Summary preview will render here.</p>
+                                    )}
+                                </div>
                             </div>
                             <div className='space-y-1'>
                                 <p className='text-xs font-medium'>Plan Items (one per line)</p>
@@ -166,6 +185,13 @@ export function ModeExecutionPanel({
                                         setItemsDraft(event.target.value);
                                     }}
                                 />
+                                <div className='border-border bg-background rounded-md border p-3'>
+                                    {itemPreviewBlocks.length > 0 ? (
+                                        <RichContentBlocks blocks={itemPreviewBlocks} />
+                                    ) : (
+                                        <p className='text-muted-foreground text-xs'>Item preview will render here.</p>
+                                    )}
+                                </div>
                             </div>
 
                             <div className='flex flex-wrap gap-2'>
@@ -235,8 +261,13 @@ export function ModeExecutionPanel({
                     </p>
                     <div className='space-y-1'>
                         {orchestratorView.steps.map((step) => (
-                            <div key={step.id} className='bg-background rounded border px-2 py-1 text-xs'>
-                                {String(step.sequence)}. {step.description} - {step.status}
+                            <div key={step.id} className='bg-background rounded border px-3 py-2 text-xs'>
+                                <div className='mb-2 flex items-center justify-between gap-3'>
+                                    <p className='font-medium'>
+                                        {String(step.sequence)}. {step.status}
+                                    </p>
+                                </div>
+                                <RichContentBlocks blocks={parseRichContentBlocks(step.description)} className='space-y-2' />
                             </div>
                         ))}
                     </div>

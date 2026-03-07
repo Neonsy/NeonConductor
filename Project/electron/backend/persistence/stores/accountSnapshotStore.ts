@@ -11,6 +11,11 @@ export interface UpsertKiloAccountSnapshotInput {
     emailMasked: string;
     authState: string;
     tokenExpiresAt?: string;
+    balance?: {
+        amount: number;
+        currency: string;
+        updatedAt: string;
+    };
 }
 
 export interface ReplaceKiloOrganizationsInput {
@@ -36,6 +41,9 @@ export class AccountSnapshotStore {
                     'email_masked',
                     'auth_state',
                     'token_expires_at',
+                    'balance_amount',
+                    'balance_currency',
+                    'balance_updated_at',
                     'updated_at',
                 ])
                 .where('profile_id', '=', profileId)
@@ -73,6 +81,17 @@ export class AccountSnapshotStore {
             emailMasked: accountRow.email_masked,
             authState: accountRow.auth_state,
             ...(accountRow.token_expires_at ? { tokenExpiresAt: accountRow.token_expires_at } : {}),
+            ...(accountRow.balance_amount !== null &&
+            accountRow.balance_currency !== null &&
+            accountRow.balance_updated_at !== null
+                ? {
+                      balance: {
+                          amount: accountRow.balance_amount,
+                          currency: accountRow.balance_currency,
+                          updatedAt: accountRow.balance_updated_at,
+                      },
+                  }
+                : {}),
             organizations: organizationRows.map((organizationRow) => ({
                 id: organizationRow.id,
                 organizationId: organizationRow.organization_id,
@@ -97,6 +116,9 @@ export class AccountSnapshotStore {
                 email_masked: input.emailMasked,
                 auth_state: input.authState,
                 token_expires_at: input.tokenExpiresAt ?? null,
+                balance_amount: input.balance?.amount ?? null,
+                balance_currency: input.balance?.currency ?? null,
+                balance_updated_at: input.balance?.updatedAt ?? null,
                 updated_at: updatedAt,
             })
             .onConflict((oc) =>
@@ -106,6 +128,9 @@ export class AccountSnapshotStore {
                     email_masked: input.emailMasked,
                     auth_state: input.authState,
                     token_expires_at: input.tokenExpiresAt ?? null,
+                    balance_amount: input.balance?.amount ?? null,
+                    balance_currency: input.balance?.currency ?? null,
+                    balance_updated_at: input.balance?.updatedAt ?? null,
                     updated_at: updatedAt,
                 })
             )

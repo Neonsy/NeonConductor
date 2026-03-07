@@ -1,32 +1,51 @@
-export interface MessageRenderInlineSegment {
+export interface RichContentInlineSegment {
     kind: 'text' | 'inline_code';
     text: string;
 }
 
-export interface MessageRenderToken {
+export interface RichContentToken {
     kind: 'plain' | 'keyword' | 'string' | 'number' | 'comment' | 'operator';
     text: string;
 }
 
-export interface MessageRenderCodeLine {
+export interface RichContentCodeLine {
     lineNumber: number;
-    tokens: MessageRenderToken[];
+    tokens: RichContentToken[];
 }
 
-export interface MessageRenderParagraphBlock {
+export interface RichContentParagraphBlock {
     kind: 'paragraph';
     text: string;
-    segments: MessageRenderInlineSegment[];
+    segments: RichContentInlineSegment[];
 }
 
-export interface MessageRenderCodeBlock {
+export interface RichContentHeadingBlock {
+    kind: 'heading';
+    level: 1 | 2 | 3;
+    text: string;
+    segments: RichContentInlineSegment[];
+}
+
+export interface RichContentListBlock {
+    kind: 'list';
+    items: Array<{
+        text: string;
+        segments: RichContentInlineSegment[];
+    }>;
+}
+
+export interface RichContentCodeBlock {
     kind: 'code';
     code: string;
     language?: string;
-    lines: MessageRenderCodeLine[];
+    lines: RichContentCodeLine[];
 }
 
-export type MessageRenderBlock = MessageRenderParagraphBlock | MessageRenderCodeBlock;
+export type RichContentBlock =
+    | RichContentParagraphBlock
+    | RichContentHeadingBlock
+    | RichContentListBlock
+    | RichContentCodeBlock;
 
 const KEYWORDS_BY_LANGUAGE: Record<string, Set<string>> = {
     javascript: new Set([
@@ -82,7 +101,24 @@ const KEYWORDS_BY_LANGUAGE: Record<string, Set<string>> = {
     ]),
     json: new Set(['false', 'null', 'true']),
     bash: new Set(['case', 'do', 'done', 'elif', 'else', 'esac', 'fi', 'for', 'if', 'in', 'then', 'while']),
-    powershell: new Set(['begin', 'class', 'elseif', 'else', 'end', 'foreach', 'function', 'if', 'param', 'process', 'return', 'switch', 'throw', 'trap', 'try', 'while']),
+    powershell: new Set([
+        'begin',
+        'class',
+        'elseif',
+        'else',
+        'end',
+        'foreach',
+        'function',
+        'if',
+        'param',
+        'process',
+        'return',
+        'switch',
+        'throw',
+        'trap',
+        'try',
+        'while',
+    ]),
     markdown: new Set([]),
 };
 
@@ -138,8 +174,8 @@ function readCommentStart(line: string, language: string | undefined): number {
     return line.indexOf('//');
 }
 
-function tokenizeTextSegment(text: string, keywordSet: Set<string>): MessageRenderToken[] {
-    const tokens: MessageRenderToken[] = [];
+function tokenizeTextSegment(text: string, keywordSet: Set<string>): RichContentToken[] {
+    const tokens: RichContentToken[] = [];
     const parts = text.split(/(\b|\s+)/);
 
     for (const part of parts) {
@@ -168,12 +204,12 @@ function tokenizeTextSegment(text: string, keywordSet: Set<string>): MessageRend
     return tokens;
 }
 
-function tokenizeCodeLine(line: string, language: string | undefined): MessageRenderToken[] {
+function tokenizeCodeLine(line: string, language: string | undefined): RichContentToken[] {
     const commentStart = readCommentStart(line, language);
     const content = commentStart >= 0 ? line.slice(0, commentStart) : line;
     const comment = commentStart >= 0 ? line.slice(commentStart) : '';
     const keywordSet = getKeywordSet(language);
-    const tokens: MessageRenderToken[] = [];
+    const tokens: RichContentToken[] = [];
     const pattern = /("(?:\\.|[^"])*"|'(?:\\.|[^'])*'|`(?:\\.|[^`])*`)/g;
 
     let lastIndex = 0;
@@ -200,15 +236,15 @@ function tokenizeCodeLine(line: string, language: string | undefined): MessageRe
     return tokens.length > 0 ? tokens : [{ kind: 'plain', text: '' }];
 }
 
-function tokenizeCodeBlock(code: string, language: string | undefined): MessageRenderCodeLine[] {
+function tokenizeCodeBlock(code: string, language: string | undefined): RichContentCodeLine[] {
     return code.split('\n').map((line, index) => ({
         lineNumber: index + 1,
         tokens: tokenizeCodeLine(line, language),
     }));
 }
 
-function parseInlineSegments(text: string): MessageRenderInlineSegment[] {
-    const segments: MessageRenderInlineSegment[] = [];
+function parseInlineSegments(text: string): RichContentInlineSegment[] {
+    const segments: RichContentInlineSegment[] = [];
     let cursor = 0;
 
     while (cursor < text.length) {
@@ -238,25 +274,111 @@ function parseInlineSegments(text: string): MessageRenderInlineSegment[] {
     return segments.filter((segment) => segment.text.length > 0);
 }
 
-function buildParagraphBlocks(text: string): MessageRenderParagraphBlock[] {
-    return text
-        .split(/\n{2,}/)
-        .map((paragraph) => paragraph.trim())
-        .filter((paragraph) => paragraph.length > 0)
-        .map((paragraph) => ({
-            kind: 'paragraph' as const,
-            text: paragraph,
-            segments: parseInlineSegments(paragraph),
-        }));
+function createParagraphBlock(lines: string[]): RichContentParagraphBlock | undefined {
+    const text = lines.join('\n').trim();
+    if (text.length === 0) {
+        return undefined;
+    }
+
+    return {
+        kind: 'paragraph',
+        text,
+        segments: parseInlineSegments(text),
+    };
 }
 
-export function parseMessageRenderBlocks(text: string): MessageRenderBlock[] {
+function createListBlock(items: string[]): RichContentListBlock | undefined {
+    const normalizedItems = items.map((item) => item.trim()).filter((item) => item.length > 0);
+    if (normalizedItems.length === 0) {
+        return undefined;
+    }
+
+    return {
+        kind: 'list',
+        items: normalizedItems.map((text) => ({
+            text,
+            segments: parseInlineSegments(text),
+        })),
+    };
+}
+
+function buildTextBlocks(text: string): RichContentBlock[] {
+    const blocks: RichContentBlock[] = [];
+    const lines = text.split('\n');
+    const paragraphLines: string[] = [];
+    const listItems: string[] = [];
+
+    function flushParagraph() {
+        const paragraph = createParagraphBlock(paragraphLines);
+        if (paragraph) {
+            blocks.push(paragraph);
+        }
+        paragraphLines.length = 0;
+    }
+
+    function flushList() {
+        const list = createListBlock(listItems);
+        if (list) {
+            blocks.push(list);
+        }
+        listItems.length = 0;
+    }
+
+    for (const rawLine of lines) {
+        const line = rawLine.trimEnd();
+        const trimmed = line.trim();
+
+        if (trimmed.length === 0) {
+            flushParagraph();
+            flushList();
+            continue;
+        }
+
+        const headingMatch = trimmed.match(/^(#{1,3})\s+(.+)$/);
+        if (headingMatch) {
+            flushParagraph();
+            flushList();
+            const prefix = headingMatch[1];
+            const headingText = headingMatch[2];
+            if (!prefix || !headingText) {
+                continue;
+            }
+            blocks.push({
+                kind: 'heading',
+                level: Math.min(prefix.length, 3) as 1 | 2 | 3,
+                text: headingText.trim(),
+                segments: parseInlineSegments(headingText.trim()),
+            });
+            continue;
+        }
+
+        const listMatch = trimmed.match(/^[-*]\s+(.+)$/);
+        if (listMatch) {
+            flushParagraph();
+            const listItemText = listMatch[1];
+            if (!listItemText) {
+                continue;
+            }
+            listItems.push(listItemText);
+            continue;
+        }
+
+        flushList();
+        paragraphLines.push(line);
+    }
+
+    flushParagraph();
+    flushList();
+    return blocks;
+}
+
+export function parseRichContentBlocks(text: string): RichContentBlock[] {
     const normalized = text.replace(/\r\n?/g, '\n').trim();
     if (normalized.length === 0) {
         return [];
     }
 
-    const blocks: MessageRenderBlock[] = [];
+    const blocks: RichContentBlock[] = [];
     const lines = normalized.split('\n');
     const pendingText: string[] = [];
     let index = 0;
@@ -266,7 +388,7 @@ export function parseMessageRenderBlocks(text: string): MessageRenderBlock[] {
             return;
         }
 
-        blocks.push(...buildParagraphBlocks(pendingText.join('\n')));
+        blocks.push(...buildTextBlocks(pendingText.join('\n')));
         pendingText.length = 0;
     }
 
@@ -289,11 +411,12 @@ export function parseMessageRenderBlocks(text: string): MessageRenderBlock[] {
             index += 1;
         }
 
+        const code = codeLines.join('\n');
         blocks.push({
             kind: 'code',
-            code: codeLines.join('\n'),
+            code,
             ...(language ? { language } : {}),
-            lines: tokenizeCodeBlock(codeLines.join('\n'), language),
+            lines: tokenizeCodeBlock(code, language),
         });
 
         if (index < lines.length && /^```\s*$/.test(lines[index] ?? '')) {

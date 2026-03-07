@@ -134,6 +134,9 @@ async function seedKiloAccountSnapshot(tx: ProfileStoreDb, profileId: string, ti
             email_masked: '',
             auth_state: 'logged_out',
             token_expires_at: null,
+            balance_amount: null,
+            balance_currency: null,
+            balance_updated_at: null,
             updated_at: timestamp,
         })
         .onConflict((oc) =>
@@ -143,6 +146,9 @@ async function seedKiloAccountSnapshot(tx: ProfileStoreDb, profileId: string, ti
                 email_masked: '',
                 auth_state: 'logged_out',
                 token_expires_at: null,
+                balance_amount: null,
+                balance_currency: null,
+                balance_updated_at: null,
                 updated_at: timestamp,
             })
         )

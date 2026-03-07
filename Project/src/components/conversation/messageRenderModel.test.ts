@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseMessageRenderBlocks } from '@/web/components/conversation/messageRenderModel';
+import { parseRichContentBlocks } from '@/web/components/content/richContentModel';
 
-describe('message render model', () => {
+describe('rich content model', () => {
     it('splits fenced code blocks from paragraphs and preserves inline code', () => {
-        const blocks = parseMessageRenderBlocks([
+        const blocks = parseRichContentBlocks([
             'Intro paragraph with `inline` detail.',
             '',
             '```ts',
@@ -34,7 +34,7 @@ describe('message render model', () => {
     });
 
     it('highlights basic token kinds inside code blocks', () => {
-        const [block] = parseMessageRenderBlocks(['```js', 'const total = 7 // count', '```'].join('\n'));
+        const [block] = parseRichContentBlocks(['```js', 'const total = 7 // count', '```'].join('\n'));
         if (!block || block.kind !== 'code') {
             throw new Error('Expected a code block.');
         }

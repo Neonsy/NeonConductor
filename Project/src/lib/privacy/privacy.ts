@@ -1,4 +1,4 @@
-export type SensitiveFieldCategory = 'person' | 'email' | 'organization' | 'account_id';
+export type SensitiveFieldCategory = 'person' | 'email' | 'organization' | 'account_id' | 'balance';
 
 export interface PrivacyModeState {
     enabled: boolean;
@@ -15,6 +15,7 @@ const EMAIL_PLACEHOLDERS = [
 ] as const;
 const ORGANIZATION_PLACEHOLDERS = ['Northwind Labs', 'Atlas Forge', 'Summit House', 'Brightline Studio'] as const;
 const ACCOUNT_PREFIXES = ['acct_demo', 'acct_masked', 'acct_hidden', 'acct_private'] as const;
+const BALANCE_PLACEHOLDERS = ['84.20 USD', '128.50 USD', '36.75 USD', '412.00 USD'] as const;
 
 function hashString(value: string): number {
     let hash = 0;
@@ -81,6 +82,10 @@ export function redactSensitiveValue(value: string, category: SensitiveFieldCate
 
     if (category === 'organization') {
         return pickPlaceholder(value, ORGANIZATION_PLACEHOLDERS);
+    }
+
+    if (category === 'balance') {
+        return pickPlaceholder(value, BALANCE_PLACEHOLDERS);
     }
 
     return formatAccountPlaceholder(value);

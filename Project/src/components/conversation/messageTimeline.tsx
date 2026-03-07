@@ -1,4 +1,4 @@
-import { MessageRenderBlocks } from '@/web/components/conversation/messageRender';
+import { RichContentBlocks } from '@/web/components/content/richContent';
 import type { MessageTimelineEntry } from '@/web/components/conversation/messageTimelineModel';
 
 interface MessageTimelineItemProps {
@@ -72,7 +72,7 @@ export function MessageTimelineItem({
                                     ) : null}
                                 </div>
                             ) : null}
-                            <MessageRenderBlocks blocks={item.blocks} />
+                            <RichContentBlocks blocks={item.blocks} />
                         </div>
                     ))
                 ) : (

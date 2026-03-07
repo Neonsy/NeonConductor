@@ -585,4 +585,17 @@ CREATE INDEX idx_threads_profile_root_updated_at
     ON threads(profile_id, root_thread_id, updated_at DESC);
 `,
     },
+    {
+        name: '002_kilo_account_balance.sql',
+        sql: `
+ALTER TABLE kilo_account_snapshots
+    ADD COLUMN balance_amount REAL NULL;
+
+ALTER TABLE kilo_account_snapshots
+    ADD COLUMN balance_currency TEXT NULL;
+
+ALTER TABLE kilo_account_snapshots
+    ADD COLUMN balance_updated_at TEXT NULL;
+`,
+    },
 ];

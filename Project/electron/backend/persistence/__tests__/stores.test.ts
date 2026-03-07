@@ -132,6 +132,52 @@ describe('persistence stores', () => {
         expect(defaults.providerId).toBe('openai');
     });
 
+    it('persists and rehydrates kilo balance snapshots across updates', async () => {
+        const profileId = getDefaultProfileId();
+
+        await accountSnapshotStore.upsertAccount({
+            profileId,
+            accountId: 'acct_kilo_primary',
+            displayName: 'Neon',
+            emailMasked: 'neon@example.test',
+            authState: 'authenticated',
+            tokenExpiresAt: '2026-03-07T16:00:00.000Z',
+            balance: {
+                amount: 42.75,
+                currency: 'USD',
+                updatedAt: '2026-03-07T15:30:00.000Z',
+            },
+        });
+
+        const initial = await accountSnapshotStore.getByProfile(profileId);
+        expect(initial.balance).toEqual({
+            amount: 42.75,
+            currency: 'USD',
+            updatedAt: '2026-03-07T15:30:00.000Z',
+        });
+
+        await accountSnapshotStore.upsertAccount({
+            profileId,
+            accountId: 'acct_kilo_primary',
+            displayName: 'Neon',
+            emailMasked: 'neon@example.test',
+            authState: 'authenticated',
+            tokenExpiresAt: '2026-03-07T16:00:00.000Z',
+            balance: {
+                amount: 18.5,
+                currency: 'EUR',
+                updatedAt: '2026-03-07T15:45:00.000Z',
+            },
+        });
+
+        const refreshed = await accountSnapshotStore.getByProfile(profileId);
+        expect(refreshed.balance).toEqual({
+            amount: 18.5,
+            currency: 'EUR',
+            updatedAt: '2026-03-07T15:45:00.000Z',
+        });
+    });
+
     it('returns typed errors for invalid tag writes and missing session refreshes', async () => {
         const profileId = getDefaultProfileId();
 

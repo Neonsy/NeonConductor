@@ -242,6 +242,21 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
         providerId: 'kilo';
         organizationId?: string | null;
     }>();
+    expectTypeOf<Outputs['provider']['getAccountContext']>().toExtend<{
+        profileId: string;
+        providerId: string;
+        authState: {
+            authState: string;
+            tokenExpiresAt?: string;
+        };
+        kiloAccountContext?: {
+            balance?: {
+                amount: number;
+                currency: string;
+                updatedAt: string;
+            };
+        };
+    }>();
     expectTypeOf<Inputs['provider']['getEndpointProfile']>().toExtend<{
         profileId: string;
         providerId: string;

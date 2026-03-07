@@ -237,8 +237,19 @@ export function seedRuntimeData(sqlite: BetterSqliteDatabase, defaultProfileId: 
     const insertKiloAccountSnapshot = sqlite.prepare(
         `
             INSERT OR IGNORE INTO kilo_account_snapshots
-                (profile_id, account_id, display_name, email_masked, auth_state, token_expires_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                (
+                    profile_id,
+                    account_id,
+                    display_name,
+                    email_masked,
+                    auth_state,
+                    token_expires_at,
+                    balance_amount,
+                    balance_currency,
+                    balance_updated_at,
+                    updated_at
+                )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `
     );
     const insertSettingIfMissing = sqlite.prepare(
@@ -299,7 +310,7 @@ export function seedRuntimeData(sqlite: BetterSqliteDatabase, defaultProfileId: 
         );
     }
 
-    insertKiloAccountSnapshot.run(defaultProfileId, null, '', '', 'logged_out', null, now);
+    insertKiloAccountSnapshot.run(defaultProfileId, null, '', '', 'logged_out', null, null, null, null, now);
     insertSettingIfMissing.run(
         'setting_default_provider',
         defaultProfileId,

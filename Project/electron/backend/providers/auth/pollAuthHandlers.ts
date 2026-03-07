@@ -71,6 +71,7 @@ export async function handleKiloDevicePoll(flow: ProviderAuthFlowRecord): Promis
         profileId: flow.profileId,
         accessToken: status.accessToken,
         ...(status.organizationId ? { organizationId: status.organizationId } : {}),
+        ...(status.expiresAt ? { tokenExpiresAt: status.expiresAt } : {}),
     });
 
     return okAuthExecution({ flow: completedFlow ?? flow, state });

@@ -150,6 +150,18 @@ export function ConversationShell({ profileId, topLevelTab, modeKey, onTopLevelT
         providerId: runTargetState.selectedProviderIdForComposer,
         modelId: runTargetState.selectedModelIdForComposer,
     });
+    const selectedProviderStatus = runTargetState.selectedProviderIdForComposer
+        ? runTargetState.providerById.get(runTargetState.selectedProviderIdForComposer)
+        : undefined;
+    const selectedModelLabel =
+        runTargetState.selectedProviderIdForComposer && runTargetState.selectedModelIdForComposer
+            ? runTargetState.modelsByProvider
+                  .get(runTargetState.selectedProviderIdForComposer)
+                  ?.find((model) => model.id === runTargetState.selectedModelIdForComposer)?.label
+            : undefined;
+    const selectedUsageSummary = queries.usageSummaryQuery.data?.summaries.find(
+        (summary) => summary.providerId === runTargetState.selectedProviderIdForComposer
+    );
     const editFlow = useConversationShellEditFlow({
         profileId,
         topLevelTab,
@@ -247,6 +259,17 @@ export function ConversationShell({ profileId, topLevelTab, modeKey, onTopLevelT
                 selectedProviderId={runTargetState.selectedProviderIdForComposer}
                 selectedModelId={runTargetState.selectedModelIdForComposer}
                 routingBadge={routingBadge}
+                {...(selectedProviderStatus
+                    ? {
+                          selectedProviderStatus: {
+                              label: selectedProviderStatus.label,
+                              authState: selectedProviderStatus.authState,
+                              authMethod: selectedProviderStatus.authMethod,
+                          },
+                      }
+                    : {})}
+                {...(selectedModelLabel ? { selectedModelLabel } : {})}
+                {...(selectedUsageSummary ? { selectedUsageSummary } : {})}
                 providerOptions={runTargetState.providerOptions}
                 modelOptions={runTargetState.modelOptions}
                 runErrorMessage={composer.runSubmitError}

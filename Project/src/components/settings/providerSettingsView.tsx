@@ -3,10 +3,7 @@ import { ProviderDefaultModelSection } from '@/web/components/settings/providerS
 import { useProviderSettingsController } from '@/web/components/settings/providerSettings/hooks/useProviderSettingsController';
 import { KiloAccountSection } from '@/web/components/settings/providerSettings/kiloAccountSection';
 import { KiloRoutingSection } from '@/web/components/settings/providerSettings/kiloRoutingSection';
-import {
-    OpenAIAccountLimitsSection,
-    OpenAILocalUsageSection,
-} from '@/web/components/settings/providerSettings/openAISections';
+import { ProviderStatusSection } from '@/web/components/settings/providerSettings/providerStatusSection';
 import { ProviderSidebar } from '@/web/components/settings/providerSettings/providerSidebar';
 
 interface ProviderSettingsViewProps {
@@ -113,32 +110,27 @@ export function ProviderSettingsView({ profileId }: ProviderSettingsViewProps) {
                             }}
                         />
 
+                        <ProviderStatusSection
+                            provider={controller.selectedProvider}
+                            authState={controller.selectedAuthState}
+                            accountContext={controller.kiloAccountContext}
+                            usageSummary={controller.selectedProviderUsageSummary}
+                            openAISubscriptionUsage={controller.openAISubscriptionUsage}
+                            openAISubscriptionRateLimits={controller.openAISubscriptionRateLimits}
+                            isLoadingAccountContext={controller.queries.accountContextQuery.isLoading}
+                            isLoadingUsageSummary={controller.queries.usageSummaryQuery.isLoading}
+                            isLoadingOpenAIUsage={controller.queries.openAISubscriptionUsageQuery.isLoading}
+                            isLoadingOpenAIRateLimits={controller.queries.openAISubscriptionRateLimitsQuery.isLoading}
+                        />
+
                         {controller.selectedProvider.id === 'kilo' ? (
                             <KiloAccountSection
-                                authState={
-                                    controller.queries.accountContextQuery.data?.authState.authState ??
-                                    controller.selectedProvider.authState
-                                }
                                 accountContext={controller.kiloAccountContext}
                                 isLoading={controller.queries.accountContextQuery.isLoading}
                                 isSavingOrganization={controller.mutations.setOrganizationMutation.isPending}
                                 onOrganizationChange={(organizationId) => {
                                     void controller.changeOrganization(organizationId);
                                 }}
-                            />
-                        ) : null}
-
-                        {controller.selectedProvider.id === 'openai' ? (
-                            <OpenAIAccountLimitsSection
-                                isLoading={controller.queries.openAISubscriptionRateLimitsQuery.isLoading}
-                                rateLimits={controller.openAISubscriptionRateLimits}
-                            />
-                        ) : null}
-
-                        {controller.selectedProvider.id === 'openai' ? (
-                            <OpenAILocalUsageSection
-                                isLoading={controller.queries.openAISubscriptionUsageQuery.isLoading}
-                                usage={controller.openAISubscriptionUsage}
                             />
                         ) : null}
                     </div>

@@ -30,6 +30,11 @@ export interface KiloAccountContext {
     emailMasked: string;
     authState: string;
     tokenExpiresAt?: string;
+    balance?: {
+        amount: number;
+        currency: string;
+        updatedAt: string;
+    };
     organizations: Array<{
         id: string;
         organizationId: string;

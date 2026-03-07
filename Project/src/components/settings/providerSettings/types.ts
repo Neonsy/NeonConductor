@@ -45,6 +45,8 @@ export interface ProviderListItem {
 export interface ProviderAuthStateView {
     authState: string;
     authMethod: string;
+    accountId?: string;
+    tokenExpiresAt?: string;
 }
 
 export type ProviderModelOption = ProviderModelRecord;

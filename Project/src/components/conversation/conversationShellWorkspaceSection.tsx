@@ -4,6 +4,7 @@ import { SessionWorkspacePanel } from '@/web/components/conversation/sessionWork
 import type {
     MessagePartRecord,
     MessageRecord,
+    ProviderUsageSummary,
     RunRecord,
     SessionSummaryRecord,
     ThreadListRecord,
@@ -30,6 +31,15 @@ interface ConversationShellWorkspaceSectionProps {
     selectedProviderId: RuntimeProviderId | undefined;
     selectedModelId: string | undefined;
     routingBadge: string | undefined;
+    selectedProviderStatus?:
+        | {
+              label: string;
+              authState: string;
+              authMethod: string;
+          }
+        | undefined;
+    selectedModelLabel?: string;
+    selectedUsageSummary?: ProviderUsageSummary;
     providerOptions: Array<{ id: string; label: string; authState: string }>;
     modelOptions: Array<{ id: string; label: string; price?: number; latency?: number; tps?: number }>;
     runErrorMessage: string | undefined;
@@ -63,6 +73,9 @@ export function ConversationShellWorkspaceSection({
     selectedProviderId,
     selectedModelId,
     routingBadge,
+    selectedProviderStatus,
+    selectedModelLabel,
+    selectedUsageSummary,
     providerOptions,
     modelOptions,
     runErrorMessage,
@@ -103,6 +116,9 @@ export function ConversationShellWorkspaceSection({
                 selectedProviderId={selectedProviderId}
                 selectedModelId={selectedModelId}
                 {...(routingBadge !== undefined ? { routingBadge } : {})}
+                {...(selectedProviderStatus ? { selectedProviderStatus } : {})}
+                {...(selectedModelLabel ? { selectedModelLabel } : {})}
+                {...(selectedUsageSummary ? { selectedUsageSummary } : {})}
                 providerOptions={providerOptions}
                 modelOptions={modelOptions}
                 runErrorMessage={runErrorMessage}
