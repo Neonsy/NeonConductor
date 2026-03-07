@@ -63,6 +63,20 @@ export function useProfileSettingsController(input: {
             refetchProfilePreference(threadTitlePreferenceQuery);
         },
     });
+    const executionPresetQuery = trpc.profile.getExecutionPreset.useQuery(
+        {
+            profileId: selectedProfileIdForSettings,
+        },
+        {
+            enabled: Boolean(selectedProfileIdForSettings),
+            refetchOnWindowFocus: false,
+        }
+    );
+    const setExecutionPresetMutation = trpc.profile.setExecutionPreset.useMutation({
+        onSuccess: () => {
+            refetchProfilePreference(executionPresetQuery);
+        },
+    });
 
     useEffect(() => {
         setRenameValue(selectedProfile?.name ?? '');
@@ -114,6 +128,8 @@ export function useProfileSettingsController(input: {
         setEditPreferenceMutation,
         threadTitlePreferenceQuery,
         setThreadTitlePreferenceMutation,
+        executionPresetQuery,
+        setExecutionPresetMutation,
         setSelectedProfileId: (profileId: string | undefined) => {
             setSelectedProfileId(profileId);
             setStatusMessage(undefined);
@@ -123,6 +139,17 @@ export function useProfileSettingsController(input: {
         setThreadTitleAiModelInput,
         setStatusMessage,
         setConfirmDeleteOpen,
+        updateExecutionPreset: async (preset: 'privacy' | 'standard' | 'yolo') => {
+            if (!selectedProfile) {
+                return;
+            }
+
+            await setExecutionPresetMutation.mutateAsync({
+                profileId: selectedProfile.id,
+                preset,
+            });
+            setStatusMessage('Updated execution preset.');
+        },
         ...actions,
     };
 }

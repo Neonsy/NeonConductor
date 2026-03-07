@@ -3,11 +3,14 @@ import {
     profileCreateInputSchema,
     profileDeleteInputSchema,
     profileDuplicateInputSchema,
+    profileGetExecutionPresetInputSchema,
     profileRenameInputSchema,
     profileSetActiveInputSchema,
+    profileSetExecutionPresetInputSchema,
 } from '@/app/backend/runtime/contracts';
 import { runtimeRemoveEvent, runtimeStatusEvent, runtimeUpsertEvent } from '@/app/backend/runtime/services/runtimeEventEnvelope';
 import { runtimeEventLogService } from '@/app/backend/runtime/services/runtimeEventLog';
+import { getExecutionPreset, setExecutionPreset } from '@/app/backend/runtime/services/profile/executionPreset';
 import { publicProcedure, router } from '@/app/backend/trpc/init';
 import { throwWithCode } from '@/app/backend/trpc/routers/provider/shared';
 
@@ -25,6 +28,30 @@ export const profileRouter = router({
 
         return result.value;
     }),
+    getExecutionPreset: publicProcedure.input(profileGetExecutionPresetInputSchema).query(async ({ input }) => {
+        return {
+            preset: await getExecutionPreset(input.profileId),
+        };
+    }),
+    setExecutionPreset: publicProcedure
+        .input(profileSetExecutionPresetInputSchema)
+        .mutation(async ({ input }) => {
+            const preset = await setExecutionPreset(input.profileId, input.preset);
+            await runtimeEventLogService.append(
+                runtimeStatusEvent({
+                    entityType: 'profile',
+                    domain: 'profile',
+                    entityId: input.profileId,
+                    eventType: 'profile.execution-preset.updated',
+                    payload: {
+                        profileId: input.profileId,
+                        preset,
+                    },
+                })
+            );
+
+            return { preset };
+        }),
     setActive: publicProcedure.input(profileSetActiveInputSchema).mutation(async ({ input }) => {
         const result = await profileStore.setActive(input.profileId);
         if (result.isErr()) {

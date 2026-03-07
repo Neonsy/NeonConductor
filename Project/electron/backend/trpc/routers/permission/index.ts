@@ -1,11 +1,12 @@
 import { permissionPolicyOverrideStore, permissionStore, toolStore } from '@/app/backend/persistence/stores';
 import {
-    permissionDecisionInputSchema,
     permissionGetEffectivePolicyInputSchema,
     permissionRequestInputSchema,
+    permissionResolveInputSchema,
     permissionSetProfileOverrideInputSchema,
     permissionSetWorkspaceOverrideInputSchema,
 } from '@/app/backend/runtime/contracts';
+import { getExecutionPreset } from '@/app/backend/runtime/services/profile/executionPreset';
 import { resolveEffectivePermissionPolicy } from '@/app/backend/runtime/services/permissions/policyResolver';
 import { runtimeStatusEvent, runtimeUpsertEvent } from '@/app/backend/runtime/services/runtimeEventEnvelope';
 import { runtimeEventLogService } from '@/app/backend/runtime/services/runtimeEventLog';
@@ -33,7 +34,7 @@ export const permissionRouter = router({
     }),
     getEffectivePolicy: publicProcedure.input(permissionGetEffectivePolicyInputSchema).query(async ({ input }) => {
         const tools = await toolStore.list();
-        const toolId = input.resource.startsWith('tool:') ? input.resource.slice('tool:'.length) : null;
+        const toolId = input.resource.startsWith('tool:') ? input.resource.slice('tool:'.length).split(':', 1)[0] : null;
         const tool = toolId ? tools.find((item) => item.id === toolId) : null;
         const defaultPolicy = tool?.permissionPolicy ?? 'deny';
 
@@ -42,6 +43,8 @@ export const permissionRouter = router({
             resource: input.resource,
             topLevelTab: input.topLevelTab,
             modeKey: input.modeKey,
+            executionPreset: await getExecutionPreset(input.profileId),
+            capabilities: tool?.capabilities ?? [],
             toolDefaultPolicy: defaultPolicy,
             ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
         });
@@ -103,49 +106,45 @@ export const permissionRouter = router({
             );
 
             return {
-                override,
-            };
-        }),
-    grant: publicProcedure.input(permissionDecisionInputSchema).mutation(async ({ input }) => {
-        const record = await permissionStore.getById(input.requestId);
-        if (!record) {
-            return { updated: false as const, reason: 'not_found' as const };
-        }
-        if (record.decision === 'granted') {
-            return { updated: false as const, reason: 'already_granted' as const, request: record };
-        }
-
-        const updatedRecord = await permissionStore.setDecision(input.requestId, 'granted');
-        if (!updatedRecord) {
-            return { updated: false as const, reason: 'not_found' as const };
-        }
-
-        await runtimeEventLogService.append(
-            runtimeStatusEvent({
-            entityType: 'permission',
-            domain: 'permission',
-            entityId: updatedRecord.id,
-            eventType: 'permission.granted',
-            payload: {
-                request: updatedRecord,
-            },
-            })
-        );
-
-        return { updated: true as const, reason: null, request: updatedRecord };
+            override,
+        };
     }),
-    deny: publicProcedure.input(permissionDecisionInputSchema).mutation(async ({ input }) => {
+    resolve: publicProcedure.input(permissionResolveInputSchema).mutation(async ({ input }) => {
         const record = await permissionStore.getById(input.requestId);
         if (!record) {
             return { updated: false as const, reason: 'not_found' as const };
         }
-        if (record.decision === 'denied') {
-            return { updated: false as const, reason: 'already_denied' as const, request: record };
+        if (record.profileId !== input.profileId) {
+            return { updated: false as const, reason: 'not_found' as const };
+        }
+        if (record.decision !== 'pending') {
+            return { updated: false as const, reason: 'already_resolved' as const, request: record };
         }
 
-        const updatedRecord = await permissionStore.setDecision(input.requestId, 'denied');
+        if (input.resolution === 'allow_workspace' && !record.workspaceFingerprint) {
+            return { updated: false as const, reason: 'workspace_scope_missing' as const, request: record };
+        }
+
+        const updatedRecord = await permissionStore.resolve(input.requestId, input.resolution);
         if (!updatedRecord) {
             return { updated: false as const, reason: 'not_found' as const };
+        }
+
+        if (input.resolution === 'allow_profile') {
+            await permissionPolicyOverrideStore.upsert(
+                input.profileId,
+                permissionPolicyOverrideStore.toProfileScopeKey(),
+                record.resource,
+                'allow'
+            );
+        }
+        if (input.resolution === 'allow_workspace' && record.workspaceFingerprint) {
+            await permissionPolicyOverrideStore.upsert(
+                input.profileId,
+                permissionPolicyOverrideStore.toWorkspaceScopeKey(record.workspaceFingerprint),
+                record.resource,
+                'allow'
+            );
         }
 
         await runtimeEventLogService.append(
@@ -153,9 +152,10 @@ export const permissionRouter = router({
             entityType: 'permission',
             domain: 'permission',
             entityId: updatedRecord.id,
-            eventType: 'permission.denied',
+            eventType: 'permission.resolved',
             payload: {
                 request: updatedRecord,
+                resolution: input.resolution,
             },
             })
         );

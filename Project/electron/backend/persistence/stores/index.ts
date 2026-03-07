@@ -27,3 +27,4 @@ export { skillfileStore } from '@/app/backend/persistence/stores/skillfileStore'
 export { tagStore } from '@/app/backend/persistence/stores/tagStore';
 export { threadStore } from '@/app/backend/persistence/stores/threadStore';
 export { toolStore } from '@/app/backend/persistence/stores/toolStore';
+export { workspaceRootStore } from '@/app/backend/persistence/stores/workspaceRootStore';

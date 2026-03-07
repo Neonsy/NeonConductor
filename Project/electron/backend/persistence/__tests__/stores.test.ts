@@ -98,16 +98,25 @@ describe('persistence stores', () => {
     });
 
     it('supports permission store decision transitions', async () => {
+        const profileId = getDefaultProfileId();
         const created = await permissionStore.create({
+            profileId,
             policy: 'ask',
             resource: 'tool:run_command',
+            toolId: 'run_command',
+            scopeKind: 'tool',
+            summary: {
+                title: 'Run Command Request',
+                detail: 'Need shell command access.',
+            },
         });
         expect(created.decision).toBe('pending');
 
-        const granted = await permissionStore.setDecision(created.id, 'granted');
+        const granted = await permissionStore.resolve(created.id, 'allow_once');
         expect(granted?.decision).toBe('granted');
+        expect(granted?.resolvedScope).toBe('once');
 
-        const denied = await permissionStore.setDecision(created.id, 'denied');
+        const denied = await permissionStore.resolve(created.id, 'deny');
         expect(denied?.decision).toBe('denied');
     });
 

@@ -9,7 +9,7 @@ import type { TopLevelTab } from '@/app/backend/runtime/contracts';
 
 interface CreateThreadInput {
     scope: 'detached' | 'workspace';
-    workspaceFingerprint?: string;
+    workspacePath?: string;
     title: string;
 }
 
@@ -230,7 +230,7 @@ export function ConversationSidebar({
                                 setNewThreadWorkspace(event.target.value);
                             }}
                             className='border-border bg-background h-9 w-full rounded-md border px-2 text-sm'
-                            placeholder='workspace fingerprint'
+                            placeholder='workspace path'
                         />
                     ) : null}
                     {newThreadScope === 'detached' && topLevelTab !== 'chat' ? (

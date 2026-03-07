@@ -100,9 +100,16 @@ export interface RunUsageTable {
 
 export interface PermissionsTable {
     id: string;
+    profile_id: string;
     policy: string;
     resource: string;
+    tool_id: string;
+    workspace_fingerprint: string | null;
+    scope_kind: string;
+    summary_json: string;
     decision: string;
+    resolved_scope: string | null;
+    consumed_at: string | null;
     rationale: string | null;
     created_at: string;
     updated_at: string;
@@ -158,6 +165,16 @@ export interface ConversationsTable {
     scope: string;
     workspace_fingerprint: string | null;
     title: string;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface WorkspaceRootsTable {
+    fingerprint: string;
+    profile_id: string;
+    absolute_path: string;
+    path_key: string;
+    label: string;
     created_at: string;
     updated_at: string;
 }
@@ -455,6 +472,7 @@ export interface DatabaseSchema {
     mcp_servers: McpServersTable;
     schema_migrations: SchemaMigrationsTable;
     conversations: ConversationsTable;
+    workspace_roots: WorkspaceRootsTable;
     threads: ThreadsTable;
     tags: TagsTable;
     thread_tags: ThreadTagsTable;

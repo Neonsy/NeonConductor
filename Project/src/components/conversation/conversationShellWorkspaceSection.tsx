@@ -4,6 +4,7 @@ import { SessionWorkspacePanel } from '@/web/components/conversation/sessionWork
 import type {
     MessagePartRecord,
     MessageRecord,
+    PermissionRecord,
     ProviderUsageSummary,
     RunRecord,
     SessionSummaryRecord,
@@ -24,9 +25,21 @@ interface ConversationShellWorkspaceSectionProps {
     runs: RunRecord[];
     messages: MessageRecord[];
     partsByMessageId: Map<string, MessagePartRecord[]>;
+    executionPreset: 'privacy' | 'standard' | 'yolo';
+    workspaceScope:
+        | {
+              kind: 'detached';
+          }
+        | {
+              kind: 'workspace';
+              label: string;
+              absolutePath: string;
+          };
+    pendingPermissions: PermissionRecord[];
     prompt: string;
     isCreatingSession: boolean;
     isStartingRun: boolean;
+    isResolvingPermission: boolean;
     canCreateSession: boolean;
     selectedProviderId: RuntimeProviderId | undefined;
     selectedModelId: string | undefined;
@@ -51,6 +64,10 @@ interface ConversationShellWorkspaceSectionProps {
     onCreateSession: () => void;
     onPromptChange: (prompt: string) => void;
     onSubmitPrompt: () => void;
+    onResolvePermission: (
+        requestId: PermissionRecord['id'],
+        resolution: 'deny' | 'allow_once' | 'allow_profile' | 'allow_workspace'
+    ) => void;
     onEditMessage: (entry: MessageTimelineEntry) => void;
     onBranchFromMessage: (entry: MessageTimelineEntry) => void;
 }
@@ -66,9 +83,13 @@ export function ConversationShellWorkspaceSection({
     runs,
     messages,
     partsByMessageId,
+    executionPreset,
+    workspaceScope,
+    pendingPermissions,
     prompt,
     isCreatingSession,
     isStartingRun,
+    isResolvingPermission,
     canCreateSession,
     selectedProviderId,
     selectedModelId,
@@ -87,6 +108,7 @@ export function ConversationShellWorkspaceSection({
     onCreateSession,
     onPromptChange,
     onSubmitPrompt,
+    onResolvePermission,
     onEditMessage,
     onBranchFromMessage,
 }: ConversationShellWorkspaceSectionProps) {
@@ -109,9 +131,13 @@ export function ConversationShellWorkspaceSection({
                 partsByMessageId={partsByMessageId}
                 {...(selectedSessionId ? { selectedSessionId } : {})}
                 {...(selectedRunId ? { selectedRunId } : {})}
+                executionPreset={executionPreset}
+                workspaceScope={workspaceScope}
+                pendingPermissions={pendingPermissions}
                 prompt={prompt}
                 isCreatingSession={isCreatingSession}
                 isStartingRun={isStartingRun}
+                isResolvingPermission={isResolvingPermission}
                 canCreateSession={canCreateSession}
                 selectedProviderId={selectedProviderId}
                 selectedModelId={selectedModelId}
@@ -129,6 +155,7 @@ export function ConversationShellWorkspaceSection({
                 onCreateSession={onCreateSession}
                 onPromptChange={onPromptChange}
                 onSubmitPrompt={onSubmitPrompt}
+                onResolvePermission={onResolvePermission}
                 onEditMessage={onEditMessage}
                 onBranchFromMessage={onBranchFromMessage}
                 modePanel={modePanel}

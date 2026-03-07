@@ -23,7 +23,7 @@ export interface ConversationListThreadsInput extends ProfileInput {
 export interface ConversationCreateThreadInput extends ProfileInput {
     topLevelTab?: TopLevelTab;
     scope: ConversationScope;
-    workspaceFingerprint?: string;
+    workspacePath?: string;
     title: string;
 }
 

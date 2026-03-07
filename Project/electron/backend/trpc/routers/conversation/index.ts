@@ -1,4 +1,4 @@
-import { conversationStore, settingsStore, tagStore, threadStore } from '@/app/backend/persistence/stores';
+import { conversationStore, settingsStore, tagStore, threadStore, workspaceRootStore } from '@/app/backend/persistence/stores';
 import {
     conversationCreateThreadInputSchema,
     conversationGetEditPreferenceInputSchema,
@@ -119,7 +119,13 @@ export const conversationRouter = router({
         const bucket = await conversationStore.createOrGetBucket({
             profileId: input.profileId,
             scope: input.scope,
-            ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
+            ...(input.workspacePath
+                ? {
+                      workspaceFingerprint: (
+                          await workspaceRootStore.resolveOrCreate(input.profileId, input.workspacePath)
+                      ).fingerprint,
+                  }
+                : {}),
         });
         if (bucket.isErr()) {
             throw toTrpcError(bucket.error);
