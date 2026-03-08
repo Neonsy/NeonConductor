@@ -4,7 +4,7 @@
     "version": "0.0.1",
     "description": "AI agent manager with Kilo integration and BYOK support.",
     "homepage": "https://github.com/Neonsy/NeonConductor",
-    "packageManager": "pnpm@10.30.3",
+    "packageManager": "pnpm@10.31.0",
     "author": {
         "name": "Neonsy",
         "email": "118444485+Neonsy@users.noreply.github.com"
