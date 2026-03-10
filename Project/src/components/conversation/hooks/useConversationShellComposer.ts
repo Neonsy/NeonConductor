@@ -121,7 +121,21 @@ export function useConversationShellComposer<
 
     function startCompressingImage(image: ComposerPendingImage) {
         void prepareComposerImageAttachment(image.sourceFile, image.clientId)
-            .then((prepared) => {
+            .then((preparedResult) => {
+                if (preparedResult.isErr()) {
+                    const message = preparedResult.error.message;
+                    setPendingImages((current) =>
+                        current.map((candidate) =>
+                            candidate.clientId === image.clientId
+                                ? toFailedImageState(candidate, message)
+                                : candidate
+                        )
+                    );
+                    failImageAttachment(message);
+                    return;
+                }
+
+                const prepared = preparedResult.value;
                 setPendingImages((current) => {
                     const existing = current.find((candidate) => candidate.clientId === image.clientId);
                     if (!existing) {
@@ -154,17 +168,6 @@ export function useConversationShellComposer<
                             : candidate
                     );
                 });
-            })
-            .catch((error: unknown) => {
-                const message = error instanceof Error ? error.message : 'Image compression failed.';
-                setPendingImages((current) =>
-                    current.map((candidate) =>
-                        candidate.clientId === image.clientId
-                            ? toFailedImageState(candidate, message)
-                            : candidate
-                    )
-                );
-                failImageAttachment(message);
             });
     }
 

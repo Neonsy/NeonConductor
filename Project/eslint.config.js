@@ -45,7 +45,7 @@ const neverthrowWorkflowGlobs = ['electron/**/*.{ts,tsx}', 'src/**/*.{ts,tsx}', 
 const generatedGlobs = ['src/routeTree.gen.ts'];
 const validatedFsAuthorityGlobs = [
     'electron/backend/persistence/db.ts',
-    'electron/backend/persistence/runtimeBaseline.ts',
+    'electron/backend/runtime/services/context/tokenizerRuntime.ts',
     'electron/backend/runtime/services/registry/filesystem.ts',
     'electron/backend/runtime/services/runtimeFactoryReset.ts',
     'electron/backend/runtime/services/toolExecution/handlers/listFiles.ts',

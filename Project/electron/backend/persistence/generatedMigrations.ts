@@ -7,7 +7,7 @@ export interface RuntimeSqlMigration {
 
 export const runtimeSqlMigrations: RuntimeSqlMigration[] = [
     {
-        name: '001_runtime_baseline_v4.sql',
+        name: '001_runtime_baseline_v5.sql',
         sql: `
 CREATE TABLE "conversations" (
     id TEXT PRIMARY KEY,
@@ -570,11 +570,7 @@ CREATE INDEX idx_threads_profile_parent_updated_at
 
 CREATE INDEX idx_threads_profile_root_updated_at
     ON threads(profile_id, root_thread_id, updated_at DESC);
-`,
-    },
-    {
-        name: '002_kilo_account_balance.sql',
-        sql: `
+
 ALTER TABLE kilo_account_snapshots
     ADD COLUMN balance_amount REAL NULL;
 
@@ -583,11 +579,7 @@ ALTER TABLE kilo_account_snapshots
 
 ALTER TABLE kilo_account_snapshots
     ADD COLUMN balance_updated_at TEXT NULL;
-`,
-    },
-    {
-        name: '003_runtime_safety_foundation.sql',
-        sql: `
+
 ALTER TABLE permissions ADD COLUMN profile_id TEXT REFERENCES profiles(id) ON DELETE CASCADE;
 ALTER TABLE permissions ADD COLUMN tool_id TEXT NOT NULL DEFAULT '';
 ALTER TABLE permissions ADD COLUMN workspace_fingerprint TEXT NULL;
@@ -595,31 +587,6 @@ ALTER TABLE permissions ADD COLUMN scope_kind TEXT NOT NULL DEFAULT 'tool';
 ALTER TABLE permissions ADD COLUMN summary_json TEXT NOT NULL DEFAULT '{"title":"Permission Request","detail":"This action requires approval."}';
 ALTER TABLE permissions ADD COLUMN resolved_scope TEXT NULL;
 ALTER TABLE permissions ADD COLUMN consumed_at TEXT NULL;
-
-UPDATE permissions
-SET
-    profile_id = (
-        SELECT id
-        FROM profiles
-        WHERE is_active = 1
-        ORDER BY updated_at DESC, id ASC
-        LIMIT 1
-    )
-WHERE profile_id IS NULL;
-
-UPDATE permissions
-SET tool_id = CASE
-    WHEN resource LIKE 'tool:%' THEN substr(resource, 6, instr(substr(resource, 6), ':') - 1)
-    ELSE ''
-END
-WHERE tool_id = '';
-
-UPDATE permissions
-SET tool_id = CASE
-    WHEN tool_id = '' AND resource LIKE 'tool:%' THEN substr(resource, 6)
-    ELSE tool_id
-END
-WHERE tool_id = '';
 
 CREATE INDEX idx_permissions_profile_decision_created_at ON permissions(profile_id, decision, created_at);
 CREATE INDEX idx_permissions_resource_workspace_decision ON permissions(resource, workspace_fingerprint, decision);
@@ -636,11 +603,7 @@ CREATE TABLE workspace_roots (
 
 CREATE UNIQUE INDEX idx_workspace_roots_profile_path_key ON workspace_roots(profile_id, path_key);
 CREATE INDEX idx_workspace_roots_profile_updated_at ON workspace_roots(profile_id, updated_at DESC);
-`,
-    },
-    {
-        name: '004_registry_metadata.sql',
-        sql: `
+
 ALTER TABLE mode_definitions ADD COLUMN asset_key TEXT NOT NULL DEFAULT '';
 ALTER TABLE mode_definitions ADD COLUMN source_kind TEXT NOT NULL DEFAULT 'system_seed';
 ALTER TABLE mode_definitions ADD COLUMN scope TEXT NOT NULL DEFAULT 'system';
@@ -650,30 +613,12 @@ ALTER TABLE mode_definitions ADD COLUMN description TEXT NULL;
 ALTER TABLE mode_definitions ADD COLUMN tags_json TEXT NOT NULL DEFAULT '[]';
 ALTER TABLE mode_definitions ADD COLUMN precedence INTEGER NOT NULL DEFAULT 0;
 
-UPDATE mode_definitions
-SET asset_key = mode_key
-WHERE asset_key = '';
-
 ALTER TABLE rulesets ADD COLUMN asset_key TEXT NOT NULL DEFAULT '';
 ALTER TABLE rulesets ADD COLUMN scope TEXT NOT NULL DEFAULT 'workspace';
 ALTER TABLE rulesets ADD COLUMN source_kind TEXT NOT NULL DEFAULT 'session_override';
 ALTER TABLE rulesets ADD COLUMN origin_path TEXT NULL;
 ALTER TABLE rulesets ADD COLUMN description TEXT NULL;
 ALTER TABLE rulesets ADD COLUMN tags_json TEXT NOT NULL DEFAULT '[]';
-
-UPDATE rulesets
-SET
-    asset_key = lower(replace(name, ' ', '_')),
-    scope = CASE
-        WHEN workspace_fingerprint IS NULL THEN 'global'
-        ELSE 'workspace'
-    END,
-    source_kind = CASE
-        WHEN source = 'system' THEN 'system_seed'
-        WHEN workspace_fingerprint IS NULL THEN 'global_file'
-        ELSE 'workspace_file'
-    END
-WHERE asset_key = '';
 
 ALTER TABLE skillfiles ADD COLUMN asset_key TEXT NOT NULL DEFAULT '';
 ALTER TABLE skillfiles ADD COLUMN scope TEXT NOT NULL DEFAULT 'workspace';
@@ -682,28 +627,10 @@ ALTER TABLE skillfiles ADD COLUMN origin_path TEXT NULL;
 ALTER TABLE skillfiles ADD COLUMN description TEXT NULL;
 ALTER TABLE skillfiles ADD COLUMN tags_json TEXT NOT NULL DEFAULT '[]';
 
-UPDATE skillfiles
-SET
-    asset_key = lower(replace(name, ' ', '_')),
-    scope = CASE
-        WHEN workspace_fingerprint IS NULL THEN 'global'
-        ELSE 'workspace'
-    END,
-    source_kind = CASE
-        WHEN source = 'system' THEN 'system_seed'
-        WHEN workspace_fingerprint IS NULL THEN 'global_file'
-        ELSE 'workspace_file'
-    END
-WHERE asset_key = '';
-
 CREATE INDEX idx_mode_definitions_profile_tab_scope ON mode_definitions(profile_id, top_level_tab, scope, workspace_fingerprint);
 CREATE INDEX idx_rulesets_profile_scope ON rulesets(profile_id, scope, workspace_fingerprint);
 CREATE INDEX idx_skillfiles_profile_scope ON skillfiles(profile_id, scope, workspace_fingerprint);
-`,
-    },
-    {
-        name: '005_registry_precedence_indexes.sql',
-        sql: `
+
 DROP INDEX IF EXISTS idx_mode_definitions_profile_tab_mode;
 DROP INDEX IF EXISTS idx_rulesets_profile_scope_name;
 DROP INDEX IF EXISTS idx_skillfiles_profile_scope_name;
@@ -716,11 +643,7 @@ CREATE UNIQUE INDEX idx_rulesets_profile_registry_asset
 
 CREATE UNIQUE INDEX idx_skillfiles_profile_registry_asset
     ON skillfiles(profile_id, scope, ifnull(workspace_fingerprint, ''), asset_key);
-`,
-    },
-    {
-        name: '006_session_attached_skills.sql',
-        sql: `
+
 CREATE TABLE session_attached_skills (
     session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
     profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
@@ -731,23 +654,11 @@ CREATE TABLE session_attached_skills (
 
 CREATE INDEX idx_session_attached_skills_profile_session
     ON session_attached_skills(profile_id, session_id, created_at);
-`,
-    },
-    {
-        name: '007_run_command_shell_approvals.sql',
-        sql: `
+
 ALTER TABLE permissions ADD COLUMN command_text TEXT NULL;
 ALTER TABLE permissions ADD COLUMN approval_candidates_json TEXT NOT NULL DEFAULT '[]';
 ALTER TABLE permissions ADD COLUMN selected_approval_resource TEXT NULL;
 
-UPDATE tools_catalog
-SET permission_policy = 'ask'
-WHERE id = 'run_command';
-`,
-    },
-    {
-        name: '008_diff_checkpoints.sql',
-        sql: `
 ALTER TABLE "diffs"
     ADD COLUMN artifact_json TEXT NOT NULL DEFAULT '{}';
 
@@ -773,11 +684,7 @@ CREATE UNIQUE INDEX idx_checkpoints_profile_run
 
 CREATE INDEX idx_checkpoints_profile_session_created_at
     ON "checkpoints"(profile_id, session_id, created_at DESC);
-`,
-    },
-    {
-        name: '009_managed_worktrees.sql',
-        sql: `
+
 CREATE TABLE worktrees (
     id TEXT PRIMARY KEY,
     profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
@@ -825,11 +732,7 @@ CREATE INDEX idx_threads_profile_worktree_updated_at
 
 CREATE INDEX idx_sessions_profile_worktree_updated_at
     ON sessions(profile_id, worktree_id, updated_at DESC);
-`,
-    },
-    {
-        name: '010_provider_secrets.sql',
-        sql: `
+
 CREATE TABLE provider_secrets (
     id TEXT PRIMARY KEY,
     profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
@@ -841,18 +744,7 @@ CREATE TABLE provider_secrets (
 
 CREATE UNIQUE INDEX idx_provider_secrets_profile_provider_kind
     ON provider_secrets(profile_id, provider_id, secret_kind);
-`,
-    },
-    {
-        name: '011_drop_legacy_secret_references.sql',
-        sql: `
-DROP INDEX IF EXISTS idx_secret_references_profile_provider_kind;
-DROP TABLE IF EXISTS secret_references;
-`,
-    },
-    {
-        name: '012_context_management.sql',
-        sql: `
+
 CREATE TABLE app_context_settings (
     id TEXT PRIMARY KEY,
     enabled INTEGER NOT NULL CHECK (enabled IN (0, 1)),
@@ -886,54 +778,7 @@ CREATE TABLE session_context_compactions (
 
 CREATE INDEX idx_session_context_compactions_profile_session
     ON session_context_compactions(profile_id, session_id);
-`,
-    },
-    {
-        name: '013_static_model_limits.sql',
-        sql: `
-UPDATE provider_model_catalog
-SET
-    context_length = CASE model_id
-        WHEN 'openai/gpt-5' THEN 400000
-        WHEN 'openai/gpt-5-mini' THEN 400000
-        WHEN 'openai/gpt-5-codex' THEN 400000
-        WHEN 'openai/codex-mini' THEN 400000
-        WHEN 'zai/glm-4.5' THEN 128000
-        WHEN 'zai/glm-4.5-air' THEN 128000
-        WHEN 'zai/glm-4.5-flash' THEN 128000
-        WHEN 'moonshot/kimi-for-coding' THEN 262144
-        WHEN 'moonshot/kimi-k2' THEN 262144
-        WHEN 'moonshot/kimi-latest' THEN 128000
-        ELSE context_length
-    END,
-    raw_json = CASE model_id
-        WHEN 'openai/gpt-5' THEN json_set(COALESCE(raw_json, '{}'), '$.max_output_tokens', 128000)
-        WHEN 'openai/gpt-5-mini' THEN json_set(COALESCE(raw_json, '{}'), '$.max_output_tokens', 128000)
-        WHEN 'openai/gpt-5-codex' THEN json_set(COALESCE(raw_json, '{}'), '$.max_output_tokens', 128000)
-        WHEN 'openai/codex-mini' THEN json_set(COALESCE(raw_json, '{}'), '$.max_output_tokens', 128000)
-        WHEN 'zai/glm-4.5' THEN json_set(COALESCE(raw_json, '{}'), '$.max_output_tokens', 96000)
-        WHEN 'zai/glm-4.5-air' THEN json_set(COALESCE(raw_json, '{}'), '$.max_output_tokens', 96000)
-        WHEN 'zai/glm-4.5-flash' THEN json_set(COALESCE(raw_json, '{}'), '$.max_output_tokens', 96000)
-        ELSE raw_json
-    END,
-    updated_at = CURRENT_TIMESTAMP
-WHERE model_id IN (
-    'openai/gpt-5',
-    'openai/gpt-5-mini',
-    'openai/gpt-5-codex',
-    'openai/codex-mini',
-    'zai/glm-4.5',
-    'zai/glm-4.5-air',
-    'zai/glm-4.5-flash',
-    'moonshot/kimi-for-coding',
-    'moonshot/kimi-k2',
-    'moonshot/kimi-latest'
-);
-`,
-    },
-    {
-        name: '014_model_limit_overrides.sql',
-        sql: `
+
 CREATE TABLE model_limit_overrides (
     provider_id TEXT NOT NULL REFERENCES providers(id) ON DELETE CASCADE,
     model_id TEXT NOT NULL,
@@ -947,18 +792,10 @@ CREATE TABLE model_limit_overrides (
 
 CREATE INDEX idx_model_limit_overrides_provider_updated_at
     ON model_limit_overrides(provider_id, updated_at DESC);
-`,
-    },
-    {
-        name: '015_thread_favorites.sql',
-        sql: `
+
 ALTER TABLE "threads"
     ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0 CHECK (is_favorite IN (0, 1));
-`,
-    },
-    {
-        name: '016_message_media.sql',
-        sql: `
+
 CREATE TABLE message_media (
     media_id TEXT PRIMARY KEY,
     message_part_id TEXT NOT NULL UNIQUE REFERENCES message_parts(id) ON DELETE CASCADE,

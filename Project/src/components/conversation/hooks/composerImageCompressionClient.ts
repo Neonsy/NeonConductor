@@ -1,3 +1,10 @@
+import { err, ok, type Result } from 'neverthrow';
+
+import {
+    composerImageCompressionError,
+    type ComposerImageCompressionError,
+} from '@/web/components/conversation/hooks/composerImageCompressionErrors';
+
 import type { ComposerImageAttachmentInput } from '@/app/backend/runtime/contracts';
 
 interface ImageCompressionWorkerSuccessMessage {
@@ -19,12 +26,21 @@ interface ImageCompressionRequest {
     requestId: string;
     clientId: string;
     file: File;
-    resolve: (result: {
-        attachment: ComposerImageAttachmentInput;
-        byteSize: number;
-    }) => void;
-    reject: (error: Error) => void;
+    resolveOutcome: (outcome: ImageCompressionOutcome) => void;
 }
+
+type ImageCompressionOutcome =
+    | {
+          status: 'success';
+          value: {
+              attachment: ComposerImageAttachmentInput;
+              byteSize: number;
+          };
+      }
+    | {
+          status: 'error';
+          error: ComposerImageCompressionError;
+      };
 
 interface ImageCompressionWorkerHandle {
     onmessage: ((event: MessageEvent<ImageCompressionWorkerMessage>) => void) | null;
@@ -40,10 +56,6 @@ interface ImageCompressionWorkerHandle {
 export type ComposerImageCompressionWorkerFactory = () => ImageCompressionWorkerHandle;
 
 function createCompressionWorker(): ImageCompressionWorkerHandle {
-    if (typeof Worker !== 'function') {
-        throw new Error('Image compression workers are unavailable.');
-    }
-
     return new Worker(new URL('./composerImageCompression.worker.ts', import.meta.url), {
         type: 'module',
     });
@@ -56,29 +68,51 @@ export class ComposerImageCompressionClient {
 
     constructor(private readonly workerFactory: ComposerImageCompressionWorkerFactory = createCompressionWorker) {}
 
-    compress(file: File, clientId: string): Promise<{
-        attachment: ComposerImageAttachmentInput;
-        byteSize: number;
-    }> {
-        return new Promise((resolve, reject) => {
+    compress(
+        file: File,
+        clientId: string
+    ): Promise<
+        Result<
+            {
+                attachment: ComposerImageAttachmentInput;
+                byteSize: number;
+            },
+            ComposerImageCompressionError
+        >
+    > {
+        return new Promise<ImageCompressionOutcome>((resolve) => {
             this.queuedRequests.push({
                 requestId: crypto.randomUUID(),
                 clientId,
                 file,
-                resolve,
-                reject,
+                resolveOutcome: resolve,
             });
             this.pumpQueue();
+        }).then((outcome) => {
+            if (outcome.status === 'error') {
+                return err(outcome.error);
+            }
+
+            return ok(outcome.value);
         });
     }
 
     dispose(): void {
-        const error = new Error('Image compression worker was disposed.');
-        this.activeRequest?.reject(error);
+        const disposedError = composerImageCompressionError(
+            'worker_unavailable',
+            'Image compression worker was disposed.'
+        );
+        this.activeRequest?.resolveOutcome({
+            status: 'error',
+            error: disposedError,
+        });
         this.activeRequest = undefined;
 
         while (this.queuedRequests.length > 0) {
-            this.queuedRequests.shift()?.reject(error);
+            this.queuedRequests.shift()?.resolveOutcome({
+                status: 'error',
+                error: disposedError,
+            });
         }
 
         this.teardownWorker();
@@ -100,11 +134,17 @@ export class ComposerImageCompressionClient {
             this.activeRequest = undefined;
 
             if (message.status === 'error') {
-                activeRequest.reject(new Error(message.message));
+                activeRequest.resolveOutcome({
+                    status: 'error',
+                    error: composerImageCompressionError('worker_unavailable', message.message),
+                });
             } else {
-                activeRequest.resolve({
-                    attachment: message.attachment,
-                    byteSize: message.byteSize,
+                activeRequest.resolveOutcome({
+                    status: 'success',
+                    value: {
+                        attachment: message.attachment,
+                        byteSize: message.byteSize,
+                    },
                 });
             }
 
@@ -114,7 +154,10 @@ export class ComposerImageCompressionClient {
             const activeRequest = this.activeRequest;
             this.activeRequest = undefined;
             this.teardownWorker();
-            activeRequest?.reject(new Error('Image compression worker failed.'));
+            activeRequest?.resolveOutcome({
+                status: 'error',
+                error: composerImageCompressionError('worker_unavailable', 'Image compression worker failed.'),
+            });
             this.pumpQueue();
         };
         this.worker = worker;
@@ -135,9 +178,13 @@ export class ComposerImageCompressionClient {
         try {
             worker = this.ensureWorker();
         } catch (error: unknown) {
-            nextRequest.reject(
-                error instanceof Error ? error : new Error('Image compression worker could not be created.')
-            );
+            nextRequest.resolveOutcome({
+                status: 'error',
+                error: composerImageCompressionError(
+                    'worker_unavailable',
+                    error instanceof Error ? error.message : 'Image compression worker could not be created.'
+                ),
+            });
             this.pumpQueue();
             return;
         }

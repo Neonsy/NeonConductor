@@ -1,11 +1,16 @@
 import { providerSecretStore } from '@/app/backend/persistence/stores';
-import { tryParseProviderSecretKey } from '@/app/backend/secrets/providerSecretKeys';
+import type { ProviderSecretKind, RuntimeProviderId } from '@/app/backend/runtime/contracts';
 import { appLog } from '@/app/main/logging';
 
-export interface SecretStore {
-    get(key: string): Promise<string | null>;
-    set(key: string, value: string): Promise<void>;
-    delete(key: string): Promise<void>;
+export interface ProviderSecretStoreBackend {
+    getValue(profileId: string, providerId: RuntimeProviderId, secretKind: ProviderSecretKind): Promise<string | null>;
+    setValue(input: {
+        profileId: string;
+        providerId: RuntimeProviderId;
+        secretKind: ProviderSecretKind;
+        secretValue: string;
+    }): Promise<void>;
+    deleteValue(profileId: string, providerId: RuntimeProviderId, secretKind: ProviderSecretKind): Promise<void>;
 }
 
 export interface SecretStoreInfo {
@@ -13,88 +18,71 @@ export interface SecretStoreInfo {
     available: boolean;
 }
 
-export class InMemorySecretStore implements SecretStore {
+function buildSecretMapKey(profileId: string, providerId: RuntimeProviderId, secretKind: ProviderSecretKind): string {
+    return `${profileId}::${providerId}::${secretKind}`;
+}
+
+export class InMemorySecretStore implements ProviderSecretStoreBackend {
     private readonly data = new Map<string, string>();
 
-    get(key: string): Promise<string | null> {
-        return Promise.resolve(this.data.get(key) ?? null);
+    getValue(profileId: string, providerId: RuntimeProviderId, secretKind: ProviderSecretKind): Promise<string | null> {
+        return Promise.resolve(this.data.get(buildSecretMapKey(profileId, providerId, secretKind)) ?? null);
     }
 
-    set(key: string, value: string): Promise<void> {
-        this.data.set(key, value);
+    setValue(input: {
+        profileId: string;
+        providerId: RuntimeProviderId;
+        secretKind: ProviderSecretKind;
+        secretValue: string;
+    }): Promise<void> {
+        this.data.set(
+            buildSecretMapKey(input.profileId, input.providerId, input.secretKind),
+            input.secretValue
+        );
         return Promise.resolve();
     }
 
-    delete(key: string): Promise<void> {
-        this.data.delete(key);
+    deleteValue(profileId: string, providerId: RuntimeProviderId, secretKind: ProviderSecretKind): Promise<void> {
+        this.data.delete(buildSecretMapKey(profileId, providerId, secretKind));
         return Promise.resolve();
     }
 }
 
-class DatabaseSecretStore implements SecretStore {
-    private tryResolveSecretKey(key: string, operation: 'get' | 'set' | 'delete') {
-        const parsedSecretKey = tryParseProviderSecretKey(key);
-        if (parsedSecretKey) {
-            return parsedSecretKey;
-        }
-
-        appLog.warn({
-            tag: 'secrets.store',
-            message: 'Rejected invalid provider secret key.',
-            key,
-            operation,
-        });
-        return null;
+class DatabaseSecretStore implements ProviderSecretStoreBackend {
+    getValue(profileId: string, providerId: RuntimeProviderId, secretKind: ProviderSecretKind): Promise<string | null> {
+        return providerSecretStore.getValue(profileId, providerId, secretKind);
     }
 
-    async get(key: string): Promise<string | null> {
-        const parsedSecretKey = this.tryResolveSecretKey(key, 'get');
-        if (!parsedSecretKey) {
-            return null;
-        }
-
-        return providerSecretStore.getValue(
-            parsedSecretKey.profileId,
-            parsedSecretKey.providerId,
-            parsedSecretKey.secretKind
-        );
-    }
-
-    async set(key: string, value: string): Promise<void> {
-        const parsedSecretKey = this.tryResolveSecretKey(key, 'set');
-        if (!parsedSecretKey) {
-            return;
-        }
-
+    async setValue(input: {
+        profileId: string;
+        providerId: RuntimeProviderId;
+        secretKind: ProviderSecretKind;
+        secretValue: string;
+    }): Promise<void> {
         await providerSecretStore.upsertValue({
-            profileId: parsedSecretKey.profileId,
-            providerId: parsedSecretKey.providerId,
-            secretKind: parsedSecretKey.secretKind,
-            secretValue: value,
+            profileId: input.profileId,
+            providerId: input.providerId,
+            secretKind: input.secretKind,
+            secretValue: input.secretValue,
         });
     }
 
-    async delete(key: string): Promise<void> {
-        const parsedSecretKey = this.tryResolveSecretKey(key, 'delete');
-        if (!parsedSecretKey) {
-            return;
-        }
-
+    async deleteValue(profileId: string, providerId: RuntimeProviderId, secretKind: ProviderSecretKind): Promise<void> {
         await providerSecretStore.deleteByProfileProviderAndKind(
-            parsedSecretKey.profileId,
-            parsedSecretKey.providerId,
-            parsedSecretKey.secretKind
+            profileId,
+            providerId,
+            secretKind
         );
     }
 }
 
-let store: SecretStore = new InMemorySecretStore();
+let store: ProviderSecretStoreBackend = new InMemorySecretStore();
 let storeInfo: SecretStoreInfo = {
     backend: 'memory',
     available: true,
 };
 
-export function getSecretStore(): SecretStore {
+export function getSecretStore(): ProviderSecretStoreBackend {
     return store;
 }
 
@@ -102,7 +90,7 @@ export function getSecretStoreInfo(): SecretStoreInfo {
     return storeInfo;
 }
 
-export function initializeSecretStore(nextStore?: SecretStore): SecretStore {
+export function initializeSecretStore(nextStore?: ProviderSecretStoreBackend): ProviderSecretStoreBackend {
     if (nextStore) {
         store = nextStore;
         storeInfo = {

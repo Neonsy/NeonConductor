@@ -1,6 +1,7 @@
 import { runStore, sessionStore, threadStore } from '@/app/backend/persistence/stores';
 import type { ProviderRuntimeTransportSelection } from '@/app/backend/providers/types';
 import type { EntityId } from '@/app/backend/runtime/contracts';
+import { InvariantError } from '@/app/backend/runtime/services/common/fatalErrors';
 import { withCorrelationContext } from '@/app/backend/runtime/services/common/logContext';
 import { sessionContextService } from '@/app/backend/runtime/services/context/sessionContextService';
 import type { RunExecutionError } from '@/app/backend/runtime/services/runExecution/errors';
@@ -225,7 +226,9 @@ export class RunExecutionService {
         ]);
 
         if (!run || !sessionStatus.found) {
-            throw new Error('Run start persisted successfully but the updated session state could not be reloaded.');
+            throw new InvariantError(
+                'Run start persisted successfully but the updated session state could not be reloaded.'
+            );
         }
 
         const resolvedContextState = resolvedContextStateResult.isOk()

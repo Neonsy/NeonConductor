@@ -124,6 +124,9 @@ export type ProviderAuthFlowType = (typeof providerAuthFlowTypes)[number];
 export const providerAuthFlowStatuses = ['pending', 'completed', 'cancelled', 'expired', 'failed'] as const;
 export type ProviderAuthFlowStatus = (typeof providerAuthFlowStatuses)[number];
 
+export const providerSecretKinds = ['api_key', 'access_token', 'refresh_token'] as const;
+export type ProviderSecretKind = (typeof providerSecretKinds)[number];
+
 export const planStatuses = [
     'awaiting_answers',
     'draft',

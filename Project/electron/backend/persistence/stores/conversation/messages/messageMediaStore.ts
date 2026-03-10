@@ -3,6 +3,7 @@ import { parseEntityId } from '@/app/backend/persistence/stores/shared/rowParser
 import { nowIso } from '@/app/backend/persistence/stores/shared/utils';
 import type { MessageMediaRecord } from '@/app/backend/persistence/types';
 import type { SessionMessageMediaPayload } from '@/app/backend/runtime/contracts';
+import { DataCorruptionError } from '@/app/backend/runtime/services/common/fatalErrors';
 import { readImageMimeType } from '@/app/shared/imageMimeType';
 
 function normalizeMediaBytes(bytes: ArrayBuffer | Uint8Array): Uint8Array {
@@ -115,7 +116,7 @@ export class MessageMediaStore {
 
         const mimeType = readImageMimeType(row.mime_type);
         if (!mimeType) {
-            throw new Error(`Unsupported media mime type "${row.mime_type}" in message_media.`);
+            throw new DataCorruptionError(`Unsupported media mime type "${row.mime_type}" in message_media.`);
         }
 
         return {
@@ -152,7 +153,7 @@ export class MessageMediaStore {
 
         const mimeType = readImageMimeType(row.mime_type);
         if (!mimeType) {
-            throw new Error(`Unsupported media mime type "${row.mime_type}" in message_media.`);
+            throw new DataCorruptionError(`Unsupported media mime type "${row.mime_type}" in message_media.`);
         }
 
         return {

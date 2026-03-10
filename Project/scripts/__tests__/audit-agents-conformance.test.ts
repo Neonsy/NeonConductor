@@ -60,4 +60,22 @@ describe('auditAgentsConformance', () => {
             rmSync(rootDir, { recursive: true, force: true });
         }
     });
+
+    it('allows TRPC transport-boundary throw toTrpcError patterns', () => {
+        const rootDir = mkdtempSync(path.join(os.tmpdir(), 'agents-audit-'));
+
+        try {
+            writeFixture(
+                rootDir,
+                'electron/backend/trpc/routers/context/index.ts',
+                "const value = result.match((ok) => ok, (error) => { throw toTrpcError(error); });\n"
+            );
+
+            const report = auditAgentsConformance(rootDir);
+
+            expect(report.nonBlockingThrows).toEqual([]);
+        } finally {
+            rmSync(rootDir, { recursive: true, force: true });
+        }
+    });
 });

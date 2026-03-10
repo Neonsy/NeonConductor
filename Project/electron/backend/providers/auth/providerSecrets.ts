@@ -1,6 +1,5 @@
 import type { ProviderSecretKind } from '@/app/backend/runtime/contracts';
 import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
-import { buildProviderSecretKey } from '@/app/backend/secrets/providerSecretKeys';
 import { getSecretStore } from '@/app/backend/secrets/store';
 
 export async function writeProviderSecretValue(input: {
@@ -9,8 +8,12 @@ export async function writeProviderSecretValue(input: {
     secretKind: ProviderSecretKind;
     value: string;
 }): Promise<void> {
-    const providerSecretKey = buildProviderSecretKey(input.profileId, input.providerId, input.secretKind);
-    await getSecretStore().set(providerSecretKey, input.value);
+    await getSecretStore().setValue({
+        profileId: input.profileId,
+        providerId: input.providerId,
+        secretKind: input.secretKind,
+        secretValue: input.value,
+    });
 }
 
 export async function readProviderSecretValue(
@@ -18,6 +21,6 @@ export async function readProviderSecretValue(
     providerId: RuntimeProviderId,
     secretKind: ProviderSecretKind
 ): Promise<string | undefined> {
-    const value = await getSecretStore().get(buildProviderSecretKey(profileId, providerId, secretKind));
+    const value = await getSecretStore().getValue(profileId, providerId, secretKind);
     return value ?? undefined;
 }

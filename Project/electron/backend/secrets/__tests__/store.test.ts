@@ -32,12 +32,18 @@ describe('secret store', () => {
         );
         const injectedStore = new InMemorySecretStore();
         initializeSecretStore(injectedStore);
+        const profileId = 'profile_test';
 
         const secretStore = getSecretStore();
-        await secretStore.set('provider/profile_test/openai/api_key', 'token-value');
-        await expect(secretStore.get('provider/profile_test/openai/api_key')).resolves.toBe('token-value');
-        await secretStore.delete('provider/profile_test/openai/api_key');
-        await expect(secretStore.get('provider/profile_test/openai/api_key')).resolves.toBeNull();
+        await secretStore.setValue({
+            profileId,
+            providerId: 'openai',
+            secretKind: 'api_key',
+            secretValue: 'token-value',
+        });
+        await expect(secretStore.getValue(profileId, 'openai', 'api_key')).resolves.toBe('token-value');
+        await secretStore.deleteValue(profileId, 'openai', 'api_key');
+        await expect(secretStore.getValue(profileId, 'openai', 'api_key')).resolves.toBeNull();
 
         expect(getSecretStoreInfo()).toEqual({
             backend: 'memory',
@@ -50,9 +56,11 @@ describe('secret store', () => {
         delete process.env['VITEST'];
 
         vi.resetModules();
+        const { resetPersistenceForTests } = await import('@/app/backend/persistence/db');
         const { providerSecretStore } = await import('@/app/backend/persistence/stores');
         const { getSecretStore, getSecretStoreInfo, initializeSecretStore } = await import('@/app/backend/secrets/store');
         const profileId = getDefaultProfileId();
+        resetPersistenceForTests();
         initializeSecretStore();
 
         expect(getSecretStoreInfo()).toEqual({
@@ -61,29 +69,17 @@ describe('secret store', () => {
         });
 
         const secretStore = getSecretStore();
-        await secretStore.set(`provider/${profileId}/openai/api_key`, 'database-token');
+        await secretStore.setValue({
+            profileId,
+            providerId: 'openai',
+            secretKind: 'api_key',
+            secretValue: 'database-token',
+        });
 
-        await expect(secretStore.get(`provider/${profileId}/openai/api_key`)).resolves.toBe('database-token');
+        await expect(secretStore.getValue(profileId, 'openai', 'api_key')).resolves.toBe('database-token');
         await expect(providerSecretStore.getValue(profileId, 'openai', 'api_key')).resolves.toBe('database-token');
 
-        await secretStore.delete(`provider/${profileId}/openai/api_key`);
-        await expect(providerSecretStore.getValue(profileId, 'openai', 'api_key')).resolves.toBeNull();
-    });
-
-    it('rejects invalid provider secret keys without mutating the database store', async () => {
-        process.env['NODE_ENV'] = 'production';
-        delete process.env['VITEST'];
-
-        vi.resetModules();
-        const { providerSecretStore } = await import('@/app/backend/persistence/stores');
-        const { getSecretStore, initializeSecretStore } = await import('@/app/backend/secrets/store');
-        const profileId = getDefaultProfileId();
-        initializeSecretStore();
-
-        const secretStore = getSecretStore();
-        await expect(secretStore.get(`provider/${profileId}/unsupported/api_key`)).resolves.toBeNull();
-        await expect(secretStore.set(`provider/${profileId}/unsupported/api_key`, 'ignored')).resolves.toBeUndefined();
-        await expect(secretStore.delete(`provider/${profileId}/unsupported/api_key`)).resolves.toBeUndefined();
+        await secretStore.deleteValue(profileId, 'openai', 'api_key');
         await expect(providerSecretStore.getValue(profileId, 'openai', 'api_key')).resolves.toBeNull();
     });
 });

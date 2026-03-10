@@ -1,3 +1,10 @@
+import { err, ok } from 'neverthrow';
+
+import {
+    composerImageCompressionError,
+    type ComposerImageCompressionResult,
+} from '@/web/components/conversation/hooks/composerImageCompressionErrors';
+
 import type { ComposerImageAttachmentInput } from '@/app/backend/runtime/contracts';
 import { readImageMimeType } from '@/app/shared/imageMimeType';
 
@@ -79,16 +86,21 @@ async function finalizePreparedAttachment(
     width: number,
     height: number,
     clientId: string
-): Promise<CompressionSuccessMessage['attachment'] & { byteSize: number }> {
+): Promise<ComposerImageCompressionResult<CompressionSuccessMessage['attachment'] & { byteSize: number }>> {
     const buffer = await blob.arrayBuffer();
     const bytesBase64 = bufferToBase64(buffer);
     const sha256 = await sha256Hex(buffer);
     const mimeType = readImageMimeType(blob.type);
     if (!mimeType) {
-        throw new Error('Image compression produced an unsupported image type.');
+        return err(
+            composerImageCompressionError(
+                'unsupported_output_type',
+                'Image compression produced an unsupported image type.'
+            )
+        );
     }
 
-    return {
+    return ok({
         clientId,
         mimeType,
         bytesBase64,
@@ -96,22 +108,37 @@ async function finalizePreparedAttachment(
         height,
         sha256,
         byteSize: blob.size,
-    };
+    });
 }
 
-async function compressImage(file: File, clientId: string): Promise<CompressionSuccessMessage> {
+async function compressImage(file: File, clientId: string): Promise<ComposerImageCompressionResult<CompressionSuccessMessage>> {
     if (typeof createImageBitmap !== 'function' || typeof OffscreenCanvas === 'undefined') {
-        throw new Error('Image compression worker is unavailable.');
+        return err(composerImageCompressionError('worker_unavailable', 'Image compression worker is unavailable.'));
     }
 
-    const imageBitmap = await createImageBitmap(file);
+    let imageBitmap: ImageBitmap;
+    try {
+        imageBitmap = await createImageBitmap(file);
+    } catch (error) {
+        return err(
+            composerImageCompressionError(
+                'decode_failed',
+                error instanceof Error ? error.message : `Failed to decode image "${file.name}".`
+            )
+        );
+    }
 
     try {
         let dimensions = fitDimensions(imageBitmap.width, imageBitmap.height, MAX_IMAGE_EDGE_PX);
         const initialCanvas = new OffscreenCanvas(dimensions.width, dimensions.height);
         const initialContext = initialCanvas.getContext('2d');
         if (!initialContext) {
-            throw new Error('Image compression worker could not acquire a 2D canvas context.');
+            return err(
+                composerImageCompressionError(
+                    'canvas_unavailable',
+                    'Image compression worker could not acquire a 2D canvas context.'
+                )
+            );
         }
 
         initialContext.drawImage(imageBitmap, 0, 0, dimensions.width, dimensions.height);
@@ -122,7 +149,12 @@ async function compressImage(file: File, clientId: string): Promise<CompressionS
             const canvas = new OffscreenCanvas(dimensions.width, dimensions.height);
             const context = canvas.getContext('2d');
             if (!context) {
-                throw new Error('Image compression worker could not acquire a 2D canvas context.');
+                return err(
+                    composerImageCompressionError(
+                        'canvas_unavailable',
+                        'Image compression worker could not acquire a 2D canvas context.'
+                    )
+                );
             }
 
             context.drawImage(imageBitmap, 0, 0, dimensions.width, dimensions.height);
@@ -131,38 +163,44 @@ async function compressImage(file: File, clientId: string): Promise<CompressionS
                 const pngBlob = await canvasToBlob(canvas, 'image/png');
                 if (pngBlob.size <= MAX_COMPRESSED_IMAGE_BYTES) {
                     const prepared = await finalizePreparedAttachment(pngBlob, dimensions.width, dimensions.height, clientId);
-                    return {
+                    if (prepared.isErr()) {
+                        return err(prepared.error);
+                    }
+                    return ok({
                         requestId: '',
                         status: 'success',
                         attachment: {
-                            clientId: prepared.clientId,
-                            mimeType: prepared.mimeType,
-                            bytesBase64: prepared.bytesBase64,
-                            width: prepared.width,
-                            height: prepared.height,
-                            sha256: prepared.sha256,
+                            clientId: prepared.value.clientId,
+                            mimeType: prepared.value.mimeType,
+                            bytesBase64: prepared.value.bytesBase64,
+                            width: prepared.value.width,
+                            height: prepared.value.height,
+                            sha256: prepared.value.sha256,
                         },
-                        byteSize: prepared.byteSize,
-                    };
+                        byteSize: prepared.value.byteSize,
+                    });
                 }
             } else {
                 for (const quality of JPEG_QUALITY_STEPS) {
                     const jpegBlob = await canvasToBlob(canvas, 'image/jpeg', quality);
                     if (jpegBlob.size <= MAX_COMPRESSED_IMAGE_BYTES) {
                         const prepared = await finalizePreparedAttachment(jpegBlob, dimensions.width, dimensions.height, clientId);
-                        return {
+                        if (prepared.isErr()) {
+                            return err(prepared.error);
+                        }
+                        return ok({
                             requestId: '',
                             status: 'success',
                             attachment: {
-                                clientId: prepared.clientId,
-                                mimeType: prepared.mimeType,
-                                bytesBase64: prepared.bytesBase64,
-                                width: prepared.width,
-                                height: prepared.height,
-                                sha256: prepared.sha256,
+                                clientId: prepared.value.clientId,
+                                mimeType: prepared.value.mimeType,
+                                bytesBase64: prepared.value.bytesBase64,
+                                width: prepared.value.width,
+                                height: prepared.value.height,
+                                sha256: prepared.value.sha256,
                             },
-                            byteSize: prepared.byteSize,
-                        };
+                            byteSize: prepared.value.byteSize,
+                        });
                     }
                 }
             }
@@ -181,26 +219,32 @@ async function compressImage(file: File, clientId: string): Promise<CompressionS
         imageBitmap.close();
     }
 
-    throw new Error(`"${file.name}" could not be compressed below 1.5 MB.`);
+    return err(
+        composerImageCompressionError(
+            'size_limit_exceeded',
+            `"${file.name}" could not be compressed below 1.5 MB.`
+        )
+    );
 }
 
 self.onmessage = (event: MessageEvent<CompressionRequestMessage>) => {
     const { requestId, clientId, file } = event.data;
 
-    void compressImage(file, clientId)
-        .then((result) => {
-            const message: CompressionSuccessMessage = {
-                ...result,
-                requestId,
-            };
-            self.postMessage(message);
-        })
-        .catch((error: unknown) => {
+    void compressImage(file, clientId).then((result) => {
+        if (result.isErr()) {
             const message: CompressionErrorMessage = {
                 requestId,
                 status: 'error',
-                message: error instanceof Error ? error.message : 'Image compression failed.',
+                message: result.error.message,
             };
             self.postMessage(message);
-        });
+            return;
+        }
+
+        const message: CompressionSuccessMessage = {
+            ...result.value,
+            requestId,
+        };
+        self.postMessage(message);
+    });
 };

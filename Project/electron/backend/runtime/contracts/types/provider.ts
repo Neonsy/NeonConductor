@@ -2,6 +2,7 @@ import type {
     KiloDynamicSort,
     KiloRoutingMode,
     ProviderAuthMethod,
+    ProviderSecretKind,
     RuntimeProviderId,
 } from '@/app/backend/runtime/contracts/enums';
 import type { ProfileInput } from '@/app/backend/runtime/contracts/types/common';
@@ -143,13 +144,10 @@ export interface KiloModelProviderInfo {
     maxCompletionTokens?: number;
 }
 
-export type ProviderSecretKind = 'api_key' | 'access_token' | 'refresh_token';
-
 export interface ProviderSecret {
     id: string;
     profileId: string;
     providerId: RuntimeProviderId;
     secretKind: ProviderSecretKind;
-    storage: 'database';
     updatedAt: string;
 }

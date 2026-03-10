@@ -2,16 +2,11 @@ import { Kysely, SqliteDialect } from 'kysely';
 import { mkdirSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { DatabaseSync, type SQLOutputValue } from 'node:sqlite';
+import { DatabaseSync } from 'node:sqlite';
 
 import { seedRuntimeData } from '@/app/backend/persistence/bootstrap/runtimeSeed';
 import { runtimeSqlMigrations } from '@/app/backend/persistence/generatedMigrations';
 import { createNodeSqliteDatabase } from '@/app/backend/persistence/nodeSqliteDialect';
-import {
-    markPersistenceBaselineApplied,
-    resetPersistenceBaseline,
-    shouldResetPersistenceBaseline,
-} from '@/app/backend/persistence/runtimeBaseline';
 import type { DatabaseSchema } from '@/app/backend/persistence/schema';
 import { InvariantError } from '@/app/backend/runtime/services/common/fatalErrors';
 import { appLog } from '@/app/main/logging';
@@ -145,47 +140,6 @@ function ensureParentDirectory(dbPath: string): void {
     mkdirSync(directory, { recursive: true });
 }
 
-function readPragmaTableInfoRows(sqlite: DatabaseSync, tableName: string): Array<{ name?: SQLOutputValue }> {
-    const statement = sqlite.prepare(`PRAGMA table_info("${tableName.replaceAll('"', '""')}")`);
-    const rows = statement.all();
-
-    if (!Array.isArray(rows)) {
-        return [];
-    }
-
-    const tableInfoRows: Array<{ name?: SQLOutputValue }> = [];
-    for (const row of rows) {
-        tableInfoRows.push({
-            ...('name' in row ? { name: row.name } : {}),
-        });
-    }
-
-    return tableInfoRows;
-}
-
-function getTableColumns(sqlite: DatabaseSync, tableName: string): Set<string> {
-    const rows = readPragmaTableInfoRows(sqlite, tableName);
-    return new Set(
-        rows
-            .map((row) => (typeof row.name === 'string' ? row.name : null))
-            .filter((columnName): columnName is string => columnName !== null)
-    );
-}
-
-function isMigrationAlreadySatisfied(sqlite: DatabaseSync, migrationSql: string): boolean {
-    const normalizedSql = migrationSql.trim().replace(/\s+/g, ' ');
-    const addColumnMatch = /^ALTER TABLE "?([^"\s]+)"? ADD COLUMN "?([^"\s]+)"? /i.exec(normalizedSql);
-    if (!addColumnMatch) {
-        return false;
-    }
-
-    const [, tableName, columnName] = addColumnMatch;
-    if (!tableName || !columnName) {
-        return false;
-    }
-    return getTableColumns(sqlite, tableName).has(columnName);
-}
-
 function applySqlMigrations(sqlite: DatabaseSync): void {
     sqlite.exec(`
         CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -200,10 +154,6 @@ function applySqlMigrations(sqlite: DatabaseSync): void {
     for (const migration of runtimeSqlMigrations) {
         const wasApplied = isAppliedStatement.get(migration.name);
         if (wasApplied) {
-            continue;
-        }
-        if (isMigrationAlreadySatisfied(sqlite, migration.sql)) {
-            recordAppliedStatement.run(migration.name, new Date().toISOString());
             continue;
         }
 
@@ -278,7 +228,6 @@ export function closePersistence(): void {
 
 export function initializePersistence(options: InitializePersistenceOptions = {}): PersistenceContext {
     const dbPath = resolveDbPath(options);
-    const resetForBaseline = shouldResetPersistenceBaseline(dbPath);
 
     if (persistenceContext && (options.forceReinitialize || persistenceContext.dbPath !== dbPath)) {
         closePersistence();
@@ -287,21 +236,12 @@ export function initializePersistence(options: InitializePersistenceOptions = {}
     if (options.resetDb && !isMemoryDbPath(dbPath)) {
         rmSync(dbPath, { force: true });
     }
-    if (resetForBaseline) {
-        appLog.warn({
-            tag: 'persistence.db',
-            message: 'Resetting runtime persistence for new baseline schema.',
-            dbPath,
-        });
-        resetPersistenceBaseline(dbPath);
-    }
 
     if (persistenceContext && !options.forceReinitialize && persistenceContext.dbPath === dbPath) {
         return persistenceContext;
     }
 
     persistenceContext = createPersistenceContext(dbPath);
-    markPersistenceBaselineApplied(dbPath);
     return persistenceContext;
 }
 

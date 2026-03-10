@@ -4,6 +4,7 @@ import {
     ComposerImageCompressionClient,
     resetSharedComposerImageCompressionClientForTests,
 } from '@/web/components/conversation/hooks/composerImageCompressionClient';
+import { composerImageCompressionError } from '@/web/components/conversation/hooks/composerImageCompressionErrors';
 
 import type { ComposerImageAttachmentInput } from '@/app/backend/runtime/contracts';
 
@@ -65,7 +66,12 @@ describe('ComposerImageCompressionClient', () => {
             },
         } as MessageEvent<unknown>);
 
-        await expect(firstPromise).resolves.toEqual({
+        await expect(firstPromise).resolves.toMatchObject({
+            _unsafeUnwrap: expect.any(Function),
+        });
+        const firstResult = await firstPromise;
+        expect(firstResult.isOk()).toBe(true);
+        expect(firstResult._unsafeUnwrap()).toEqual({
             attachment: buildAttachment('client-first'),
             byteSize: 128,
         });
@@ -82,7 +88,9 @@ describe('ComposerImageCompressionClient', () => {
             },
         } as MessageEvent<unknown>);
 
-        await expect(secondPromise).resolves.toEqual({
+        const secondResult = await secondPromise;
+        expect(secondResult.isOk()).toBe(true);
+        expect(secondResult._unsafeUnwrap()).toEqual({
             attachment: buildAttachment('client-second'),
             byteSize: 256,
         });
@@ -91,13 +99,21 @@ describe('ComposerImageCompressionClient', () => {
         expect(worker.terminated).toBe(true);
     });
 
-    it('surfaces worker creation failures so callers can fall back', async () => {
+    it('surfaces worker creation failures as a typed fallback result', async () => {
         const client = new ComposerImageCompressionClient(() => {
             throw new Error('worker unavailable');
         });
 
-        await expect(
-            client.compress(new File(['fallback'], 'fallback.png', { type: 'image/png' }), 'client-fallback')
-        ).rejects.toThrow('worker unavailable');
+        const result = await client.compress(
+            new File(['fallback'], 'fallback.png', { type: 'image/png' }),
+            'client-fallback'
+        );
+
+        expect(result).toEqual(
+            expect.objectContaining({
+                error: composerImageCompressionError('worker_unavailable', 'worker unavailable'),
+            })
+        );
+        expect(result.isErr()).toBe(true);
     });
 });

@@ -155,7 +155,10 @@ function collectPatternViolations(input: {
             const matches =
                 typeof input.pattern === 'string'
                     ? lineContent.includes(input.pattern)
-                    : new RegExp(input.pattern.source, input.pattern.flags).test(lineContent);
+                    : (() => {
+                          input.pattern.lastIndex = 0;
+                          return input.pattern.test(lineContent);
+                      })();
 
             if (matches) {
                 violations.push({
@@ -200,6 +203,10 @@ function isIntentionalThrowLine(relativePath: string, lineContent: string): bool
 
     if (relativePath === 'electron/backend/trpc/trpcErrorMap.ts') {
         return trimmedLine.startsWith('throw ');
+    }
+
+    if (relativePath.startsWith('electron/backend/trpc/routers/')) {
+        return trimmedLine.includes('throw toTrpcError(');
     }
 
     return false;

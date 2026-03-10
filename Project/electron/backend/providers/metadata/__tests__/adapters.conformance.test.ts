@@ -1,5 +1,6 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { resetPersistenceForTests } from '@/app/backend/persistence/db';
 import { getProviderMetadataAdapter } from '@/app/backend/providers/metadata/adapters';
 import type { ProviderCatalogSyncSuccess } from '@/app/backend/providers/types';
 
@@ -22,6 +23,10 @@ function expectConforms(result: ProviderCatalogSyncSuccess) {
 
 afterEach(() => {
     vi.unstubAllGlobals();
+});
+
+beforeEach(() => {
+    resetPersistenceForTests();
 });
 
 describe('provider metadata adapter conformance', () => {

@@ -559,3 +559,242 @@ CREATE INDEX idx_threads_profile_parent_updated_at
 
 CREATE INDEX idx_threads_profile_root_updated_at
     ON threads(profile_id, root_thread_id, updated_at DESC);
+
+ALTER TABLE kilo_account_snapshots
+    ADD COLUMN balance_amount REAL NULL;
+
+ALTER TABLE kilo_account_snapshots
+    ADD COLUMN balance_currency TEXT NULL;
+
+ALTER TABLE kilo_account_snapshots
+    ADD COLUMN balance_updated_at TEXT NULL;
+
+ALTER TABLE permissions ADD COLUMN profile_id TEXT REFERENCES profiles(id) ON DELETE CASCADE;
+ALTER TABLE permissions ADD COLUMN tool_id TEXT NOT NULL DEFAULT '';
+ALTER TABLE permissions ADD COLUMN workspace_fingerprint TEXT NULL;
+ALTER TABLE permissions ADD COLUMN scope_kind TEXT NOT NULL DEFAULT 'tool';
+ALTER TABLE permissions ADD COLUMN summary_json TEXT NOT NULL DEFAULT '{"title":"Permission Request","detail":"This action requires approval."}';
+ALTER TABLE permissions ADD COLUMN resolved_scope TEXT NULL;
+ALTER TABLE permissions ADD COLUMN consumed_at TEXT NULL;
+
+CREATE INDEX idx_permissions_profile_decision_created_at ON permissions(profile_id, decision, created_at);
+CREATE INDEX idx_permissions_resource_workspace_decision ON permissions(resource, workspace_fingerprint, decision);
+
+CREATE TABLE workspace_roots (
+    fingerprint TEXT PRIMARY KEY,
+    profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    absolute_path TEXT NOT NULL,
+    path_key TEXT NOT NULL,
+    label TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX idx_workspace_roots_profile_path_key ON workspace_roots(profile_id, path_key);
+CREATE INDEX idx_workspace_roots_profile_updated_at ON workspace_roots(profile_id, updated_at DESC);
+
+ALTER TABLE mode_definitions ADD COLUMN asset_key TEXT NOT NULL DEFAULT '';
+ALTER TABLE mode_definitions ADD COLUMN source_kind TEXT NOT NULL DEFAULT 'system_seed';
+ALTER TABLE mode_definitions ADD COLUMN scope TEXT NOT NULL DEFAULT 'system';
+ALTER TABLE mode_definitions ADD COLUMN workspace_fingerprint TEXT NULL;
+ALTER TABLE mode_definitions ADD COLUMN origin_path TEXT NULL;
+ALTER TABLE mode_definitions ADD COLUMN description TEXT NULL;
+ALTER TABLE mode_definitions ADD COLUMN tags_json TEXT NOT NULL DEFAULT '[]';
+ALTER TABLE mode_definitions ADD COLUMN precedence INTEGER NOT NULL DEFAULT 0;
+
+ALTER TABLE rulesets ADD COLUMN asset_key TEXT NOT NULL DEFAULT '';
+ALTER TABLE rulesets ADD COLUMN scope TEXT NOT NULL DEFAULT 'workspace';
+ALTER TABLE rulesets ADD COLUMN source_kind TEXT NOT NULL DEFAULT 'session_override';
+ALTER TABLE rulesets ADD COLUMN origin_path TEXT NULL;
+ALTER TABLE rulesets ADD COLUMN description TEXT NULL;
+ALTER TABLE rulesets ADD COLUMN tags_json TEXT NOT NULL DEFAULT '[]';
+
+ALTER TABLE skillfiles ADD COLUMN asset_key TEXT NOT NULL DEFAULT '';
+ALTER TABLE skillfiles ADD COLUMN scope TEXT NOT NULL DEFAULT 'workspace';
+ALTER TABLE skillfiles ADD COLUMN source_kind TEXT NOT NULL DEFAULT 'session_override';
+ALTER TABLE skillfiles ADD COLUMN origin_path TEXT NULL;
+ALTER TABLE skillfiles ADD COLUMN description TEXT NULL;
+ALTER TABLE skillfiles ADD COLUMN tags_json TEXT NOT NULL DEFAULT '[]';
+
+CREATE INDEX idx_mode_definitions_profile_tab_scope ON mode_definitions(profile_id, top_level_tab, scope, workspace_fingerprint);
+CREATE INDEX idx_rulesets_profile_scope ON rulesets(profile_id, scope, workspace_fingerprint);
+CREATE INDEX idx_skillfiles_profile_scope ON skillfiles(profile_id, scope, workspace_fingerprint);
+
+DROP INDEX IF EXISTS idx_mode_definitions_profile_tab_mode;
+DROP INDEX IF EXISTS idx_rulesets_profile_scope_name;
+DROP INDEX IF EXISTS idx_skillfiles_profile_scope_name;
+
+CREATE UNIQUE INDEX idx_mode_definitions_profile_registry_asset
+    ON mode_definitions(profile_id, top_level_tab, scope, ifnull(workspace_fingerprint, ''), asset_key);
+
+CREATE UNIQUE INDEX idx_rulesets_profile_registry_asset
+    ON rulesets(profile_id, scope, ifnull(workspace_fingerprint, ''), asset_key);
+
+CREATE UNIQUE INDEX idx_skillfiles_profile_registry_asset
+    ON skillfiles(profile_id, scope, ifnull(workspace_fingerprint, ''), asset_key);
+
+CREATE TABLE session_attached_skills (
+    session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    asset_key TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (session_id, asset_key)
+);
+
+CREATE INDEX idx_session_attached_skills_profile_session
+    ON session_attached_skills(profile_id, session_id, created_at);
+
+ALTER TABLE permissions ADD COLUMN command_text TEXT NULL;
+ALTER TABLE permissions ADD COLUMN approval_candidates_json TEXT NOT NULL DEFAULT '[]';
+ALTER TABLE permissions ADD COLUMN selected_approval_resource TEXT NULL;
+
+ALTER TABLE "diffs"
+    ADD COLUMN artifact_json TEXT NOT NULL DEFAULT '{}';
+
+CREATE TABLE "checkpoints" (
+    id TEXT PRIMARY KEY,
+    profile_id TEXT NOT NULL,
+    session_id TEXT NOT NULL,
+    run_id TEXT NOT NULL,
+    diff_id TEXT NOT NULL,
+    workspace_fingerprint TEXT NOT NULL,
+    top_level_tab TEXT NOT NULL,
+    mode_key TEXT NOT NULL,
+    summary TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
+    FOREIGN KEY (run_id) REFERENCES runs(id) ON DELETE CASCADE,
+    FOREIGN KEY (diff_id) REFERENCES diffs(id) ON DELETE CASCADE
+);
+
+CREATE UNIQUE INDEX idx_checkpoints_profile_run
+    ON "checkpoints"(profile_id, run_id);
+
+CREATE INDEX idx_checkpoints_profile_session_created_at
+    ON "checkpoints"(profile_id, session_id, created_at DESC);
+
+CREATE TABLE worktrees (
+    id TEXT PRIMARY KEY,
+    profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    workspace_fingerprint TEXT NOT NULL REFERENCES workspace_roots(fingerprint) ON DELETE CASCADE,
+    branch TEXT NOT NULL,
+    base_branch TEXT NOT NULL,
+    absolute_path TEXT NOT NULL,
+    path_key TEXT NOT NULL,
+    label TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('pending', 'ready', 'missing', 'broken', 'removed')),
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    last_used_at TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX idx_worktrees_profile_path_key
+    ON worktrees(profile_id, path_key);
+
+CREATE UNIQUE INDEX idx_worktrees_profile_workspace_branch
+    ON worktrees(profile_id, workspace_fingerprint, branch);
+
+CREATE INDEX idx_worktrees_profile_workspace_updated_at
+    ON worktrees(profile_id, workspace_fingerprint, updated_at DESC);
+
+ALTER TABLE threads
+    ADD COLUMN execution_environment_mode TEXT NOT NULL DEFAULT 'local';
+
+ALTER TABLE threads
+    ADD COLUMN execution_branch TEXT NULL;
+
+ALTER TABLE threads
+    ADD COLUMN base_branch TEXT NULL;
+
+ALTER TABLE threads
+    ADD COLUMN worktree_id TEXT NULL REFERENCES worktrees(id) ON DELETE SET NULL;
+
+ALTER TABLE sessions
+    ADD COLUMN worktree_id TEXT NULL REFERENCES worktrees(id) ON DELETE SET NULL;
+
+ALTER TABLE checkpoints
+    ADD COLUMN worktree_id TEXT NULL REFERENCES worktrees(id) ON DELETE SET NULL;
+
+CREATE INDEX idx_threads_profile_worktree_updated_at
+    ON threads(profile_id, worktree_id, updated_at DESC);
+
+CREATE INDEX idx_sessions_profile_worktree_updated_at
+    ON sessions(profile_id, worktree_id, updated_at DESC);
+
+CREATE TABLE provider_secrets (
+    id TEXT PRIMARY KEY,
+    profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    provider_id TEXT NOT NULL REFERENCES providers(id) ON DELETE CASCADE,
+    secret_kind TEXT NOT NULL,
+    secret_value TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX idx_provider_secrets_profile_provider_kind
+    ON provider_secrets(profile_id, provider_id, secret_kind);
+
+CREATE TABLE app_context_settings (
+    id TEXT PRIMARY KEY,
+    enabled INTEGER NOT NULL CHECK (enabled IN (0, 1)),
+    mode TEXT NOT NULL CHECK (mode IN ('percent')),
+    percent INTEGER NOT NULL CHECK (percent BETWEEN 1 AND 100),
+    updated_at TEXT NOT NULL
+);
+
+INSERT INTO app_context_settings (id, enabled, mode, percent, updated_at)
+VALUES ('global', 1, 'percent', 90, CURRENT_TIMESTAMP);
+
+CREATE TABLE profile_context_settings (
+    profile_id TEXT PRIMARY KEY REFERENCES profiles(id) ON DELETE CASCADE,
+    override_mode TEXT NOT NULL CHECK (override_mode IN ('inherit', 'percent', 'fixed_tokens')),
+    percent INTEGER NULL CHECK (percent IS NULL OR percent BETWEEN 1 AND 100),
+    fixed_input_tokens INTEGER NULL CHECK (fixed_input_tokens IS NULL OR fixed_input_tokens > 0),
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE session_context_compactions (
+    session_id TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
+    profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    cutoff_message_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+    summary_text TEXT NOT NULL,
+    source TEXT NOT NULL CHECK (source IN ('auto', 'manual')),
+    threshold_tokens INTEGER NOT NULL,
+    estimated_input_tokens INTEGER NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE INDEX idx_session_context_compactions_profile_session
+    ON session_context_compactions(profile_id, session_id);
+
+CREATE TABLE model_limit_overrides (
+    provider_id TEXT NOT NULL REFERENCES providers(id) ON DELETE CASCADE,
+    model_id TEXT NOT NULL,
+    context_length INTEGER NULL CHECK (context_length IS NULL OR context_length > 0),
+    max_output_tokens INTEGER NULL CHECK (max_output_tokens IS NULL OR max_output_tokens > 0),
+    reason TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (provider_id, model_id),
+    CHECK (context_length IS NOT NULL OR max_output_tokens IS NOT NULL)
+);
+
+CREATE INDEX idx_model_limit_overrides_provider_updated_at
+    ON model_limit_overrides(provider_id, updated_at DESC);
+
+ALTER TABLE "threads"
+    ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0 CHECK (is_favorite IN (0, 1));
+
+CREATE TABLE message_media (
+    media_id TEXT PRIMARY KEY,
+    message_part_id TEXT NOT NULL UNIQUE REFERENCES message_parts(id) ON DELETE CASCADE,
+    mime_type TEXT NOT NULL,
+    width INTEGER NOT NULL CHECK (width > 0),
+    height INTEGER NOT NULL CHECK (height > 0),
+    byte_size INTEGER NOT NULL CHECK (byte_size >= 0),
+    sha256 TEXT NOT NULL,
+    bytes_blob BLOB NOT NULL,
+    created_at TEXT NOT NULL
+);
+
+CREATE INDEX idx_message_media_part_id ON message_media(message_part_id);

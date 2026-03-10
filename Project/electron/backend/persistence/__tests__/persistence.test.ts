@@ -138,44 +138,4 @@ describe('persistence bootstrap and durability', () => {
         expect(listed.sessions.some((item) => item.id === created.session.id)).toBe(true);
     });
 
-    it('resets an existing runtime db once when the baseline marker is missing', async () => {
-        const tempDir = mkdtempSync(path.join(os.tmpdir(), 'neonconductor-persistence-'));
-        tempDirs.push(tempDir);
-        const dbPath = path.join(tempDir, 'runtime.sqlite');
-
-        initializePersistence({
-            dbPath,
-            resetDb: true,
-            forceReinitialize: true,
-        });
-
-        const caller = createCaller();
-        const profileId = getDefaultProfileId();
-        const thread = await caller.conversation.createThread({
-            profileId,
-            scope: 'detached',
-            title: 'Reset Me',
-        });
-        const created = await caller.session.create({
-            profileId,
-            threadId: thread.thread.id as `thr_${string}`,
-            kind: 'local',
-        });
-        if (!created.created) {
-            throw new Error(`Expected session creation success, received "${created.reason}".`);
-        }
-
-        closePersistence();
-        rmSync(path.join(tempDir, 'runtime-baseline.version'), { force: true });
-
-        initializePersistence({
-            dbPath,
-            forceReinitialize: true,
-        });
-
-        const nextCaller = createCaller();
-        const listed = await nextCaller.session.list({ profileId });
-
-        expect(listed.sessions).toEqual([]);
-    });
 });

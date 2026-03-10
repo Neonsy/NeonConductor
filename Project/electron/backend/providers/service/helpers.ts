@@ -7,7 +7,6 @@ import {
     type ProviderServiceResult,
 } from '@/app/backend/providers/service/errors';
 import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
-import { buildProviderSecretKey } from '@/app/backend/secrets/providerSecretKeys';
 import { getSecretStore } from '@/app/backend/secrets/store';
 
 export function defaultAuthState(profileId: string, providerId: RuntimeProviderId): ProviderAuthStateRecord {
@@ -42,6 +41,6 @@ export async function resolveSecret(
     providerId: RuntimeProviderId,
     secretKind: 'api_key' | 'access_token'
 ): Promise<string | undefined> {
-    const value = await getSecretStore().get(buildProviderSecretKey(profileId, providerId, secretKind));
+    const value = await getSecretStore().getValue(profileId, providerId, secretKind);
     return value ?? undefined;
 }

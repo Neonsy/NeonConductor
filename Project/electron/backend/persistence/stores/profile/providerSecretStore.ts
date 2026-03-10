@@ -4,9 +4,7 @@ import { getPersistence } from '@/app/backend/persistence/db';
 import { parseEnumValue } from '@/app/backend/persistence/stores/shared/rowParsers';
 import { nowIso } from '@/app/backend/persistence/stores/shared/utils';
 import type { ProviderSecretKindRecord, ProviderSecretRecord } from '@/app/backend/persistence/types';
-import { providerIds } from '@/app/backend/runtime/contracts';
-import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
-import { providerSecretKinds } from '@/app/backend/secrets/providerSecretKeys';
+import { providerIds, providerSecretKinds, type RuntimeProviderId } from '@/app/backend/runtime/contracts';
 
 function mapProviderSecret(row: {
     id: string;
@@ -20,7 +18,6 @@ function mapProviderSecret(row: {
         profileId: row.profile_id,
         providerId: parseEnumValue(row.provider_id, 'provider_secrets.provider_id', providerIds),
         secretKind: parseEnumValue(row.secret_kind, 'provider_secrets.secret_kind', providerSecretKinds),
-        storage: 'database',
         updatedAt: row.updated_at,
     };
 }

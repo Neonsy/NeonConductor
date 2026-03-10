@@ -1,4 +1,10 @@
+import { err, ok, type Result } from 'neverthrow';
+
 import { compressComposerImageInWorker } from '@/web/components/conversation/hooks/composerImageCompressionClient';
+import {
+    composerImageCompressionError,
+    type ComposerImageCompressionError,
+} from '@/web/components/conversation/hooks/composerImageCompressionErrors';
 
 import type { ComposerImageAttachmentInput } from '@/app/backend/runtime/contracts';
 import { readImageMimeType } from '@/app/shared/imageMimeType';
@@ -31,7 +37,15 @@ export interface PreparedComposerImageAttachment {
     previewUrl: string;
 }
 
+type PreparedComposerImageAttachmentResult = Result<PreparedComposerImageAttachment, ComposerImageCompressionError>;
 type DrawableImageSource = ImageBitmap | HTMLImageElement;
+
+interface LoadedDrawableImage {
+    source: DrawableImageSource;
+    width: number;
+    height: number;
+    release: () => void;
+}
 
 type CanvasSurface =
     | {
@@ -46,6 +60,10 @@ type CanvasSurface =
       };
 
 type ReadableCanvasContext = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
+
+function createCanvasUnavailableError(message: string): ComposerImageCompressionError {
+    return composerImageCompressionError('canvas_unavailable', message);
+}
 
 function releaseCanvas(surface: CanvasSurface): void {
     surface.canvas.width = 0;
@@ -74,52 +92,70 @@ function createBlobPreviewUrl(attachment: ComposerImageAttachmentInput): string 
     return URL.createObjectURL(blob);
 }
 
-async function loadImageElement(file: File): Promise<HTMLImageElement> {
+async function loadImageElement(file: File): Promise<Result<HTMLImageElement, ComposerImageCompressionError>> {
     const objectUrl = URL.createObjectURL(file);
 
     try {
-        const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const image = await new Promise<
+            { status: 'success'; value: HTMLImageElement } | { status: 'error'; message: string }
+        >((resolve) => {
             const element = new Image();
             element.onload = () => {
-                resolve(element);
+                resolve({
+                    status: 'success',
+                    value: element,
+                });
             };
             element.onerror = () => {
-                reject(new Error(`Failed to decode image "${file.name}".`));
+                resolve({
+                    status: 'error',
+                    message: `Failed to decode image "${file.name}".`,
+                });
             };
             element.src = objectUrl;
         });
 
-        return image;
+        return image.status === 'success'
+            ? ok(image.value)
+            : err(composerImageCompressionError('decode_failed', image.message));
     } finally {
         URL.revokeObjectURL(objectUrl);
     }
 }
 
-async function loadDrawableImage(file: File): Promise<{
-    source: DrawableImageSource;
-    width: number;
-    height: number;
-    release: () => void;
-}> {
+async function loadDrawableImage(file: File): Promise<Result<LoadedDrawableImage, ComposerImageCompressionError>> {
     if (typeof createImageBitmap === 'function') {
-        const imageBitmap = await createImageBitmap(file);
-        return {
-            source: imageBitmap,
-            width: imageBitmap.width,
-            height: imageBitmap.height,
-            release: () => {
-                imageBitmap.close();
-            },
-        };
+        try {
+            const imageBitmap = await createImageBitmap(file);
+            return ok({
+                source: imageBitmap,
+                width: imageBitmap.width,
+                height: imageBitmap.height,
+                release: () => {
+                    imageBitmap.close();
+                },
+            });
+        } catch (error) {
+            return err(
+                composerImageCompressionError(
+                    'decode_failed',
+                    error instanceof Error ? error.message : `Failed to decode image "${file.name}".`
+                )
+            );
+        }
     }
 
-    const image = await loadImageElement(file);
-    return {
-        source: image,
-        width: image.naturalWidth,
-        height: image.naturalHeight,
+    const imageResult = await loadImageElement(file);
+    if (imageResult.isErr()) {
+        return err(imageResult.error);
+    }
+
+    return ok({
+        source: imageResult.value,
+        width: imageResult.value.naturalWidth,
+        height: imageResult.value.naturalHeight,
         release: () => {},
-    };
+    });
 }
 
 function fitDimensions(width: number, height: number, maxEdge: number): { width: number; height: number } {
@@ -141,19 +177,23 @@ function downscaleDimensions(width: number, height: number): { width: number; he
     };
 }
 
-function createCanvasSurface(width: number, height: number): CanvasSurface {
+function createCanvasSurface(width: number, height: number): Result<CanvasSurface, ComposerImageCompressionError> {
     if (typeof OffscreenCanvas !== 'undefined') {
         const canvas = new OffscreenCanvas(width, height);
         const context = canvas.getContext('2d');
         if (!context) {
-            throw new Error('Image compression could not acquire an offscreen 2D canvas context.');
+            return err(createCanvasUnavailableError('Image compression could not acquire an offscreen 2D canvas context.'));
         }
 
-        return {
+        return ok({
             kind: 'offscreen',
             canvas,
             context,
-        };
+        });
+    }
+
+    if (typeof document === 'undefined') {
+        return err(createCanvasUnavailableError('Image compression could not acquire a DOM canvas context.'));
     }
 
     const canvas = document.createElement('canvas');
@@ -161,24 +201,28 @@ function createCanvasSurface(width: number, height: number): CanvasSurface {
     canvas.height = height;
     const context = canvas.getContext('2d');
     if (!context) {
-        throw new Error('Image compression could not acquire a 2D canvas context.');
+        return err(createCanvasUnavailableError('Image compression could not acquire a 2D canvas context.'));
     }
 
-    return {
+    return ok({
         kind: 'dom',
         canvas,
         context,
-    };
+    });
 }
 
 function renderToCanvas(
     image: DrawableImageSource,
     width: number,
     height: number
-): CanvasSurface {
+): Result<CanvasSurface, ComposerImageCompressionError> {
     const surface = createCanvasSurface(width, height);
-    surface.context.drawImage(image, 0, 0, width, height);
-    return surface;
+    if (surface.isErr()) {
+        return err(surface.error);
+    }
+
+    surface.value.context.drawImage(image, 0, 0, width, height);
+    return ok(surface.value);
 }
 
 function hasTransparentPixels(context: ReadableCanvasContext, width: number, height: number): boolean {
@@ -196,23 +240,34 @@ async function canvasToBlob(
     surface: CanvasSurface,
     mimeType: 'image/jpeg' | 'image/png',
     quality?: number
-): Promise<Blob> {
-    if (surface.kind === 'offscreen') {
-        return surface.canvas.convertToBlob({
-            type: mimeType,
-            ...(quality !== undefined ? { quality } : {}),
+): Promise<Result<Blob, ComposerImageCompressionError>> {
+    try {
+        if (surface.kind === 'offscreen') {
+            return ok(
+                await surface.canvas.convertToBlob({
+                    type: mimeType,
+                    ...(quality !== undefined ? { quality } : {}),
+                })
+            );
+        }
+
+        const blob = await new Promise<Blob | null>((resolve) => {
+            surface.canvas.toBlob(resolve, mimeType, quality);
         });
+
+        if (!blob) {
+            return err(composerImageCompressionError('encode_failed', 'Image compression could not encode the canvas output.'));
+        }
+
+        return ok(blob);
+    } catch (error) {
+        return err(
+            composerImageCompressionError(
+                'encode_failed',
+                error instanceof Error ? error.message : 'Image compression could not encode the canvas output.'
+            )
+        );
     }
-
-    const blob = await new Promise<Blob | null>((resolve) => {
-        surface.canvas.toBlob(resolve, mimeType, quality);
-    });
-
-    if (!blob) {
-        throw new Error('Image compression could not encode the canvas output.');
-    }
-
-    return blob;
 }
 
 function bufferToBase64(bytes: ArrayBuffer): string {
@@ -238,67 +293,103 @@ async function finalizePreparedAttachment(
     width: number,
     height: number,
     clientId: string
-): Promise<PreparedComposerImageAttachment> {
-    const buffer = await blob.arrayBuffer();
-    const bytesBase64 = bufferToBase64(buffer);
-    const sha256 = await sha256Hex(buffer);
-    const mimeType = readImageMimeType(blob.type);
-    if (!mimeType) {
-        throw new Error('Image compression produced an unsupported image type.');
-    }
+): Promise<PreparedComposerImageAttachmentResult> {
+    try {
+        const buffer = await blob.arrayBuffer();
+        const bytesBase64 = bufferToBase64(buffer);
+        const sha256 = await sha256Hex(buffer);
+        const mimeType = readImageMimeType(blob.type);
+        if (!mimeType) {
+            return err(
+                composerImageCompressionError(
+                    'unsupported_output_type',
+                    'Image compression produced an unsupported image type.'
+                )
+            );
+        }
 
-    return {
-        attachment: {
-            clientId,
-            mimeType,
-            bytesBase64,
-            width,
-            height,
-            sha256,
-        },
-        byteSize: blob.size,
-        previewUrl: createBlobPreviewUrl({
-            clientId,
-            mimeType,
-            bytesBase64,
-            width,
-            height,
-            sha256,
-        }),
-    };
+        return ok({
+            attachment: {
+                clientId,
+                mimeType,
+                bytesBase64,
+                width,
+                height,
+                sha256,
+            },
+            byteSize: blob.size,
+            previewUrl: createBlobPreviewUrl({
+                clientId,
+                mimeType,
+                bytesBase64,
+                width,
+                height,
+                sha256,
+            }),
+        });
+    } catch (error) {
+        return err(
+            composerImageCompressionError(
+                'encode_failed',
+                error instanceof Error ? error.message : 'Image compression failed.'
+            )
+        );
+    }
 }
 
 async function prepareComposerImageAttachmentOnMainThread(
     file: File,
     clientId: string
-): Promise<PreparedComposerImageAttachment> {
+): Promise<PreparedComposerImageAttachmentResult> {
     if (!file.type.startsWith('image/')) {
-        throw new Error(`"${file.name}" is not an image file.`);
+        return err(composerImageCompressionError('invalid_file_type', `"${file.name}" is not an image file.`));
     }
 
-    const loadedImage = await loadDrawableImage(file);
+    const loadedImageResult = await loadDrawableImage(file);
+    if (loadedImageResult.isErr()) {
+        return err(loadedImageResult.error);
+    }
+
+    const loadedImage = loadedImageResult.value;
 
     try {
         let dimensions = fitDimensions(loadedImage.width, loadedImage.height, MAX_IMAGE_EDGE_PX);
         const initialRender = renderToCanvas(loadedImage.source, dimensions.width, dimensions.height);
-        const preservePng = hasTransparentPixels(initialRender.context, dimensions.width, dimensions.height);
-        releaseCanvas(initialRender);
+        if (initialRender.isErr()) {
+            return err(initialRender.error);
+        }
+        const preservePng = hasTransparentPixels(initialRender.value.context, dimensions.width, dimensions.height);
+        releaseCanvas(initialRender.value);
 
         for (;;) {
             const surface = renderToCanvas(loadedImage.source, dimensions.width, dimensions.height);
+            if (surface.isErr()) {
+                return err(surface.error);
+            }
 
             try {
                 if (preservePng) {
-                    const pngBlob = await canvasToBlob(surface, 'image/png');
-                    if (pngBlob.size <= MAX_COMPRESSED_IMAGE_BYTES) {
-                        return await finalizePreparedAttachment(pngBlob, dimensions.width, dimensions.height, clientId);
+                    const pngBlob = await canvasToBlob(surface.value, 'image/png');
+                    if (pngBlob.isErr()) {
+                        return err(pngBlob.error);
+                    }
+                    if (pngBlob.value.size <= MAX_COMPRESSED_IMAGE_BYTES) {
+                        return await finalizePreparedAttachment(
+                            pngBlob.value,
+                            dimensions.width,
+                            dimensions.height,
+                            clientId
+                        );
                     }
                 } else {
                     for (const quality of JPEG_QUALITY_STEPS) {
-                        const jpegBlob = await canvasToBlob(surface, 'image/jpeg', quality);
-                        if (jpegBlob.size <= MAX_COMPRESSED_IMAGE_BYTES) {
+                        const jpegBlob = await canvasToBlob(surface.value, 'image/jpeg', quality);
+                        if (jpegBlob.isErr()) {
+                            return err(jpegBlob.error);
+                        }
+                        if (jpegBlob.value.size <= MAX_COMPRESSED_IMAGE_BYTES) {
                             return await finalizePreparedAttachment(
-                                jpegBlob,
+                                jpegBlob.value,
                                 dimensions.width,
                                 dimensions.height,
                                 clientId
@@ -307,7 +398,7 @@ async function prepareComposerImageAttachmentOnMainThread(
                     }
                 }
             } finally {
-                releaseCanvas(surface);
+                releaseCanvas(surface.value);
             }
 
             const nextDimensions = downscaleDimensions(dimensions.width, dimensions.height);
@@ -324,29 +415,33 @@ async function prepareComposerImageAttachmentOnMainThread(
         loadedImage.release();
     }
 
-    throw new Error(
-        `"${file.name}" could not be compressed below 1.5 MB.`
+    return err(
+        composerImageCompressionError(
+            'size_limit_exceeded',
+            `"${file.name}" could not be compressed below 1.5 MB.`
+        )
     );
 }
 
 export async function prepareComposerImageAttachment(
     file: File,
     clientId: string
-): Promise<PreparedComposerImageAttachment> {
+): Promise<PreparedComposerImageAttachmentResult> {
     if (typeof Worker === 'function') {
-        try {
-            const response = await compressComposerImageInWorker(file, clientId);
-            return {
-                attachment: response.attachment,
-                byteSize: response.byteSize,
-                previewUrl: createBlobPreviewUrl(response.attachment),
-            };
-        } catch {
-            // Fall back to the main thread path when workers or worker-side APIs are unavailable.
+        const workerResult = await compressComposerImageInWorker(file, clientId);
+        if (workerResult.isOk()) {
+            return ok({
+                attachment: workerResult.value.attachment,
+                byteSize: workerResult.value.byteSize,
+                previewUrl: createBlobPreviewUrl(workerResult.value.attachment),
+            });
+        }
+        if (workerResult.error.code !== 'worker_unavailable') {
+            return err(workerResult.error);
         }
     }
 
-    return prepareComposerImageAttachmentOnMainThread(file, clientId);
+    return await prepareComposerImageAttachmentOnMainThread(file, clientId);
 }
 
 export function createPendingImage(file: File): ComposerPendingImage {

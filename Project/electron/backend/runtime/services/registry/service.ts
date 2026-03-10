@@ -3,6 +3,7 @@ import type {
     ModeDefinitionRecord,
     SkillfileDefinitionRecord,
 } from '@/app/backend/persistence/types';
+import { InvariantError } from '@/app/backend/runtime/services/common/fatalErrors';
 import { pickActiveMode, toActiveModeKey } from '@/app/backend/runtime/services/mode/selection';
 import { buildDiscoveredAssets, replaceDiscoveredModes, replaceDiscoveredRulesets, replaceDiscoveredSkillfiles } from '@/app/backend/runtime/services/registry/discovery';
 import { resolveRegistryPaths } from '@/app/backend/runtime/services/registry/filesystem';
@@ -234,7 +235,7 @@ export async function refreshRegistry(input: {
     const agentModes = resolvedRegistry.resolved.modes.filter((mode) => mode.topLevelTab === 'agent');
     const activeAgentMode = pickActiveMode(agentModes, persistedAgentModeKey, 'agent') ?? agentModes[0];
     if (!activeAgentMode) {
-        throw new Error(`No enabled agent modes found for profile "${input.profileId}".`);
+        throw new InvariantError(`No enabled agent modes found for profile "${input.profileId}".`);
     }
 
     return {

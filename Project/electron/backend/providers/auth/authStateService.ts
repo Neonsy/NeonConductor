@@ -10,8 +10,7 @@ import { errAuthExecution, okAuthExecution, type AuthExecutionResult } from '@/a
 import { writeProviderSecretValue } from '@/app/backend/providers/auth/providerSecrets';
 import type { FlowAuthMethod } from '@/app/backend/providers/auth/types';
 import { assertSupportedProviderId } from '@/app/backend/providers/registry';
-import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
-import { buildProviderSecretKey, providerSecretKinds } from '@/app/backend/secrets/providerSecretKeys';
+import { providerSecretKinds, type RuntimeProviderId } from '@/app/backend/runtime/contracts';
 import { getSecretStore } from '@/app/backend/secrets/store';
 
 function nowIso(): string {
@@ -96,9 +95,7 @@ export async function clearAuth(
     const existingProviderSecrets = await providerSecretStore.listByProfileAndProvider(profileId, providerId);
     const store = getSecretStore();
     await Promise.allSettled(
-        providerSecretKinds.map((secretKind) =>
-            store.delete(buildProviderSecretKey(profileId, providerId, secretKind))
-        )
+        providerSecretKinds.map((secretKind) => store.deleteValue(profileId, providerId, secretKind))
     );
     await providerAuthFlowStore.cancelPendingByProvider(profileId, providerId);
 
