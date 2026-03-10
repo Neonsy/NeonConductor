@@ -1,5 +1,5 @@
 import { RouterProvider } from '@tanstack/react-router';
-import { initLogger, log } from 'evlog';
+import { initLogger } from 'evlog';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
@@ -7,7 +7,6 @@ import DevTools from '@/web/components/utils/devtools';
 import { initializePrivacyMode } from '@/web/lib/privacy/privacy';
 import Providers from '@/web/lib/providers';
 import { initializeThemeClass } from '@/web/lib/theme/theme';
-import { trpcClient } from '@/web/lib/trpcClient';
 import { router } from '@/web/router';
 import '@/web/styles/index.css';
 
@@ -29,16 +28,6 @@ if (isDev) {
     });
 }
 
-function waitForFirstPaint(): Promise<void> {
-    return new Promise((resolve) => {
-        requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-                resolve();
-            });
-        });
-    });
-}
-
 if (rootElement) {
     createRoot(rootElement).render(
         <Providers>
@@ -49,17 +38,4 @@ if (rootElement) {
             {isDev && <DevTools router={router} />}
         </Providers>
     );
-
-    // Signal main after React has had a chance to paint the first frame.
-    void waitForFirstPaint()
-        .then(() => trpcClient.system.signalReady.mutate())
-        .catch((error: unknown) => {
-            if (isDev) {
-                log.warn({
-                    tag: 'window',
-                    message: 'Failed to send ready signal.',
-                    ...(error instanceof Error ? { error: error.message } : { error: String(error) }),
-                });
-            }
-        });
 }

@@ -18,6 +18,9 @@ const {
     appLogInfoSpy,
     attachCspHeadersSpy,
     createMainWindowSpy,
+    createSplashWindowSpy,
+    updateSplashWindowPhaseSpy,
+    registerBootWindowsSpy,
     createIPCHandlerInputSpy,
     attachWindowSpy,
     runtimeEnvState,
@@ -43,6 +46,9 @@ const {
     appLogInfoSpy: vi.fn(),
     attachCspHeadersSpy: vi.fn(),
     createMainWindowSpy: vi.fn(() => ({ id: 'window-main' })),
+    createSplashWindowSpy: vi.fn(() => ({ id: 'window-splash' })),
+    updateSplashWindowPhaseSpy: vi.fn(() => Promise.resolve()),
+    registerBootWindowsSpy: vi.fn(),
     createIPCHandlerInputSpy: vi.fn((input: unknown) => input),
     attachWindowSpy: vi.fn(),
     runtimeEnvState: {
@@ -140,6 +146,15 @@ vi.mock('@/app/main/window/factory', () => ({
     createMainWindow: createMainWindowSpy,
 }));
 
+vi.mock('@/app/main/window/splash', () => ({
+    createSplashWindow: createSplashWindowSpy,
+    updateSplashWindowPhase: updateSplashWindowPhaseSpy,
+}));
+
+vi.mock('@/app/main/window/bootCoordinator', () => ({
+    registerBootWindows: registerBootWindowsSpy,
+}));
+
 describe('bootstrapMainProcess', () => {
     beforeEach(() => {
         appEventHandlers.clear();
@@ -189,7 +204,35 @@ describe('bootstrapMainProcess', () => {
         expect(process.env['NEONCONDUCTOR_PERSISTENCE_CHANNEL']).toBe('development');
         expect(initializeSecretStoreSpy).toHaveBeenCalled();
         expect(attachCspHeadersSpy).toHaveBeenCalled();
+        expect(createSplashWindowSpy).toHaveBeenCalledWith({
+            isDev: true,
+            mainDirname: 'M:\\Neonsy\\Projects\\NeonConductor\\Project\\electron\\main',
+            devServerUrl: 'http://localhost:5173',
+        });
         expect(createMainWindowSpy).toHaveBeenCalled();
+        expect(createSplashWindowSpy.mock.invocationCallOrder[0]).toBeLessThan(
+            createMainWindowSpy.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY
+        );
+        expect(registerBootWindowsSpy).toHaveBeenCalledWith({
+            mainWindow: { id: 'window-main' },
+            splashWindow: { id: 'window-splash' },
+            onDelayedSplash: expect.any(Function),
+        });
+        const delayedSplashRegistration = registerBootWindowsSpy.mock.calls[0]?.[0] as
+            | {
+                  onDelayedSplash: () => void;
+              }
+            | undefined;
+        delayedSplashRegistration?.onDelayedSplash();
+        expect(updateSplashWindowPhaseSpy).toHaveBeenCalledWith(
+            { id: 'window-splash' },
+            {
+                isDev: true,
+                mainDirname: 'M:\\Neonsy\\Projects\\NeonConductor\\Project\\electron\\main',
+                devServerUrl: 'http://localhost:5173',
+            },
+            'delayed'
+        );
         expect(registerWindowStateBridgeSpy).toHaveBeenCalledWith({ id: 'window-main' });
         expect(createIPCHandlerInputSpy).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -239,5 +282,9 @@ describe('bootstrapMainProcess', () => {
         expect(process.env['NEONCONDUCTOR_USER_DATA_PATH']).toBe(defaultUserDataPath);
         expect(process.env['NEONCONDUCTOR_RUNTIME_NAMESPACE']).toBe('beta');
         expect(process.env['NEONCONDUCTOR_PERSISTENCE_CHANNEL']).toBe('beta');
+        expect(createSplashWindowSpy).toHaveBeenCalledWith({
+            isDev: false,
+            mainDirname: 'M:\\Neonsy\\Projects\\NeonConductor\\Project\\electron\\main',
+        });
     });
 });

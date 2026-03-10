@@ -10,6 +10,12 @@
 
     // Single icon source - electron-builder converts to .ico/.icns automatically
     icon: 'src/assets/appicon.png',
+    extraResources: [
+        {
+            from: 'src/assets/appicon.png',
+            to: 'assets/appicon.png',
+        },
+    ],
 
     directories: {
         output: 'release/${version}',

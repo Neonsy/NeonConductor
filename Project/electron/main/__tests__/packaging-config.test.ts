@@ -10,6 +10,8 @@ describe('electron-builder packaging config', () => {
         const contents = readFileSync(configPath, 'utf8');
 
         expect(contents).toContain("files: ['dist', 'dist-electron']");
+        expect(contents).toContain("from: 'src/assets/appicon.png'");
+        expect(contents).toContain("to: 'assets/appicon.png'");
     });
 
     it('uses explicit cross-platform artifact names for release publishing', () => {

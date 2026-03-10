@@ -1,10 +1,28 @@
 import { ConversationShell } from '@/web/components/conversation/shell';
+import {
+    INITIAL_CONVERSATION_SHELL_BOOT_CHROME_READINESS,
+    isWorkspaceBootReady,
+} from '@/web/components/runtime/bootReadiness';
+import { useRendererBootReadySignal } from '@/web/components/runtime/useRendererBootReadySignal';
 import { useWorkspaceSurfaceController } from '@/web/components/runtime/workspaceSurfaceController';
 import { WorkspaceSurfaceHeader } from '@/web/components/runtime/workspaceSurfaceHeader';
 import { SettingsSheet } from '@/web/components/settings/settingsSheet';
+import { useState } from 'react';
 
 export function WorkspaceSurface() {
     const controller = useWorkspaceSurfaceController();
+    const [conversationShellBootReadiness, setConversationShellBootReadiness] = useState(
+        INITIAL_CONVERSATION_SHELL_BOOT_CHROME_READINESS
+    );
+    const isBootReady = isWorkspaceBootReady({
+        hasResolvedProfile: Boolean(controller.resolvedProfileId),
+        hasResolvedInitialMode: controller.hasResolvedInitialMode,
+        ...conversationShellBootReadiness,
+        hasInteractiveShell:
+            Boolean(controller.resolvedProfileId) && conversationShellBootReadiness.shellBootstrapSettled,
+    });
+
+    useRendererBootReadySignal(isBootReady);
 
     return (
         <section className='flex min-h-0 flex-1 flex-col'>
@@ -35,6 +53,7 @@ export function WorkspaceSurface() {
                         modeKey={controller.activeModeKey}
                         onTopLevelTabChange={controller.setTopLevelTab}
                         onSelectedWorkspaceFingerprintChange={controller.setCurrentWorkspaceFingerprint}
+                        onBootChromeReadyChange={setConversationShellBootReadiness}
                     />
                 ) : (
                     <div className='text-muted-foreground flex h-full items-center justify-center text-sm'>

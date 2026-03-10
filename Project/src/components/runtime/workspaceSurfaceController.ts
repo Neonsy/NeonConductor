@@ -30,6 +30,7 @@ export function useWorkspaceSurfaceController() {
         setCurrentWorkspaceFingerprint,
         modes: modeState.modes,
         activeModeKey: modeState.activeModeKey,
+        hasResolvedInitialMode: modeState.hasResolvedInitialMode,
         profileSetActiveMutation: profileState.profileSetActiveMutation,
         setActiveModeMutation: modeState.setActiveModeMutation,
         setResolvedProfile: profileState.setResolvedProfile,

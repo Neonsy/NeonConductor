@@ -43,6 +43,8 @@ export function useWorkspaceModeState(input: {
     return {
         modes: modeActiveQuery.data?.modes ?? modeListQuery.data?.modes ?? [],
         activeModeKey: resolveWorkspaceActiveModeKey(input.topLevelTab, modeActiveQuery.data?.activeMode.modeKey),
+        hasResolvedInitialMode:
+            Boolean(input.resolvedProfileId) && (modeActiveQuery.isSuccess || modeListQuery.isSuccess),
         setActiveModeMutation,
         selectMode: async (modeKey: string) => {
             if (!modeKey || setActiveModeMutation.isPending || !input.resolvedProfileId) {

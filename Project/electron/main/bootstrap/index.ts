@@ -11,7 +11,9 @@ import { appLog, flushAppLogger, initAppLogger } from '@/app/main/logging';
 import { devServerUrl, getMainDirname, isDev } from '@/app/main/runtime/env';
 import { resolveDesktopStorage, resolveDesktopStoragePaths } from '@/app/main/runtime/storage';
 import { attachCspHeaders } from '@/app/main/security/cspHeaders';
+import { registerBootWindows } from '@/app/main/window/bootCoordinator';
 import { createMainWindow } from '@/app/main/window/factory';
+import { createSplashWindow, updateSplashWindowPhase } from '@/app/main/window/splash';
 
 interface BootstrapDeps {
     createContext: (opts: CreateContextOptions) => Promise<Context>;
@@ -45,6 +47,19 @@ export function bootstrapMainProcess(deps: BootstrapDeps, importMetaUrl: string)
         isDev,
         ...(devServerUrl ? { devServerUrl } : {}),
     };
+
+    function createBootManagedMainWindow(): BrowserWindow {
+        const splashWindow = createSplashWindow(runtimeWindowOptions);
+        const nextMainWindow = createMainWindow(runtimeWindowOptions);
+        registerBootWindows({
+            mainWindow: nextMainWindow,
+            splashWindow,
+            onDelayedSplash: () => {
+                void updateSplashWindowPhase(splashWindow, runtimeWindowOptions, 'delayed');
+            },
+        });
+        return nextMainWindow;
+    }
 
     void app
         .whenReady()
@@ -89,7 +104,7 @@ export function bootstrapMainProcess(deps: BootstrapDeps, importMetaUrl: string)
             // Set up Content Security Policy via HTTP headers.
             attachCspHeaders(runtimeCspOptions);
 
-            mainWindow = createMainWindow(runtimeWindowOptions);
+            mainWindow = createBootManagedMainWindow();
             registerWindowStateBridge(mainWindow);
 
             // Wire up tRPC to handle IPC calls from the renderer
@@ -123,9 +138,7 @@ export function bootstrapMainProcess(deps: BootstrapDeps, importMetaUrl: string)
     // macOS: re-create window when dock icon clicked with no windows open
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) {
-            mainWindow = createMainWindow({
-                ...runtimeWindowOptions,
-            });
+            mainWindow = createBootManagedMainWindow();
             registerWindowStateBridge(mainWindow);
         }
     });

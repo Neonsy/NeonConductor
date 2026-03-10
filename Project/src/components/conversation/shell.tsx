@@ -24,6 +24,7 @@ import { useRuntimeEventStreamStore } from '@/web/lib/runtime/eventStream';
 import { trpc } from '@/web/trpc/client';
 
 import type { TopLevelTab } from '@/app/backend/runtime/contracts';
+import type { ConversationShellBootChromeReadiness } from '@/web/components/runtime/bootReadiness';
 
 interface ConversationShellProps {
     profileId: string;
@@ -31,6 +32,7 @@ interface ConversationShellProps {
     modeKey: string;
     onTopLevelTabChange: (nextTab: TopLevelTab) => void;
     onSelectedWorkspaceFingerprintChange?: (workspaceFingerprint: string | undefined) => void;
+    onBootChromeReadyChange?: (readiness: ConversationShellBootChromeReadiness) => void;
 }
 
 export function ConversationShell({
@@ -39,6 +41,7 @@ export function ConversationShell({
     modeKey,
     onTopLevelTabChange,
     onSelectedWorkspaceFingerprintChange,
+    onBootChromeReadyChange,
 }: ConversationShellProps) {
     const [tabSwitchNotice, setTabSwitchNotice] = useState<string | undefined>(undefined);
     const [contextFeedbackMessage, setContextFeedbackMessage] = useState<string | undefined>(undefined);
@@ -211,6 +214,33 @@ export function ConversationShell({
     useEffect(() => {
         onSelectedWorkspaceFingerprintChange?.(shellViewModel.selectedThread?.workspaceFingerprint);
     }, [onSelectedWorkspaceFingerprintChange, shellViewModel.selectedThread?.workspaceFingerprint]);
+
+    useEffect(() => {
+        onBootChromeReadyChange?.({
+            shellBootstrapSettled: queries.shellBootstrapQuery.status === 'success',
+            bucketListSettled: queries.listBucketsQuery.status === 'success',
+            tagListSettled: queries.listTagsQuery.status === 'success',
+            threadListSettled: queries.listThreadsQuery.status === 'success',
+            sessionListSettled: queries.sessionsQuery.status === 'success',
+        });
+
+        return () => {
+            onBootChromeReadyChange?.({
+                shellBootstrapSettled: false,
+                bucketListSettled: false,
+                tagListSettled: false,
+                threadListSettled: false,
+                sessionListSettled: false,
+            });
+        };
+    }, [
+        onBootChromeReadyChange,
+        queries.listBucketsQuery.status,
+        queries.listTagsQuery.status,
+        queries.listThreadsQuery.status,
+        queries.sessionsQuery.status,
+        queries.shellBootstrapQuery.status,
+    ]);
 
     const routingBadge = useConversationShellRoutingBadge({
         profileId,

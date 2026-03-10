@@ -1,22 +1,11 @@
 /**
- * Signals that the renderer is ready and shows the window.
- * Called after React has rendered to prevent blank flash.
+ * Signals that the renderer is ready and reveals the main window.
  */
 
 import type { BrowserWindow } from 'electron';
 
+import { completeBootWindowHandoff } from '@/app/main/window/bootCoordinator';
+
 export function signalReady(win: BrowserWindow | null): { success: boolean } {
-    if (!win) {
-        return { success: false };
-    }
-
-    // Maximize and show the window now that content is ready
-    if (!win.isVisible()) {
-        win.show();
-    }
-    if (!win.isMaximized()) {
-        win.maximize();
-    }
-
-    return { success: true };
+    return completeBootWindowHandoff(win);
 }
