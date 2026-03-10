@@ -128,42 +128,19 @@ function persistState(profileId: string, input: StoredConversationUiState): void
 }
 
 export function useConversationUiState(profileId: string): ConversationUiState {
-    const stored = readStoredState(profileId);
+    const [storedState] = useState<StoredConversationUiState>(() => readStoredState(profileId));
 
-    const [scopeFilter, setScopeFilter] = useState<ScopeFilter>(stored.scopeFilter ?? 'all');
-    const [workspaceFilter, setWorkspaceFilter] = useState<string | undefined>(stored.workspaceFilter);
-    const [sort, setSort] = useState<ThreadSort | null>(stored.sort ?? null);
-    const [showAllModes, setShowAllModes] = useState<boolean>(stored.showAllModes ?? false);
-    const [groupView, setGroupView] = useState<ThreadGroupView>(stored.groupView ?? 'workspace');
-    const [selectedThreadId, setSelectedThreadId] = useState<string | undefined>(stored.selectedThreadId);
-    const [selectedSessionId, setSelectedSessionId] = useState<string | undefined>(stored.selectedSessionId);
-    const [selectedRunId, setSelectedRunId] = useState<string | undefined>(stored.selectedRunId);
-    const [selectedTagIds, setSelectedTagIds] = useState<string[]>(stored.selectedTagIds ?? []);
-    const [hydratedProfileId, setHydratedProfileId] = useState(profileId);
-
-    useEffect(() => {
-        if (profileId === hydratedProfileId) {
-            return;
-        }
-
-        const nextStored = readStoredState(profileId);
-        setScopeFilter(nextStored.scopeFilter ?? 'all');
-        setWorkspaceFilter(nextStored.workspaceFilter);
-        setSort(nextStored.sort ?? null);
-        setShowAllModes(nextStored.showAllModes ?? false);
-        setGroupView(nextStored.groupView ?? 'workspace');
-        setSelectedThreadId(nextStored.selectedThreadId);
-        setSelectedSessionId(nextStored.selectedSessionId);
-        setSelectedRunId(nextStored.selectedRunId);
-        setSelectedTagIds(nextStored.selectedTagIds ?? []);
-        setHydratedProfileId(profileId);
-    }, [hydratedProfileId, profileId]);
+    const [scopeFilter, setScopeFilter] = useState<ScopeFilter>(storedState.scopeFilter ?? 'all');
+    const [workspaceFilter, setWorkspaceFilter] = useState<string | undefined>(storedState.workspaceFilter);
+    const [sort, setSort] = useState<ThreadSort | null>(storedState.sort ?? null);
+    const [showAllModes, setShowAllModes] = useState<boolean>(storedState.showAllModes ?? false);
+    const [groupView, setGroupView] = useState<ThreadGroupView>(storedState.groupView ?? 'workspace');
+    const [selectedThreadId, setSelectedThreadId] = useState<string | undefined>(storedState.selectedThreadId);
+    const [selectedSessionId, setSelectedSessionId] = useState<string | undefined>(storedState.selectedSessionId);
+    const [selectedRunId, setSelectedRunId] = useState<string | undefined>(storedState.selectedRunId);
+    const [selectedTagIds, setSelectedTagIds] = useState<string[]>(storedState.selectedTagIds ?? []);
 
     useEffect(() => {
-        if (hydratedProfileId !== profileId) {
-            return;
-        }
-
         persistState(profileId, {
             scopeFilter,
             ...(workspaceFilter ? { workspaceFilter } : {}),
@@ -186,7 +163,6 @@ export function useConversationUiState(profileId: string): ConversationUiState {
         selectedSessionId,
         selectedRunId,
         selectedTagIds,
-        hydratedProfileId,
     ]);
 
     return {

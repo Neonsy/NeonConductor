@@ -1,6 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 import { createProfileSettingsActions } from '@/web/components/settings/profileSettings/actions';
+import {
+    resolveProfileRenameValue,
+    type ProfileRenameDraft,
+} from '@/web/components/settings/profileSettings/drafts';
 import { resolveSelectedProfileId } from '@/web/components/settings/profileSettings/selection';
 import { PROGRESSIVE_QUERY_OPTIONS } from '@/web/lib/query/progressiveQueryOptions';
 import { invalidateRuntimeResetQueries } from '@/web/lib/runtime/invalidation/queryInvalidation';
@@ -15,8 +19,10 @@ export function useProfileSettingsController(input: {
 }) {
     const [selectedProfileId, setSelectedProfileId] = useState<string | undefined>(undefined);
     const [newProfileName, setNewProfileName] = useState('');
-    const [renameValue, setRenameValue] = useState('');
-    const [threadTitleAiModelInput, setThreadTitleAiModelInput] = useState('');
+    const [renameDraft, setRenameDraft] = useState<ProfileRenameDraft | undefined>(undefined);
+    const [threadTitleAiModelDraft, setThreadTitleAiModelDraft] = useState<
+        { profileId: string; value: string } | undefined
+    >(undefined);
     const [statusMessage, setStatusMessage] = useState<string | undefined>(undefined);
     const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
     const [confirmFactoryResetOpen, setConfirmFactoryResetOpen] = useState(false);
@@ -41,16 +47,15 @@ export function useProfileSettingsController(input: {
     });
 
     const profiles = profilesQuery.data?.profiles ?? [];
-
-    useEffect(() => {
-        const nextSelectedProfileId = resolveSelectedProfileId(profiles, selectedProfileId, input.activeProfileId);
-        if (nextSelectedProfileId !== selectedProfileId) {
-            setSelectedProfileId(nextSelectedProfileId);
-        }
-    }, [input.activeProfileId, profiles, selectedProfileId]);
-
-    const selectedProfile = selectedProfileId ? profiles.find((profile) => profile.id === selectedProfileId) : undefined;
-    const selectedProfileIdForSettings = selectedProfileId ?? input.activeProfileId;
+    const resolvedSelectedProfileId = resolveSelectedProfileId(profiles, selectedProfileId, input.activeProfileId);
+    const selectedProfile = resolvedSelectedProfileId
+        ? profiles.find((profile) => profile.id === resolvedSelectedProfileId)
+        : undefined;
+    const selectedProfileIdForSettings = resolvedSelectedProfileId ?? input.activeProfileId;
+    const renameValue = resolveProfileRenameValue({
+        selectedProfile,
+        renameDraft,
+    });
 
     function updateProfileList(
         updater: (profiles: ProfileRecord[]) => ProfileRecord[]
@@ -183,6 +188,10 @@ export function useProfileSettingsController(input: {
             );
         },
     });
+    const threadTitleAiModelInput =
+        threadTitleAiModelDraft?.profileId === selectedProfileIdForSettings
+            ? threadTitleAiModelDraft.value
+            : threadTitlePreferenceQuery.data?.aiModel ?? '';
     const setEditPreference = async (input: {
         profileId: string;
         value: 'ask' | 'truncate' | 'branch';
@@ -258,15 +267,6 @@ export function useProfileSettingsController(input: {
         },
     });
 
-    useEffect(() => {
-        setRenameValue(selectedProfile?.name ?? '');
-    }, [selectedProfile?.id, selectedProfile?.name]);
-
-    useEffect(() => {
-        const aiModel = threadTitlePreferenceQuery.data?.aiModel ?? '';
-        setThreadTitleAiModelInput(aiModel);
-    }, [threadTitlePreferenceQuery.data?.aiModel, threadTitlePreferenceQuery.data?.mode]);
-
     const actions = createProfileSettingsActions({
         activeProfileId: input.activeProfileId,
         selectedProfile,
@@ -287,6 +287,7 @@ export function useProfileSettingsController(input: {
             mutateAsync: setThreadTitlePreference,
         },
         setNewProfileName,
+        setRenameDraft,
         setSelectedProfileId,
         setStatusMessage,
         setConfirmDeleteOpen,
@@ -321,7 +322,7 @@ export function useProfileSettingsController(input: {
                   : ('info' as const),
         profiles,
         selectedProfile,
-        selectedProfileId,
+        selectedProfileId: resolvedSelectedProfileId,
         newProfileName,
         renameValue,
         threadTitleAiModelInput,
@@ -349,8 +350,26 @@ export function useProfileSettingsController(input: {
             setStatusMessage(undefined);
         },
         setNewProfileName,
-        setRenameValue,
-        setThreadTitleAiModelInput,
+        setRenameValue: (value: string) => {
+            setRenameDraft(
+                selectedProfileIdForSettings
+                    ? {
+                          profileId: selectedProfileIdForSettings,
+                          value,
+                      }
+                    : undefined
+            );
+        },
+        setThreadTitleAiModelInput: (value: string) => {
+            setThreadTitleAiModelDraft(
+                selectedProfileIdForSettings
+                    ? {
+                          profileId: selectedProfileIdForSettings,
+                          value,
+                      }
+                    : undefined
+            );
+        },
         setStatusMessage,
         setConfirmDeleteOpen,
         setConfirmFactoryResetOpen,

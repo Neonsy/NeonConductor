@@ -5,7 +5,6 @@ import { resetProviderSettingsState } from '@/web/components/settings/providerSe
 import { useKiloRoutingDraft } from '@/web/components/settings/providerSettings/hooks/useKiloRoutingDraft';
 import { useProviderSettingsAuthPolling } from '@/web/components/settings/providerSettings/hooks/useProviderSettingsAuthPolling';
 import { useProviderSettingsMutations } from '@/web/components/settings/providerSettings/hooks/useProviderSettingsMutations';
-import { useProviderSettingsQueries } from '@/web/components/settings/providerSettings/hooks/useProviderSettingsQueries';
 import { prefetchProviderSettingsData } from '@/web/components/settings/providerSettings/providerSettingsPrefetch';
 import { resolveSelectedModelId, resolveSelectedProviderId } from '@/web/components/settings/providerSettings/selection';
 import type {
@@ -13,29 +12,135 @@ import type {
     ProviderAuthStateView,
     ProviderListItem,
 } from '@/web/components/settings/providerSettings/types';
+import { PROGRESSIVE_QUERY_OPTIONS } from '@/web/lib/query/progressiveQueryOptions';
 import { trpc } from '@/web/trpc/client';
 
 import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
 
 export function useProviderSettingsController(profileId: string) {
     const utils = trpc.useUtils();
-    const [selectedProviderId, setSelectedProviderId] = useState<RuntimeProviderId | undefined>(undefined);
-    const [selectedModelId, setSelectedModelId] = useState('');
+    const [requestedProviderId, setRequestedProviderId] = useState<RuntimeProviderId | undefined>(undefined);
+    const [requestedModelId, setRequestedModelId] = useState('');
     const [apiKeyInput, setApiKeyInput] = useState('');
     const [activeAuthFlow, setActiveAuthFlow] = useState<ActiveAuthFlow | undefined>(undefined);
     const [statusMessage, setStatusMessage] = useState<string | undefined>(undefined);
 
-    const queries = useProviderSettingsQueries({
-        profileId,
+    const providersQuery = trpc.provider.listProviders.useQuery(
+        { profileId },
+        PROGRESSIVE_QUERY_OPTIONS
+    );
+    const defaultsQuery = trpc.provider.getDefaults.useQuery(
+        { profileId },
+        PROGRESSIVE_QUERY_OPTIONS
+    );
+    const providers = providersQuery.data?.providers ?? [];
+    const defaults = defaultsQuery.data?.defaults;
+    const selectedProviderId = resolveSelectedProviderId(providers, requestedProviderId);
+
+    const listModelsQuery = trpc.provider.listModels.useQuery(
+        {
+            profileId,
+            providerId: selectedProviderId ?? 'openai',
+        },
+        {
+            enabled: Boolean(selectedProviderId),
+            ...PROGRESSIVE_QUERY_OPTIONS,
+        }
+    );
+    const authStateQuery = trpc.provider.getAuthState.useQuery(
+        {
+            profileId,
+            providerId: selectedProviderId ?? 'openai',
+        },
+        {
+            enabled: Boolean(selectedProviderId),
+            ...PROGRESSIVE_QUERY_OPTIONS,
+        }
+    );
+
+    const models = listModelsQuery.data?.models ?? [];
+    const selectedModelId = resolveSelectedModelId({
         selectedProviderId,
-        selectedModelId,
+        selectedModelId: requestedModelId,
+        models,
+        defaults,
     });
-    const providers = queries.providersQuery.data?.providers ?? [];
-    const defaults = queries.defaultsQuery.data?.defaults;
+
+    const kiloRoutingPreferenceQuery = trpc.provider.getModelRoutingPreference.useQuery(
+        {
+            profileId,
+            providerId: 'kilo',
+            modelId: selectedModelId,
+        },
+        {
+            enabled: selectedProviderId === 'kilo' && selectedModelId.trim().length > 0,
+            ...PROGRESSIVE_QUERY_OPTIONS,
+        }
+    );
+    const kiloModelProvidersQuery = trpc.provider.listModelProviders.useQuery(
+        {
+            profileId,
+            providerId: 'kilo',
+            modelId: selectedModelId,
+        },
+        {
+            enabled: selectedProviderId === 'kilo' && selectedModelId.trim().length > 0,
+            ...PROGRESSIVE_QUERY_OPTIONS,
+        }
+    );
+    const accountContextQuery = trpc.provider.getAccountContext.useQuery(
+        {
+            profileId,
+            providerId: selectedProviderId ?? 'kilo',
+        },
+        {
+            enabled: selectedProviderId === 'kilo',
+            ...PROGRESSIVE_QUERY_OPTIONS,
+        }
+    );
+    const usageSummaryQuery = trpc.provider.getUsageSummary.useQuery(
+        {
+            profileId,
+        },
+        {
+            enabled: Boolean(selectedProviderId),
+            ...PROGRESSIVE_QUERY_OPTIONS,
+        }
+    );
+    const openAISubscriptionUsageQuery = trpc.provider.getOpenAISubscriptionUsage.useQuery(
+        {
+            profileId,
+        },
+        {
+            enabled: selectedProviderId === 'openai',
+            ...PROGRESSIVE_QUERY_OPTIONS,
+        }
+    );
+    const openAISubscriptionRateLimitsQuery = trpc.provider.getOpenAISubscriptionRateLimits.useQuery(
+        {
+            profileId,
+        },
+        {
+            enabled: selectedProviderId === 'openai',
+            ...PROGRESSIVE_QUERY_OPTIONS,
+        }
+    );
+
+    const queries = {
+        providersQuery,
+        defaultsQuery,
+        listModelsQuery,
+        authStateQuery,
+        kiloRoutingPreferenceQuery,
+        kiloModelProvidersQuery,
+        accountContextQuery,
+        usageSummaryQuery,
+        openAISubscriptionUsageQuery,
+        openAISubscriptionRateLimitsQuery,
+    };
     const providerItems: ProviderListItem[] = providers;
     const selectedProvider = providers.find((provider) => provider.id === selectedProviderId);
-    const models = queries.listModelsQuery.data?.models ?? [];
-    const kiloModelProviders = queries.kiloModelProvidersQuery.data?.providers ?? [];
+    const kiloModelProviders = kiloModelProvidersQuery.data?.providers ?? [];
 
     useEffect(() => {
         resetProviderSettingsState({
@@ -44,13 +149,6 @@ export function useProviderSettingsController(profileId: string) {
             setStatusMessage,
         });
     }, [profileId]);
-
-    useEffect(() => {
-        const nextProviderId = resolveSelectedProviderId(providers, selectedProviderId);
-        if (nextProviderId && nextProviderId !== selectedProviderId) {
-            setSelectedProviderId(nextProviderId);
-        }
-    }, [providers, selectedProviderId]);
 
     const mutations = useProviderSettingsMutations({
         profileId,
@@ -72,38 +170,26 @@ export function useProviderSettingsController(profileId: string) {
         pollAuth: ignoreMutationResult(mutations.pollAuthMutation.mutateAsync),
     });
 
-    useEffect(() => {
-        const nextModelId = resolveSelectedModelId({
-            selectedProviderId,
-            selectedModelId,
-            models,
-            defaults,
-        });
-        if (nextModelId !== selectedModelId) {
-            setSelectedModelId(nextModelId);
-        }
-    }, [defaults, models, selectedModelId, selectedProviderId]);
-
-    const selectedAuthState: ProviderAuthStateView | undefined = queries.authStateQuery.data?.found
-        ? queries.authStateQuery.data.state
+    const selectedAuthState: ProviderAuthStateView | undefined = authStateQuery.data?.found
+        ? authStateQuery.data.state
         : undefined;
     const kiloAccountContext =
-        queries.accountContextQuery.data?.providerId === 'kilo'
-            ? queries.accountContextQuery.data.kiloAccountContext
+        accountContextQuery.data?.providerId === 'kilo'
+            ? accountContextQuery.data.kiloAccountContext
             : undefined;
-    const selectedProviderUsageSummary = queries.usageSummaryQuery.data?.summaries.find(
+    const selectedProviderUsageSummary = usageSummaryQuery.data?.summaries.find(
         (summary) => summary.providerId === selectedProviderId
     );
     const selectedIsDefaultProvider = defaults?.providerId === selectedProviderId;
     const selectedIsDefaultModel = selectedIsDefaultProvider && defaults?.modelId === selectedModelId;
-    const openAISubscriptionUsage = queries.openAISubscriptionUsageQuery.data?.usage;
-    const openAISubscriptionRateLimits = queries.openAISubscriptionRateLimitsQuery.data?.rateLimits;
+    const openAISubscriptionUsage = openAISubscriptionUsageQuery.data?.usage;
+    const openAISubscriptionRateLimits = openAISubscriptionRateLimitsQuery.data?.rateLimits;
 
     const { kiloRoutingDraft } = useKiloRoutingDraft({
         profileId,
         selectedProviderId,
         selectedModelId,
-        preference: queries.kiloRoutingPreferenceQuery.data?.preference,
+        preference: kiloRoutingPreferenceQuery.data?.preference,
         providerOptions: kiloModelProviders,
         setStatusMessage,
         savePreference: async (saveInput) => {
@@ -118,7 +204,7 @@ export function useProviderSettingsController(profileId: string) {
         activeAuthFlow,
         kiloModelProviderIds: kiloModelProviders.map((provider) => provider.providerId),
         kiloRoutingDraft,
-        setSelectedProviderId,
+        setSelectedProviderId: setRequestedProviderId,
         setStatusMessage,
         mutations: {
             setDefaultMutation: {
@@ -211,7 +297,7 @@ export function useProviderSettingsController(profileId: string) {
                 trpcUtils: utils,
             });
         },
-        setSelectedModelId,
+        setSelectedModelId: setRequestedModelId,
         setApiKeyInput,
         setStatusMessage,
     };

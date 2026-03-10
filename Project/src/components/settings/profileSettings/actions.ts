@@ -1,3 +1,4 @@
+import { type ProfileRenameDraft } from '@/web/components/settings/profileSettings/drafts';
 import {
     getActivateProfileStatusMessage,
     getDeleteProfileStatusMessage,
@@ -49,6 +50,7 @@ export function createProfileSettingsActions(input: {
         }) => Promise<void>;
     };
     setNewProfileName: (value: string) => void;
+    setRenameDraft: (value: ProfileRenameDraft | undefined) => void;
     setSelectedProfileId: (value: string | undefined) => void;
     setStatusMessage: (value: string | undefined) => void;
     setConfirmDeleteOpen: (value: boolean) => void;
@@ -83,6 +85,7 @@ export function createProfileSettingsActions(input: {
                 return;
             }
 
+            input.setRenameDraft(undefined);
             input.updateProfileList((profiles) =>
                 profiles.map((profile) =>
                     profile.id === input.selectedProfile?.id
@@ -112,6 +115,7 @@ export function createProfileSettingsActions(input: {
                 return;
             }
 
+            input.setRenameDraft(undefined);
             input.setSelectedProfileId(result.profile.id);
             input.updateProfileList((profiles) => [...profiles, result.profile]);
         },
@@ -133,6 +137,7 @@ export function createProfileSettingsActions(input: {
                 return;
             }
 
+            input.setRenameDraft(undefined);
             input.onProfileActivated(result.profile.id);
             input.setActiveProfileCache(result.profile.id);
         },
@@ -202,6 +207,7 @@ export function createProfileSettingsActions(input: {
                 input.onProfileActivated(result.activeProfileId);
                 input.setActiveProfileCache(result.activeProfileId);
             }
+            input.setRenameDraft(undefined);
             input.setSelectedProfileId(undefined);
             input.updateProfileList((profiles) => profiles.filter((profile) => profile.id !== input.selectedProfile?.id));
         },

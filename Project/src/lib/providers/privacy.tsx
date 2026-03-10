@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import {
     applyPrivacyMode,
@@ -7,7 +7,6 @@ import {
     redactSensitiveValue,
 } from '@/web/lib/privacy/privacy';
 import { PrivacyContext } from '@/web/lib/privacy/privacyContext';
-import type { PrivacyContextValue } from '@/web/lib/privacy/privacyContext';
 
 import type { ReactNode } from 'react';
 
@@ -20,17 +19,17 @@ export function PrivacyProvider({ children }: { children: ReactNode }): ReactNod
         persistPrivacyMode(state);
     }, [enabled]);
 
-    const value = useMemo<PrivacyContextValue>(
-        () => ({
-            enabled,
-            setEnabled,
-            toggleEnabled: () => {
-                setEnabled((current) => !current);
-            },
-            redactValue: (value, category) => redactSensitiveValue(value, category),
-        }),
-        [enabled]
+    return (
+        <PrivacyContext.Provider
+            value={{
+                enabled,
+                setEnabled,
+                toggleEnabled: () => {
+                    setEnabled((current) => !current);
+                },
+                redactValue: (value, category) => redactSensitiveValue(value, category),
+            }}>
+            {children}
+        </PrivacyContext.Provider>
     );
-
-    return <PrivacyContext.Provider value={value}>{children}</PrivacyContext.Provider>;
 }

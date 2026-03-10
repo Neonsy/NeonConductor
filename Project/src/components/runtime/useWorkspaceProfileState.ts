@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 import { BOOT_CRITICAL_QUERY_OPTIONS } from '@/web/components/runtime/startupQueryOptions';
 import { resolveActiveWorkspaceProfileId } from '@/web/components/runtime/workspaceSurfaceModel';
@@ -19,14 +19,6 @@ export function useWorkspaceProfileState(input: { setTopLevelTab: (value: TopLev
         serverActiveProfileId: activeProfileQuery.data?.activeProfileId,
         profiles,
     });
-
-    useEffect(() => {
-        if (!resolvedProfileId || resolvedProfileId === activeProfileId) {
-            return;
-        }
-
-        setActiveProfileId(resolvedProfileId);
-    }, [activeProfileId, resolvedProfileId]);
 
     const profileSetActiveMutation = trpc.profile.setActive.useMutation({
         onSuccess: (result) => {

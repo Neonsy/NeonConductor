@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import {
     applyResolvedTheme,
@@ -9,7 +9,6 @@ import {
 } from '@/web/lib/theme/theme';
 import type { ResolvedTheme, ThemePreference } from '@/web/lib/theme/theme';
 import { ThemeContext } from '@/web/lib/theme/themeContext';
-import type { ThemeContextValue } from '@/web/lib/theme/themeContext';
 
 import type { ReactNode } from 'react';
 
@@ -46,14 +45,14 @@ export function ThemeProvider({ children }: { children: ReactNode }): ReactNode 
         };
     }, [preference]);
 
-    const value = useMemo<ThemeContextValue>(
-        () => ({
-            preference,
-            resolvedTheme,
-            setPreference: setPreferenceState,
-        }),
-        [preference, resolvedTheme]
+    return (
+        <ThemeContext.Provider
+            value={{
+                preference,
+                resolvedTheme,
+                setPreference: setPreferenceState,
+            }}>
+            {children}
+        </ThemeContext.Provider>
     );
-
-    return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }

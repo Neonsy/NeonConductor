@@ -87,6 +87,7 @@ export function WorkspaceSurface() {
             <div className='min-h-0 flex-1'>
                 {controller.resolvedProfileId ? (
                     <ConversationShell
+                        key={controller.resolvedProfileId}
                         profileId={controller.resolvedProfileId}
                         topLevelTab={controller.topLevelTab}
                         modeKey={controller.activeModeKey}

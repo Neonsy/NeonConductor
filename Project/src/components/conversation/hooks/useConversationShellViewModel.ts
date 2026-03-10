@@ -95,15 +95,11 @@ export function useConversationShellViewModel(input: {
         allMessages: input.queries.messagesQuery.data?.messages ?? [],
         allMessageParts: input.queries.messagesQuery.data?.messageParts ?? [],
         selectedThreadId: input.uiState.selectedThreadId,
-        selectedSessionId: input.uiState.selectedSessionId,
-        selectedRunId: input.uiState.selectedRunId,
-        onSelectedSessionInvalid: () => { input.uiState.setSelectedSessionId(undefined); },
-        onSelectFallbackSession: (sessionId) => { input.uiState.setSelectedSessionId(sessionId); },
-        onSelectedRunInvalid: () => { input.uiState.setSelectedRunId(undefined); },
-        onSelectFallbackRun: (runId) => { input.uiState.setSelectedRunId(runId); },
+        selectedSessionId: isEntityId(input.uiState.selectedSessionId, 'sess') ? input.uiState.selectedSessionId : undefined,
+        selectedRunId: isEntityId(input.uiState.selectedRunId, 'run') ? input.uiState.selectedRunId : undefined,
     });
-    const selectedSession = input.uiState.selectedSessionId
-        ? sessionRunSelection.sessions.find((session) => session.id === input.uiState.selectedSessionId)
+    const selectedSession = sessionRunSelection.selection.resolvedSessionId
+        ? sessionRunSelection.sessions.find((session) => session.id === sessionRunSelection.selection.resolvedSessionId)
         : undefined;
     const selectedManagedWorktree =
         selectedThread?.workspaceFingerprint &&

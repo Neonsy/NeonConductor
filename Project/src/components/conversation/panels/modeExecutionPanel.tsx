@@ -1,30 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 import { MarkdownContent } from '@/web/components/content/markdown/markdownContent';
+import {
+    resolveModeExecutionDraftState,
+    type ModeExecutionDraftState,
+    type ModeExecutionPlanView,
+} from '@/web/components/conversation/panels/modeExecutionPanelState';
 import { Button } from '@/web/components/ui/button';
 
 import type { EntityId, TopLevelTab } from '@/app/backend/runtime/contracts';
 
-interface PlanQuestionView {
-    id: string;
-    question: string;
-    answer?: string;
-}
-
-interface PlanItemView {
-    id: EntityId<'step'>;
-    sequence: number;
-    description: string;
-    status: 'pending' | 'running' | 'completed' | 'failed' | 'aborted';
-}
-
-interface PlanView {
-    id: EntityId<'plan'>;
-    status: 'awaiting_answers' | 'draft' | 'approved' | 'implementing' | 'implemented' | 'failed' | 'cancelled';
-    summaryMarkdown: string;
-    questions: PlanQuestionView[];
-    items: PlanItemView[];
-}
+type PlanView = ModeExecutionPlanView;
 
 interface OrchestratorView {
     run: {
@@ -69,29 +55,19 @@ export function ModeExecutionPanel({
     onImplementPlan,
     onAbortOrchestrator,
 }: ModeExecutionPanelProps) {
-    const [summaryDraft, setSummaryDraft] = useState('');
-    const [itemsDraft, setItemsDraft] = useState('');
-    const [answerByQuestionId, setAnswerByQuestionId] = useState<Record<string, string>>({});
-
-    useEffect(() => {
-        if (!activePlan) {
-            setSummaryDraft('');
-            setItemsDraft('');
-            setAnswerByQuestionId({});
-            return;
-        }
-
-        setSummaryDraft(activePlan.summaryMarkdown);
-        setItemsDraft(activePlan.items.map((item) => item.description).join('\n'));
-        setAnswerByQuestionId(
-            Object.fromEntries(activePlan.questions.map((question) => [question.id, question.answer ?? '']))
-        );
-    }, [activePlan]);
+    const [draftState, setDraftState] = useState<ModeExecutionDraftState | undefined>(undefined);
+    const resolvedDraftState = resolveModeExecutionDraftState({
+        activePlan,
+        draftState,
+    });
 
     if (modeKey !== 'plan' && topLevelTab !== 'orchestrator') {
         return null;
     }
 
+    const summaryDraft = resolvedDraftState?.summaryDraft ?? '';
+    const itemsDraft = resolvedDraftState?.itemsDraft ?? '';
+    const answerByQuestionId = resolvedDraftState?.answerByQuestionId ?? {};
     const itemPreviewMarkdown = itemsDraft
         .split('\n')
         .map((item) => item.trim())
@@ -126,10 +102,19 @@ export function ModeExecutionPanel({
                                             value={answerByQuestionId[question.id] ?? ''}
                                             onChange={(event) => {
                                                 const next = event.target.value;
-                                                setAnswerByQuestionId((current) => ({
-                                                    ...current,
-                                                    [question.id]: next,
-                                                }));
+                                                setDraftState((current) => {
+                                                    const nextState =
+                                                        current?.planId === activePlan.id ? current : resolvedDraftState;
+                                                    return nextState
+                                                        ? {
+                                                              ...nextState,
+                                                              answerByQuestionId: {
+                                                                  ...nextState.answerByQuestionId,
+                                                                  [question.id]: next,
+                                                              },
+                                                          }
+                                                        : nextState;
+                                                });
                                             }}
                                         />
                                         <Button
@@ -160,7 +145,17 @@ export function ModeExecutionPanel({
                                     className='border-border bg-background w-full rounded-md border p-2 text-xs'
                                     value={summaryDraft}
                                     onChange={(event) => {
-                                        setSummaryDraft(event.target.value);
+                                        const next = event.target.value;
+                                        setDraftState((current) => {
+                                            const nextState =
+                                                current?.planId === activePlan.id ? current : resolvedDraftState;
+                                            return nextState
+                                                ? {
+                                                      ...nextState,
+                                                      summaryDraft: next,
+                                                  }
+                                                : nextState;
+                                        });
                                     }}
                                 />
                                 <div className='border-border bg-background rounded-md border p-3'>
@@ -178,7 +173,17 @@ export function ModeExecutionPanel({
                                     className='border-border bg-background w-full rounded-md border p-2 text-xs'
                                     value={itemsDraft}
                                     onChange={(event) => {
-                                        setItemsDraft(event.target.value);
+                                        const next = event.target.value;
+                                        setDraftState((current) => {
+                                            const nextState =
+                                                current?.planId === activePlan.id ? current : resolvedDraftState;
+                                            return nextState
+                                                ? {
+                                                      ...nextState,
+                                                      itemsDraft: next,
+                                                  }
+                                                : nextState;
+                                        });
                                     }}
                                 />
                                 <div className='border-border bg-background rounded-md border p-3'>

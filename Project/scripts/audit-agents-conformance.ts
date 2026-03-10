@@ -22,7 +22,9 @@ export interface AgentsConformanceReport {
     oversizedHandwrittenSourceFiles: AuditViolation[];
     inlineLintSuppressions: AuditViolation[];
     nonTestFrameworkImports: AuditViolation[];
+    forbiddenLayoutEffects: AuditViolation[];
     nonBlockingReactMemoization: AuditViolation[];
+    nonBlockingSuspiciousEffects: AuditViolation[];
     nonBlockingBroadCasts: AuditViolation[];
     nonBlockingThrows: AuditViolation[];
 }
@@ -237,6 +239,68 @@ function collectTestFrameworkImportViolations(files: AuditSourceFile[]): AuditVi
     });
 }
 
+function isReactMemoizationLine(lineContent: string): boolean {
+    return (
+        lineContent.includes('useMemo(') ||
+        lineContent.includes('useMemo<') ||
+        lineContent.includes('useCallback(') ||
+        lineContent.includes('useCallback<') ||
+        lineContent.includes('memo(')
+    );
+}
+
+function isForbiddenLayoutEffectLine(lineContent: string): boolean {
+    return lineContent.includes('useLayoutEffect(') || lineContent.includes('useLayoutEffect<');
+}
+
+function collectSuspiciousEffectViolations(files: AuditSourceFile[]): AuditViolation[] {
+    const violations: AuditViolation[] = [];
+    const setterPattern =
+        /\b(?:set[A-Z][A-Za-z0-9_]*|input\.uiState\.set[A-Z][A-Za-z0-9_]*|uiState\.set[A-Z][A-Za-z0-9_]*)\s*\(/;
+    const externalSyncPattern =
+        /\b(?:addEventListener|removeEventListener|subscribe|unsubscribe|localStorage|sessionStorage|matchMedia|persist[A-Z]|prefetch|invalidate|setConnecting|setError|sendRendererReadySignal)\b/;
+    const remoteMirrorPattern =
+        /\b(?:[A-Za-z0-9_]+Query\.data\?\.(?:settings|profiles|profile|state)|selected[A-Z][A-Za-z0-9_]*|active[A-Z][A-Za-z0-9_]*|workspaceScope|firstSelectable[A-Z][A-Za-z0-9_]*|initial[A-Z][A-Za-z0-9_]*|default[A-Z][A-Za-z0-9_]*|input\.preference|input\.threads|input\.tags|input\.buckets|input\.selectedProviderId|input\.selectedModelId|resolvedProfileId|defaults\b|models\b|workspaceRoots\b)\b/;
+    const allowedDialogLifecyclePattern =
+        /\bif\s*\(!open\)\s*\{\s*return;\s*\}[\s\S]*\b(?:initialText|preferredResolution|forcedMode)\b/;
+    const effectPattern = /useEffect\s*\(\s*\(\s*\)\s*=>\s*\{([\s\S]*?)\}\s*,\s*\[[\s\S]*?\]\s*\)/g;
+
+    for (const file of files) {
+        if (isTestFile(file.relativePath) || !isRendererSourceFile(file.relativePath)) {
+            continue;
+        }
+
+        let match: RegExpExecArray | null;
+        while ((match = effectPattern.exec(file.content)) !== null) {
+            const body = match[1] ?? '';
+            if (!setterPattern.test(body)) {
+                continue;
+            }
+            if (/\breturn\s*\(\s*\)\s*=>/.test(body)) {
+                continue;
+            }
+            if (externalSyncPattern.test(body)) {
+                continue;
+            }
+            if (allowedDialogLifecyclePattern.test(body)) {
+                continue;
+            }
+            if (!remoteMirrorPattern.test(body)) {
+                continue;
+            }
+
+            const line = file.content.slice(0, match.index).split(/\r?\n/).length;
+            violations.push({
+                path: file.relativePath,
+                line,
+                message: 'Review effect-driven state mirroring and replace it with derived state, a keyed draft reset, or an explicit reconciliation boundary.',
+            });
+        }
+    }
+
+    return violations;
+}
+
 export function auditAgentsConformance(rootDir: string): AgentsConformanceReport {
     const sourceFiles = collectSourceFiles(rootDir);
 
@@ -255,12 +319,21 @@ export function auditAgentsConformance(rootDir: string): AgentsConformanceReport
             message: 'Inline lint suppressions are not allowed in handwritten source.',
         }),
         nonTestFrameworkImports: collectTestFrameworkImportViolations(sourceFiles),
+        forbiddenLayoutEffects: collectPatternViolations({
+            files: sourceFiles,
+            shouldInclude: (file) => !isTestFile(file.relativePath) && isRendererSourceFile(file.relativePath),
+            pattern: 'useLayoutEffect',
+            shouldIncludeLine: (_file, lineContent) => isForbiddenLayoutEffectLine(lineContent),
+            message: 'useLayoutEffect is not allowed unless the file is explicitly allowlisted for a proven pre-paint layout need.',
+        }),
         nonBlockingReactMemoization: collectPatternViolations({
             files: sourceFiles,
             shouldInclude: (file) => !isTestFile(file.relativePath) && isRendererSourceFile(file.relativePath),
-            pattern: /\b(useMemo|useCallback|memo)\s*\(/,
+            pattern: 'useMemo',
+            shouldIncludeLine: (_file, lineContent) => isReactMemoizationLine(lineContent),
             message: 'Review defensive React memoization and remove it unless compiler coverage is known to miss.',
         }),
+        nonBlockingSuspiciousEffects: collectSuspiciousEffectViolations(sourceFiles),
         nonBlockingBroadCasts: collectPatternViolations({
             files: sourceFiles,
             shouldInclude: (file) => !isTestFile(file.relativePath),
@@ -308,7 +381,8 @@ export function hasBlockingViolations(report: AgentsConformanceReport): boolean 
     return (
         report.oversizedHandwrittenSourceFiles.length > 0 ||
         report.inlineLintSuppressions.length > 0 ||
-        report.nonTestFrameworkImports.length > 0
+        report.nonTestFrameworkImports.length > 0 ||
+        report.forbiddenLayoutEffects.length > 0
     );
 }
 
@@ -322,7 +396,9 @@ export function runAgentsConformanceAudit(options: {
     logViolations('Oversized source files', report.oversizedHandwrittenSourceFiles, 'error');
     logViolations('Inline lint suppressions', report.inlineLintSuppressions, 'error');
     logViolations('Non-test framework imports', report.nonTestFrameworkImports, 'error');
+    logViolations('Forbidden useLayoutEffect review', report.forbiddenLayoutEffects, 'error');
     logViolations('React memoization review', report.nonBlockingReactMemoization, 'warn');
+    logViolations('Suspicious effect review', report.nonBlockingSuspiciousEffects, 'warn');
     logViolations('Broad cast review', report.nonBlockingBroadCasts, 'warn');
     logViolations('Non-parser throw review', report.nonBlockingThrows, 'warn');
 

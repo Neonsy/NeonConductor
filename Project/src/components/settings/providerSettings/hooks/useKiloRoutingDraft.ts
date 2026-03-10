@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 import type { KiloRoutingDraft } from '@/web/components/settings/providerSettings/types';
 
@@ -36,48 +36,78 @@ interface UseKiloRoutingDraftInput {
     ) => Promise<void>;
 }
 
-export function useKiloRoutingDraft(input: UseKiloRoutingDraftInput) {
-    const [kiloRoutingDraft, setKiloRoutingDraft] = useState<KiloRoutingDraft | undefined>(undefined);
+interface OptimisticKiloRoutingDraftState {
+    key: string;
+    draft: KiloRoutingDraft;
+}
 
-    useEffect(() => {
-        if (input.selectedProviderId !== 'kilo' || input.selectedModelId.trim().length === 0) {
-            setKiloRoutingDraft(undefined);
-            return;
-        }
+function buildDraftKey(input: {
+    profileId: string;
+    selectedProviderId: RuntimeProviderId | undefined;
+    selectedModelId: string;
+}): string | undefined {
+    if (input.selectedProviderId !== 'kilo' || input.selectedModelId.trim().length === 0) {
+        return undefined;
+    }
 
-        const preference = input.preference;
-        if (!preference) {
-            setKiloRoutingDraft({
-                routingMode: 'dynamic',
-                sort: 'default',
-                pinnedProviderId: '',
-            });
-            return;
-        }
+    return `${input.profileId}:${input.selectedModelId.trim()}`;
+}
 
-        if (preference.routingMode === 'dynamic') {
-            setKiloRoutingDraft({
-                routingMode: 'dynamic',
-                sort: preference.sort ?? 'default',
-                pinnedProviderId: '',
-            });
-            return;
-        }
+function buildBaseKiloRoutingDraft(input: {
+    selectedProviderId: RuntimeProviderId | undefined;
+    selectedModelId: string;
+    preference: UseKiloRoutingDraftInput['preference'];
+}): KiloRoutingDraft | undefined {
+    if (input.selectedProviderId !== 'kilo' || input.selectedModelId.trim().length === 0) {
+        return undefined;
+    }
 
-        setKiloRoutingDraft({
-            routingMode: 'pinned',
+    if (!input.preference) {
+        return {
+            routingMode: 'dynamic',
             sort: 'default',
-            pinnedProviderId: preference.pinnedProviderId ?? '',
-        });
-    }, [input.preference, input.selectedModelId, input.selectedProviderId]);
+            pinnedProviderId: '',
+        };
+    }
+
+    if (input.preference.routingMode === 'dynamic') {
+        return {
+            routingMode: 'dynamic',
+            sort: input.preference.sort ?? 'default',
+            pinnedProviderId: '',
+        };
+    }
+
+    return {
+        routingMode: 'pinned',
+        sort: 'default',
+        pinnedProviderId: input.preference.pinnedProviderId ?? '',
+    };
+}
+
+export function useKiloRoutingDraft(input: UseKiloRoutingDraftInput) {
+    const [optimisticDraftState, setOptimisticDraftState] = useState<OptimisticKiloRoutingDraftState | undefined>(
+        undefined
+    );
+    const draftKey = buildDraftKey(input);
+    const baseDraft = buildBaseKiloRoutingDraft({
+        selectedProviderId: input.selectedProviderId,
+        selectedModelId: input.selectedModelId,
+        preference: input.preference,
+    });
+    const kiloRoutingDraft =
+        draftKey && optimisticDraftState?.key === draftKey ? optimisticDraftState.draft : baseDraft;
 
     const saveKiloRoutingPreference = async (nextDraft: KiloRoutingDraft): Promise<void> => {
-        if (input.selectedProviderId !== 'kilo' || input.selectedModelId.trim().length === 0) {
+        if (!draftKey || !kiloRoutingDraft || input.selectedProviderId !== 'kilo' || input.selectedModelId.trim().length === 0) {
             return;
         }
 
         const previousDraft = kiloRoutingDraft;
-        setKiloRoutingDraft(nextDraft);
+        setOptimisticDraftState({
+            key: draftKey,
+            draft: nextDraft,
+        });
 
         try {
             if (nextDraft.routingMode === 'dynamic') {
@@ -91,7 +121,10 @@ export function useKiloRoutingDraft(input: UseKiloRoutingDraftInput) {
             } else {
                 if (nextDraft.pinnedProviderId.trim().length === 0) {
                     input.setStatusMessage('Select a provider before enabling pinned routing.');
-                    setKiloRoutingDraft(previousDraft);
+                    setOptimisticDraftState({
+                        key: draftKey,
+                        draft: previousDraft,
+                    });
                     return;
                 }
 
@@ -105,15 +138,29 @@ export function useKiloRoutingDraft(input: UseKiloRoutingDraftInput) {
             }
 
             input.setStatusMessage('Kilo routing preference saved.');
+            setOptimisticDraftState(undefined);
         } catch {
             input.setStatusMessage('Failed to save Kilo routing preference.');
-            setKiloRoutingDraft(previousDraft);
+            setOptimisticDraftState({
+                key: draftKey,
+                draft: previousDraft,
+            });
         }
     };
 
     return {
         kiloRoutingDraft,
         saveKiloRoutingPreference,
-        setKiloRoutingDraft,
+        setKiloRoutingDraft: (nextDraft: KiloRoutingDraft | undefined) => {
+            if (!draftKey || !nextDraft) {
+                setOptimisticDraftState(undefined);
+                return;
+            }
+
+            setOptimisticDraftState({
+                key: draftKey,
+                draft: nextDraft,
+            });
+        },
     };
 }

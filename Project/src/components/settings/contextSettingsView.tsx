@@ -1,7 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 import { setResolvedContextStateCache } from '@/web/components/context/contextStateCache';
 import { isProviderId } from '@/web/components/conversation/shell/workspace/helpers';
+import {
+    resolveContextGlobalDraft,
+    resolveContextProfileDraft,
+    type ContextGlobalDraft,
+    type ContextProfileDraft,
+} from '@/web/components/settings/contextSettingsDrafts';
+import { resolveSelectedProfileId } from '@/web/components/settings/profileSettings/selection';
 import { SettingsFeedbackBanner } from '@/web/components/settings/shared/settingsFeedbackBanner';
 import { SettingsSelectionRail } from '@/web/components/settings/shared/settingsSelectionRail';
 import { PROGRESSIVE_QUERY_OPTIONS } from '@/web/lib/query/progressiveQueryOptions';
@@ -20,23 +27,22 @@ interface ContextSettingsViewProps {
 export function ContextSettingsView({ activeProfileId }: ContextSettingsViewProps) {
     const utils = trpc.useUtils();
     const [selectedProfileId, setSelectedProfileId] = useState(activeProfileId);
-    const [globalEnabled, setGlobalEnabled] = useState(true);
-    const [globalPercent, setGlobalPercent] = useState('90');
-    const [profileOverrideMode, setProfileOverrideMode] = useState<'inherit' | 'percent' | 'fixed_tokens'>('inherit');
-    const [profilePercent, setProfilePercent] = useState('90');
-    const [profileFixedInputTokens, setProfileFixedInputTokens] = useState('');
+    const [globalDraft, setGlobalDraft] = useState<ContextGlobalDraft | undefined>(undefined);
+    const [profileDraft, setProfileDraft] = useState<ContextProfileDraft | undefined>(undefined);
     const [feedbackMessage, setFeedbackMessage] = useState<string | undefined>(undefined);
     const [feedbackTone, setFeedbackTone] = useState<'success' | 'error' | 'info'>('info');
 
     const profilesQuery = trpc.profile.list.useQuery(undefined, PROGRESSIVE_QUERY_OPTIONS);
+    const profiles = profilesQuery.data?.profiles ?? [];
+    const resolvedSelectedProfileId = resolveSelectedProfileId(profiles, selectedProfileId, activeProfileId) ?? activeProfileId;
     const globalSettingsQuery = trpc.context.getGlobalSettings.useQuery(undefined, PROGRESSIVE_QUERY_OPTIONS);
     const profileSettingsQuery = trpc.context.getProfileSettings.useQuery(
-        { profileId: selectedProfileId },
-        { enabled: selectedProfileId.length > 0, ...PROGRESSIVE_QUERY_OPTIONS }
+        { profileId: resolvedSelectedProfileId },
+        { enabled: resolvedSelectedProfileId.length > 0, ...PROGRESSIVE_QUERY_OPTIONS }
     );
     const shellBootstrapQuery = trpc.runtime.getShellBootstrap.useQuery(
-        { profileId: selectedProfileId },
-        { enabled: selectedProfileId.length > 0, ...PROGRESSIVE_QUERY_OPTIONS }
+        { profileId: resolvedSelectedProfileId },
+        { enabled: resolvedSelectedProfileId.length > 0, ...PROGRESSIVE_QUERY_OPTIONS }
     );
 
     const defaultProviderId = shellBootstrapQuery.data?.defaults.providerId;
@@ -50,27 +56,54 @@ export function ContextSettingsView({ activeProfileId }: ContextSettingsViewProp
 
     const resolvedContextStateQuery = trpc.context.getResolvedState.useQuery(
         {
-            profileId: selectedProfileId,
+            profileId: resolvedSelectedProfileId,
             providerId: effectiveProviderId,
             modelId: effectiveModelId,
         },
         {
-            enabled: selectedProfileId.length > 0 && Boolean(defaultProviderId) && Boolean(defaultModelId),
+            enabled: resolvedSelectedProfileId.length > 0 && Boolean(defaultProviderId) && Boolean(defaultModelId),
             ...PROGRESSIVE_QUERY_OPTIONS,
         }
     );
     const resolvedContextStateQueryInput = {
-        profileId: selectedProfileId,
+        profileId: resolvedSelectedProfileId,
         providerId: effectiveProviderId,
         modelId: effectiveModelId,
     };
+    const globalForm = resolveContextGlobalDraft({
+        settings: globalSettingsQuery.data?.settings,
+        draft: globalDraft,
+    });
+    const profileForm = resolveContextProfileDraft({
+        profileId: resolvedSelectedProfileId,
+        inheritedPercent: globalForm.percent,
+        settings: profileSettingsQuery.data?.settings,
+        draft: profileDraft,
+    });
+
+    function updateGlobalDraft(
+        updater: (current: ContextGlobalDraft) => ContextGlobalDraft
+    ): void {
+        setGlobalDraft((current) => updater(current ?? globalForm));
+    }
+
+    function updateProfileDraft(
+        updater: (current: ContextProfileDraft) => ContextProfileDraft
+    ): void {
+        setProfileDraft((current) =>
+            updater(
+                current?.profileId === resolvedSelectedProfileId
+                    ? current
+                    : profileForm
+            )
+        );
+    }
 
     const setGlobalSettingsMutation = trpc.context.setGlobalSettings.useMutation({
         onSuccess: ({ settings, resolvedState }) => {
             setFeedbackTone('success');
             setFeedbackMessage('Saved global context defaults.');
-            setGlobalEnabled(settings.enabled);
-            setGlobalPercent(String(settings.percent));
+            setGlobalDraft(undefined);
             utils.context.getGlobalSettings.setData(undefined, {
                 settings,
             });
@@ -91,14 +124,10 @@ export function ContextSettingsView({ activeProfileId }: ContextSettingsViewProp
         onSuccess: ({ settings, resolvedState }) => {
             setFeedbackTone('success');
             setFeedbackMessage('Saved profile context override.');
-            setProfileOverrideMode(settings.overrideMode);
-            setProfilePercent(settings.percent !== undefined ? String(settings.percent) : globalPercent);
-            setProfileFixedInputTokens(
-                settings.fixedInputTokens !== undefined ? String(settings.fixedInputTokens) : ''
-            );
+            setProfileDraft(undefined);
             utils.context.getProfileSettings.setData(
                 {
-                    profileId: selectedProfileId,
+                    profileId: resolvedSelectedProfileId,
                 },
                 {
                     settings,
@@ -118,42 +147,12 @@ export function ContextSettingsView({ activeProfileId }: ContextSettingsViewProp
         },
     });
 
-    useEffect(() => {
-        if (profilesQuery.data?.profiles.length) {
-            const exists = profilesQuery.data.profiles.some((profile) => profile.id === selectedProfileId);
-            if (!exists) {
-                setSelectedProfileId(activeProfileId);
-            }
-        }
-    }, [activeProfileId, profilesQuery.data?.profiles, selectedProfileId]);
-
-    useEffect(() => {
-        const settings = globalSettingsQuery.data?.settings;
-        if (!settings) {
-            return;
-        }
-
-        setGlobalEnabled(settings.enabled);
-        setGlobalPercent(String(settings.percent));
-    }, [globalSettingsQuery.data?.settings]);
-
-    useEffect(() => {
-        const settings = profileSettingsQuery.data?.settings;
-        if (!settings) {
-            return;
-        }
-
-        setProfileOverrideMode(settings.overrideMode);
-        setProfilePercent(settings.percent !== undefined ? String(settings.percent) : globalPercent);
-        setProfileFixedInputTokens(settings.fixedInputTokens !== undefined ? String(settings.fixedInputTokens) : '');
-    }, [globalPercent, profileSettingsQuery.data?.settings]);
-
     return (
         <section className='grid min-h-full grid-cols-[260px_1fr]'>
             <SettingsSelectionRail
                 title='Profiles'
                 ariaLabel='Context settings profiles'
-                selectedId={selectedProfileId}
+                selectedId={resolvedSelectedProfileId}
                 onSelect={(profileId) => {
                     setSelectedProfileId(profileId);
                     setFeedbackMessage(undefined);
@@ -180,9 +179,12 @@ export function ContextSettingsView({ activeProfileId }: ContextSettingsViewProp
                         <label className='flex items-center gap-2 text-sm'>
                             <input
                                 type='checkbox'
-                                checked={globalEnabled}
+                                checked={globalForm.enabled}
                                 onChange={(event) => {
-                                    setGlobalEnabled(event.target.checked);
+                                    updateGlobalDraft((current) => ({
+                                        ...current,
+                                        enabled: event.target.checked,
+                                    }));
                                     setFeedbackMessage(undefined);
                                 }}
                             />
@@ -196,9 +198,12 @@ export function ContextSettingsView({ activeProfileId }: ContextSettingsViewProp
                                 type='number'
                                 min={1}
                                 max={100}
-                                value={globalPercent}
+                                value={globalForm.percent}
                                 onChange={(event) => {
-                                    setGlobalPercent(event.target.value);
+                                    updateGlobalDraft((current) => ({
+                                        ...current,
+                                        percent: event.target.value,
+                                    }));
                                     setFeedbackMessage(undefined);
                                 }}
                                 className='border-border bg-background h-9 w-full rounded-md border px-2 text-sm'
@@ -213,7 +218,7 @@ export function ContextSettingsView({ activeProfileId }: ContextSettingsViewProp
                             className='border-border bg-background hover:bg-accent rounded-md border px-3 py-2 text-sm'
                             disabled={setGlobalSettingsMutation.isPending}
                             onClick={() => {
-                                const percent = Number(globalPercent);
+                                const percent = Number(globalForm.percent);
                                 if (!Number.isInteger(percent) || percent < 1 || percent > 100) {
                                     setFeedbackTone('error');
                                     setFeedbackMessage('Global compact threshold must be an integer between 1 and 100.');
@@ -221,7 +226,7 @@ export function ContextSettingsView({ activeProfileId }: ContextSettingsViewProp
                                 }
 
                                 void setGlobalSettingsMutation.mutateAsync({
-                                    enabled: globalEnabled,
+                                    enabled: globalForm.enabled,
                                     mode: 'percent',
                                     percent,
                                     preview: resolvedContextStateQueryInput,
@@ -244,13 +249,16 @@ export function ContextSettingsView({ activeProfileId }: ContextSettingsViewProp
                             <label className='text-sm font-medium'>Override mode</label>
                             <select
                                 aria-label='Profile override mode'
-                                value={profileOverrideMode}
+                                value={profileForm.overrideMode}
                                 onChange={(event) => {
                                     const value = event.target.value;
                                     if (value !== 'inherit' && value !== 'percent' && value !== 'fixed_tokens') {
                                         return;
                                     }
-                                    setProfileOverrideMode(value);
+                                    updateProfileDraft((current) => ({
+                                        ...current,
+                                        overrideMode: value,
+                                    }));
                                     setFeedbackMessage(undefined);
                                 }}
                                 className='border-border bg-background h-9 w-full rounded-md border px-2 text-sm'>
@@ -260,7 +268,7 @@ export function ContextSettingsView({ activeProfileId }: ContextSettingsViewProp
                             </select>
                         </div>
 
-                        {profileOverrideMode === 'percent' ? (
+                        {profileForm.overrideMode === 'percent' ? (
                             <div className='max-w-sm space-y-1'>
                                 <label className='text-sm font-medium'>Profile threshold (%)</label>
                                 <input
@@ -268,9 +276,12 @@ export function ContextSettingsView({ activeProfileId }: ContextSettingsViewProp
                                     type='number'
                                     min={1}
                                     max={100}
-                                    value={profilePercent}
+                                    value={profileForm.percent}
                                     onChange={(event) => {
-                                        setProfilePercent(event.target.value);
+                                        updateProfileDraft((current) => ({
+                                            ...current,
+                                            percent: event.target.value,
+                                        }));
                                         setFeedbackMessage(undefined);
                                     }}
                                     className='border-border bg-background h-9 w-full rounded-md border px-2 text-sm'
@@ -278,16 +289,19 @@ export function ContextSettingsView({ activeProfileId }: ContextSettingsViewProp
                             </div>
                         ) : null}
 
-                        {profileOverrideMode === 'fixed_tokens' ? (
+                        {profileForm.overrideMode === 'fixed_tokens' ? (
                             <div className='max-w-sm space-y-1'>
                                 <label className='text-sm font-medium'>Fixed input tokens</label>
                                 <input
                                     aria-label='Fixed input token budget'
                                     type='number'
                                     min={1}
-                                    value={profileFixedInputTokens}
+                                    value={profileForm.fixedInputTokens}
                                     onChange={(event) => {
-                                        setProfileFixedInputTokens(event.target.value);
+                                        updateProfileDraft((current) => ({
+                                            ...current,
+                                            fixedInputTokens: event.target.value,
+                                        }));
                                         setFeedbackMessage(undefined);
                                     }}
                                     className='border-border bg-background h-9 w-full rounded-md border px-2 text-sm'
@@ -306,17 +320,17 @@ export function ContextSettingsView({ activeProfileId }: ContextSettingsViewProp
                             className='border-border bg-background hover:bg-accent rounded-md border px-3 py-2 text-sm'
                             disabled={setProfileSettingsMutation.isPending}
                             onClick={() => {
-                                if (profileOverrideMode === 'inherit') {
+                                if (profileForm.overrideMode === 'inherit') {
                                     void setProfileSettingsMutation.mutateAsync({
-                                        profileId: selectedProfileId,
+                                        profileId: resolvedSelectedProfileId,
                                         overrideMode: 'inherit',
                                         preview: resolvedContextStateQueryInput,
                                     });
                                     return;
                                 }
 
-                                if (profileOverrideMode === 'percent') {
-                                    const percent = Number(profilePercent);
+                                if (profileForm.overrideMode === 'percent') {
+                                    const percent = Number(profileForm.percent);
                                     if (!Number.isInteger(percent) || percent < 1 || percent > 100) {
                                         setFeedbackTone('error');
                                         setFeedbackMessage(
@@ -326,7 +340,7 @@ export function ContextSettingsView({ activeProfileId }: ContextSettingsViewProp
                                     }
 
                                     void setProfileSettingsMutation.mutateAsync({
-                                        profileId: selectedProfileId,
+                                        profileId: resolvedSelectedProfileId,
                                         overrideMode: 'percent',
                                         percent,
                                         preview: resolvedContextStateQueryInput,
@@ -334,7 +348,7 @@ export function ContextSettingsView({ activeProfileId }: ContextSettingsViewProp
                                     return;
                                 }
 
-                                const fixedInputTokens = Number(profileFixedInputTokens);
+                                const fixedInputTokens = Number(profileForm.fixedInputTokens);
                                 if (!Number.isInteger(fixedInputTokens) || fixedInputTokens < 1) {
                                     setFeedbackTone('error');
                                     setFeedbackMessage('Fixed input tokens must be a positive integer.');
@@ -342,7 +356,7 @@ export function ContextSettingsView({ activeProfileId }: ContextSettingsViewProp
                                 }
 
                                 void setProfileSettingsMutation.mutateAsync({
-                                    profileId: selectedProfileId,
+                                    profileId: resolvedSelectedProfileId,
                                     overrideMode: 'fixed_tokens',
                                     fixedInputTokens,
                                     preview: resolvedContextStateQueryInput,

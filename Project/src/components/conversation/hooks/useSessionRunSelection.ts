@@ -1,5 +1,3 @@
-import { useEffect } from 'react';
-
 import type {
     MessagePartRecord,
     MessageRecord,
@@ -13,12 +11,15 @@ interface UseSessionRunSelectionInput {
     allMessages: MessageRecord[];
     allMessageParts: MessagePartRecord[];
     selectedThreadId: string | undefined;
-    selectedSessionId: string | undefined;
-    selectedRunId: string | undefined;
-    onSelectedSessionInvalid: () => void;
-    onSelectFallbackSession: (sessionId: string) => void;
-    onSelectedRunInvalid: () => void;
-    onSelectFallbackRun: (runId: string) => void;
+    selectedSessionId: SessionSummaryRecord['id'] | undefined;
+    selectedRunId: RunRecord['id'] | undefined;
+}
+
+export interface SelectionResolutionState {
+    resolvedSessionId: string | undefined;
+    resolvedRunId: string | undefined;
+    shouldUpdateSessionSelection: boolean;
+    shouldUpdateRunSelection: boolean;
 }
 
 export interface SessionRunSelectionState {
@@ -26,6 +27,22 @@ export interface SessionRunSelectionState {
     runs: RunRecord[];
     messages: MessageRecord[];
     partsByMessageId: Map<string, MessagePartRecord[]>;
+    selection: SelectionResolutionState;
+}
+
+function resolveSelectedId<TRecord extends { id: string }>(
+    records: TRecord[],
+    selectedId: TRecord['id'] | undefined
+): TRecord['id'] | undefined {
+    if (records.length === 0) {
+        return undefined;
+    }
+
+    if (selectedId && records.some((record) => record.id === selectedId)) {
+        return selectedId;
+    }
+
+    return records[0]?.id;
 }
 
 export function useSessionRunSelection(input: UseSessionRunSelectionInput): SessionRunSelectionState {
@@ -34,50 +51,20 @@ export function useSessionRunSelection(input: UseSessionRunSelectionInput): Sess
         : input.allSessions
               .filter((session) => session.threadId === input.selectedThreadId)
               .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+    const resolvedSessionId = resolveSelectedId(sessions, input.selectedSessionId);
 
-    useEffect(() => {
-        if (sessions.length === 0) {
-            input.onSelectedSessionInvalid();
-            return;
-        }
-
-        if (input.selectedSessionId && sessions.some((session) => session.id === input.selectedSessionId)) {
-            return;
-        }
-
-        const firstSession = sessions.at(0);
-        if (firstSession) {
-            input.onSelectFallbackSession(firstSession.id);
-        }
-    }, [input.onSelectFallbackSession, input.onSelectedSessionInvalid, input.selectedSessionId, sessions]);
-
-    const runs = !input.selectedSessionId
+    const runs = !resolvedSessionId
         ? []
         : input.allRuns
-              .filter((run) => run.sessionId === input.selectedSessionId)
+              .filter((run) => run.sessionId === resolvedSessionId)
               .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+    const resolvedRunId = resolveSelectedId(runs, input.selectedRunId);
 
-    useEffect(() => {
-        if (runs.length === 0) {
-            input.onSelectedRunInvalid();
-            return;
-        }
-
-        if (input.selectedRunId && runs.some((run) => run.id === input.selectedRunId)) {
-            return;
-        }
-
-        const firstRun = runs.at(0);
-        if (firstRun) {
-            input.onSelectFallbackRun(firstRun.id);
-        }
-    }, [input.onSelectFallbackRun, input.onSelectedRunInvalid, input.selectedRunId, runs]);
-
-    const messages = !input.selectedSessionId
+    const messages = !resolvedSessionId
         ? []
         : input.allMessages
-              .filter((message) => message.sessionId === input.selectedSessionId)
-              .filter((message) => (input.selectedRunId ? message.runId === input.selectedRunId : true))
+              .filter((message) => message.sessionId === resolvedSessionId)
+              .filter((message) => (resolvedRunId ? message.runId === resolvedRunId : true))
               .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
 
     const partsByMessageId = new Map<string, MessagePartRecord[]>();
@@ -102,5 +89,11 @@ export function useSessionRunSelection(input: UseSessionRunSelectionInput): Sess
         runs,
         messages,
         partsByMessageId,
+        selection: {
+            resolvedSessionId,
+            resolvedRunId,
+            shouldUpdateSessionSelection: resolvedSessionId !== input.selectedSessionId,
+            shouldUpdateRunSelection: resolvedRunId !== input.selectedRunId,
+        },
     };
 }

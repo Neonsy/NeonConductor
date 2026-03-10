@@ -1,5 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
+import {
+    resolveExecutionEnvironmentDraftState,
+    type ExecutionEnvironmentDraftState,
+    type ExecutionEnvironmentScope,
+} from '@/web/components/conversation/panels/executionEnvironmentPanelState';
 import { Button } from '@/web/components/ui/button';
 
 import type { ThreadListRecord, WorktreeRecord } from '@/app/backend/persistence/types';
@@ -8,28 +13,7 @@ import type { TopLevelTab } from '@/app/backend/runtime/contracts';
 interface ExecutionEnvironmentPanelProps {
     topLevelTab: TopLevelTab;
     selectedThread: ThreadListRecord | undefined;
-    workspaceScope:
-        | {
-              kind: 'detached';
-          }
-        | {
-              kind: 'workspace';
-              label: string;
-              absolutePath: string;
-              executionEnvironmentMode: 'local' | 'new_worktree';
-              executionBranch?: string;
-              baseBranch?: string;
-          }
-        | {
-              kind: 'worktree';
-              label: string;
-              absolutePath: string;
-              branch: string;
-              baseBranch: string;
-              baseWorkspaceLabel: string;
-              baseWorkspacePath: string;
-              worktreeId: string;
-          };
+    workspaceScope: ExecutionEnvironmentScope;
     worktrees: WorktreeRecord[];
     busy: boolean;
     feedbackMessage?: string;
@@ -45,8 +29,6 @@ interface ExecutionEnvironmentPanelProps {
     onRemoveOrphaned: () => void;
 }
 
-type EnvironmentDraft = 'local' | 'new_worktree' | 'worktree';
-
 export function ExecutionEnvironmentPanel({
     topLevelTab,
     selectedThread,
@@ -60,33 +42,15 @@ export function ExecutionEnvironmentPanel({
     onRemoveWorktree,
     onRemoveOrphaned,
 }: ExecutionEnvironmentPanelProps) {
-    const [draftMode, setDraftMode] = useState<EnvironmentDraft>('local');
-    const [branch, setBranch] = useState('');
-    const [baseBranch, setBaseBranch] = useState('');
-    const [selectedWorktreeId, setSelectedWorktreeId] = useState('');
-
-    useEffect(() => {
-        if (workspaceScope.kind === 'worktree') {
-            setDraftMode('worktree');
-            setBranch(workspaceScope.branch);
-            setBaseBranch(workspaceScope.baseBranch);
-            setSelectedWorktreeId(workspaceScope.worktreeId);
-            return;
-        }
-
-        if (workspaceScope.kind === 'workspace') {
-            setDraftMode(workspaceScope.executionEnvironmentMode);
-            setBranch(workspaceScope.executionBranch ?? '');
-            setBaseBranch(workspaceScope.baseBranch ?? '');
-            setSelectedWorktreeId('');
-            return;
-        }
-
-        setDraftMode('local');
-        setBranch('');
-        setBaseBranch('');
-        setSelectedWorktreeId('');
-    }, [workspaceScope]);
+    const [draftState, setDraftState] = useState<ExecutionEnvironmentDraftState | undefined>(undefined);
+    const resolvedDraftState = resolveExecutionEnvironmentDraftState({
+        workspaceScope,
+        draftState,
+    });
+    const draftMode = resolvedDraftState.draftMode;
+    const branch = resolvedDraftState.branch;
+    const baseBranch = resolvedDraftState.baseBranch;
+    const selectedWorktreeId = resolvedDraftState.selectedWorktreeId;
 
     if (!selectedThread) {
         return null;
@@ -138,7 +102,10 @@ export function ExecutionEnvironmentPanel({
                     variant={draftMode === 'local' ? 'secondary' : 'outline'}
                     disabled={busy}
                     onClick={() => {
-                        setDraftMode('local');
+                        setDraftState({
+                            ...resolvedDraftState,
+                            draftMode: 'local',
+                        });
                     }}>
                     Local Workspace
                 </Button>
@@ -147,7 +114,10 @@ export function ExecutionEnvironmentPanel({
                     variant={draftMode === 'new_worktree' ? 'secondary' : 'outline'}
                     disabled={busy}
                     onClick={() => {
-                        setDraftMode('new_worktree');
+                        setDraftState({
+                            ...resolvedDraftState,
+                            draftMode: 'new_worktree',
+                        });
                     }}>
                     New Worktree
                 </Button>
@@ -156,7 +126,10 @@ export function ExecutionEnvironmentPanel({
                     variant={draftMode === 'worktree' ? 'secondary' : 'outline'}
                     disabled={busy || worktrees.length === 0}
                     onClick={() => {
-                        setDraftMode('worktree');
+                        setDraftState({
+                            ...resolvedDraftState,
+                            draftMode: 'worktree',
+                        });
                     }}>
                     Existing Worktree
                 </Button>
@@ -167,7 +140,10 @@ export function ExecutionEnvironmentPanel({
                     <input
                         value={branch}
                         onChange={(event) => {
-                            setBranch(event.target.value);
+                            setDraftState({
+                                ...resolvedDraftState,
+                                branch: event.target.value,
+                            });
                         }}
                         className='border-border bg-background h-11 rounded-xl border px-3 text-sm'
                         placeholder='feature/my-branch'
@@ -175,7 +151,10 @@ export function ExecutionEnvironmentPanel({
                     <input
                         value={baseBranch}
                         onChange={(event) => {
-                            setBaseBranch(event.target.value);
+                            setDraftState({
+                                ...resolvedDraftState,
+                                baseBranch: event.target.value,
+                            });
                         }}
                         className='border-border bg-background h-11 rounded-xl border px-3 text-sm'
                         placeholder='base branch (optional)'
@@ -187,7 +166,10 @@ export function ExecutionEnvironmentPanel({
                 <select
                     value={selectedWorktreeId}
                     onChange={(event) => {
-                        setSelectedWorktreeId(event.target.value);
+                        setDraftState({
+                            ...resolvedDraftState,
+                            selectedWorktreeId: event.target.value,
+                        });
                     }}
                     className='border-border bg-background mt-3 h-11 w-full rounded-xl border px-3 text-sm'>
                     <option value=''>Select managed worktree</option>

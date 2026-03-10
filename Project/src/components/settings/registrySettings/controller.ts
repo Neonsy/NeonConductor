@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useState } from 'react';
+import { useDeferredValue, useState } from 'react';
 
 import { patchRegistryRefreshCaches } from '@/web/components/settings/registrySettings/registryRefreshCache';
 import { filterResolvedSkillfiles } from '@/web/components/settings/registrySettings/registrySkillSearch';
@@ -16,10 +16,18 @@ export function useRegistrySettingsController(profileId: string) {
         { profileId },
         PROGRESSIVE_QUERY_OPTIONS
     );
+    const workspaceRoots = workspaceRootsQuery.data?.workspaceRoots ?? [];
+    const resolvedSelectedWorkspaceFingerprint =
+        selectedWorkspaceFingerprint &&
+        workspaceRoots.some((workspaceRoot) => workspaceRoot.fingerprint === selectedWorkspaceFingerprint)
+            ? selectedWorkspaceFingerprint
+            : undefined;
     const registryQuery = trpc.registry.listResolved.useQuery(
         {
             profileId,
-            ...(selectedWorkspaceFingerprint ? { workspaceFingerprint: selectedWorkspaceFingerprint } : {}),
+            ...(resolvedSelectedWorkspaceFingerprint
+                ? { workspaceFingerprint: resolvedSelectedWorkspaceFingerprint }
+                : {}),
         },
         PROGRESSIVE_QUERY_OPTIONS
     );
@@ -45,28 +53,15 @@ export function useRegistrySettingsController(profileId: string) {
         },
     });
 
-    const workspaceRoots = workspaceRootsQuery.data?.workspaceRoots ?? [];
-    useEffect(() => {
-        if (!selectedWorkspaceFingerprint) {
-            return;
-        }
-
-        if (workspaceRoots.some((workspaceRoot) => workspaceRoot.fingerprint === selectedWorkspaceFingerprint)) {
-            return;
-        }
-
-        setSelectedWorkspaceFingerprint(undefined);
-    }, [selectedWorkspaceFingerprint, workspaceRoots]);
-
     const resolvedAgentModes =
         registryQuery.data?.resolved.modes.filter((mode) => mode.topLevelTab === 'agent') ?? [];
-    const selectedWorkspaceRoot = selectedWorkspaceFingerprint
-        ? workspaceRoots.find((workspaceRoot) => workspaceRoot.fingerprint === selectedWorkspaceFingerprint)
+    const selectedWorkspaceRoot = resolvedSelectedWorkspaceFingerprint
+        ? workspaceRoots.find((workspaceRoot) => workspaceRoot.fingerprint === resolvedSelectedWorkspaceFingerprint)
         : undefined;
     const skillMatches = filterResolvedSkillfiles(registryQuery.data?.resolved.skillfiles ?? [], deferredSkillQuery);
 
     return {
-        selectedWorkspaceFingerprint,
+        selectedWorkspaceFingerprint: resolvedSelectedWorkspaceFingerprint,
         setSelectedWorkspaceFingerprint,
         skillQuery,
         setSkillQuery,

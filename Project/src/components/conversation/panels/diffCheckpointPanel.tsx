@@ -1,6 +1,7 @@
-import { startTransition, useEffect, useState } from 'react';
+import { startTransition, useState } from 'react';
 
 import { MarkdownContent } from '@/web/components/content/markdown/markdownContent';
+import { resolveSelectedDiffPath } from '@/web/components/conversation/panels/diffCheckpointPanelState';
 import { Button } from '@/web/components/ui/button';
 import { PROGRESSIVE_QUERY_OPTIONS } from '@/web/lib/query/progressiveQueryOptions';
 import { trpc } from '@/web/trpc/client';
@@ -51,18 +52,21 @@ export function DiffCheckpointPanel({
     disabled,
 }: DiffCheckpointPanelProps) {
     const selectedDiff = diffs[0];
-    const firstSelectablePath = selectedDiff?.artifact.kind === 'git' ? selectedDiff.artifact.files[0]?.path : undefined;
-    const [selectedPath, setSelectedPath] = useState<string | undefined>(firstSelectablePath);
+    const [preferredPath, setPreferredPath] = useState<string | undefined>(undefined);
+    const resolvedSelectedPath = resolveSelectedDiffPath({
+        selectedDiff,
+        preferredPath,
+    });
     const [confirmRollbackId, setConfirmRollbackId] = useState<CheckpointRecord['id'] | undefined>(undefined);
     const [rollbackTargetId, setRollbackTargetId] = useState<CheckpointRecord['id'] | undefined>(undefined);
     const [feedbackMessage, setFeedbackMessage] = useState<string | undefined>(undefined);
     const utils = trpc.useUtils();
     const patchQuery = trpc.diff.getFilePatch.useQuery(
-        selectedDiff && selectedPath
+        selectedDiff && resolvedSelectedPath
             ? {
                   profileId,
                   diffId: selectedDiff.id,
-                  path: selectedPath,
+                  path: resolvedSelectedPath,
               }
             : {
                   profileId,
@@ -70,7 +74,7 @@ export function DiffCheckpointPanel({
                   path: 'missing',
               },
         {
-            enabled: Boolean(selectedDiff && selectedPath),
+            enabled: Boolean(selectedDiff && resolvedSelectedPath),
             ...PROGRESSIVE_QUERY_OPTIONS,
         }
     );
@@ -92,10 +96,6 @@ export function DiffCheckpointPanel({
             setRollbackTargetId(undefined);
         },
     });
-
-    useEffect(() => {
-        setSelectedPath(firstSelectablePath);
-    }, [firstSelectablePath, selectedDiff?.id]);
 
     const prefetchPatch = (path: string) => {
         if (!selectedDiff) {
@@ -154,7 +154,7 @@ export function DiffCheckpointPanel({
                                                         key={file.path}
                                                         type='button'
                                                         className={`focus-visible:ring-ring flex min-h-11 w-full items-center justify-between rounded-md border px-3 text-left text-sm focus-visible:ring-2 ${
-                                                            selectedPath === file.path
+                                                            resolvedSelectedPath === file.path
                                                                 ? 'border-primary bg-primary/10'
                                                                 : 'border-border bg-background/60 hover:bg-accent'
                                                         }`}
@@ -166,7 +166,7 @@ export function DiffCheckpointPanel({
                                                         }}
                                                         onClick={() => {
                                                             startTransition(() => {
-                                                                setSelectedPath(file.path);
+                                                                setPreferredPath(file.path);
                                                             });
                                                         }}>
                                                         <span className='truncate font-mono text-[12px]'>{file.path}</span>
@@ -276,12 +276,12 @@ export function DiffCheckpointPanel({
                     <section className='border-border rounded-lg border'>
                         <header className='border-border bg-background/60 flex min-h-11 items-center justify-between gap-3 border-b px-3'>
                             <div className='min-w-0'>
-                                <p className='truncate text-sm font-medium'>{selectedPath ?? 'Patch Preview'}</p>
+                                <p className='truncate text-sm font-medium'>{resolvedSelectedPath ?? 'Patch Preview'}</p>
                                 <p className='text-muted-foreground text-xs'>
                                     {patchQuery.data?.found ? 'Unified diff preview' : selectedDiff.summary}
                                 </p>
                             </div>
-                            {selectedDiff.artifact.kind === 'git' && selectedPath ? (
+                            {selectedDiff.artifact.kind === 'git' && resolvedSelectedPath ? (
                                 <Button
                                     type='button'
                                     size='sm'
@@ -289,7 +289,7 @@ export function DiffCheckpointPanel({
                                     disabled={openPathMutation.isPending}
                                     onClick={() => {
                                         void openPathMutation.mutateAsync({
-                                            path: `${selectedDiff.artifact.workspaceRootPath}\\${selectedPath.replaceAll('/', '\\')}`,
+                                            path: `${selectedDiff.artifact.workspaceRootPath}\\${resolvedSelectedPath.replaceAll('/', '\\')}`,
                                         });
                                     }}>
                                     Open in Editor
