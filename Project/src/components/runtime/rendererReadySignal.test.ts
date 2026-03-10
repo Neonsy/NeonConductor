@@ -20,24 +20,58 @@ describe('rendererReadySignal', () => {
     });
 
     it('sends the ready signal only once when called repeatedly', async () => {
-        const { sendRendererReadySignal } = await import('@/web/components/runtime/rendererReadySignal');
+        const { ensureRendererReadySignal } = await import('@/web/components/runtime/rendererReadySignal');
 
-        await sendRendererReadySignal();
-        await sendRendererReadySignal();
+        await ensureRendererReadySignal();
+        await ensureRendererReadySignal();
 
         expect(signalReadyMutationSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('shares one in-flight ready signal and publishes the sent snapshot once it resolves', async () => {
+        let resolveSignal: (() => void) | undefined;
+        signalReadyMutationSpy.mockImplementationOnce(
+            () =>
+                new Promise<void>((resolve) => {
+                    resolveSignal = resolve;
+                })
+        );
+
+        const {
+            ensureRendererReadySignal,
+            getRendererReadySignalSnapshot,
+        } = await import('@/web/components/runtime/rendererReadySignal');
+
+        const firstSignalPromise = ensureRendererReadySignal();
+        const secondSignalPromise = ensureRendererReadySignal();
+
+        expect(signalReadyMutationSpy).toHaveBeenCalledTimes(1);
+        expect(getRendererReadySignalSnapshot().readySignalState).toBe('pending');
+
+        resolveSignal?.();
+        await Promise.all([firstSignalPromise, secondSignalPromise]);
+
+        expect(getRendererReadySignalSnapshot()).toEqual({
+            readySignalState: 'sent',
+        });
     });
 
     it('resets to idle when the ready signal fails', async () => {
         const expectedError = new Error('boot failed');
         signalReadyMutationSpy.mockRejectedValueOnce(expectedError);
-        const { sendRendererReadySignal } = await import('@/web/components/runtime/rendererReadySignal');
+        const { ensureRendererReadySignal, getRendererReadySignalSnapshot } = await import(
+            '@/web/components/runtime/rendererReadySignal'
+        );
 
-        await expect(sendRendererReadySignal()).rejects.toThrow('boot failed');
+        await expect(ensureRendererReadySignal()).rejects.toThrow('boot failed');
         expect(signalReadyMutationSpy).toHaveBeenCalledTimes(1);
+        expect(getRendererReadySignalSnapshot()).toEqual({
+            readySignalState: 'failed',
+            readySignalErrorMessage: 'boot failed',
+        });
 
         signalReadyMutationSpy.mockResolvedValueOnce(undefined);
-        await sendRendererReadySignal();
+        await ensureRendererReadySignal();
         expect(signalReadyMutationSpy).toHaveBeenCalledTimes(2);
     });
 });

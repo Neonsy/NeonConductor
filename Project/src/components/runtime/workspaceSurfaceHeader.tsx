@@ -1,4 +1,4 @@
-import type { TopLevelTab } from '@/app/backend/runtime/contracts';
+import type { TopLevelTab } from '@/shared/contracts';
 
 const TAB_OPTIONS: Array<{ id: TopLevelTab; label: string }> = [
     { id: 'chat', label: 'Chat' },
@@ -99,3 +99,4 @@ export function WorkspaceSurfaceHeader({
         </header>
     );
 }
+

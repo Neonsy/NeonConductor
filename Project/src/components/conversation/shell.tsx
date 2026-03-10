@@ -28,7 +28,8 @@ import { useRuntimeEventStreamStore } from '@/web/lib/runtime/eventStream';
 import { trpc } from '@/web/trpc/client';
 
 import type { RunRecord, SessionSummaryRecord, ThreadListRecord } from '@/app/backend/persistence/types';
-import type { PlanRecordView, TopLevelTab } from '@/app/backend/runtime/contracts';
+
+import type { PlanRecordView, TopLevelTab } from '@/shared/contracts';
 
 interface ConversationShellProps {
     profileId: string;
@@ -402,6 +403,9 @@ export function ConversationShell({
     useEffect(() => {
         onBootChromeReadyChange?.({
             shellBootstrapSettled: !queries.shellBootstrapQuery.isPending,
+            ...(queries.shellBootstrapQuery.error?.message
+                ? { shellBootstrapErrorMessage: queries.shellBootstrapQuery.error.message }
+                : {}),
         });
 
         return () => {
@@ -409,7 +413,7 @@ export function ConversationShell({
                 shellBootstrapSettled: false,
             });
         };
-    }, [onBootChromeReadyChange, queries.shellBootstrapQuery.isPending]);
+    }, [onBootChromeReadyChange, queries.shellBootstrapQuery.error?.message, queries.shellBootstrapQuery.isPending]);
 
     const sidebarStatusMessage = queries.listBucketsQuery.isPending
         ? 'Loading conversation groups...'
@@ -656,3 +660,4 @@ export function ConversationShell({
         </main>
     );
 }
+

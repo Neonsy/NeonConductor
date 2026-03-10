@@ -2,7 +2,7 @@ import { Button } from '@/web/components/ui/button';
 import { SensitiveValue } from '@/web/components/ui/sensitiveValue';
 import { usePrivacyMode } from '@/web/lib/privacy/privacyContext';
 
-import type { KiloAccountContext } from '@/app/backend/runtime/contracts';
+import type { KiloAccountContext } from '@/shared/contracts';
 
 interface KiloAccountSectionProps {
     accountContext: KiloAccountContext | undefined;
@@ -106,3 +106,4 @@ export function KiloAccountSection({
         </section>
     );
 }
+

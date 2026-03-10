@@ -15,7 +15,7 @@ import type {
 import { PROGRESSIVE_QUERY_OPTIONS } from '@/web/lib/query/progressiveQueryOptions';
 import { trpc } from '@/web/trpc/client';
 
-import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
+import type { RuntimeProviderId } from '@/shared/contracts';
 
 export function useProviderSettingsController(profileId: string) {
     const utils = trpc.useUtils();
@@ -302,3 +302,4 @@ export function useProviderSettingsController(profileId: string) {
         setStatusMessage,
     };
 }
+

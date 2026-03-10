@@ -1,6 +1,7 @@
 import { expect, expectTypeOf, test } from 'vitest';
 
 import type { AppRouter } from '@/app/backend/trpc/router';
+import type { BootStatusSnapshot } from '@/app/shared/splashContract';
 
 import type { inferRouterInputs, inferRouterOutputs } from '@trpc/server';
 
@@ -437,6 +438,10 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
     }>();
     expectTypeOf<Inputs['runtime']['getShellBootstrap']>().toExtend<{
         profileId: string;
+    }>();
+    expectTypeOf<Inputs['system']['reportBootStatus']>().toExtend<BootStatusSnapshot>();
+    expectTypeOf<Outputs['system']['reportBootStatus']>().toExtend<{
+        accepted: boolean;
     }>();
     expectTypeOf<Inputs['system']['openPath']>().toExtend<{
         path: string;

@@ -1,4 +1,4 @@
-import type { TopLevelTab } from '@/app/backend/runtime/contracts';
+import type { TopLevelTab } from '@/shared/contracts';
 
 export const FALLBACK_MODE_BY_TAB: Record<TopLevelTab, string> = {
     chat: 'chat',
@@ -35,3 +35,4 @@ export function resolveWorkspaceActiveModeKey(
 ): string {
     return activeModeKey ?? FALLBACK_MODE_BY_TAB[topLevelTab];
 }
+

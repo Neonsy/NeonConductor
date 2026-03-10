@@ -16,8 +16,9 @@ import type {
     RunRecord,
     SessionSummaryRecord,
 } from '@/app/backend/persistence/types';
-import type { DiffOverview } from '@/app/backend/runtime/contracts';
-import type { ResolvedContextState } from '@/app/backend/runtime/contracts';
+
+import type { DiffOverview } from '@/shared/contracts';
+import type { ResolvedContextState } from '@/shared/contracts';
 
 import type { ReactNode } from 'react';
 
@@ -393,3 +394,4 @@ export function SessionWorkspacePanel({
         </div>
     );
 }
+

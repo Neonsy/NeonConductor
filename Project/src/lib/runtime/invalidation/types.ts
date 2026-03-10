@@ -1,6 +1,6 @@
 import { trpc } from '@/web/trpc/client';
 
-import type { EntityId, RuntimeProviderId, TopLevelTab } from '@/app/backend/runtime/contracts';
+import type { EntityId, RuntimeProviderId, TopLevelTab } from '@/shared/contracts';
 
 export type TrpcUtils = ReturnType<typeof trpc.useUtils>;
 
@@ -20,3 +20,4 @@ export interface RuntimeEventContext {
     topLevelTab: TopLevelTab | undefined;
     selection: ConversationSelectionState;
 }
+

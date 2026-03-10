@@ -6,7 +6,7 @@ import {
 } from '@/web/components/conversation/hooks/composerImageCompressionClient';
 import { composerImageCompressionError } from '@/web/components/conversation/hooks/composerImageCompressionErrors';
 
-import type { ComposerImageAttachmentInput } from '@/app/backend/runtime/contracts';
+import type { ComposerImageAttachmentInput } from '@/shared/contracts';
 
 interface PostedMessage {
     requestId: string;
@@ -117,3 +117,4 @@ describe('ComposerImageCompressionClient', () => {
         expect(result.isErr()).toBe(true);
     });
 });
+

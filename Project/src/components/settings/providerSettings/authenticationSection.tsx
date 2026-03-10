@@ -3,7 +3,7 @@ import { ExternalLink } from 'lucide-react';
 import type { ActiveAuthFlow, ProviderAuthStateView } from '@/web/components/settings/providerSettings/types';
 import { Button } from '@/web/components/ui/button';
 
-import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
+import type { RuntimeProviderId } from '@/shared/contracts';
 
 interface ProviderAuthenticationSectionProps {
     selectedProviderId: RuntimeProviderId | undefined;
@@ -187,3 +187,4 @@ export function ProviderAuthenticationSection({
         </section>
     );
 }
+

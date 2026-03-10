@@ -9,7 +9,7 @@ import { useConversationQueries } from '@/web/components/conversation/shell/quer
 import { isEntityId } from '@/web/components/conversation/shell/workspace/helpers';
 import { useConversationWorkspaceActions } from '@/web/components/conversation/shell/workspace/useConversationWorkspaceActions';
 
-import type { TopLevelTab } from '@/app/backend/runtime/contracts';
+import type { TopLevelTab } from '@/shared/contracts';
 
 interface BuildConversationWorkspacePanelsInput {
     profileId: string;
@@ -143,3 +143,4 @@ export function buildConversationWorkspacePanels(input: BuildConversationWorkspa
             ) : undefined,
     };
 }
+

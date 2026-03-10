@@ -2,8 +2,9 @@ import { getPersistence } from '@/app/backend/persistence/db';
 import { parseEntityId, parseEnumValue, parseJsonRecord } from '@/app/backend/persistence/stores/shared/rowParsers';
 import { isJsonRecord, isJsonUnknownArray, nowIso, parseJsonValue } from '@/app/backend/persistence/stores/shared/utils';
 import type { PlanItemRecord, PlanQuestionRecord, PlanRecord } from '@/app/backend/persistence/types';
-import { createEntityId, planItemStatuses, planStatuses, topLevelTabs } from '@/app/backend/runtime/contracts';
+import { planItemStatuses, planStatuses, topLevelTabs } from '@/app/backend/runtime/contracts';
 import type { EntityId, TopLevelTab } from '@/app/backend/runtime/contracts';
+import { createEntityId } from '@/app/backend/runtime/identity/entityIds';
 
 function isPlanQuestionRecord(value: unknown): value is PlanQuestionRecord {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -367,3 +368,4 @@ export class PlanStore {
 }
 
 export const planStore = new PlanStore();
+

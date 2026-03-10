@@ -1,6 +1,7 @@
 import type { ProviderModelRecord, RunRecord } from '@/app/backend/persistence/types';
-import { providerIds } from '@/app/backend/runtime/contracts';
-import type { EntityId, EntityIdPrefix, RuntimeProviderId, RuntimeRunOptions } from '@/app/backend/runtime/contracts';
+
+import { providerIds } from '@/shared/contracts';
+import type { EntityId, EntityIdPrefix, RuntimeProviderId, RuntimeRunOptions } from '@/shared/contracts';
 
 export const DEFAULT_RUN_OPTIONS: RuntimeRunOptions = {
     reasoning: {
@@ -91,3 +92,4 @@ export function toActionableRunError(message: string, providerLabel: string): st
 
     return `Run failed: ${message}`;
 }
+

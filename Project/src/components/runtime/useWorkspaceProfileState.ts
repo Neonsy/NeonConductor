@@ -4,7 +4,7 @@ import { BOOT_CRITICAL_QUERY_OPTIONS } from '@/web/components/runtime/startupQue
 import { resolveActiveWorkspaceProfileId } from '@/web/components/runtime/workspaceSurfaceModel';
 import { trpc } from '@/web/trpc/client';
 
-import type { TopLevelTab } from '@/app/backend/runtime/contracts';
+import type { TopLevelTab } from '@/shared/contracts';
 
 export function useWorkspaceProfileState(input: { setTopLevelTab: (value: TopLevelTab) => void }) {
     const [activeProfileId, setActiveProfileId] = useState<string | undefined>(undefined);
@@ -50,6 +50,9 @@ export function useWorkspaceProfileState(input: { setTopLevelTab: (value: TopLev
     return {
         profiles,
         resolvedProfileId,
+        profilePending: profileListQuery.isPending || activeProfileQuery.isPending,
+        profileErrorMessage: profileListQuery.error?.message ?? activeProfileQuery.error?.message,
+        hasProfiles: profiles.length > 0,
         profileSetActiveMutation,
         setResolvedProfile: (profileId: string) => {
             setActiveProfileId(profileId);
@@ -66,3 +69,4 @@ export function useWorkspaceProfileState(input: { setTopLevelTab: (value: TopLev
         },
     };
 }
+

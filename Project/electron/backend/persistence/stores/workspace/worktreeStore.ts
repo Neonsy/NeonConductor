@@ -4,7 +4,8 @@ import { getPersistence } from '@/app/backend/persistence/db';
 import { parseEntityId, parseEnumValue } from '@/app/backend/persistence/stores/shared/rowParsers';
 import { nowIso } from '@/app/backend/persistence/stores/shared/utils';
 import type { WorktreeRecord } from '@/app/backend/persistence/types';
-import { createEntityId, worktreeStatuses } from '@/app/backend/runtime/contracts';
+import { worktreeStatuses } from '@/app/backend/runtime/contracts';
+import { createEntityId } from '@/app/backend/runtime/identity/entityIds';
 
 function toPathKey(absolutePath: string): string {
     return process.platform === 'win32' ? absolutePath.toLowerCase() : absolutePath;
@@ -236,3 +237,4 @@ export class WorktreeStore {
 }
 
 export const worktreeStore = new WorktreeStore();
+

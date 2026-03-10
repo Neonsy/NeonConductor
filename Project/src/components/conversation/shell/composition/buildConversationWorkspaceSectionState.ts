@@ -2,7 +2,7 @@ import { useConversationShellViewModel } from '@/web/components/conversation/hoo
 import { useConversationQueries } from '@/web/components/conversation/shell/queries/useConversationQueries';
 import { useConversationRunTarget } from '@/web/components/conversation/shell/workspace/useConversationRunTarget';
 
-import type { TopLevelTab } from '@/app/backend/runtime/contracts';
+import type { TopLevelTab } from '@/shared/contracts';
 
 interface BuildConversationWorkspaceSectionStateInput {
     topLevelTab: TopLevelTab;
@@ -54,3 +54,4 @@ export function buildConversationWorkspaceSectionState(
         ...(input.queries.runDiffsQuery.data?.overview ? { runDiffOverview: input.queries.runDiffsQuery.data.overview } : {}),
     };
 }
+

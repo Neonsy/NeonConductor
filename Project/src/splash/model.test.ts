@@ -1,28 +1,58 @@
 import { describe, expect, it } from 'vitest';
 
-import { applySplashPhase, getSplashSubtitle, normalizeSplashPhase } from '@/web/splash/model';
+import { applyBootStatus, normalizeBootStatusSnapshot } from '@/web/splash/model';
 
 describe('splash model', () => {
-    it('normalizes unknown phases back to starting', () => {
-        expect(normalizeSplashPhase(undefined)).toBe('starting');
-        expect(normalizeSplashPhase('unexpected')).toBe('starting');
-        expect(normalizeSplashPhase('delayed')).toBe('delayed');
+    it('normalizes unknown status payloads back to the initial boot state', () => {
+        expect(normalizeBootStatusSnapshot(undefined)).toMatchObject({
+            stage: 'main_initializing',
+        });
+        expect(normalizeBootStatusSnapshot({ stage: 'unexpected' })).toMatchObject({
+            stage: 'main_initializing',
+        });
     });
 
-    it('applies the delayed phase subtitle without rebuilding the target', () => {
+    it('applies boot status content without rebuilding the target', () => {
+        const headlineTarget = {
+            textContent: 'NeonConductor',
+        };
         const subtitleTarget = {
-            textContent: 'Preparing the workspace and loading your agent shell.',
+            textContent: 'Initializing the desktop runtime.',
+        };
+        const diagnosticsTarget = {
+            textContent: '',
         };
         const target = {
             body: {
                 dataset: {} as Record<string, string | undefined>,
             },
-            getElementById: (id: string) => (id === 'splash-subtitle' ? subtitleTarget : null),
+            getElementById: (id: string) => {
+                if (id === 'splash-headline') {
+                    return headlineTarget;
+                }
+                if (id === 'splash-subtitle') {
+                    return subtitleTarget;
+                }
+                if (id === 'splash-diagnostics') {
+                    return diagnosticsTarget;
+                }
+                return null;
+            },
         };
 
-        applySplashPhase(target, 'delayed');
+        applyBootStatus(target, {
+            stage: 'boot_stuck',
+            headline: 'Startup is taking longer than expected',
+            detail: 'Waiting on: shell bootstrap data.',
+            isStuck: true,
+            blockingPrerequisite: 'shell_bootstrap',
+            elapsedMs: 4000,
+            source: 'main',
+        });
 
-        expect(target.body.dataset['phase']).toBe('delayed');
-        expect(subtitleTarget.textContent).toBe(getSplashSubtitle('delayed'));
+        expect(target.body.dataset['bootStage']).toBe('boot_stuck');
+        expect(headlineTarget.textContent).toBe('Startup is taking longer than expected');
+        expect(subtitleTarget.textContent).toBe('Waiting on: shell bootstrap data.');
+        expect(diagnosticsTarget.textContent).toBe('Waiting on: shell bootstrap data');
     });
 });

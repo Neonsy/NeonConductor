@@ -1,26 +1,43 @@
 import { log } from 'evlog';
-import { useEffect } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 
-import { sendRendererReadySignal } from '@/web/components/runtime/rendererReadySignal';
+import {
+    ensureRendererReadySignal,
+    getRendererReadySignalSnapshot,
+    subscribeRendererReadySignal,
+    type RendererReadySignalSnapshot,
+} from '@/web/components/runtime/rendererReadySignal';
 
 const isDev = import.meta.env.DEV;
 
-export function useRendererBootReadySignal(isBootReady: boolean): void {
+function getErrorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
+}
+
+export function useRendererBootReadySignal(isReadyToSignal: boolean): RendererReadySignalSnapshot {
+    const readySignalSnapshot = useSyncExternalStore(
+        subscribeRendererReadySignal,
+        getRendererReadySignalSnapshot,
+        getRendererReadySignalSnapshot
+    );
+
     useEffect(() => {
-        if (!isBootReady) {
+        if (!isReadyToSignal || readySignalSnapshot.readySignalState !== 'idle') {
             return;
         }
 
-        void sendRendererReadySignal().catch((error: unknown) => {
+        void ensureRendererReadySignal().catch((error: unknown) => {
             if (!isDev) {
                 return;
             }
 
             log.warn({
-                tag: 'window',
+                tag: 'window.boot',
                 message: 'Failed to send ready signal.',
-                ...(error instanceof Error ? { error: error.message } : { error: String(error) }),
+                error: getErrorMessage(error),
             });
         });
-    }, [isBootReady]);
+    }, [isReadyToSignal, readySignalSnapshot.readySignalState]);
+
+    return readySignalSnapshot;
 }

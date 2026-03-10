@@ -19,8 +19,8 @@ const {
     attachCspHeadersSpy,
     createMainWindowSpy,
     createSplashWindowSpy,
-    updateSplashWindowPhaseSpy,
     registerBootWindowsSpy,
+    reportMainBootStatusSpy,
     createIPCHandlerInputSpy,
     attachWindowSpy,
     runtimeEnvState,
@@ -47,8 +47,8 @@ const {
     attachCspHeadersSpy: vi.fn(),
     createMainWindowSpy: vi.fn(() => ({ id: 'window-main' })),
     createSplashWindowSpy: vi.fn(() => ({ id: 'window-splash' })),
-    updateSplashWindowPhaseSpy: vi.fn(() => Promise.resolve()),
     registerBootWindowsSpy: vi.fn(),
+    reportMainBootStatusSpy: vi.fn(),
     createIPCHandlerInputSpy: vi.fn((input: unknown) => input),
     attachWindowSpy: vi.fn(),
     runtimeEnvState: {
@@ -154,11 +154,11 @@ vi.mock('@/app/main/window/factory', () => ({
 
 vi.mock('@/app/main/window/splash', () => ({
     createSplashWindow: createSplashWindowSpy,
-    updateSplashWindowPhase: updateSplashWindowPhaseSpy,
 }));
 
 vi.mock('@/app/main/window/bootCoordinator', () => ({
     registerBootWindows: registerBootWindowsSpy,
+    reportMainBootStatus: reportMainBootStatusSpy,
 }));
 
 describe('bootstrapMainProcess', () => {
@@ -226,26 +226,16 @@ describe('bootstrapMainProcess', () => {
         expect(registerBootWindowsSpy).toHaveBeenCalledWith({
             mainWindow: { id: 'window-main' },
             splashWindow: { id: 'window-splash' },
-            onDelayedSplash: expect.any(Function),
         });
-        const delayedSplashRegistrationCall = registerBootWindowsSpy.mock.calls[0] as
-            | [{ onDelayedSplash: () => void }]
-            | undefined;
-        if (!delayedSplashRegistrationCall) {
-            throw new Error('Expected registerBootWindows to be called.');
-        }
-        const [delayedSplashRegistration] = delayedSplashRegistrationCall;
-        delayedSplashRegistration.onDelayedSplash();
-        expect(updateSplashWindowPhaseSpy).toHaveBeenCalledWith(
-            { id: 'window-splash' },
-            {
-                appPath: 'M:\\Neonsy\\Projects\\NeonConductor\\Project',
-                devServerUrl: 'http://localhost:5173',
-                isPackaged: false,
-                mainDirname: 'M:\\Neonsy\\Projects\\NeonConductor\\Project\\electron\\main',
-                resourcesPath: process.resourcesPath,
-            },
-            'delayed'
+        expect(reportMainBootStatusSpy.mock.calls).toEqual(
+            expect.arrayContaining([
+                [{ stage: 'main_initializing' }],
+                [{ stage: 'storage_ready' }],
+                [{ stage: 'persistence_ready' }],
+                [{ stage: 'secrets_ready' }],
+                [{ stage: 'windows_ready' }],
+                [{ stage: 'renderer_connecting', blockingPrerequisite: 'renderer_first_report' }],
+            ])
         );
         expect(registerWindowStateBridgeSpy).toHaveBeenCalledWith({ id: 'window-main' });
         expect(createIPCHandlerInputSpy).toHaveBeenCalledWith(

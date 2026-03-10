@@ -4,7 +4,7 @@ import { BOOT_CRITICAL_QUERY_OPTIONS } from '@/web/components/runtime/startupQue
 import { PROGRESSIVE_QUERY_OPTIONS } from '@/web/lib/query/progressiveQueryOptions';
 import { trpc } from '@/web/trpc/client';
 
-import type { TopLevelTab } from '@/app/backend/runtime/contracts';
+import type { TopLevelTab } from '@/shared/contracts';
 
 interface UseConversationQueriesInput {
     profileId: string;
@@ -158,3 +158,4 @@ export function useConversationQueries(input: UseConversationQueriesInput) {
         orchestratorLatestQuery,
     };
 }
+

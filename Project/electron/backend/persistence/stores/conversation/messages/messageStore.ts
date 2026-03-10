@@ -3,8 +3,8 @@ import { parseEntityId, parseEnumValue, parseJsonRecord } from '@/app/backend/pe
 import { nowIso } from '@/app/backend/persistence/stores/shared/utils';
 import type { MessagePartRecord, MessageRecord } from '@/app/backend/persistence/types';
 import type { EntityId } from '@/app/backend/runtime/contracts';
-import { createEntityId } from '@/app/backend/runtime/contracts';
 import { runtimeMessagePartTypes } from '@/app/backend/runtime/contracts';
+import { createEntityId } from '@/app/backend/runtime/identity/entityIds';
 
 const messageRoles = ['user', 'assistant', 'system', 'tool'] as const;
 type MessageRole = (typeof messageRoles)[number];
@@ -245,3 +245,4 @@ export class MessageStore {
 }
 
 export const messageStore = new MessageStore();
+

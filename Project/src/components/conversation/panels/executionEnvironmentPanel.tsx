@@ -8,7 +8,8 @@ import {
 import { Button } from '@/web/components/ui/button';
 
 import type { ThreadListRecord, WorktreeRecord } from '@/app/backend/persistence/types';
-import type { TopLevelTab } from '@/app/backend/runtime/contracts';
+
+import type { TopLevelTab } from '@/shared/contracts';
 
 interface ExecutionEnvironmentPanelProps {
     topLevelTab: TopLevelTab;
@@ -265,3 +266,4 @@ export function ExecutionEnvironmentPanel({
         </section>
     );
 }
+

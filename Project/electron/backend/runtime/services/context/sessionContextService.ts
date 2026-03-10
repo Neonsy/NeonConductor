@@ -5,13 +5,13 @@ import type { SessionContextCompactionRecord } from '@/app/backend/persistence/t
 import { getProviderAdapter } from '@/app/backend/providers/adapters';
 import type { ComposerImageAttachmentInput } from '@/app/backend/runtime/contracts';
 import {
-    createEntityId,
     type EntityId,
     type CompactSessionResult,
     type ResolvedContextPolicy,
     type ResolvedContextState,
     type TokenCountEstimate,
 } from '@/app/backend/runtime/contracts';
+import { createEntityId } from '@/app/backend/runtime/identity/entityIds';
 import { errOp, okOp, type OperationalResult } from '@/app/backend/runtime/services/common/operationalError';
 import { contextPolicyService } from '@/app/backend/runtime/services/context/policyService';
 import { tokenCountingService } from '@/app/backend/runtime/services/context/tokenCountingService';

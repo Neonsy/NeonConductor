@@ -5,7 +5,7 @@ import {
     type RunTargetSelection,
 } from '@/web/components/conversation/shell/workspace/helpers';
 
-import type { RuntimeRunOptions } from '@/app/backend/runtime/contracts';
+import type { RuntimeRunOptions } from '@/shared/contracts';
 import type {
     ComposerImageAttachmentInput,
     EntityId,
@@ -14,7 +14,7 @@ import type {
     RuntimeProviderId,
     SessionStartRunInput,
     TopLevelTab,
-} from '@/app/backend/runtime/contracts';
+} from '@/shared/contracts';
 
 interface ProviderAuthView {
     label: string;
@@ -139,3 +139,4 @@ export async function submitPrompt<
         input.onError(toActionableRunError(message, providerLabel));
     }
 }
+

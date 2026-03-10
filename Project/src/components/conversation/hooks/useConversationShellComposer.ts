@@ -19,7 +19,7 @@ import type {
     RuntimeRunOptions,
     SessionStartRunInput,
     TopLevelTab,
-} from '@/app/backend/runtime/contracts';
+} from '@/shared/contracts';
 
 interface ProviderAuthView {
     label: string;
@@ -315,3 +315,4 @@ export function useConversationShellComposer<
         },
     };
 }
+

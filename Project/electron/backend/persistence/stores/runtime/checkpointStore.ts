@@ -2,7 +2,8 @@ import { getPersistence } from '@/app/backend/persistence/db';
 import { parseEntityId, parseEnumValue } from '@/app/backend/persistence/stores/shared/rowParsers';
 import { nowIso } from '@/app/backend/persistence/stores/shared/utils';
 import type { CheckpointRecord } from '@/app/backend/persistence/types';
-import { createEntityId, topLevelTabs } from '@/app/backend/runtime/contracts';
+import { topLevelTabs } from '@/app/backend/runtime/contracts';
+import { createEntityId } from '@/app/backend/runtime/identity/entityIds';
 
 function mapCheckpointRecord(row: {
     id: string;
@@ -141,3 +142,4 @@ export class CheckpointStore {
 }
 
 export const checkpointStore = new CheckpointStore();
+

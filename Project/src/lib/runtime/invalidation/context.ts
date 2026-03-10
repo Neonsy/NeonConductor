@@ -3,7 +3,8 @@ import { readConversationSelectionState } from '@/web/lib/runtime/invalidation/s
 import type { RuntimeEventContext } from '@/web/lib/runtime/invalidation/types';
 
 import type { RuntimeEventRecordV1 } from '@/app/backend/persistence/types';
-import type { EntityId, TopLevelTab } from '@/app/backend/runtime/contracts';
+
+import type { EntityId, TopLevelTab } from '@/shared/contracts';
 
 function readString(value: unknown): string | undefined {
     return typeof value === 'string' && value.trim().length > 0 ? value : undefined;
@@ -76,3 +77,4 @@ export function hasSelectedWorkspaceImpact(context: RuntimeEventContext): boolea
 
     return Boolean(!context.runId && context.sessionId && context.selection.selectedSessionId === context.sessionId);
 }
+

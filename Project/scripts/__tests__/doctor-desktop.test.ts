@@ -1,12 +1,20 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { parseDesktopDoctorScope, resolveDesktopDoctorPaths } from '../doctor-desktop';
+import {
+    assertSandboxedPreloadBundles,
+    parseDesktopDoctorScope,
+    preloadBundleUsesUnsupportedModuleSyntax,
+    resolveDesktopDoctorPaths,
+} from '../doctor-desktop';
 
 describe('doctor-desktop', () => {
     const previousUserDataPath = process.env['NEONCONDUCTOR_USER_DATA_PATH'];
     const previousRuntimeNamespace = process.env['NEONCONDUCTOR_RUNTIME_NAMESPACE'];
     const previousPersistenceChannel = process.env['NEONCONDUCTOR_PERSISTENCE_CHANNEL'];
+    const temporaryDirectories: string[] = [];
 
     afterEach(() => {
         if (previousUserDataPath === undefined) {
@@ -25,6 +33,13 @@ describe('doctor-desktop', () => {
             delete process.env['NEONCONDUCTOR_PERSISTENCE_CHANNEL'];
         } else {
             process.env['NEONCONDUCTOR_PERSISTENCE_CHANNEL'] = previousPersistenceChannel;
+        }
+
+        for (const temporaryDirectory of temporaryDirectories.splice(0)) {
+            rmSync(temporaryDirectory, {
+                force: true,
+                recursive: true,
+            });
         }
     });
 
@@ -66,5 +81,44 @@ describe('doctor-desktop', () => {
             logsRoot: path.join(`${packagedUserDataPath}-dev`, 'logs'),
             isDevIsolatedStorage: true,
         });
+    });
+
+    it('treats classic sandboxed preload bundles as valid desktop build output', () => {
+        const distElectronRoot = mkdtempSync(path.join(os.tmpdir(), 'doctor-desktop-'));
+        temporaryDirectories.push(distElectronRoot);
+
+        writeFileSync(path.join(distElectronRoot, 'mainWindow.js'), '"use strict";const electron=require("electron");');
+        writeFileSync(path.join(distElectronRoot, 'splashWindow.js'), '"use strict";const electron=require("electron");');
+
+        expect(assertSandboxedPreloadBundles(distElectronRoot)).toMatchObject([
+            {
+                bundleName: 'mainWindow.js',
+                exists: true,
+                usesUnsupportedModuleSyntax: false,
+            },
+            {
+                bundleName: 'splashWindow.js',
+                exists: true,
+                usesUnsupportedModuleSyntax: false,
+            },
+        ]);
+    });
+
+    it('rejects sandboxed preload bundles that still contain top-level ESM import syntax', () => {
+        const distElectronRoot = mkdtempSync(path.join(os.tmpdir(), 'doctor-desktop-'));
+        temporaryDirectories.push(distElectronRoot);
+
+        writeFileSync(path.join(distElectronRoot, 'mainWindow.js'), 'import { contextBridge } from "electron";');
+        writeFileSync(path.join(distElectronRoot, 'splashWindow.js'), '"use strict";const electron=require("electron");');
+
+        expect(() => assertSandboxedPreloadBundles(distElectronRoot)).toThrow(
+            /contains top-level ESM syntax/i
+        );
+    });
+
+    it('detects unsupported module syntax using the shared preload classifier', () => {
+        expect(preloadBundleUsesUnsupportedModuleSyntax('import { contextBridge } from "electron";')).toBe(true);
+        expect(preloadBundleUsesUnsupportedModuleSyntax('export const bridge = true;')).toBe(true);
+        expect(preloadBundleUsesUnsupportedModuleSyntax('"use strict";const electron=require("electron");')).toBe(false);
     });
 });

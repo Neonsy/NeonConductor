@@ -5,7 +5,7 @@ import {
     type ComposerImageCompressionError,
 } from '@/web/components/conversation/hooks/composerImageCompressionErrors';
 
-import type { ComposerImageAttachmentInput } from '@/app/backend/runtime/contracts';
+import type { ComposerImageAttachmentInput } from '@/shared/contracts';
 
 interface ImageCompressionWorkerSuccessMessage {
     requestId: string;
@@ -221,3 +221,4 @@ export function resetSharedComposerImageCompressionClientForTests(): void {
     sharedComposerImageCompressionClient?.dispose();
     sharedComposerImageCompressionClient = undefined;
 }
+

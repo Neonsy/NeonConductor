@@ -11,9 +11,9 @@ import { appLog, flushAppLogger, initAppLogger } from '@/app/main/logging';
 import { devServerUrl, getMainDirname, isDev } from '@/app/main/runtime/env';
 import { resolveDesktopStorage, resolveDesktopStoragePaths } from '@/app/main/runtime/storage';
 import { attachCspHeaders } from '@/app/main/security/cspHeaders';
-import { registerBootWindows } from '@/app/main/window/bootCoordinator';
+import { registerBootWindows, reportMainBootStatus } from '@/app/main/window/bootCoordinator';
 import { createMainWindow } from '@/app/main/window/factory';
-import { createSplashWindow, updateSplashWindowPhase } from '@/app/main/window/splash';
+import { createSplashWindow } from '@/app/main/window/splash';
 
 interface BootstrapDeps {
     createContext: (opts: CreateContextOptions) => Promise<Context>;
@@ -61,9 +61,9 @@ export function bootstrapMainProcess(deps: BootstrapDeps, importMetaUrl: string)
         registerBootWindows({
             mainWindow: nextMainWindow,
             splashWindow,
-            onDelayedSplash: () => {
-                void updateSplashWindowPhase(splashWindow, splashWindowOptions, 'delayed');
-            },
+        });
+        reportMainBootStatus({
+            stage: 'windows_ready',
         });
         return nextMainWindow;
     }
@@ -74,6 +74,9 @@ export function bootstrapMainProcess(deps: BootstrapDeps, importMetaUrl: string)
             initAppLogger({
                 isDev,
                 version: app.getVersion(),
+            });
+            reportMainBootStatus({
+                stage: 'main_initializing',
             });
 
             const resolvedStorage = resolveDesktopStorage({
@@ -93,9 +96,15 @@ export function bootstrapMainProcess(deps: BootstrapDeps, importMetaUrl: string)
                 dbPath: storagePaths.dbPath,
                 isDevIsolatedStorage: resolvedStorage.isDevIsolatedStorage,
             });
+            reportMainBootStatus({
+                stage: 'storage_ready',
+            });
 
             initializePersistence({
                 dbPath: storagePaths.dbPath,
+            });
+            reportMainBootStatus({
+                stage: 'persistence_ready',
             });
             initializeSecretStore();
             const secretStoreInfo = getSecretStoreInfo();
@@ -103,6 +112,9 @@ export function bootstrapMainProcess(deps: BootstrapDeps, importMetaUrl: string)
                 tag: 'secrets',
                 message: 'Provider secrets initialized.',
                 backend: secretStoreInfo.backend,
+            });
+            reportMainBootStatus({
+                stage: 'secrets_ready',
             });
 
             // Remove default menu bar (File, Edit, View, Help)
@@ -119,6 +131,10 @@ export function bootstrapMainProcess(deps: BootstrapDeps, importMetaUrl: string)
                 router: appRouter,
                 windows: [mainWindow],
                 createContext,
+            });
+            reportMainBootStatus({
+                stage: 'renderer_connecting',
+                blockingPrerequisite: 'renderer_first_report',
             });
 
             app.on('browser-window-created', (_event, window) => {

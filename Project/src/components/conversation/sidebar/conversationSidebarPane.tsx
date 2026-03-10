@@ -18,7 +18,8 @@ import { trpc } from '@/web/trpc/client';
 
 import type { ConversationRecord, TagRecord, ThreadListRecord, ThreadRecord, ThreadTagRecord } from '@/app/backend/persistence/types';
 import type { SessionSummaryRecord } from '@/app/backend/persistence/types';
-import type { EntityId, TopLevelTab } from '@/app/backend/runtime/contracts';
+
+import type { EntityId, TopLevelTab } from '@/shared/contracts';
 
 interface ConversationSidebarPaneProps {
     profileId: string;
@@ -572,3 +573,4 @@ export function ConversationSidebarPane({
         </>
     );
 }
+

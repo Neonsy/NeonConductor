@@ -12,7 +12,8 @@ import type {
     OpenAISubscriptionUsageSummary,
     ProviderUsageSummary,
 } from '@/app/backend/persistence/types';
-import type { KiloAccountContext } from '@/app/backend/runtime/contracts';
+
+import type { KiloAccountContext } from '@/shared/contracts';
 
 import type { ReactNode } from 'react';
 
@@ -281,3 +282,4 @@ export function ProviderStatusSection({
         </section>
     );
 }
+

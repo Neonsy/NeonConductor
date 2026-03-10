@@ -1,4 +1,4 @@
-import type { TopLevelTab } from '@/app/backend/runtime/contracts';
+import type { TopLevelTab } from '@/shared/contracts';
 
 export function resolveTabSwitchNotice(
     currentTab: TopLevelTab,
@@ -18,3 +18,4 @@ export function resolveTabSwitchNotice(
         notice: `Switched to ${nextTab} to open this thread.`,
     };
 }
+

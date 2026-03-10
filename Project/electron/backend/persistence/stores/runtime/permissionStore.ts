@@ -9,12 +9,12 @@ import {
 } from '@/app/backend/persistence/stores/shared/utils';
 import type { PermissionRecord } from '@/app/backend/persistence/types';
 import {
-    createEntityId,
     permissionPolicies,
     permissionScopeKinds,
     type PermissionPolicy,
     type PermissionResolution,
 } from '@/app/backend/runtime/contracts';
+import { createEntityId } from '@/app/backend/runtime/identity/entityIds';
 
 const permissionDecisions = ['pending', 'granted', 'denied'] as const;
 const permissionResolvedScopes = ['once', 'profile', 'workspace'] as const;
@@ -382,3 +382,4 @@ export class PermissionStore {
 }
 
 export const permissionStore = new PermissionStore();
+

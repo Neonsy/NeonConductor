@@ -8,6 +8,7 @@ import { shell } from 'electron';
 import { windowStateSubscriptionInputSchema } from '@/app/backend/runtime/contracts';
 import { readObject, readString } from '@/app/backend/runtime/contracts/parsers/helpers';
 import { publicProcedure, router } from '@/app/backend/trpc/init';
+import { bootStatusInputSchema, reportBootStatus } from '@/app/backend/trpc/routers/system/reportBootStatus';
 import { signalReady } from '@/app/backend/trpc/routers/system/signalReady';
 import {
     closeWindow,
@@ -47,6 +48,7 @@ function waitForNextWindowStateEvent(cursor: number, signal: AbortSignal): Promi
 export const systemRouter = router({
     // Called by renderer when React has rendered, to show the window
     signalReady: publicProcedure.mutation(({ ctx }) => signalReady(ctx.win)),
+    reportBootStatus: publicProcedure.input(bootStatusInputSchema).mutation(({ ctx, input }) => reportBootStatus(ctx.win, input)),
     // Custom title bar controls via existing tRPC IPC channel
     getWindowState: publicProcedure.query(({ ctx }) => getWindowState(ctx.win)),
     subscribeWindowState: publicProcedure.input(windowStateSubscriptionInputSchema).subscription(async function* ({

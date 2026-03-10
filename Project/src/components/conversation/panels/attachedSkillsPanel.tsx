@@ -5,7 +5,7 @@ import { useDebouncedQueryValue } from '@/web/lib/hooks/useDebouncedQueryValue';
 import { PROGRESSIVE_QUERY_OPTIONS } from '@/web/lib/query/progressiveQueryOptions';
 import { trpc } from '@/web/trpc/client';
 
-import type { EntityId, SkillfileDefinition } from '@/app/backend/runtime/contracts';
+import type { EntityId, SkillfileDefinition } from '@/shared/contracts';
 
 interface AttachedSkillsPanelProps {
     profileId: string;
@@ -238,3 +238,4 @@ export function AttachedSkillsPanel({
         </section>
     );
 }
+

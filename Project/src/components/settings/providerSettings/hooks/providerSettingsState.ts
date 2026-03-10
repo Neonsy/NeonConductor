@@ -1,6 +1,6 @@
 import type { ActiveAuthFlow } from '@/web/components/settings/providerSettings/types';
 
-import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
+import type { RuntimeProviderId } from '@/shared/contracts';
 
 export function resetProviderSettingsState(input: {
     setActiveAuthFlow: (value: ActiveAuthFlow | undefined) => void;
@@ -27,3 +27,4 @@ export function resolvePinnedProviderId(input: {
 }): string | undefined {
     return input.pinnedProviderId || input.availableProviderIds[0];
 }
+

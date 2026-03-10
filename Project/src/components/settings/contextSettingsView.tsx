@@ -14,7 +14,7 @@ import { SettingsSelectionRail } from '@/web/components/settings/shared/settings
 import { PROGRESSIVE_QUERY_OPTIONS } from '@/web/lib/query/progressiveQueryOptions';
 import { trpc } from '@/web/trpc/client';
 
-import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
+import type { RuntimeProviderId } from '@/shared/contracts';
 
 function formatTokenCount(value: number): string {
     return new Intl.NumberFormat('en-US').format(value);
@@ -478,3 +478,4 @@ export function ContextSettingsView({ activeProfileId }: ContextSettingsViewProp
         </section>
     );
 }
+

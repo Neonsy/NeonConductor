@@ -2,7 +2,8 @@ import type { ModeExecutionPanelProps } from '@/web/components/conversation/pane
 import { DEFAULT_RUN_OPTIONS, type RunTargetSelection } from '@/web/components/conversation/shell/workspace/helpers';
 
 import type { OrchestratorRunRecord, OrchestratorStepRecord } from '@/app/backend/persistence/types';
-import type { EntityId, PlanRecordView, RuntimeProviderId } from '@/app/backend/runtime/contracts';
+
+import type { EntityId, PlanRecordView, RuntimeProviderId } from '@/shared/contracts';
 
 interface MutationLike<TInput, TResult> {
     isPending: boolean;
@@ -154,3 +155,4 @@ export function buildConversationPlanOrchestrator(input: BuildConversationPlanOr
         },
     };
 }
+

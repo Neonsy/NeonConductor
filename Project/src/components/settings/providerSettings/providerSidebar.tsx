@@ -1,7 +1,7 @@
 import type { ProviderListItem } from '@/web/components/settings/providerSettings/types';
 import { SettingsSelectionRail } from '@/web/components/settings/shared/settingsSelectionRail';
 
-import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
+import type { RuntimeProviderId } from '@/shared/contracts';
 
 interface ProviderSidebarProps {
     providers: ProviderListItem[];
@@ -46,3 +46,4 @@ export function ProviderSidebar({
         />
     );
 }
+

@@ -11,7 +11,8 @@ import { invalidateRuntimeResetQueries } from '@/web/lib/runtime/invalidation/qu
 import { trpc } from '@/web/trpc/client';
 
 import type { ProfileRecord } from '@/app/backend/persistence/types';
-import { FACTORY_RESET_CONFIRMATION_TEXT } from '@/app/backend/runtime/contracts';
+
+import { FACTORY_RESET_CONFIRMATION_TEXT } from '@/shared/contracts';
 
 export function useProfileSettingsController(input: {
     activeProfileId: string;
@@ -394,3 +395,4 @@ export function useProfileSettingsController(input: {
         ...actions,
     };
 }
+

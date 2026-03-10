@@ -4,8 +4,9 @@ import { threadStore } from '@/app/backend/persistence/stores/conversation/threa
 import { parseEntityId, parseEnumValue } from '@/app/backend/persistence/stores/shared/rowParsers';
 import { nowIso } from '@/app/backend/persistence/stores/shared/utils';
 import type { SessionSummaryRecord } from '@/app/backend/persistence/types';
-import { createEntityId, runStatuses, sessionKinds } from '@/app/backend/runtime/contracts';
+import { runStatuses, sessionKinds } from '@/app/backend/runtime/contracts';
 import type { EntityId, RunStatus, SessionKind } from '@/app/backend/runtime/contracts';
+import { createEntityId } from '@/app/backend/runtime/identity/entityIds';
 import { DataCorruptionError } from '@/app/backend/runtime/services/common/fatalErrors';
 import { errOp, okOp, type OperationalResult } from '@/app/backend/runtime/services/common/operationalError';
 
@@ -340,3 +341,4 @@ export class SessionStore {
 }
 
 export const sessionStore = new SessionStore();
+

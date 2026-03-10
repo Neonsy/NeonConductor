@@ -2,7 +2,7 @@ import { BOOT_CRITICAL_QUERY_OPTIONS } from '@/web/components/runtime/startupQue
 import { resolveWorkspaceActiveModeKey, MISSING_PROFILE_ID } from '@/web/components/runtime/workspaceSurfaceModel';
 import { trpc } from '@/web/trpc/client';
 
-import type { TopLevelTab } from '@/app/backend/runtime/contracts';
+import type { TopLevelTab } from '@/shared/contracts';
 
 export function useWorkspaceModeState(input: {
     resolvedProfileId: string | undefined;
@@ -50,6 +50,8 @@ export function useWorkspaceModeState(input: {
         activeModeKey: resolveWorkspaceActiveModeKey(input.topLevelTab, modeActiveQuery.data?.activeMode.modeKey),
         hasResolvedInitialMode:
             Boolean(input.resolvedProfileId) && (!modeActiveQuery.isPending || !modeListQuery.isPending),
+        modePending: Boolean(input.resolvedProfileId) && (modeActiveQuery.isPending || modeListQuery.isPending),
+        modeErrorMessage: modeActiveQuery.error?.message ?? modeListQuery.error?.message,
         setActiveModeMutation,
         selectMode: async (modeKey: string) => {
             if (!modeKey || setActiveModeMutation.isPending || !input.resolvedProfileId) {
@@ -65,3 +67,4 @@ export function useWorkspaceModeState(input: {
         },
     };
 }
+

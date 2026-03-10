@@ -10,6 +10,10 @@ import {
     resolvePackagedRuntimeNamespaceFromEnv,
     type RuntimeStorageNamespace,
 } from '@/app/main/runtime/storage';
+import {
+    MAIN_WINDOW_PRELOAD_BUNDLE_NAME,
+    SPLASH_WINDOW_PRELOAD_BUNDLE_NAME,
+} from '@/app/main/window/preloadPaths';
 
 import { scriptLog } from '@/scripts/logger';
 
@@ -32,6 +36,13 @@ export interface DesktopDoctorPaths {
     dbPath: string;
     logsRoot: string;
     isDevIsolatedStorage: boolean;
+}
+
+export interface SandboxedPreloadBundleCheck {
+    bundleName: string;
+    bundlePath: string;
+    exists: boolean;
+    usesUnsupportedModuleSyntax: boolean;
 }
 
 export function parseDesktopDoctorScope(argv: string[] = process.argv.slice(2)): DesktopDoctorScope {
@@ -145,9 +156,64 @@ function countRows(database: DatabaseSync, tableName: string): number | null {
     return readOptionalNumberField(row, 'count') ?? 0;
 }
 
+export function preloadBundleUsesUnsupportedModuleSyntax(source: string): boolean {
+    return source.split(/\r?\n/u).some((line) => {
+        const trimmedLine = line.trimStart();
+        return (
+            trimmedLine.startsWith('import ') ||
+            trimmedLine.startsWith("import '") ||
+            trimmedLine.startsWith('import "') ||
+            trimmedLine.startsWith('export ')
+        );
+    });
+}
+
+export function inspectSandboxedPreloadBundles(mainDirname: string): SandboxedPreloadBundleCheck[] {
+    return [MAIN_WINDOW_PRELOAD_BUNDLE_NAME, SPLASH_WINDOW_PRELOAD_BUNDLE_NAME].map((bundleName) => {
+        const bundlePath = path.join(mainDirname, bundleName);
+        if (!existsSync(bundlePath)) {
+            return {
+                bundleName,
+                bundlePath,
+                exists: false,
+                usesUnsupportedModuleSyntax: false,
+            };
+        }
+
+        const source = readFileSync(bundlePath, 'utf8');
+        return {
+            bundleName,
+            bundlePath,
+            exists: true,
+            usesUnsupportedModuleSyntax: preloadBundleUsesUnsupportedModuleSyntax(source),
+        };
+    });
+}
+
+export function assertSandboxedPreloadBundles(mainDirname: string): SandboxedPreloadBundleCheck[] {
+    const bundleChecks = inspectSandboxedPreloadBundles(mainDirname);
+    const missingBundle = bundleChecks.find((bundleCheck) => !bundleCheck.exists);
+    if (missingBundle) {
+        throw new Error(
+            `Sandboxed preload bundle "${missingBundle.bundleName}" is missing at "${missingBundle.bundlePath}".`
+        );
+    }
+
+    const invalidBundle = bundleChecks.find((bundleCheck) => bundleCheck.usesUnsupportedModuleSyntax);
+    if (invalidBundle) {
+        throw new Error(
+            `Sandboxed preload bundle "${invalidBundle.bundleName}" at "${invalidBundle.bundlePath}" contains top-level ESM syntax.`
+        );
+    }
+
+    return bundleChecks;
+}
+
 export function runDesktopDoctor(scope = parseDesktopDoctorScope()): void {
     const packageJson = readPackageJson();
     const desktopPaths = resolveDesktopDoctorPaths(scope);
+    const distElectronRoot = path.join(process.cwd(), 'dist-electron');
+    const preloadBundleChecks = existsSync(distElectronRoot) ? assertSandboxedPreloadBundles(distElectronRoot) : null;
     if (!existsSync(desktopPaths.dbPath)) {
         scriptLog.info({
             tag: 'doctor.desktop',
@@ -155,6 +221,8 @@ export function runDesktopDoctor(scope = parseDesktopDoctorScope()): void {
             nodeVersion: process.version,
             electronVersion: packageJson.devDependencies?.['electron'] ?? 'unknown',
             ...desktopPaths,
+            hasDesktopBuild: preloadBundleChecks !== null,
+            preloadBundleChecks,
         });
         return;
     }
@@ -172,6 +240,8 @@ export function runDesktopDoctor(scope = parseDesktopDoctorScope()): void {
             nodeVersion: process.version,
             electronVersion: packageJson.devDependencies?.['electron'] ?? 'unknown',
             ...desktopPaths,
+            hasDesktopBuild: preloadBundleChecks !== null,
+            preloadBundleChecks,
             hasProviderSecretsTable: tableExists(database, 'provider_secrets'),
             providerSecretsCount,
         });

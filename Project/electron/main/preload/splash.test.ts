@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { BootStatusSnapshot } from '@/app/shared/splashContract';
+
 const {
     exposeInMainWorldSpy,
     ipcOnSpy,
@@ -31,21 +33,38 @@ describe('splash preload bridge', () => {
         ipcPhaseHandlerState.handler = undefined;
     });
 
-    it('exposes an onPhaseChange bridge that replays the latest splash phase', async () => {
+    it('exposes an onStatusChange bridge that replays the latest boot status', async () => {
         await import('@/app/main/preload/splash');
 
         expect(exposeInMainWorldSpy).toHaveBeenCalledTimes(1);
         const splashBridge = exposeInMainWorldSpy.mock.calls[0]?.[1] as {
-            onPhaseChange: (listener: (phase: 'starting' | 'delayed') => void) => () => void;
+            onStatusChange: (listener: (status: BootStatusSnapshot) => void) => () => void;
         };
 
-        const phaseListener = vi.fn();
-        splashBridge.onPhaseChange(phaseListener);
+        const statusListener = vi.fn();
+        splashBridge.onStatusChange(statusListener);
 
-        expect(phaseListener).toHaveBeenCalledWith('starting');
+        expect(statusListener).toHaveBeenCalledWith(
+            expect.objectContaining({
+                stage: 'main_initializing',
+            })
+        );
 
-        ipcPhaseHandlerState.handler?.({}, 'delayed');
+        ipcPhaseHandlerState.handler?.({}, {
+            stage: 'profile_resolving',
+            headline: 'Resolving the active profile',
+            detail: 'Resolving the active workspace profile.',
+            isStuck: false,
+            blockingPrerequisite: 'resolved_profile',
+            elapsedMs: 100,
+            source: 'renderer',
+        });
 
-        expect(phaseListener).toHaveBeenLastCalledWith('delayed');
+        expect(statusListener).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+                stage: 'profile_resolving',
+                blockingPrerequisite: 'resolved_profile',
+            })
+        );
     });
 });

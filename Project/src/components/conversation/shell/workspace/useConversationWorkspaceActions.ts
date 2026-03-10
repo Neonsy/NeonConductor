@@ -6,11 +6,12 @@ import { patchWorktreeCaches } from '@/web/components/conversation/shell/workspa
 import { trpc } from '@/web/trpc/client';
 
 import type { PermissionRecord } from '@/app/backend/persistence/types';
+
 import type {
     ConversationSetThreadExecutionEnvironmentInput,
     EntityId,
     PermissionResolution,
-} from '@/app/backend/runtime/contracts';
+} from '@/shared/contracts';
 
 interface UseConversationWorkspaceActionsInput {
     profileId: string;
@@ -178,3 +179,4 @@ export function useConversationWorkspaceActions(input: UseConversationWorkspaceA
         },
     };
 }
+

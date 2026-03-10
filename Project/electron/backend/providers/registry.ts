@@ -3,9 +3,15 @@ import { err, ok, type Result } from 'neverthrow';
 import { InvariantError } from '@/app/backend/runtime/services/common/fatalErrors';
 import { appLog } from '@/app/main/logging';
 
-export const firstPartyProviderIds = ['kilo', 'openai', 'zai', 'moonshot'] as const;
+import {
+    firstPartyProviderIds,
+    providerIds,
+    type FirstPartyProviderId,
+} from '@/shared/contracts/enums';
 
-export type FirstPartyProviderId = (typeof firstPartyProviderIds)[number];
+export { firstPartyProviderIds, providerIds };
+export type { FirstPartyProviderId };
+
 export interface UnsupportedProviderIdError {
     code: 'provider_not_supported';
     message: string;
@@ -87,8 +93,6 @@ const providerDefinitions: Record<FirstPartyProviderId, ProviderDefinition> = {
         supportsModelProviderListing: false,
     },
 };
-
-export const providerIds = firstPartyProviderIds;
 
 export function listProviderDefinitions(): ProviderDefinition[] {
     return firstPartyProviderIds.map((providerId) => providerDefinitions[providerId]);

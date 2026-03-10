@@ -6,7 +6,7 @@ import { ImageLightboxModal } from '@/web/components/conversation/panels/imageLi
 import { Button } from '@/web/components/ui/button';
 import { readRelatedTargetNode } from '@/web/lib/dom/readRelatedTargetNode';
 
-import type { ResolvedContextState } from '@/app/backend/runtime/contracts';
+import type { ResolvedContextState } from '@/shared/contracts';
 
 interface ProviderOption {
     id: string;
@@ -512,3 +512,4 @@ export function ComposerActionPanel({
         </>
     );
 }
+

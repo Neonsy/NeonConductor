@@ -1,5 +1,5 @@
 import { messageMediaStore, messageStore, runStore, sessionStore } from '@/app/backend/persistence/stores';
-import { createEntityId } from '@/app/backend/runtime/contracts';
+import { createEntityId } from '@/app/backend/runtime/identity/entityIds';
 import { eventMetadata } from '@/app/backend/runtime/services/common/logContext';
 import { decodeAttachmentBytes } from '@/app/backend/runtime/services/runExecution/contextParts';
 import { emitCacheResolutionEvent, emitTransportSelectionEvent } from '@/app/backend/runtime/services/runExecution/eventing';
@@ -153,3 +153,4 @@ export async function persistRunStart(input: {
         assistantMessageId: assistantMessage.id,
     };
 }
+

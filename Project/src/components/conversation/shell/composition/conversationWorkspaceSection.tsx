@@ -10,7 +10,8 @@ import type {
     SessionSummaryRecord,
     ThreadListRecord,
 } from '@/app/backend/persistence/types';
-import type { DiffOverview, ResolvedContextState, RuntimeProviderId } from '@/app/backend/runtime/contracts';
+
+import type { DiffOverview, ResolvedContextState, RuntimeProviderId } from '@/shared/contracts';
 
 import type { ReactNode } from 'react';
 
@@ -271,3 +272,4 @@ export function ConversationWorkspaceSection({
         </section>
     );
 }
+

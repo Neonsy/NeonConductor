@@ -1,4 +1,4 @@
-import type { EntityId } from '@/app/backend/runtime/contracts';
+import type { EntityId } from '@/shared/contracts';
 
 export interface PendingMessageEdit {
     messageId: EntityId<'msg'>;
@@ -33,3 +33,4 @@ export function toEditFailureMessage(reason: string): string {
     }
     return `Edit failed: ${reason}`;
 }
+

@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useWorkspaceModeState } from '@/web/components/runtime/useWorkspaceModeState';
 import { useWorkspaceProfileState } from '@/web/components/runtime/useWorkspaceProfileState';
 
-import type { TopLevelTab } from '@/app/backend/runtime/contracts';
+import type { TopLevelTab } from '@/shared/contracts';
 
 export function useWorkspaceSurfaceController() {
     const [topLevelTab, setTopLevelTab] = useState<TopLevelTab>('chat');
@@ -22,6 +22,9 @@ export function useWorkspaceSurfaceController() {
     return {
         profiles: profileState.profiles,
         resolvedProfileId: profileState.resolvedProfileId,
+        profilePending: profileState.profilePending,
+        profileErrorMessage: profileState.profileErrorMessage,
+        hasProfiles: profileState.hasProfiles,
         topLevelTab,
         setTopLevelTab,
         showSettings,
@@ -31,6 +34,8 @@ export function useWorkspaceSurfaceController() {
         modes: modeState.modes,
         activeModeKey: modeState.activeModeKey,
         hasResolvedInitialMode: modeState.hasResolvedInitialMode,
+        modePending: modeState.modePending,
+        modeErrorMessage: modeState.modeErrorMessage,
         profileSetActiveMutation: profileState.profileSetActiveMutation,
         setActiveModeMutation: modeState.setActiveModeMutation,
         setResolvedProfile: profileState.setResolvedProfile,
@@ -38,3 +43,4 @@ export function useWorkspaceSurfaceController() {
         selectMode: modeState.selectMode,
     };
 }
+

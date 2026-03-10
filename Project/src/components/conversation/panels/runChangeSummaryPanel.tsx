@@ -1,7 +1,8 @@
 import { Button } from '@/web/components/ui/button';
 
 import type { DiffFileArtifact } from '@/app/backend/persistence/types';
-import type { DiffOverview } from '@/app/backend/runtime/contracts';
+
+import type { DiffOverview } from '@/shared/contracts';
 
 const diffStatuses: ReadonlyArray<DiffFileArtifact['status']> = [
     'added',
@@ -176,3 +177,4 @@ export function RunChangeSummaryPanel({ selectedRunId, overview, onJumpToDiffs }
         </section>
     );
 }
+

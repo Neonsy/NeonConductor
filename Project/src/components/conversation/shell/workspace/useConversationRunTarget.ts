@@ -8,7 +8,8 @@ import {
 
 import type { ProviderModelRecord, RunRecord } from '@/app/backend/persistence/types';
 import type { ProviderListItem } from '@/app/backend/providers/service/types';
-import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
+
+import type { RuntimeProviderId } from '@/shared/contracts';
 
 interface UseConversationRunTargetInput {
     providers: ProviderListItem[];
@@ -140,3 +141,4 @@ export function useConversationRunTarget(input: UseConversationRunTargetInput) {
         modelOptions,
     };
 }
+

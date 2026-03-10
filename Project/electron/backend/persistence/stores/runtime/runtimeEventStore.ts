@@ -12,7 +12,7 @@ import {
     runtimeEventDomains,
     runtimeEventOperations,
 } from '@/app/backend/persistence/types';
-import { createEntityId } from '@/app/backend/runtime/contracts';
+import { createEntityId } from '@/app/backend/runtime/identity/entityIds';
 
 export class RuntimeEventStore {
     async append(event: {
@@ -122,3 +122,4 @@ export class RuntimeEventStore {
 }
 
 export const runtimeEventStore = new RuntimeEventStore();
+

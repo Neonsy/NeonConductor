@@ -6,10 +6,11 @@ import type {
     ProviderEndpointProfileResult,
     ProviderListItem,
 } from '@/app/backend/providers/service/types';
+
 import type {
     KiloModelRoutingPreference,
     RuntimeProviderId,
-} from '@/app/backend/runtime/contracts';
+} from '@/shared/contracts';
 
 type TrpcUtils = ReturnType<typeof trpc.useUtils>;
 type ProviderListData = Awaited<ReturnType<TrpcUtils['provider']['listProviders']['fetch']>>;
@@ -139,3 +140,4 @@ export function patchProviderCache(input: {
         );
     }
 }
+

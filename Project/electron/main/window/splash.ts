@@ -3,9 +3,13 @@ import path from 'node:path';
 
 import { resolveRuntimeAssetPath } from '@/app/main/runtime/assets';
 import { resolveSplashWindowPreloadPath } from '@/app/main/window/preloadPaths';
-import { SPLASH_PHASE_CHANNEL, type SplashPhase } from '@/app/shared/splashContract';
+import {
+    INITIAL_BOOT_STATUS_SNAPSHOT,
+    SPLASH_BOOT_STATUS_CHANNEL,
+    type BootStatusSnapshot,
+} from '@/app/shared/splashContract';
 
-const splashWindowPhaseById = new Map<number, SplashPhase>();
+const splashWindowStatusById = new Map<number, BootStatusSnapshot>();
 
 export interface SplashWindowOptions {
     appPath: string;
@@ -48,21 +52,17 @@ function ensureTrailingSlash(value: string): string {
     return value.endsWith('/') ? value : `${value}/`;
 }
 
-function sendSplashPhase(window: BrowserWindow, phase: SplashPhase): void {
+function sendSplashStatus(window: BrowserWindow, status: BootStatusSnapshot): void {
     if (window.isDestroyed()) {
         return;
     }
 
-    splashWindowPhaseById.set(window.id, phase);
-    window.webContents.send(SPLASH_PHASE_CHANNEL, phase);
+    splashWindowStatusById.set(window.id, status);
+    window.webContents.send(SPLASH_BOOT_STATUS_CHANNEL, status);
 }
 
-export function updateSplashWindowPhase(
-    splashWindow: BrowserWindow,
-    _options: SplashWindowOptions,
-    phase: SplashPhase
-): Promise<void> {
-    sendSplashPhase(splashWindow, phase);
+export function updateSplashWindowStatus(splashWindow: BrowserWindow, status: BootStatusSnapshot): Promise<void> {
+    sendSplashStatus(splashWindow, status);
     return Promise.resolve();
 }
 
@@ -100,16 +100,16 @@ export function createSplashWindow(options: SplashWindowOptions): BrowserWindow 
         },
     });
 
-    splashWindowPhaseById.set(splashWindow.id, 'starting');
+    splashWindowStatusById.set(splashWindow.id, INITIAL_BOOT_STATUS_SNAPSHOT);
     splashWindow.once('ready-to-show', () => {
         splashWindow.show();
     });
     splashWindow.once('closed', () => {
-        splashWindowPhaseById.delete(splashWindow.id);
+        splashWindowStatusById.delete(splashWindow.id);
     });
     splashWindow.webContents.on('did-finish-load', () => {
-        const currentPhase = splashWindowPhaseById.get(splashWindow.id) ?? 'starting';
-        sendSplashPhase(splashWindow, currentPhase);
+        const currentStatus = splashWindowStatusById.get(splashWindow.id) ?? INITIAL_BOOT_STATUS_SNAPSHOT;
+        sendSplashStatus(splashWindow, currentStatus);
     });
     splashWindow.removeMenu();
 

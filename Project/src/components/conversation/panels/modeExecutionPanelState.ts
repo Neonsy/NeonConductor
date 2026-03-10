@@ -1,4 +1,4 @@
-import type { EntityId } from '@/app/backend/runtime/contracts';
+import type { EntityId } from '@/shared/contracts';
 
 interface PlanQuestionView {
     id: string;
@@ -49,3 +49,4 @@ export function resolveModeExecutionDraftState(input: {
         ),
     };
 }
+

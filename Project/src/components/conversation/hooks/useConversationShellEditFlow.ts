@@ -9,7 +9,8 @@ import { PROGRESSIVE_QUERY_OPTIONS } from '@/web/lib/query/progressiveQueryOptio
 import { trpc } from '@/web/trpc/client';
 
 import type { RunRecord, SessionSummaryRecord, ThreadListRecord } from '@/app/backend/persistence/types';
-import type { RuntimeProviderId, SessionEditInput, TopLevelTab } from '@/app/backend/runtime/contracts';
+
+import type { RuntimeProviderId, SessionEditInput, TopLevelTab } from '@/shared/contracts';
 
 interface UseConversationShellEditFlowInput {
     profileId: string;
@@ -177,3 +178,4 @@ export function useConversationShellEditFlow(input: UseConversationShellEditFlow
         },
     };
 }
+

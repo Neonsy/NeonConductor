@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import type { TopLevelTab } from '@/app/backend/runtime/contracts';
+import type { TopLevelTab } from '@/shared/contracts';
 
 interface CreateThreadInput {
     scope: 'detached' | 'workspace';
@@ -85,3 +85,4 @@ export function useConversationSidebarState(input: UseConversationSidebarStateIn
         addTagToThread,
     };
 }
+

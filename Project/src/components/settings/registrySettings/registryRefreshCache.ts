@@ -1,6 +1,6 @@
 import { trpc } from '@/web/trpc/client';
 
-import type { RegistryRefreshResult } from '@/app/backend/runtime/contracts';
+import type { RegistryRefreshResult } from '@/shared/contracts';
 
 type TrpcUtils = ReturnType<typeof trpc.useUtils>;
 
@@ -29,3 +29,4 @@ export function patchRegistryRefreshCaches(input: {
         modes: input.refreshResult.agentModes,
     });
 }
+

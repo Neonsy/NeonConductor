@@ -23,6 +23,7 @@
         "paths": {
             "@/web/*": ["src/*"],
             "@/app/*": ["electron/*"],
+            "@/shared/*": ["electron/shared/*"],
             "@/scripts/*": ["scripts/*"]
         },
         "types": ["node", "vite/client"]

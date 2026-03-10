@@ -1,7 +1,7 @@
 import { resolvePinnedProviderId, selectProviderWithReset } from '@/web/components/settings/providerSettings/hooks/providerSettingsState';
 import type { ActiveAuthFlow } from '@/web/components/settings/providerSettings/types';
 
-import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
+import type { RuntimeProviderId } from '@/shared/contracts';
 
 export function createProviderSettingsActions(input: {
     profileId: string;
@@ -230,3 +230,4 @@ export function createProviderSettingsActions(input: {
         },
     };
 }
+

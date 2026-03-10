@@ -5,7 +5,7 @@ import {
     releaseMessageMediaObjectUrl,
 } from '@/web/components/conversation/messages/messageMediaObjectUrlCache';
 
-import type { SessionMessageMediaPayload } from '@/app/backend/runtime/contracts';
+import type { SessionMessageMediaPayload } from '@/shared/contracts';
 
 describe('messageMediaObjectUrlCache', () => {
     const originalCreateObjectUrl = URL.createObjectURL.bind(URL);
@@ -61,3 +61,4 @@ describe('messageMediaObjectUrlCache', () => {
         expect(revokeObjectUrl).toHaveBeenCalledWith('blob:test-url');
     });
 });
+

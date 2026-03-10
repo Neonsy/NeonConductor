@@ -5,13 +5,14 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>NeonConductor</title>
     </head>
-    <body data-phase="starting">
+    <body data-boot-stage="main_initializing">
         <main class="splash-shell" aria-live="polite">
             <div class="splash-mascot">
                 <img data-splash-mascot alt="NeonConductor mascot" />
             </div>
-            <h1>NeonConductor</h1>
-            <p id="splash-subtitle">Preparing the workspace and loading your agent shell.</p>
+            <h1 id="splash-headline">Starting NeonConductor</h1>
+            <p id="splash-subtitle">Initializing the desktop runtime.</p>
+            <p id="splash-diagnostics" class="splash-diagnostics">Elapsed: 0ms</p>
             <div class="splash-progress" aria-hidden="true"></div>
         </main>
         <script type="module" src="/src/splash/main.ts"></script>

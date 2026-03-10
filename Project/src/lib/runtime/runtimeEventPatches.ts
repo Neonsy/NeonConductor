@@ -24,6 +24,7 @@ import type {
     ThreadTagRecord,
 } from '@/app/backend/persistence/types';
 import type { KiloModelProviderOption, ProviderEndpointProfileResult, ProviderListItem } from '@/app/backend/providers/service/types';
+
 import {
     executionEnvironmentModes,
     kiloDynamicSorts,
@@ -32,8 +33,8 @@ import {
     providerAuthStates,
     providerIds,
     topLevelTabs,
-} from '@/app/backend/runtime/contracts';
-import type { KiloModelRoutingPreference } from '@/app/backend/runtime/contracts';
+} from '@/shared/contracts';
+import type { KiloModelRoutingPreference } from '@/shared/contracts';
 
 const conversationScopes = ['detached', 'workspace'] as const;
 const providerCatalogStrategies = ['dynamic', 'static'] as const;
@@ -899,3 +900,4 @@ export function applyRuntimeEventPatches(
 
     return false;
 }
+

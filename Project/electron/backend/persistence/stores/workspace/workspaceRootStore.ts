@@ -3,7 +3,7 @@ import path from 'node:path';
 import { getPersistence } from '@/app/backend/persistence/db';
 import { nowIso } from '@/app/backend/persistence/stores/shared/utils';
 import type { WorkspaceRootRecord } from '@/app/backend/persistence/types';
-import { createEntityId } from '@/app/backend/runtime/contracts';
+import { createEntityId } from '@/app/backend/runtime/identity/entityIds';
 import { InvariantError } from '@/app/backend/runtime/services/common/fatalErrors';
 
 function canonicalizeWorkspacePath(inputPath: string): string {
@@ -119,3 +119,4 @@ export class WorkspaceRootStore {
 }
 
 export const workspaceRootStore = new WorkspaceRootStore();
+

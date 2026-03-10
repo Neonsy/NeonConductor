@@ -4,7 +4,7 @@ import { formatMetric } from '@/web/components/settings/providerSettings/helpers
 import type { ProviderModelOption } from '@/web/components/settings/providerSettings/types';
 import { Button } from '@/web/components/ui/button';
 
-import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
+import type { RuntimeProviderId } from '@/shared/contracts';
 
 interface ProviderDefaultModelSectionProps {
     selectedProviderId: RuntimeProviderId | undefined;
@@ -84,3 +84,4 @@ export function ProviderDefaultModelSection({
         </section>
     );
 }
+

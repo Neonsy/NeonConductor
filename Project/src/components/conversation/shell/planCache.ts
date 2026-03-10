@@ -1,6 +1,6 @@
 import { trpc } from '@/web/trpc/client';
 
-import type { EntityId, PlanRecordView, TopLevelTab } from '@/app/backend/runtime/contracts';
+import type { EntityId, PlanRecordView, TopLevelTab } from '@/shared/contracts';
 
 type TrpcUtils = ReturnType<typeof trpc.useUtils>;
 type OrchestratorLatestData = Awaited<ReturnType<TrpcUtils['orchestrator']['latestBySession']['fetch']>>;
@@ -36,3 +36,4 @@ export function setOrchestratorLatestCache(input: {
         input.latest
     );
 }
+

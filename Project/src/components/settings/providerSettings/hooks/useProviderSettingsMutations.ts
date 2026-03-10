@@ -4,7 +4,8 @@ import type { ActiveAuthFlow } from '@/web/components/settings/providerSettings/
 import { trpc } from '@/web/trpc/client';
 
 import type { ProviderAuthStateRecord } from '@/app/backend/persistence/types';
-import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
+
+import type { RuntimeProviderId } from '@/shared/contracts';
 
 interface UseProviderSettingsMutationsInput {
     profileId: string;
@@ -255,3 +256,4 @@ export function useProviderSettingsMutations(input: UseProviderSettingsMutations
         cancelAuthMutation,
     };
 }
+

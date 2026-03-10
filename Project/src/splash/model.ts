@@ -1,29 +1,48 @@
-export type SplashPhase = 'starting' | 'delayed';
+import {
+    INITIAL_BOOT_STATUS_SNAPSHOT,
+    getBootBlockingPrerequisiteLabel,
+    isBootStatusSnapshot,
+    type BootStatusSnapshot,
+} from '@/app/shared/splashContract';
 
-export interface SplashPhaseDocumentTarget {
+export interface SplashDocumentTarget {
     body: {
         dataset: Record<string, string | undefined>;
     };
     getElementById(id: string): { textContent: string | null } | null;
 }
 
-export function normalizeSplashPhase(value: string | undefined): SplashPhase {
-    return value === 'delayed' ? 'delayed' : 'starting';
+export function normalizeBootStatusSnapshot(value: unknown): BootStatusSnapshot {
+    return isBootStatusSnapshot(value) ? value : INITIAL_BOOT_STATUS_SNAPSHOT;
 }
 
-export function getSplashSubtitle(phase: SplashPhase): string {
-    return phase === 'delayed'
-        ? 'Still starting. Preparing the workspace and runtime.'
-        : 'Preparing the workspace and loading your agent shell.';
-}
+export function applyBootStatus(target: SplashDocumentTarget, status: BootStatusSnapshot): void {
+    target.body.dataset['bootStage'] = status.stage;
+    target.body.dataset['bootSource'] = status.source;
+    target.body.dataset['bootStuck'] = status.isStuck ? 'true' : 'false';
 
-export function applySplashPhase(target: SplashPhaseDocumentTarget, phase: SplashPhase): void {
-    target.body.dataset['phase'] = phase;
+    const headlineElement = target.getElementById('splash-headline');
+    if (headlineElement) {
+        headlineElement.textContent = status.headline;
+    }
 
     const subtitleElement = target.getElementById('splash-subtitle');
-    if (!subtitleElement) {
+    if (subtitleElement) {
+        subtitleElement.textContent = status.detail;
+    }
+
+    const diagnosticsElement = target.getElementById('splash-diagnostics');
+    if (!diagnosticsElement) {
         return;
     }
 
-    subtitleElement.textContent = getSplashSubtitle(phase);
+    const blockingPrerequisiteLabel = status.blockingPrerequisite
+        ? getBootBlockingPrerequisiteLabel(status.blockingPrerequisite)
+        : undefined;
+
+    diagnosticsElement.textContent = status.isStuck
+        ? `Waiting on: ${blockingPrerequisiteLabel ?? 'startup prerequisite'}`
+        : blockingPrerequisiteLabel
+          ? `Current blocker: ${blockingPrerequisiteLabel}`
+          : `Elapsed: ${String(Math.max(0, Math.round(status.elapsedMs)))}ms`;
 }

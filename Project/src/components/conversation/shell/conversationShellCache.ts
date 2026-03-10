@@ -8,7 +8,8 @@ import type {
     SessionSummaryRecord,
     ThreadListRecord,
 } from '@/app/backend/persistence/types';
-import type { EntityId } from '@/app/backend/runtime/contracts';
+
+import type { EntityId } from '@/shared/contracts';
 
 type TrpcUtils = ReturnType<typeof trpc.useUtils>;
 type SessionListData = Awaited<ReturnType<TrpcUtils['session']['list']['fetch']>>;
@@ -147,3 +148,4 @@ export function applyConversationSessionCacheUpdate(input: {
         );
     }
 }
+

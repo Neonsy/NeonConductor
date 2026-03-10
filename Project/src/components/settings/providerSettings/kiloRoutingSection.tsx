@@ -1,7 +1,7 @@
 import type { KiloModelProviderOption, KiloRoutingDraft } from '@/web/components/settings/providerSettings/types';
 import { Button } from '@/web/components/ui/button';
 
-import type { KiloDynamicSort } from '@/app/backend/runtime/contracts';
+import type { KiloDynamicSort } from '@/shared/contracts';
 
 interface KiloRoutingSectionProps {
     selectedModelId: string;
@@ -169,3 +169,4 @@ export function KiloRoutingSection({
         </section>
     );
 }
+

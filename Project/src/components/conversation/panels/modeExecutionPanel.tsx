@@ -8,7 +8,7 @@ import {
 } from '@/web/components/conversation/panels/modeExecutionPanelState';
 import { Button } from '@/web/components/ui/button';
 
-import type { EntityId, TopLevelTab } from '@/app/backend/runtime/contracts';
+import type { EntityId, TopLevelTab } from '@/shared/contracts';
 
 type PlanView = ModeExecutionPlanView;
 
@@ -277,3 +277,4 @@ export function ModeExecutionPanel({
         </section>
     );
 }
+

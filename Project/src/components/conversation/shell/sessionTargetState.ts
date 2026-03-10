@@ -1,5 +1,5 @@
-import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
-import type { EntityId } from '@/app/backend/runtime/contracts';
+import type { RuntimeProviderId } from '@/shared/contracts';
+import type { EntityId } from '@/shared/contracts';
 
 export interface SessionTargetOverride {
     providerId?: RuntimeProviderId;
@@ -37,3 +37,4 @@ export function applySessionModelOverride(
         },
     };
 }
+

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
-import { resolveSplashAssetPath, resolveSplashPageLocation, updateSplashWindowPhase } from '@/app/main/window/splash';
+import { resolveSplashAssetPath, resolveSplashPageLocation, updateSplashWindowStatus } from '@/app/main/window/splash';
 
 describe('splash window', () => {
     it('resolves the mascot from the project app path during development', () => {
@@ -52,7 +52,7 @@ describe('splash window', () => {
         });
     });
 
-    it('sends delayed phase updates over IPC instead of reloading the page', async () => {
+    it('sends structured boot status updates over IPC instead of reloading the page', async () => {
         const sendSpy = vi.fn();
         const splashWindow = {
             isDestroyed: vi.fn(() => false),
@@ -61,9 +61,25 @@ describe('splash window', () => {
             },
         };
 
-        await updateSplashWindowPhase(splashWindow as never, {} as never, 'delayed');
+        await updateSplashWindowStatus(splashWindow as never, {
+            stage: 'boot_stuck',
+            headline: 'Startup is taking longer than expected',
+            detail: 'Waiting on: shell bootstrap data.',
+            isStuck: true,
+            blockingPrerequisite: 'shell_bootstrap',
+            elapsedMs: 4000,
+            source: 'main',
+        });
 
-        expect(sendSpy).toHaveBeenCalledWith('neonconductor:splash-phase', 'delayed');
+        expect(sendSpy).toHaveBeenCalledWith('neonconductor:splash-phase', {
+            stage: 'boot_stuck',
+            headline: 'Startup is taking longer than expected',
+            detail: 'Waiting on: shell bootstrap data.',
+            isStuck: true,
+            blockingPrerequisite: 'shell_bootstrap',
+            elapsedMs: 4000,
+            source: 'main',
+        });
     });
 
     it('no longer relies on inline data pages or executeJavaScript patching', () => {

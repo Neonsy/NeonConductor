@@ -1,4 +1,4 @@
-import type { SessionMessageMediaPayload } from '@/app/backend/runtime/contracts';
+import type { SessionMessageMediaPayload } from '@/shared/contracts';
 
 interface CachedMediaObjectUrl {
     objectUrl: string;
@@ -44,3 +44,4 @@ export function releaseMessageMediaObjectUrl(mediaId: string, payload: SessionMe
     URL.revokeObjectURL(cached.objectUrl);
     mediaObjectUrlCache.delete(cacheKey);
 }
+

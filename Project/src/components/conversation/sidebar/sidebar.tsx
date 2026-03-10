@@ -5,7 +5,8 @@ import { buildConversationSidebarModel } from '@/web/components/conversation/sid
 import { Button } from '@/web/components/ui/button';
 
 import type { ConversationRecord, TagRecord, ThreadListRecord } from '@/app/backend/persistence/types';
-import type { TopLevelTab } from '@/app/backend/runtime/contracts';
+
+import type { TopLevelTab } from '@/shared/contracts';
 
 interface CreateThreadInput {
     scope: 'detached' | 'workspace';
@@ -443,3 +444,4 @@ export function ConversationSidebar({
         </aside>
     );
 }
+

@@ -1,5 +1,5 @@
-import { providerIds } from '@/app/backend/runtime/contracts';
-import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
+import { providerIds } from '@/shared/contracts';
+import type { RuntimeProviderId } from '@/shared/contracts';
 
 export function isProviderId(value: string | undefined): value is RuntimeProviderId {
     if (!value) {
@@ -96,3 +96,4 @@ export function formatDateTime(value: string | undefined): string {
 
     return date.toLocaleString();
 }
+

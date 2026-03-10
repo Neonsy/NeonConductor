@@ -2,7 +2,7 @@ import { useState } from 'react';
 
 import type { KiloRoutingDraft } from '@/web/components/settings/providerSettings/types';
 
-import type { KiloModelProviderInfo, RuntimeProviderId } from '@/app/backend/runtime/contracts';
+import type { KiloModelProviderInfo, RuntimeProviderId } from '@/shared/contracts';
 
 interface UseKiloRoutingDraftInput {
     profileId: string;
@@ -164,3 +164,4 @@ export function useKiloRoutingDraft(input: UseKiloRoutingDraftInput) {
         },
     };
 }
+

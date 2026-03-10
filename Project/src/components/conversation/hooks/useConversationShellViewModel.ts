@@ -7,7 +7,7 @@ import { useConversationRunTarget } from '@/web/components/conversation/shell/wo
 import { PROGRESSIVE_QUERY_OPTIONS } from '@/web/lib/query/progressiveQueryOptions';
 import { trpc } from '@/web/trpc/client';
 
-import type { TopLevelTab } from '@/app/backend/runtime/contracts';
+import type { TopLevelTab } from '@/shared/contracts';
 
 function buildWorkspaceScope(input: {
     selectedThread: ReturnType<typeof useThreadSidebarState>['visibleThreads'][number] | undefined;
@@ -155,3 +155,4 @@ export function useConversationShellViewModel(input: {
         }),
     };
 }
+

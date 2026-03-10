@@ -5,8 +5,9 @@ import {
     type ComposerImageCompressionResult,
 } from '@/web/components/conversation/hooks/composerImageCompressionErrors';
 
-import type { ComposerImageAttachmentInput } from '@/app/backend/runtime/contracts';
 import { readImageMimeType } from '@/app/shared/imageMimeType';
+
+import type { ComposerImageAttachmentInput } from '@/shared/contracts';
 
 const MAX_IMAGE_EDGE_PX = 2048;
 const MAX_COMPRESSED_IMAGE_BYTES = 1_500_000;
@@ -248,3 +249,4 @@ self.onmessage = (event: MessageEvent<CompressionRequestMessage>) => {
         self.postMessage(message);
     });
 };
+

@@ -33,6 +33,8 @@ interface WorkspaceBootLoaderInput {
     };
 }
 
+let workspaceBootPrefetchPromise: Promise<void> | null = null;
+
 export async function prefetchWorkspaceBootData(input: WorkspaceBootLoaderInput): Promise<void> {
     const [profileList, activeProfile] = await Promise.all([
         input.trpcUtils.profile.list.ensureData(undefined, BOOT_CRITICAL_QUERY_OPTIONS),
@@ -61,4 +63,21 @@ export async function prefetchWorkspaceBootData(input: WorkspaceBootLoaderInput)
             profileId: resolvedProfileId,
         }),
     ]);
+}
+
+export function startWorkspaceBootPrefetch(input: WorkspaceBootLoaderInput): Promise<void> {
+    if (workspaceBootPrefetchPromise) {
+        return workspaceBootPrefetchPromise;
+    }
+
+    workspaceBootPrefetchPromise = prefetchWorkspaceBootData(input).catch((error: unknown) => {
+        workspaceBootPrefetchPromise = null;
+        throw error;
+    });
+
+    return workspaceBootPrefetchPromise;
+}
+
+export function resetWorkspaceBootPrefetchForTests(): void {
+    workspaceBootPrefetchPromise = null;
 }

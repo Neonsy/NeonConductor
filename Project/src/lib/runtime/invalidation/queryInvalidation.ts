@@ -1,6 +1,6 @@
 import type { RuntimeEventContext, TrpcUtils } from '@/web/lib/runtime/invalidation/types';
 
-import type { EntityId } from '@/app/backend/runtime/contracts';
+import type { EntityId } from '@/shared/contracts';
 
 function toVoidPromise<TResult>(task: Promise<TResult>): Promise<void> {
     return task.then(() => undefined);
@@ -207,3 +207,4 @@ export async function invalidateRuntimeResetQueries(utils: TrpcUtils): Promise<v
 
     await Promise.all(invalidations);
 }
+

@@ -2,13 +2,13 @@ import { getPersistence } from '@/app/backend/persistence/db';
 import { mapRunRecord } from '@/app/backend/persistence/stores/conversation/runs/runStoreMapper';
 import { nowIso } from '@/app/backend/persistence/stores/shared/utils';
 import type { RunRecord } from '@/app/backend/persistence/types';
-import { createEntityId } from '@/app/backend/runtime/contracts';
 import type {
     ProviderAuthMethod,
     RunStatus,
     RuntimeProviderId,
     RuntimeRunOptions,
 } from '@/app/backend/runtime/contracts';
+import { createEntityId } from '@/app/backend/runtime/identity/entityIds';
 
 export interface CreateRunInput {
     profileId: string;
@@ -174,3 +174,4 @@ export class RunStore {
 }
 
 export const runStore = new RunStore();
+

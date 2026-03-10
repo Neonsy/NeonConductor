@@ -7,8 +7,9 @@ import {
 import { isEntityId } from '@/web/components/conversation/shell/workspace/helpers';
 
 import type { SessionSummaryRecord, ThreadListRecord } from '@/app/backend/persistence/types';
-import type { SessionCreateInput, RuntimeProviderId } from '@/app/backend/runtime/contracts';
-import type { EntityId } from '@/app/backend/runtime/contracts';
+
+import type { SessionCreateInput, RuntimeProviderId } from '@/shared/contracts';
+import type { EntityId } from '@/shared/contracts';
 
 interface UseConversationShellSessionActionsInput {
     profileId: string;
@@ -92,3 +93,4 @@ export function useConversationShellSessionActions(input: UseConversationShellSe
         },
     };
 }
+

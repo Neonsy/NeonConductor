@@ -3,8 +3,9 @@ import { isEntityId } from '@/web/components/conversation/shell/workspace/helper
 
 
 import type { MessagePartRecord, MessageRecord } from '@/app/backend/persistence/types';
-import type { EntityId } from '@/app/backend/runtime/contracts';
 import { readImageMimeType } from '@/app/shared/imageMimeType';
+
+import type { EntityId } from '@/shared/contracts';
 
 export type MessageTimelineTextEntryType = 'assistant_reasoning' | 'assistant_text' | 'user_text' | 'system_text';
 export type MessageTimelineImageEntryType = 'assistant_image' | 'user_image' | 'system_image';
@@ -208,3 +209,4 @@ export function isWithinBottomThreshold({
     const distance = scrollHeight - scrollTop - clientHeight;
     return distance <= thresholdPx;
 }
+

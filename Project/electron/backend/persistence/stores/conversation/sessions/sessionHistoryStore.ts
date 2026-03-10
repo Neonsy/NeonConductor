@@ -1,7 +1,7 @@
 import { getPersistence } from '@/app/backend/persistence/db';
 import type { MessagePartsTable, MessagesTable, RunUsageTable, RunsTable, SessionsTable } from '@/app/backend/persistence/schema';
 import { nowIso } from '@/app/backend/persistence/stores/shared/utils';
-import { createEntityId } from '@/app/backend/runtime/contracts';
+import { createEntityId } from '@/app/backend/runtime/identity/entityIds';
 import { InvariantError } from '@/app/backend/runtime/services/common/fatalErrors';
 
 import type { Selectable } from 'kysely';
@@ -304,3 +304,4 @@ export class SessionHistoryStore {
 }
 
 export const sessionHistoryStore = new SessionHistoryStore();
+

@@ -1,4 +1,4 @@
-import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
+import type { RuntimeProviderId } from '@/shared/contracts';
 
 interface ProviderSettingsPrefetchInput {
     profileId: string;
@@ -73,3 +73,4 @@ export function prefetchProviderSettingsData(input: ProviderSettingsPrefetchInpu
 
     void Promise.all(tasks);
 }
+

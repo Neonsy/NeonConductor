@@ -1,5 +1,7 @@
 import mascotUrl from '@/web/assets/appicon.png';
-import { applySplashPhase, normalizeSplashPhase } from '@/web/splash/model';
+import { applyBootStatus, normalizeBootStatusSnapshot } from '@/web/splash/model';
+
+import { INITIAL_BOOT_STATUS_SNAPSHOT, type BootStatusSnapshot } from '@/app/shared/splashContract';
 
 import './styles.css';
 
@@ -9,16 +11,16 @@ function initializeSplash(): void {
         mascotImage.src = mascotUrl;
     }
 
-    applySplashPhase(document, normalizeSplashPhase(document.body.dataset['phase']));
+    applyBootStatus(document, normalizeBootStatusSnapshot(INITIAL_BOOT_STATUS_SNAPSHOT));
 
-    const removePhaseListener = window.neonSplash?.onPhaseChange((phase: 'starting' | 'delayed') => {
-        applySplashPhase(document, phase);
+    const removeStatusListener = window.neonSplash?.onStatusChange((status: BootStatusSnapshot) => {
+        applyBootStatus(document, status);
     });
 
     window.addEventListener(
         'beforeunload',
         () => {
-            removePhaseListener?.();
+            removeStatusListener?.();
         },
         { once: true }
     );

@@ -98,6 +98,7 @@ const importOrderRule = [
         pathGroups: [
             { pattern: '@/web/**', group: 'internal', position: 'before' },
             { pattern: '@/app/**', group: 'internal', position: 'before' },
+            { pattern: '@/shared/**', group: 'internal', position: 'before' },
         ],
         pathGroupsExcludedImportTypes: ['builtin'],
         'newlines-between': 'always',
@@ -109,6 +110,34 @@ const noRestrictedImportsRule = [
     'error',
     {
         patterns: ['./*', '../*', '../../*', '../../../*', '../../../../*'],
+    },
+];
+const rendererNoRestrictedImportsRule = [
+    'error',
+    {
+        paths: [
+            {
+                name: '@/app/backend/runtime/contracts',
+                message: 'Renderer code must import browser-safe runtime contracts from @/shared/contracts.',
+            },
+            {
+                name: '@/app/backend/runtime/identity/entityIds',
+                message: 'Renderer code must not import backend-only ID generation helpers.',
+            },
+        ],
+        patterns: [
+            {
+                group: ['./*', '../*', '../../*', '../../../*', '../../../../*'],
+            },
+            {
+                group: ['@/app/backend/runtime/contracts/**'],
+                message: 'Renderer code must import browser-safe runtime contracts from @/shared/contracts.',
+            },
+            {
+                group: ['@/app/backend/runtime/identity/**'],
+                message: 'Renderer code must not import backend-only runtime identity helpers.',
+            },
+        ],
     },
 ];
 const noSecretsRule = [
@@ -196,7 +225,7 @@ export default [
             'import/order': importOrderRule,
             'import/newline-after-import': 'warn',
             'import/no-unresolved': 'off',
-            'no-restricted-imports': noRestrictedImportsRule,
+            'no-restricted-imports': rendererNoRestrictedImportsRule,
             'no-secrets/no-secrets': noSecretsRule,
             'no-alert': 'error',
             'no-console': 'error',
