@@ -69,6 +69,30 @@
 - Add `useMemo`, `useCallback`, or `memo` only when compiler coverage is known to miss or profiling proves a real regression.
 - Do not add defensive memoization by default.
 
+### 10) Prefer Aliases Except in Bundler-Sensitive Entry Files
+- Prefer `@/web`, `@/app`, and `@/shared` imports over deep relative paths in ordinary renderer, main-process, and shared modules.
+- Use relative imports only when module resolution must stay pinned to the local file system or the current entry file.
+- Allowed exception cases include `*.worker.ts`, preload entrypoints, Vite/build config files, and local `new URL(..., import.meta.url)` entry references.
+- Keep these exceptions narrow; do not use them as a convenience escape hatch in ordinary source files.
+
+### 11) Review React Effects and Async Flows Strictly
+- Use `useEffect` only for external synchronization such as subscriptions, timers, DOM listeners, IPC/event bridges, persistence sync, or network/cache side effects.
+- Do not model user actions as state plus `useEffect`; run interaction-driven side effects in the event handler that caused them.
+- Do not mirror derivable state into component state through effects; derive it during render or reset through an explicit keyed boundary.
+- Prefer `useEffectEvent` when an effect needs the latest values without widening the effect dependency surface.
+- Prefer `startTransition` for non-urgent UI updates and `useDeferredValue` for deferred reads such as search filtering or heavy derived views.
+- React Compiler is the default optimization path; add `useMemo`, `useCallback`, or `memo` only for proven compiler gaps or profiling-backed regressions.
+- For independent async work, start early, await late, and use `Promise.all` instead of avoidable waterfalls.
+- Do not write `useEffect(async () => ...)`; keep the effect synchronous and call an inner async function when needed.
+
+### 12) Preserve Electron Boundaries and Window Hardening
+- Renderer code must not import `electron` directly.
+- `ipcRenderer` and `contextBridge` are preload-only APIs.
+- Expose narrow, validated preload bridges instead of broad Electron handles or raw process access.
+- Every `BrowserWindow` must keep `contextIsolation: true`, `nodeIntegration: false`, and `sandbox: true`.
+- Route external navigation through guarded allowlist/validation helpers instead of directly opening arbitrary URLs.
+- Keep Electron security-sensitive behavior centralized in the existing main-process security and window modules whenever possible.
+
 ## Repository Documentation Status
 - Root `README.md` is intentionally empty and points to `Markdown/README`.
 - `Project/README.md` is intentionally not filled yet.

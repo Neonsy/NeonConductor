@@ -3,11 +3,19 @@ import { err, ok } from 'neverthrow';
 import {
     composerImageCompressionError,
     type ComposerImageCompressionResult,
-} from '@/web/components/conversation/hooks/composerImageCompressionErrors';
+} from './composerImageCompressionErrors';
 
-import { readImageMimeType } from '@/app/shared/imageMimeType';
+const composerImageAttachmentMimeTypes = ['image/jpeg', 'image/png', 'image/webp'] as const;
+type ComposerImageAttachmentMimeType = (typeof composerImageAttachmentMimeTypes)[number];
 
-import type { ComposerImageAttachmentInput } from '@/shared/contracts';
+interface ComposerImageAttachmentInput {
+    clientId: string;
+    mimeType: ComposerImageAttachmentMimeType;
+    bytesBase64: string;
+    width: number;
+    height: number;
+    sha256: string;
+}
 
 const MAX_IMAGE_EDGE_PX = 2048;
 const MAX_COMPRESSED_IMAGE_BYTES = 1_500_000;
@@ -69,6 +77,14 @@ function bufferToBase64(bytes: ArrayBuffer): string {
 async function sha256Hex(bytes: ArrayBuffer): Promise<string> {
     const digest = await crypto.subtle.digest('SHA-256', bytes);
     return Array.from(new Uint8Array(digest), (value) => value.toString(16).padStart(2, '0')).join('');
+}
+
+function readImageMimeType(value: unknown): ComposerImageAttachmentMimeType | undefined {
+    if (typeof value !== 'string') {
+        return undefined;
+    }
+
+    return composerImageAttachmentMimeTypes.find((mimeType) => mimeType === value);
 }
 
 async function canvasToBlob(

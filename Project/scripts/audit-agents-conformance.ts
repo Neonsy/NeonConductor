@@ -23,8 +23,12 @@ export interface AgentsConformanceReport {
     inlineLintSuppressions: AuditViolation[];
     nonTestFrameworkImports: AuditViolation[];
     forbiddenLayoutEffects: AuditViolation[];
+    rendererElectronImports: AuditViolation[];
+    nonPreloadElectronBridgeUsage: AuditViolation[];
+    insecureBrowserWindows: AuditViolation[];
     nonBlockingReactMemoization: AuditViolation[];
     nonBlockingSuspiciousEffects: AuditViolation[];
+    nonBlockingAsyncEffects: AuditViolation[];
     nonBlockingBroadCasts: AuditViolation[];
     nonBlockingThrows: AuditViolation[];
 }
@@ -80,6 +84,14 @@ function isParserSourceFile(relativePath: string): boolean {
 
 function isRendererSourceFile(relativePath: string): boolean {
     return relativePath.startsWith('src/');
+}
+
+function isPreloadSourceFile(relativePath: string): boolean {
+    return relativePath.startsWith('electron/main/preload/');
+}
+
+function isElectronSourceFile(relativePath: string): boolean {
+    return relativePath.startsWith('electron/');
 }
 
 function collectSourceFiles(rootDir: string): AuditSourceFile[] {
@@ -253,6 +265,135 @@ function isForbiddenLayoutEffectLine(lineContent: string): boolean {
     return lineContent.includes('useLayoutEffect(') || lineContent.includes('useLayoutEffect<');
 }
 
+function collectRendererElectronImportViolations(files: AuditSourceFile[]): AuditViolation[] {
+    return collectPatternViolations({
+        files,
+        shouldInclude: (file) => !isTestFile(file.relativePath) && isRendererSourceFile(file.relativePath),
+        pattern: /from\s+['"]electron['"]/,
+        message: 'Renderer source must not import from electron directly; route access through preload or shared contracts.',
+    });
+}
+
+function collectNonPreloadElectronBridgeViolations(files: AuditSourceFile[]): AuditViolation[] {
+    const violations: AuditViolation[] = [];
+
+    for (const file of files) {
+        if (
+            isTestFile(file.relativePath) ||
+            isPreloadSourceFile(file.relativePath) ||
+            (!isRendererSourceFile(file.relativePath) && !isElectronSourceFile(file.relativePath))
+        ) {
+            continue;
+        }
+
+        const lines = file.content.split(/\r?\n/);
+        const lineIndex = lines.findIndex((lineContent) => {
+            const trimmedLine = lineContent.trimStart();
+            return !trimmedLine.startsWith('//') && /\b(?:ipcRenderer|contextBridge)\b/.test(lineContent);
+        });
+
+        if (lineIndex === -1) {
+            continue;
+        }
+
+        violations.push({
+            path: file.relativePath,
+            line: lineIndex + 1,
+            message: 'ipcRenderer and contextBridge are preload-only APIs.',
+        });
+    }
+
+    return violations;
+}
+
+function countOccurrences(value: string, pattern: RegExp): number {
+    const matches = value.match(pattern);
+    return matches ? matches.length : 0;
+}
+
+function collectBrowserWindowSegments(file: AuditSourceFile): Array<{ line: number; content: string }> {
+    const lines = file.content.split(/\r?\n/);
+    const segments: Array<{ line: number; content: string }> = [];
+
+    for (let index = 0; index < lines.length; index += 1) {
+        const lineContent = lines[index] ?? '';
+        if (!lineContent.includes('new BrowserWindow(')) {
+            continue;
+        }
+
+        let braceDepth = 0;
+        let startedObject = false;
+        const segmentLines: string[] = [];
+        const startLine = index + 1;
+
+        for (let cursor = index; cursor < lines.length; cursor += 1) {
+            const currentLine = lines[cursor] ?? '';
+            segmentLines.push(currentLine);
+            braceDepth += countOccurrences(currentLine, /\{/g);
+            braceDepth -= countOccurrences(currentLine, /\}/g);
+            if (currentLine.includes('{')) {
+                startedObject = true;
+            }
+
+            if (startedObject && braceDepth <= 0) {
+                index = cursor;
+                break;
+            }
+        }
+
+        segments.push({
+            line: startLine,
+            content: segmentLines.join('\n'),
+        });
+    }
+
+    return segments;
+}
+
+function collectInsecureBrowserWindowViolations(files: AuditSourceFile[]): AuditViolation[] {
+    const violations: AuditViolation[] = [];
+
+    for (const file of files) {
+        if (isTestFile(file.relativePath) || !isElectronSourceFile(file.relativePath)) {
+            continue;
+        }
+
+        for (const segment of collectBrowserWindowSegments(file)) {
+            const missingFlags: string[] = [];
+            if (!segment.content.includes('contextIsolation: true')) {
+                missingFlags.push('contextIsolation: true');
+            }
+            if (!segment.content.includes('nodeIntegration: false')) {
+                missingFlags.push('nodeIntegration: false');
+            }
+            if (!segment.content.includes('sandbox: true')) {
+                missingFlags.push('sandbox: true');
+            }
+
+            if (missingFlags.length === 0) {
+                continue;
+            }
+
+            violations.push({
+                path: file.relativePath,
+                line: segment.line,
+                message: `BrowserWindow must keep hardened webPreferences: missing or insecure ${missingFlags.join(', ')}.`,
+            });
+        }
+    }
+
+    return violations;
+}
+
+function collectAsyncEffectViolations(files: AuditSourceFile[]): AuditViolation[] {
+    return collectPatternViolations({
+        files,
+        shouldInclude: (file) => !isTestFile(file.relativePath) && isRendererSourceFile(file.relativePath),
+        pattern: /useEffect\s*\(\s*async\b/,
+        message: 'Do not write useEffect(async () => ...); keep the effect synchronous and call an inner async function.',
+    });
+}
+
 function collectSuspiciousEffectViolations(files: AuditSourceFile[]): AuditViolation[] {
     const violations: AuditViolation[] = [];
     const setterPattern =
@@ -326,6 +467,9 @@ export function auditAgentsConformance(rootDir: string): AgentsConformanceReport
             shouldIncludeLine: (_file, lineContent) => isForbiddenLayoutEffectLine(lineContent),
             message: 'useLayoutEffect is not allowed unless the file is explicitly allowlisted for a proven pre-paint layout need.',
         }),
+        rendererElectronImports: collectRendererElectronImportViolations(sourceFiles),
+        nonPreloadElectronBridgeUsage: collectNonPreloadElectronBridgeViolations(sourceFiles),
+        insecureBrowserWindows: collectInsecureBrowserWindowViolations(sourceFiles),
         nonBlockingReactMemoization: collectPatternViolations({
             files: sourceFiles,
             shouldInclude: (file) => !isTestFile(file.relativePath) && isRendererSourceFile(file.relativePath),
@@ -334,6 +478,7 @@ export function auditAgentsConformance(rootDir: string): AgentsConformanceReport
             message: 'Review defensive React memoization and remove it unless compiler coverage is known to miss.',
         }),
         nonBlockingSuspiciousEffects: collectSuspiciousEffectViolations(sourceFiles),
+        nonBlockingAsyncEffects: collectAsyncEffectViolations(sourceFiles),
         nonBlockingBroadCasts: collectPatternViolations({
             files: sourceFiles,
             shouldInclude: (file) => !isTestFile(file.relativePath),
@@ -382,7 +527,10 @@ export function hasBlockingViolations(report: AgentsConformanceReport): boolean 
         report.oversizedHandwrittenSourceFiles.length > 0 ||
         report.inlineLintSuppressions.length > 0 ||
         report.nonTestFrameworkImports.length > 0 ||
-        report.forbiddenLayoutEffects.length > 0
+        report.forbiddenLayoutEffects.length > 0 ||
+        report.rendererElectronImports.length > 0 ||
+        report.nonPreloadElectronBridgeUsage.length > 0 ||
+        report.insecureBrowserWindows.length > 0
     );
 }
 
@@ -397,8 +545,12 @@ export function runAgentsConformanceAudit(options: {
     logViolations('Inline lint suppressions', report.inlineLintSuppressions, 'error');
     logViolations('Non-test framework imports', report.nonTestFrameworkImports, 'error');
     logViolations('Forbidden useLayoutEffect review', report.forbiddenLayoutEffects, 'error');
+    logViolations('Renderer electron import violations', report.rendererElectronImports, 'error');
+    logViolations('Non-preload Electron bridge usage', report.nonPreloadElectronBridgeUsage, 'error');
+    logViolations('BrowserWindow hardening violations', report.insecureBrowserWindows, 'error');
     logViolations('React memoization review', report.nonBlockingReactMemoization, 'warn');
     logViolations('Suspicious effect review', report.nonBlockingSuspiciousEffects, 'warn');
+    logViolations('Async effect review', report.nonBlockingAsyncEffects, 'warn');
     logViolations('Broad cast review', report.nonBlockingBroadCasts, 'warn');
     logViolations('Non-parser throw review', report.nonBlockingThrows, 'warn');
 

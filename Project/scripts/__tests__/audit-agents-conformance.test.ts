@@ -143,4 +143,74 @@ describe('auditAgentsConformance', () => {
             rmSync(rootDir, { recursive: true, force: true });
         }
     });
+
+    it('treats renderer electron imports, non-preload bridges, and insecure BrowserWindow configs as blocking violations', () => {
+        const rootDir = mkdtempSync(path.join(os.tmpdir(), 'agents-audit-'));
+
+        try {
+            writeFixture(rootDir, 'src/view.tsx', "import { shell } from 'electron';\nexport function View() { return shell; }\n");
+            writeFixture(
+                rootDir,
+                'electron/main/runtime.ts',
+                "import { ipcRenderer } from 'electron';\nexport function read() { return ipcRenderer.sendSync('ping'); }\n"
+            );
+            writeFixture(
+                rootDir,
+                'electron/main/window.ts',
+                "import { BrowserWindow } from 'electron';\nexport function createWindow() { return new BrowserWindow({ webPreferences: { nodeIntegration: false } }); }\n"
+            );
+
+            const report = auditAgentsConformance(rootDir);
+
+            expect(report.rendererElectronImports).toHaveLength(1);
+            expect(report.nonPreloadElectronBridgeUsage).toHaveLength(1);
+            expect(report.insecureBrowserWindows).toHaveLength(1);
+            expect(hasBlockingViolations(report)).toBe(true);
+        } finally {
+            rmSync(rootDir, { recursive: true, force: true });
+        }
+    });
+
+    it('allows preload bridge usage and hardened BrowserWindow configs', () => {
+        const rootDir = mkdtempSync(path.join(os.tmpdir(), 'agents-audit-'));
+
+        try {
+            writeFixture(
+                rootDir,
+                'electron/main/preload/index.ts',
+                "import { contextBridge, ipcRenderer } from 'electron';\ncontextBridge.exposeInMainWorld('bridge', { ping: () => ipcRenderer.send('ping') });\n"
+            );
+            writeFixture(
+                rootDir,
+                'electron/main/window.ts',
+                "import { BrowserWindow } from 'electron';\nexport function createWindow() { return new BrowserWindow({ webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true } }); }\n"
+            );
+
+            const report = auditAgentsConformance(rootDir);
+
+            expect(report.nonPreloadElectronBridgeUsage).toEqual([]);
+            expect(report.insecureBrowserWindows).toEqual([]);
+        } finally {
+            rmSync(rootDir, { recursive: true, force: true });
+        }
+    });
+
+    it('reports async useEffect as a non-blocking review warning', () => {
+        const rootDir = mkdtempSync(path.join(os.tmpdir(), 'agents-audit-'));
+
+        try {
+            writeFixture(
+                rootDir,
+                'src/view.tsx',
+                "function View() { useEffect(async () => { await fetch('/api'); }, []); return null; }\n"
+            );
+
+            const report = auditAgentsConformance(rootDir);
+
+            expect(report.nonBlockingAsyncEffects).toHaveLength(1);
+            expect(hasBlockingViolations(report)).toBe(false);
+        } finally {
+            rmSync(rootDir, { recursive: true, force: true });
+        }
+    });
 });
