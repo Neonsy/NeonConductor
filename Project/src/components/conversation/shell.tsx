@@ -41,7 +41,10 @@ export function ConversationShell({
     onSelectedWorkspaceFingerprintChange,
 }: ConversationShellProps) {
     const [tabSwitchNotice, setTabSwitchNotice] = useState<string | undefined>(undefined);
+    const [contextFeedbackMessage, setContextFeedbackMessage] = useState<string | undefined>(undefined);
+    const [contextFeedbackTone, setContextFeedbackTone] = useState<'success' | 'error' | 'info'>('info');
     const uiState = useConversationUiState(profileId);
+    const utils = trpc.useUtils();
     const queries = useConversationQueries({
         profileId,
         uiState,
@@ -233,9 +236,7 @@ export function ConversationShell({
     });
     const workspaceActions = useConversationWorkspaceActions({
         profileId,
-        queries,
         mutations,
-        refetch,
         onResolvePermission: composer.clearRunSubmitError,
     });
     const workspaceSectionState = buildConversationWorkspaceSectionState({
@@ -332,8 +333,11 @@ export function ConversationShell({
                 modelOptions={runTargetState.modelOptions}
                 runErrorMessage={composer.runSubmitError}
                 {...(contextStateQuery.data ? { contextState: contextStateQuery.data } : {})}
-                {...(mutations.compactSessionMutation.error?.message
-                    ? { contextErrorMessage: mutations.compactSessionMutation.error.message }
+                {...(contextFeedbackMessage
+                    ? {
+                          contextFeedbackMessage,
+                          contextFeedbackTone,
+                      }
                     : {})}
                 canCompactContext={
                     topLevelTab !== 'orchestrator' &&
@@ -366,6 +370,7 @@ export function ConversationShell({
                         return;
                     }
 
+                    setContextFeedbackMessage(undefined);
                     void mutations.compactSessionMutation
                         .mutateAsync({
                             profileId,
@@ -377,8 +382,26 @@ export function ConversationShell({
                                 ? { workspaceFingerprint: shellViewModel.selectedThread.workspaceFingerprint }
                                 : {}),
                         })
-                        .then(() => {
-                            void contextStateQuery.refetch();
+                        .then(async () => {
+                            await utils.context.getResolvedState.invalidate({
+                                profileId,
+                                sessionId: contextSessionId,
+                                providerId: contextProviderId,
+                                modelId: contextModelId,
+                                topLevelTab,
+                                modeKey,
+                                ...(shellViewModel.selectedThread?.workspaceFingerprint
+                                    ? { workspaceFingerprint: shellViewModel.selectedThread.workspaceFingerprint }
+                                    : {}),
+                            });
+                            setContextFeedbackTone('success');
+                            setContextFeedbackMessage('Context compacted for the current session.');
+                        })
+                        .catch((error: unknown) => {
+                            setContextFeedbackTone('error');
+                            setContextFeedbackMessage(
+                                error instanceof Error ? error.message : 'Context compaction failed.'
+                            );
                         });
                 }}
                 onResolvePermission={(requestId, resolution, selectedApprovalResource) => {

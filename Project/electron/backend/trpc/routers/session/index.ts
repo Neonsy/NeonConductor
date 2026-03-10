@@ -134,11 +134,11 @@ export const sessionRouter = router({
         };
     }),
     getMessageMedia: publicProcedure.input(sessionGetMessageMediaInputSchema).query(async ({ input }) => {
-        const media = await messageMediaStore.getDataUrlForProfile(input.profileId, input.mediaId);
+        const media = await messageMediaStore.getPayloadForProfile(input.profileId, input.mediaId);
 
         return {
             found: media !== null,
-            ...(media ? { dataUrl: media } : {}),
+            ...(media ?? {}),
         };
     }),
     abort: publicProcedure.input(sessionByIdInputSchema).mutation(async ({ input, ctx }) => {

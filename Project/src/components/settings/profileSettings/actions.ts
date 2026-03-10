@@ -4,20 +4,18 @@ import {
     getDuplicateProfileStatusMessage,
     getRenameProfileStatusMessage,
 } from '@/web/components/settings/profileSettings/messages';
-import { refetchProfileList } from '@/web/components/settings/profileSettings/refetch';
+
+import type { ProfileRecord } from '@/app/backend/persistence/types';
 
 export function createProfileSettingsActions(input: {
     activeProfileId: string;
-    selectedProfile:
-        | {
-              id: string;
-              name: string;
-          }
-        | undefined;
+    selectedProfile: ProfileRecord | undefined;
     newProfileName: string;
     renameValue: string;
     threadTitleAiModelInput: string;
-    profilesQuery: { refetch: () => Promise<unknown> };
+    updateProfileList: (updater: (profiles: ProfileRecord[]) => ProfileRecord[]) => void;
+    invalidateProfileList: () => Promise<void>;
+    invalidateActiveProfile: () => Promise<void>;
     createMutation: { mutateAsync: (input: { name?: string }) => Promise<{ profile: { id: string; name: string } }> };
     renameMutation: {
         mutateAsync: (input: { profileId: string; name: string }) => Promise<
@@ -65,7 +63,7 @@ export function createProfileSettingsActions(input: {
             input.setStatusMessage(`Created profile "${result.profile.name}".`);
             input.setNewProfileName('');
             input.setSelectedProfileId(result.profile.id);
-            await refetchProfileList(input.profilesQuery);
+            await input.invalidateProfileList();
         },
         renameProfile: async () => {
             if (!input.selectedProfile) {
@@ -86,7 +84,16 @@ export function createProfileSettingsActions(input: {
                 return;
             }
 
-            await refetchProfileList(input.profilesQuery);
+            input.updateProfileList((profiles) =>
+                profiles.map((profile) =>
+                    profile.id === input.selectedProfile?.id
+                        ? {
+                              ...profile,
+                              name: result.profile.name,
+                          }
+                        : profile
+                )
+            );
         },
         duplicateProfile: async () => {
             if (!input.selectedProfile) {
@@ -107,7 +114,7 @@ export function createProfileSettingsActions(input: {
             }
 
             input.setSelectedProfileId(result.profile.id);
-            await refetchProfileList(input.profilesQuery);
+            await input.invalidateProfileList();
         },
         activateProfile: async () => {
             if (!input.selectedProfile || input.selectedProfile.id === input.activeProfileId) {
@@ -128,7 +135,13 @@ export function createProfileSettingsActions(input: {
             }
 
             input.onProfileActivated(result.profile.id);
-            await refetchProfileList(input.profilesQuery);
+            input.updateProfileList((profiles) =>
+                profiles.map((profile) => ({
+                    ...profile,
+                    isActive: profile.id === result.profile.id,
+                }))
+            );
+            await input.invalidateActiveProfile();
         },
         updateEditPreference: async (value: 'ask' | 'truncate' | 'branch') => {
             if (!input.selectedProfile) {
@@ -196,7 +209,8 @@ export function createProfileSettingsActions(input: {
                 input.onProfileActivated(result.activeProfileId);
             }
             input.setSelectedProfileId(undefined);
-            await refetchProfileList(input.profilesQuery);
+            await input.invalidateProfileList();
+            await input.invalidateActiveProfile();
         },
     };
 }

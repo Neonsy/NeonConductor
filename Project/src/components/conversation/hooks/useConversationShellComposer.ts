@@ -83,6 +83,27 @@ export function useConversationShellComposer(input: UseConversationShellComposer
         setRunSubmitError(message);
     }
 
+    function toFailedImageState(image: ComposerPendingImage, errorMessage: string): ComposerPendingImage {
+        return {
+            clientId: image.clientId,
+            fileName: image.fileName,
+            sourceFile: image.sourceFile,
+            previewUrl: image.previewUrl,
+            status: 'failed',
+            errorMessage,
+        };
+    }
+
+    function toCompressingImageState(image: ComposerPendingImage): ComposerPendingImage {
+        return {
+            clientId: image.clientId,
+            fileName: image.fileName,
+            sourceFile: image.sourceFile,
+            previewUrl: image.previewUrl,
+            status: 'compressing',
+        };
+    }
+
     function startCompressingImage(image: ComposerPendingImage) {
         void prepareComposerImageAttachment(image.sourceFile, image.clientId)
             .then((prepared) => {
@@ -97,13 +118,10 @@ export function useConversationShellComposer(input: UseConversationShellComposer
                     if (nextTotalBytes > MAX_COMPOSER_TOTAL_IMAGE_BYTES) {
                         return current.map((candidate) =>
                             candidate.clientId === image.clientId
-                                ? {
-                                      ...candidate,
-                                      status: 'failed',
-                                      errorMessage: 'Attached images exceed the 6 MB total payload limit.',
-                                      attachment: undefined,
-                                      byteSize: undefined,
-                                  }
+                                ? toFailedImageState(
+                                      candidate,
+                                      'Attached images exceed the 6 MB total payload limit.'
+                                  )
                                 : candidate
                         );
                     }
@@ -115,7 +133,6 @@ export function useConversationShellComposer(input: UseConversationShellComposer
                                   ...candidate,
                                   previewUrl: prepared.previewUrl,
                                   status: 'ready',
-                                  errorMessage: undefined,
                                   attachment: prepared.attachment,
                                   byteSize: prepared.byteSize,
                               }
@@ -128,13 +145,7 @@ export function useConversationShellComposer(input: UseConversationShellComposer
                 setPendingImages((current) =>
                     current.map((candidate) =>
                         candidate.clientId === image.clientId
-                            ? {
-                                  ...candidate,
-                                  status: 'failed',
-                                  errorMessage: message,
-                                  attachment: undefined,
-                                  byteSize: undefined,
-                              }
+                            ? toFailedImageState(candidate, message)
                             : candidate
                     )
                 );
@@ -199,13 +210,7 @@ export function useConversationShellComposer(input: UseConversationShellComposer
         setPendingImages((current) =>
             current.map((candidate) =>
                 candidate.clientId === clientId
-                    ? {
-                          ...candidate,
-                          status: 'compressing',
-                          errorMessage: undefined,
-                          attachment: undefined,
-                          byteSize: undefined,
-                      }
+                    ? toCompressingImageState(candidate)
                     : candidate
             )
         );

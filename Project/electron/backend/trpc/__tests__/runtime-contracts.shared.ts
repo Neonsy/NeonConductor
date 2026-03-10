@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, vi } from 'vitest';
 
+import { providerCatalogStore } from '@/app/backend/persistence/stores';
 import { getDefaultProfileId, getPersistence, resetPersistenceForTests } from '@/app/backend/persistence/db';
 import type { EntityId } from '@/app/backend/runtime/contracts';
 import { initializeSecretStore } from '@/app/backend/secrets/store';
@@ -176,6 +177,7 @@ export type { EntityId };
 export {
     execFileSync,
     getPersistence,
+    providerCatalogStore,
     resetPersistenceForTests,
     mkdirSync,
     mkdtempSync,

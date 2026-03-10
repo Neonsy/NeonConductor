@@ -62,7 +62,10 @@ describe('message timeline model', () => {
         const entries = buildTimelineEntries([message], new Map([[message.id, parts]]));
         expect(entries).toHaveLength(1);
         expect(entries[0]?.body.map((item) => item.id)).toEqual(['part_text', 'part_reasoning', 'part_summary']);
-        expect(entries[0]?.body[2]?.providerLimitedReasoning).toBe(true);
+        expect(entries[0]?.body[2]).toMatchObject({
+            type: 'assistant_reasoning',
+            providerLimitedReasoning: true,
+        });
         expect(entries[0]?.plainCopyText).toContain('const total = 7');
         expect(entries[0]?.rawCopyText).toContain('```ts');
     });
@@ -78,8 +81,10 @@ describe('message timeline model', () => {
         const entries = buildTimelineEntries([message], new Map([[message.id, parts]]));
         expect(entries).toHaveLength(1);
         expect(entries[0]?.body).toHaveLength(1);
-        expect(entries[0]?.body[0]?.type).toBe('user_text');
-        expect(entries[0]?.body[0]?.text).toBe('User prompt');
+        expect(entries[0]?.body[0]).toMatchObject({
+            type: 'user_text',
+            text: 'User prompt',
+        });
         expect(entries[0]?.plainCopyText).toBe('User prompt');
         expect(entries[0]?.rawCopyText).toBe('User prompt');
     });

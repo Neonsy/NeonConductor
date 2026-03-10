@@ -1,6 +1,7 @@
 import { ImagePlus, LoaderCircle, RefreshCw, X } from 'lucide-react';
 import { useRef, useState } from 'react';
 
+import { getImagePreviewStatusLabel, getPendingImagePreviewState } from '@/web/components/conversation/messages/imagePreviewState';
 import { ImageLightboxModal } from '@/web/components/conversation/panels/imageLightboxModal';
 import { Button } from '@/web/components/ui/button';
 
@@ -48,7 +49,8 @@ interface ComposerActionPanelProps {
     modelOptions: ModelOption[];
     runErrorMessage: string | undefined;
     contextState?: ResolvedContextState;
-    contextErrorMessage?: string;
+    contextFeedbackMessage?: string;
+    contextFeedbackTone?: 'success' | 'error' | 'info';
     canCompactContext?: boolean;
     isCompactingContext?: boolean;
     onProviderChange: (providerId: string) => void;
@@ -114,7 +116,8 @@ export function ComposerActionPanel({
     modelOptions,
     runErrorMessage,
     contextState,
-    contextErrorMessage,
+    contextFeedbackMessage,
+    contextFeedbackTone = 'info',
     canCompactContext = false,
     isCompactingContext = false,
     onProviderChange,
@@ -143,6 +146,13 @@ export function ComposerActionPanel({
     const hasBlockingPendingImages = pendingImages.some((image) => image.status !== 'ready');
     const hasSubmittableContent = prompt.trim().length > 0 || pendingImages.some((image) => image.status === 'ready');
     const hasUnsupportedPendingImages = pendingImages.length > 0 && !canAttachImages;
+    const attachmentStatusMessage = hasUnsupportedPendingImages
+        ? imageAttachmentBlockedReason ?? 'Select a vision-capable model to send attached images.'
+        : hasBlockingPendingImages
+          ? 'Sending is locked until every image finishes processing.'
+          : pendingImages.length > 0
+            ? 'Images are ready to send with this message.'
+            : 'Text-only prompt.';
 
     function openFilePicker() {
         fileInputRef.current?.click();
@@ -199,7 +209,12 @@ export function ComposerActionPanel({
                     }}
                 />
                 <div className='grid grid-cols-2 gap-2'>
+                    <label className='sr-only' htmlFor='composer-provider-select'>
+                        Provider
+                    </label>
                     <select
+                        id='composer-provider-select'
+                        name='composerProvider'
                         value={selectedProviderId ?? ''}
                         onChange={(event) => {
                             onProviderChange(event.target.value);
@@ -215,7 +230,12 @@ export function ComposerActionPanel({
                             </option>
                         ))}
                     </select>
+                    <label className='sr-only' htmlFor='composer-model-select'>
+                        Model
+                    </label>
                     <select
+                        id='composer-model-select'
+                        name='composerModel'
                         value={selectedModelId ?? ''}
                         onChange={(event) => {
                             onModelChange(event.target.value);
@@ -233,7 +253,11 @@ export function ComposerActionPanel({
                     </select>
                 </div>
                 {routingBadge ? <p className='text-muted-foreground text-xs'>{routingBadge}</p> : null}
-                {runErrorMessage ? <p className='text-destructive text-xs'>{runErrorMessage}</p> : null}
+                {runErrorMessage ? (
+                    <p aria-live='polite' className='text-destructive text-xs'>
+                        {runErrorMessage}
+                    </p>
+                ) : null}
                 {contextState ? (
                     <div className='border-border bg-card/40 space-y-1 rounded-md border px-3 py-2'>
                         <div className='flex flex-wrap items-center justify-between gap-2'>
@@ -288,12 +312,23 @@ export function ComposerActionPanel({
                                 ? ` · Override: ${contextState.policy.limits.overrideReason}`
                                 : ''}
                         </p>
-                        {contextErrorMessage ? <p className='text-destructive text-xs'>{contextErrorMessage}</p> : null}
+                        {contextFeedbackMessage ? (
+                            <p
+                                className={`text-xs ${
+                                    contextFeedbackTone === 'error'
+                                        ? 'text-destructive'
+                                        : contextFeedbackTone === 'success'
+                                          ? 'text-primary'
+                                          : 'text-muted-foreground'
+                                }`}>
+                                {contextFeedbackMessage}
+                            </p>
+                        ) : null}
                     </div>
                 ) : null}
                 <div
                     className={`border-border bg-card/30 relative overflow-hidden rounded-2xl border transition ${
-                        isDragActive ? 'border-primary bg-primary/8 shadow-[0_0_0_1px_hsl(var(--primary)/0.25)]' : ''
+                        isDragActive ? 'border-primary bg-primary/10 shadow-[0_0_0_1px_hsl(var(--primary)/0.25)]' : ''
                     }`}>
                     <div className='border-border flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2'>
                         <div>
@@ -319,88 +354,105 @@ export function ComposerActionPanel({
                     ) : null}
                     {pendingImages.length > 0 ? (
                         <div className='border-border grid gap-2 border-b px-3 py-3 sm:grid-cols-2 xl:grid-cols-4'>
-                            {pendingImages.map((image) => (
-                                <div key={image.clientId} className='border-border bg-background/80 rounded-2xl border p-2'>
-                                    <button
-                                        type='button'
-                                        className='group block w-full text-left'
-                                        onClick={() => {
-                                            setLightboxImage({
-                                                imageUrl: image.previewUrl,
-                                                title: image.fileName,
-                                                detail:
-                                                    image.attachment
-                                                        ? `${image.attachment.width} × ${image.attachment.height}`
-                                                        : undefined,
-                                            });
-                                        }}>
-                                        <div className='bg-muted relative overflow-hidden rounded-xl'>
-                                            <img
-                                                src={image.previewUrl}
-                                                alt={image.fileName}
-                                                className='h-32 w-full object-cover transition duration-200 group-hover:scale-[1.02]'
-                                            />
-                                            <div className='absolute inset-x-0 bottom-0 flex items-center justify-between bg-black/55 px-2 py-1 text-[11px] text-white'>
-                                                <span className='truncate'>
-                                                    {image.status === 'compressing'
-                                                        ? 'Compressing'
-                                                        : image.status === 'failed'
-                                                          ? 'Needs attention'
-                                                          : 'Ready'}
-                                                </span>
-                                                <span>{formatImageBytes(image.byteSize) ?? ''}</span>
+                            {pendingImages.map((image) => {
+                                const previewState = getPendingImagePreviewState(image.status);
+
+                                return (
+                                    <div key={image.clientId} className='border-border bg-background/80 rounded-2xl border p-2'>
+                                        <button
+                                            type='button'
+                                            className='group focus-visible:ring-ring focus-visible:ring-offset-background block w-full rounded-xl text-left focus-visible:ring-2 focus-visible:ring-offset-2'
+                                            onClick={() => {
+                                                setLightboxImage({
+                                                    imageUrl: image.previewUrl,
+                                                    title: image.fileName,
+                                                    ...(image.attachment
+                                                        ? {
+                                                              detail: `${image.attachment.width} × ${image.attachment.height}`,
+                                                          }
+                                                        : {}),
+                                                });
+                                            }}>
+                                            <div className='bg-muted relative overflow-hidden rounded-xl'>
+                                                <img
+                                                    src={image.previewUrl}
+                                                    alt={image.fileName}
+                                                    width={image.attachment?.width ?? 512}
+                                                    height={image.attachment?.height ?? 512}
+                                                    loading='lazy'
+                                                    decoding='async'
+                                                    className='h-32 w-full object-cover transition duration-200 group-hover:scale-[1.02]'
+                                                />
+                                                <div className='absolute inset-x-0 bottom-0 flex items-center justify-between bg-black/55 px-2 py-1 text-[11px] text-white'>
+                                                    <span className='truncate'>
+                                                        {getImagePreviewStatusLabel(previewState)}
+                                                    </span>
+                                                    <span>{formatImageBytes(image.byteSize) ?? ''}</span>
+                                                </div>
                                             </div>
+                                        </button>
+                                        <div className='mt-2 space-y-1'>
+                                            <p className='truncate text-xs font-medium'>{image.fileName}</p>
+                                            {image.attachment ? (
+                                                <p className='text-muted-foreground text-[11px]'>
+                                                    {image.attachment.width} × {image.attachment.height} ·{' '}
+                                                    {image.attachment.mimeType.replace('image/', '').toUpperCase()}
+                                                </p>
+                                            ) : null}
+                                            {image.errorMessage ? (
+                                                <p aria-live='polite' className='text-destructive text-[11px]'>
+                                                    {image.errorMessage}
+                                                </p>
+                                            ) : (
+                                                <p aria-live='polite' className='text-muted-foreground text-[11px]'>
+                                                    {previewState === 'loading'
+                                                        ? 'Image is being compressed before it can be sent.'
+                                                        : previewState === 'ready'
+                                                          ? 'Image is ready to be sent with this message.'
+                                                          : 'Image preview is waiting for action.'}
+                                                </p>
+                                            )}
                                         </div>
-                                    </button>
-                                    <div className='mt-2 space-y-1'>
-                                        <p className='truncate text-xs font-medium'>{image.fileName}</p>
-                                        {image.attachment ? (
-                                            <p className='text-muted-foreground text-[11px]'>
-                                                {image.attachment.width} × {image.attachment.height} ·{' '}
-                                                {image.attachment.mimeType.replace('image/', '').toUpperCase()}
-                                            </p>
-                                        ) : null}
-                                        {image.errorMessage ? (
-                                            <p className='text-destructive text-[11px]'>{image.errorMessage}</p>
-                                        ) : null}
-                                    </div>
-                                    <div className='mt-2 flex items-center justify-end gap-1'>
-                                        {image.status === 'failed' ? (
+                                        <div className='mt-2 flex items-center justify-end gap-1'>
+                                            {image.status === 'failed' ? (
+                                                <Button
+                                                    type='button'
+                                                    size='sm'
+                                                    variant='outline'
+                                                    className='h-7 px-2 text-[11px]'
+                                                    onClick={() => {
+                                                        onRetryPendingImage(image.clientId);
+                                                    }}>
+                                                    <RefreshCw className='h-3.5 w-3.5' />
+                                                    Retry
+                                                </Button>
+                                            ) : null}
+                                            {image.status === 'compressing' ? (
+                                                <span className='text-muted-foreground inline-flex items-center gap-1 px-2 text-[11px]'>
+                                                    <LoaderCircle className='h-3.5 w-3.5 animate-spin' />
+                                                    Preparing
+                                                </span>
+                                            ) : null}
                                             <Button
                                                 type='button'
                                                 size='sm'
                                                 variant='outline'
                                                 className='h-7 px-2 text-[11px]'
                                                 onClick={() => {
-                                                    onRetryPendingImage(image.clientId);
+                                                    onRemovePendingImage(image.clientId);
                                                 }}>
-                                                <RefreshCw className='h-3.5 w-3.5' />
-                                                Retry
+                                                <X className='h-3.5 w-3.5' />
+                                                Remove
                                             </Button>
-                                        ) : null}
-                                        {image.status === 'compressing' ? (
-                                            <span className='text-muted-foreground inline-flex items-center gap-1 px-2 text-[11px]'>
-                                                <LoaderCircle className='h-3.5 w-3.5 animate-spin' />
-                                                Preparing
-                                            </span>
-                                        ) : null}
-                                        <Button
-                                            type='button'
-                                            size='sm'
-                                            variant='outline'
-                                            className='h-7 px-2 text-[11px]'
-                                            onClick={() => {
-                                                onRemovePendingImage(image.clientId);
-                                            }}>
-                                            <X className='h-3.5 w-3.5' />
-                                            Remove
-                                        </Button>
+                                        </div>
                                     </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     ) : null}
                     <textarea
+                        aria-label='Prompt'
+                        name='composerPrompt'
                         value={prompt}
                         onChange={(event) => {
                             onPromptChange(event.target.value);
@@ -411,12 +463,16 @@ export function ComposerActionPanel({
                                 return;
                             }
 
-                            event.preventDefault();
                             onAddImageFiles(files);
+                            if (event.clipboardData.getData('text').trim().length === 0) {
+                                event.preventDefault();
+                            }
                         }}
                         rows={4}
                         className='bg-background/70 min-h-[112px] w-full resize-y px-3 py-3 text-sm outline-none'
-                        placeholder='Prompt for selected session...'
+                        autoComplete='off'
+                        spellCheck
+                        placeholder='Prompt for the selected session…'
                     />
                     {isDragActive ? (
                         <div className='bg-primary/10 text-primary pointer-events-none absolute inset-0 flex items-center justify-center text-sm font-semibold backdrop-blur-sm'>
@@ -425,14 +481,8 @@ export function ComposerActionPanel({
                     ) : null}
                 </div>
                 <div className='flex items-center justify-between gap-2'>
-                    <p className='text-muted-foreground text-xs'>
-                        {hasUnsupportedPendingImages
-                            ? imageAttachmentBlockedReason ?? 'Select a vision-capable model to send attached images.'
-                            : hasBlockingPendingImages
-                            ? 'Sending is locked until every image finishes processing.'
-                            : pendingImages.length > 0
-                              ? 'Images are ready to send with this message.'
-                              : 'Text-only prompt.'}
+                    <p aria-live='polite' className='text-muted-foreground text-xs'>
+                        {attachmentStatusMessage}
                     </p>
                     <Button
                         type='submit'
@@ -444,15 +494,16 @@ export function ComposerActionPanel({
                             hasBlockingPendingImages ||
                             hasUnsupportedPendingImages
                         }>
-                        {hasBlockingPendingImages ? 'Images preparing...' : 'Start Run'}
+                        {hasBlockingPendingImages ? 'Images preparing…' : 'Start Run'}
                     </Button>
                 </div>
             </form>
             <ImageLightboxModal
                 open={lightboxImage !== undefined}
-                imageUrl={lightboxImage?.imageUrl}
-                title={lightboxImage?.title}
-                detail={lightboxImage?.detail}
+                {...(lightboxImage?.imageUrl ? { imageUrl: lightboxImage.imageUrl } : {})}
+                {...(lightboxImage?.title ? { title: lightboxImage.title } : {})}
+                {...(lightboxImage?.detail ? { detail: lightboxImage.detail } : {})}
+                previewState={lightboxImage ? 'ready' : 'idle'}
                 onClose={() => {
                     setLightboxImage(undefined);
                 }}

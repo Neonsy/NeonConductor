@@ -196,11 +196,12 @@ export class ProviderMetadataOrchestrator {
         const models = listStaticModelDefinitions(providerId, endpointProfile).map((definition) =>
             toStaticProviderCatalogModel(definition, endpointProfile)
         );
+        const normalized = normalizeCatalogMetadata(providerId, models);
 
         await providerCatalogStore.replaceModels(
             profileId,
             providerId,
-            models.map(toProviderCatalogUpsert)
+            normalized.models.map(toProviderCatalogUpsert)
         );
     }
 

@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 
 import { createProfileSettingsActions } from '@/web/components/settings/profileSettings/actions';
-import { refetchProfilePreference } from '@/web/components/settings/profileSettings/refetch';
 import { resolveSelectedProfileId } from '@/web/components/settings/profileSettings/selection';
 import { invalidateRuntimeResetQueries } from '@/web/lib/runtime/invalidation/queryInvalidation';
 import { trpc } from '@/web/trpc/client';
 
+import type { ProfileRecord } from '@/app/backend/persistence/types';
 import { FACTORY_RESET_CONFIRMATION_TEXT } from '@/app/backend/runtime/contracts';
 
 export function useProfileSettingsController(input: {
@@ -51,6 +51,20 @@ export function useProfileSettingsController(input: {
     const selectedProfile = selectedProfileId ? profiles.find((profile) => profile.id === selectedProfileId) : undefined;
     const selectedProfileIdForSettings = selectedProfileId ?? input.activeProfileId;
 
+    function updateProfileList(
+        updater: (profiles: ProfileRecord[]) => ProfileRecord[]
+    ) {
+        utils.profile.list.setData(undefined, (current) => {
+            if (!current) {
+                return current;
+            }
+
+            return {
+                profiles: updater(current.profiles),
+            };
+        });
+    }
+
     const editPreferenceQuery = trpc.conversation.getEditPreference.useQuery(
         {
             profileId: selectedProfileIdForSettings,
@@ -61,8 +75,43 @@ export function useProfileSettingsController(input: {
         }
     );
     const setEditPreferenceMutation = trpc.conversation.setEditPreference.useMutation({
-        onSuccess: () => {
-            refetchProfilePreference(editPreferenceQuery);
+        onMutate: async (variables) => {
+            await utils.conversation.getEditPreference.cancel({
+                profileId: variables.profileId,
+            });
+            const previous = utils.conversation.getEditPreference.getData({
+                profileId: variables.profileId,
+            });
+            utils.conversation.getEditPreference.setData(
+                {
+                    profileId: variables.profileId,
+                },
+                {
+                    value: variables.value,
+                }
+            );
+            return {
+                previous,
+                profileId: variables.profileId,
+            };
+        },
+        onError: (_error, _variables, context) => {
+            if (context?.previous) {
+                utils.conversation.getEditPreference.setData(
+                    {
+                        profileId: context.profileId,
+                    },
+                    context.previous
+                );
+            }
+        },
+        onSuccess: (result, variables) => {
+            utils.conversation.getEditPreference.setData(
+                {
+                    profileId: variables.profileId,
+                },
+                result
+            );
         },
     });
     const threadTitlePreferenceQuery = trpc.conversation.getThreadTitlePreference.useQuery(
@@ -75,8 +124,44 @@ export function useProfileSettingsController(input: {
         }
     );
     const setThreadTitlePreferenceMutation = trpc.conversation.setThreadTitlePreference.useMutation({
-        onSuccess: () => {
-            refetchProfilePreference(threadTitlePreferenceQuery);
+        onMutate: async (variables) => {
+            await utils.conversation.getThreadTitlePreference.cancel({
+                profileId: variables.profileId,
+            });
+            const previous = utils.conversation.getThreadTitlePreference.getData({
+                profileId: variables.profileId,
+            });
+            utils.conversation.getThreadTitlePreference.setData(
+                {
+                    profileId: variables.profileId,
+                },
+                {
+                    mode: variables.mode,
+                    ...(variables.aiModel ? { aiModel: variables.aiModel } : {}),
+                }
+            );
+            return {
+                previous,
+                profileId: variables.profileId,
+            };
+        },
+        onError: (_error, _variables, context) => {
+            if (context?.previous) {
+                utils.conversation.getThreadTitlePreference.setData(
+                    {
+                        profileId: context.profileId,
+                    },
+                    context.previous
+                );
+            }
+        },
+        onSuccess: (result, variables) => {
+            utils.conversation.getThreadTitlePreference.setData(
+                {
+                    profileId: variables.profileId,
+                },
+                result
+            );
         },
     });
     const executionPresetQuery = trpc.profile.getExecutionPreset.useQuery(
@@ -89,8 +174,55 @@ export function useProfileSettingsController(input: {
         }
     );
     const setExecutionPresetMutation = trpc.profile.setExecutionPreset.useMutation({
-        onSuccess: () => {
-            refetchProfilePreference(executionPresetQuery);
+        onMutate: async (variables) => {
+            await utils.profile.getExecutionPreset.cancel({
+                profileId: variables.profileId,
+            });
+            const previous = utils.profile.getExecutionPreset.getData({
+                profileId: variables.profileId,
+            });
+            utils.profile.getExecutionPreset.setData(
+                {
+                    profileId: variables.profileId,
+                },
+                {
+                    preset: variables.preset,
+                }
+            );
+            return {
+                previous,
+                profileId: variables.profileId,
+            };
+        },
+        onError: (_error, _variables, context) => {
+            if (context?.previous) {
+                utils.profile.getExecutionPreset.setData(
+                    {
+                        profileId: context.profileId,
+                    },
+                    context.previous
+                );
+            }
+        },
+        onSuccess: (result, variables) => {
+            utils.profile.getExecutionPreset.setData(
+                {
+                    profileId: variables.profileId,
+                },
+                result
+            );
+            utils.runtime.getShellBootstrap.setData(
+                {
+                    profileId: variables.profileId,
+                },
+                (current) =>
+                    current
+                        ? {
+                              ...current,
+                              executionPreset: result.preset,
+                          }
+                        : current
+            );
         },
     });
 
@@ -109,7 +241,13 @@ export function useProfileSettingsController(input: {
         newProfileName,
         renameValue,
         threadTitleAiModelInput,
-        profilesQuery,
+        updateProfileList,
+        invalidateProfileList: async () => {
+            await utils.profile.list.invalidate();
+        },
+        invalidateActiveProfile: async () => {
+            await utils.profile.getActive.invalidate();
+        },
         createMutation,
         renameMutation,
         duplicateMutation,
@@ -125,6 +263,31 @@ export function useProfileSettingsController(input: {
     });
 
     return {
+        feedbackMessage:
+            createMutation.error?.message ??
+            renameMutation.error?.message ??
+            duplicateMutation.error?.message ??
+            deleteMutation.error?.message ??
+            setActiveMutation.error?.message ??
+            factoryResetMutation.error?.message ??
+            setEditPreferenceMutation.error?.message ??
+            setThreadTitlePreferenceMutation.error?.message ??
+            setExecutionPresetMutation.error?.message ??
+            statusMessage,
+        feedbackTone:
+            createMutation.error ??
+            renameMutation.error ??
+            duplicateMutation.error ??
+            deleteMutation.error ??
+            setActiveMutation.error ??
+            factoryResetMutation.error ??
+            setEditPreferenceMutation.error ??
+            setThreadTitlePreferenceMutation.error ??
+            setExecutionPresetMutation.error
+                ? ('error' as const)
+                : statusMessage
+                  ? ('success' as const)
+                  : ('info' as const),
         profiles,
         selectedProfile,
         selectedProfileId,

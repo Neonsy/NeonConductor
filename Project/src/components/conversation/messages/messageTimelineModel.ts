@@ -1,6 +1,8 @@
 import { buildMessageCopyPayloads } from '@/web/components/conversation/messages/messageCopy';
+import { isEntityId } from '@/web/components/conversation/shell/workspace/helpers';
 
 import type { MessagePartRecord, MessageRecord } from '@/app/backend/persistence/types';
+import type { EntityId } from '@/app/backend/runtime/contracts';
 
 export type MessageTimelineTextEntryType = 'assistant_reasoning' | 'assistant_text' | 'user_text' | 'system_text';
 export type MessageTimelineImageEntryType = 'assistant_image' | 'user_image' | 'system_image';
@@ -12,10 +14,10 @@ export type MessageTimelineBodyEntry =
           text: string;
           providerLimitedReasoning: boolean;
       }
-    | {
+      | {
           id: string;
           type: MessageTimelineImageEntryType;
-          mediaId: string;
+          mediaId: EntityId<'media'>;
           mimeType: 'image/jpeg' | 'image/png' | 'image/webp';
           width: number;
           height: number;
@@ -88,15 +90,16 @@ function buildBodyEntries(message: MessageRecord, parts: MessagePartRecord[]): M
         }
 
         if (part.partType === 'image') {
-            const mediaId = part.payload['mediaId'];
+            const rawMediaId = part.payload['mediaId'];
             const mimeType = part.payload['mimeType'];
             const width = part.payload['width'];
             const height = part.payload['height'];
             const imageEntryType = mapImageEntryType(message.role);
+            const mediaId = typeof rawMediaId === 'string' ? rawMediaId : undefined;
 
             if (
                 imageEntryType &&
-                typeof mediaId === 'string' &&
+                isEntityId(mediaId, 'media') &&
                 typeof mimeType === 'string' &&
                 typeof width === 'number' &&
                 typeof height === 'number'
@@ -164,9 +167,8 @@ export function buildTimelineEntries(
         const editableText =
             message.role === 'user'
                 ? body
-                      .filter(
-                          (item): item is Extract<MessageTimelineBodyEntry, { type: 'user_text' }> =>
-                              item.type === 'user_text'
+                      .filter((item): item is MessageTimelineBodyEntry & { type: 'user_text'; text: string } =>
+                          item.type === 'user_text' && 'text' in item
                       )
                       .map((item) => item.text)
                       .join('\n\n')

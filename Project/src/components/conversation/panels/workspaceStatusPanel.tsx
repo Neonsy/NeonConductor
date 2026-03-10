@@ -71,9 +71,9 @@ function StatusCard({
     detail: string;
 }) {
     return (
-        <div className='border-border bg-card rounded-xl border px-3 py-3'>
+        <div className='border-border bg-card/90 rounded-2xl border px-4 py-3 shadow-sm'>
             <p className='text-muted-foreground text-[11px] font-semibold tracking-[0.12em] uppercase'>{label}</p>
-            <p className='mt-2 text-sm font-semibold'>{value}</p>
+            <p className='mt-2 text-sm font-semibold text-balance'>{value}</p>
             <p className='text-muted-foreground mt-1 text-xs'>{detail}</p>
         </div>
     );
@@ -92,7 +92,7 @@ export function WorkspaceStatusPanel({
 }: WorkspaceStatusPanelProps) {
     return (
         <section
-            className={`mb-3 grid gap-2 md:grid-cols-2 ${
+            className={`mb-3 grid gap-3 md:grid-cols-2 ${
                 registrySummary || agentContextSummary ? 'xl:grid-cols-6' : 'xl:grid-cols-4'
             }`}>
             <StatusCard

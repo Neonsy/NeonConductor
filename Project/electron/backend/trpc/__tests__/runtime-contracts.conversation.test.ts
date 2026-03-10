@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { Buffer } from 'node:buffer';
 
 
 import {
@@ -7,6 +8,7 @@ import {
     createCaller,
     createSessionInScope,
     defaultRuntimeOptions,
+    requireEntityId,
     waitForRunStatus,
 } from '@/app/backend/trpc/__tests__/runtime-contracts.shared';
 
@@ -104,10 +106,11 @@ describe('runtime contracts: conversation and runs', () => {
         }
         expect(imagePart.payload['mediaId']).toEqual(expect.stringMatching(/^media_/));
 
-        const mediaId = imagePart.payload['mediaId'];
-        if (typeof mediaId !== 'string') {
-            throw new Error('Expected persisted media id.');
-        }
+        const mediaId = requireEntityId(
+            typeof imagePart.payload['mediaId'] === 'string' ? imagePart.payload['mediaId'] : undefined,
+            'media',
+            'Expected persisted media id.'
+        );
 
         const media = await caller.session.getMessageMedia({
             profileId,
@@ -117,7 +120,9 @@ describe('runtime contracts: conversation and runs', () => {
         if (!media.found) {
             throw new Error('Expected persisted message media.');
         }
-        expect(media.dataUrl.startsWith('data:image/png;base64,')).toBe(true);
+        expect(media.mimeType).toBe('image/png');
+        expect(media.bytes).toEqual(Uint8Array.from(Buffer.from(pngBytesBase64, 'base64')));
+        expect(media.byteSize).toBeGreaterThan(0);
 
         const contextState = await caller.context.getResolvedState({
             profileId,

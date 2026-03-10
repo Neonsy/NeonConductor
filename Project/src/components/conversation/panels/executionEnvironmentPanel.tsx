@@ -32,6 +32,8 @@ interface ExecutionEnvironmentPanelProps {
           };
     worktrees: WorktreeRecord[];
     busy: boolean;
+    feedbackMessage?: string;
+    feedbackTone?: 'success' | 'error' | 'info';
     onConfigureThread: (input: {
         mode: 'local' | 'new_worktree' | 'worktree';
         executionBranch?: string;
@@ -51,6 +53,8 @@ export function ExecutionEnvironmentPanel({
     workspaceScope,
     worktrees,
     busy,
+    feedbackMessage,
+    feedbackTone = 'info',
     onConfigureThread,
     onRefreshWorktree,
     onRemoveWorktree,
@@ -247,6 +251,20 @@ export function ExecutionEnvironmentPanel({
                     Cleanup Orphaned
                 </Button>
             </div>
+
+            {feedbackMessage ? (
+                <div
+                    aria-live='polite'
+                    className={`mt-3 rounded-xl border px-3 py-2 text-xs ${
+                        feedbackTone === 'error'
+                            ? 'border-destructive/20 bg-destructive/10 text-destructive'
+                            : feedbackTone === 'success'
+                              ? 'border-primary/20 bg-primary/10 text-primary'
+                              : 'border-border bg-background/70 text-muted-foreground'
+                    }`}>
+                    {feedbackMessage}
+                </div>
+            ) : null}
 
             <div className='text-muted-foreground mt-3 text-xs'>
                 {workspaceScope.kind === 'worktree' ? (

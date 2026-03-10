@@ -191,7 +191,7 @@ export function seedRuntimeData(sqlite: DatabaseSync, defaultProfileId: string):
                     source,
                     updated_at
                 )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `
     );
     const insertProviderAuthState = sqlite.prepare(

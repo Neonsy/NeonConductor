@@ -94,6 +94,23 @@ export interface SessionGetMessageMediaInput extends ProfileInput {
     mediaId: EntityId<'media'>;
 }
 
+export interface SessionMessageMediaPayload {
+    mimeType: ComposerImageAttachmentMimeType;
+    bytes: Uint8Array;
+    byteSize: number;
+    width: number;
+    height: number;
+    sha256: string;
+}
+
+export type SessionGetMessageMediaResult =
+    | {
+          found: false;
+      }
+    | ({
+          found: true;
+      } & SessionMessageMediaPayload);
+
 export type SessionGetAttachedSkillsInput = SessionByIdInput;
 
 export interface SessionSetAttachedSkillsInput extends SessionByIdInput {

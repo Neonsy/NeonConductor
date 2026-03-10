@@ -56,6 +56,12 @@ export function buildConversationWorkspacePanels(input: BuildConversationWorkspa
                     input.mutations.removeWorktreeMutation.isPending ||
                     input.mutations.removeOrphanedWorktreesMutation.isPending
                 }
+                {...(input.workspaceActions.feedbackMessage
+                    ? {
+                          feedbackMessage: input.workspaceActions.feedbackMessage,
+                          feedbackTone: input.workspaceActions.feedbackTone,
+                      }
+                    : {})}
                 onConfigureThread={(executionInput) => {
                     if (!input.shellViewModel.selectedThread || !isEntityId(input.shellViewModel.selectedThread.id, 'thr')) {
                         return;

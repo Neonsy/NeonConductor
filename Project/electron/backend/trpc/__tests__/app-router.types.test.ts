@@ -119,7 +119,19 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
     }>();
     expectTypeOf<Outputs['session']['getMessageMedia']>().toExtend<{
         found: boolean;
-        dataUrl?: string;
+        mimeType?: 'image/jpeg' | 'image/png' | 'image/webp';
+        bytes?: {
+            readonly length: number;
+            readonly byteLength: number;
+            readonly buffer: {
+                readonly byteLength: number;
+            };
+            [index: number]: number;
+        };
+        byteSize?: number;
+        width?: number;
+        height?: number;
+        sha256?: string;
     }>();
     expectTypeOf<Inputs['diff']['listByRun']>().toExtend<{
         profileId: string;

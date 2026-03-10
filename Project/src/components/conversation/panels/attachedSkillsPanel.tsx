@@ -1,4 +1,4 @@
-import { useDeferredValue, useState } from 'react';
+import { useDeferredValue, useEffect, useState } from 'react';
 
 import { Button } from '@/web/components/ui/button';
 import { trpc } from '@/web/trpc/client';
@@ -34,6 +34,8 @@ export function AttachedSkillsPanel({
     const [query, setQuery] = useState('');
     const deferredQuery = useDeferredValue(query.trim());
     const [mutationError, setMutationError] = useState<string | undefined>(undefined);
+    const [optimisticAttachedSkills, setOptimisticAttachedSkills] = useState(attachedSkills);
+    const [optimisticMissingAssetKeys, setOptimisticMissingAssetKeys] = useState(missingAssetKeys);
     const utils = trpc.useUtils();
     const searchQuery = trpc.registry.searchSkills.useQuery(
         {
@@ -56,16 +58,41 @@ export function AttachedSkillsPanel({
         },
     });
 
-    const attachedAssetKeys = attachedSkills.map((skillfile) => skillfile.assetKey);
+    useEffect(() => {
+        setOptimisticAttachedSkills(attachedSkills);
+    }, [attachedSkills]);
+
+    useEffect(() => {
+        setOptimisticMissingAssetKeys(missingAssetKeys);
+    }, [missingAssetKeys]);
+
+    const attachedAssetKeys = optimisticAttachedSkills.map((skillfile) => skillfile.assetKey);
     const attachedAssetKeySet = new Set(attachedAssetKeys);
     const visibleResults = searchQuery.data?.skillfiles.slice(0, 8) ?? [];
+    const knownSkillfilesByAssetKey = new Map(
+        [...attachedSkills, ...(searchQuery.data?.skillfiles ?? [])].map((skillfile) => [skillfile.assetKey, skillfile])
+    );
 
     const applyAttachedSkills = (assetKeys: string[]) => {
         setMutationError(undefined);
+        const previousAttachedSkills = optimisticAttachedSkills;
+        const previousMissingAssetKeys = optimisticMissingAssetKeys;
+        const nextAttachedSkills = assetKeys.flatMap((assetKey) => {
+            const skillfile = knownSkillfilesByAssetKey.get(assetKey);
+            return skillfile ? [skillfile] : [];
+        });
+        const nextMissingAssetKeys = assetKeys.filter((assetKey) => !knownSkillfilesByAssetKey.has(assetKey));
+
+        setOptimisticAttachedSkills(nextAttachedSkills);
+        setOptimisticMissingAssetKeys(nextMissingAssetKeys);
         void setAttachedSkillsMutation.mutateAsync({
             profileId,
             sessionId,
             assetKeys,
+        }).catch((error: unknown) => {
+            setOptimisticAttachedSkills(previousAttachedSkills);
+            setOptimisticMissingAssetKeys(previousMissingAssetKeys);
+            setMutationError(error instanceof Error ? error.message : 'Attached skills could not be updated.');
         });
     };
 
@@ -79,7 +106,7 @@ export function AttachedSkillsPanel({
                     </p>
                 </div>
                 <div className='text-muted-foreground text-right text-xs [font-variant-numeric:tabular-nums]'>
-                    <p>{attachedSkills.length} attached</p>
+                    <p>{optimisticAttachedSkills.length} attached</p>
                     <p>{searchQuery.data?.skillfiles.length ?? 0} available</p>
                 </div>
             </div>
@@ -92,24 +119,26 @@ export function AttachedSkillsPanel({
                         setQuery(event.target.value);
                     }}
                     className='border-border bg-background h-11 w-full rounded-xl border px-3 text-sm'
-                    placeholder='Search resolved skills by name or tag'
+                    autoComplete='off'
+                    name='skillSearch'
+                    placeholder='Search resolved skills by name or tag…'
                 />
             </label>
 
-            {missingAssetKeys.length > 0 ? (
+            {optimisticMissingAssetKeys.length > 0 ? (
                 <div className='border-amber-500/30 bg-amber-500/10 mt-3 rounded-xl border px-3 py-2 text-xs'>
-                    Unresolved attached skills: {missingAssetKeys.join(', ')}. Any save here will prune them.
+                    Unresolved attached skills: {optimisticMissingAssetKeys.join(', ')}. Any save here will prune them.
                 </div>
             ) : null}
             {mutationError ? (
-                <div className='text-destructive mt-3 rounded-xl border border-current/20 px-3 py-2 text-xs'>
+                <div aria-live='polite' className='text-destructive mt-3 rounded-xl border border-current/20 px-3 py-2 text-xs'>
                     {mutationError}
                 </div>
             ) : null}
 
             <div className='mt-3 space-y-2'>
-                {attachedSkills.length > 0 ? (
-                    attachedSkills.map((skillfile) => (
+                {optimisticAttachedSkills.length > 0 ? (
+                    optimisticAttachedSkills.map((skillfile) => (
                         <div
                             key={skillfile.assetKey}
                             className='border-border bg-background/70 flex min-h-11 items-start justify-between gap-3 rounded-xl border px-3 py-3'>

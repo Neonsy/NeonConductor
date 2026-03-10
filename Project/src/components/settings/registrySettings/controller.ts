@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react';
 
+import { invalidateShellBootstrap } from '@/web/lib/runtime/invalidation/queryInvalidation';
 import { trpc } from '@/web/trpc/client';
 
 export function useRegistrySettingsController(profileId: string) {
     const utils = trpc.useUtils();
     const [selectedWorkspaceFingerprint, setSelectedWorkspaceFingerprint] = useState<string | undefined>(undefined);
     const [skillQuery, setSkillQuery] = useState('');
+    const [feedbackMessage, setFeedbackMessage] = useState<string | undefined>(undefined);
+    const [feedbackTone, setFeedbackTone] = useState<'success' | 'error' | 'info'>('info');
 
     const workspaceRootsQuery = trpc.runtime.listWorkspaceRoots.useQuery(
         { profileId },
@@ -31,13 +34,27 @@ export function useRegistrySettingsController(profileId: string) {
     );
     const refreshMutation = trpc.registry.refresh.useMutation({
         onSuccess: async () => {
+            setFeedbackTone('success');
+            setFeedbackMessage(
+                selectedWorkspaceFingerprint ? 'Refreshed registry data for the selected workspace.' : 'Refreshed global registry data.'
+            );
             await Promise.all([
-                utils.registry.listResolved.invalidate(),
-                utils.registry.searchSkills.invalidate(),
-                utils.mode.list.invalidate(),
-                utils.mode.getActive.invalidate(),
-                utils.runtime.getShellBootstrap.invalidate({ profileId }),
+                utils.registry.listResolved.invalidate({
+                    profileId,
+                    ...(selectedWorkspaceFingerprint ? { workspaceFingerprint: selectedWorkspaceFingerprint } : {}),
+                }),
+                utils.registry.searchSkills.invalidate({
+                    profileId,
+                    ...(selectedWorkspaceFingerprint ? { workspaceFingerprint: selectedWorkspaceFingerprint } : {}),
+                }),
+                utils.mode.list.invalidate({ profileId, topLevelTab: 'agent' }),
+                utils.mode.getActive.invalidate({ profileId, topLevelTab: 'agent' }),
+                invalidateShellBootstrap(utils, profileId),
             ]);
+        },
+        onError: (error) => {
+            setFeedbackTone('error');
+            setFeedbackMessage(error.message);
         },
     });
 
@@ -73,5 +90,7 @@ export function useRegistrySettingsController(profileId: string) {
         resolvedAgentModes,
         selectedWorkspaceRoot,
         skillMatches,
+        feedbackMessage,
+        feedbackTone,
     };
 }

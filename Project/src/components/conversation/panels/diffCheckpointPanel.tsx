@@ -54,6 +54,7 @@ export function DiffCheckpointPanel({
     const [selectedPath, setSelectedPath] = useState<string | undefined>(firstSelectablePath);
     const [confirmRollbackId, setConfirmRollbackId] = useState<CheckpointRecord['id'] | undefined>(undefined);
     const [rollbackTargetId, setRollbackTargetId] = useState<CheckpointRecord['id'] | undefined>(undefined);
+    const [feedbackMessage, setFeedbackMessage] = useState<string | undefined>(undefined);
     const patchQuery = trpc.diff.getFilePatch.useQuery(
         selectedDiff && selectedPath
             ? {
@@ -72,7 +73,23 @@ export function DiffCheckpointPanel({
         }
     );
     const openPathMutation = trpc.system.openPath.useMutation();
-    const rollbackMutation = trpc.checkpoint.rollback.useMutation();
+    const rollbackMutation = trpc.checkpoint.rollback.useMutation({
+        onSuccess: (result) => {
+            if (!result.rolledBack) {
+                setFeedbackMessage(result.message ?? 'Rollback could not be completed.');
+                return;
+            }
+
+            setFeedbackMessage('Checkpoint rollback completed.');
+            setConfirmRollbackId(undefined);
+        },
+        onError: (error) => {
+            setFeedbackMessage(error.message);
+        },
+        onSettled: () => {
+            setRollbackTargetId(undefined);
+        },
+    });
 
     useEffect(() => {
         setSelectedPath(firstSelectablePath);
@@ -82,16 +99,21 @@ export function DiffCheckpointPanel({
     const fileGroups = selectedDiff?.artifact.kind === 'git' ? groupFilesByDirectory(selectedDiff.artifact.files) : [];
 
     return (
-        <section className='border-border bg-card/70 mt-3 rounded-xl border p-3 shadow-sm'>
+        <section className='border-border bg-card/80 mt-3 rounded-2xl border p-4 shadow-sm'>
             <div className='flex flex-wrap items-center justify-between gap-3'>
                 <div>
-                    <p className='text-sm font-semibold'>Diffs and Checkpoints</p>
+                    <p className='text-sm font-semibold'>Changes and Checkpoints</p>
                     <p className='text-muted-foreground text-xs'>
-                        {selectedRunId ? `Run ${selectedRunId}` : 'Select a run to inspect changes'}
+                        {selectedRunId ? `Run ${selectedRunId}` : 'Select a run to inspect code and workspace changes'}
                         {selectedSessionId ? ` · ${String(checkpoints.length)} checkpoints` : ''}
                     </p>
                 </div>
             </div>
+            {feedbackMessage ? (
+                <div aria-live='polite' className='mt-3 rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-xs text-destructive'>
+                    {feedbackMessage}
+                </div>
+            ) : null}
 
             {selectedDiff ? (
                 <div className='mt-3 grid gap-3 lg:grid-cols-[minmax(0,280px)_1fr]'>
@@ -117,7 +139,7 @@ export function DiffCheckpointPanel({
                                                     <button
                                                         key={file.path}
                                                         type='button'
-                                                        className={`flex min-h-11 w-full items-center justify-between rounded-md border px-3 text-left text-sm ${
+                                                        className={`focus-visible:ring-ring flex min-h-11 w-full items-center justify-between rounded-md border px-3 text-left text-sm focus-visible:ring-2 ${
                                                             selectedPath === file.path
                                                                 ? 'border-primary bg-primary/10'
                                                                 : 'border-border bg-background/60 hover:bg-accent'
@@ -150,7 +172,9 @@ export function DiffCheckpointPanel({
                             </header>
                             <div className='max-h-72 overflow-y-auto p-2'>
                                 {checkpoints.length === 0 ? (
-                                    <p className='text-muted-foreground p-2 text-sm'>No checkpoints for this session yet.</p>
+                                    <p className='text-muted-foreground rounded-xl border border-dashed p-3 text-sm'>
+                                        No checkpoints for this session yet.
+                                    </p>
                                 ) : (
                                     <div className='space-y-2'>
                                         {checkpoints.map((checkpoint) => (
@@ -168,12 +192,13 @@ export function DiffCheckpointPanel({
                                                         className='h-11'
                                                         disabled={disabled || rollbackMutation.isPending}
                                                         onClick={() => {
+                                                            setFeedbackMessage(undefined);
                                                             setConfirmRollbackId((current) =>
                                                                 current === checkpoint.id ? undefined : checkpoint.id
                                                             );
                                                         }}>
                                                         {rollbackMutation.isPending && rollbackTargetId === checkpoint.id
-                                                            ? 'Rolling Back'
+                                                            ? 'Rolling Back…'
                                                             : confirmRollbackId === checkpoint.id
                                                               ? 'Cancel'
                                                               : 'Rollback'}
@@ -195,6 +220,7 @@ export function DiffCheckpointPanel({
                                                                 disabled={rollbackMutation.isPending}
                                                                 onClick={() => {
                                                                     setRollbackTargetId(checkpoint.id);
+                                                                    setFeedbackMessage(undefined);
                                                                     void rollbackMutation.mutateAsync({
                                                                         profileId,
                                                                         checkpointId: checkpoint.id,
@@ -254,7 +280,9 @@ export function DiffCheckpointPanel({
                             ) : patchQuery.data?.found ? (
                                 <MarkdownContent markdown={patchMarkdown} />
                             ) : selectedDiff.artifact.kind === 'git' ? (
-                                <p className='text-muted-foreground text-sm'>Select a changed file to inspect its patch.</p>
+                                <p className='text-muted-foreground rounded-xl border border-dashed px-4 py-5 text-sm'>
+                                    Select a changed file to inspect its patch.
+                                </p>
                             ) : (
                                 <p className='text-muted-foreground text-sm'>{selectedDiff.artifact.detail}</p>
                             )}
@@ -262,7 +290,7 @@ export function DiffCheckpointPanel({
                     </section>
                 </div>
             ) : (
-                <p className='text-muted-foreground mt-3 text-sm'>
+                <p className='text-muted-foreground mt-3 rounded-xl border border-dashed px-4 py-5 text-sm'>
                     No diff artifact is available for the selected run yet.
                 </p>
             )}

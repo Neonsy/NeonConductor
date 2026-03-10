@@ -1,4 +1,5 @@
 import type { ComposerImageAttachmentInput } from '@/app/backend/runtime/contracts';
+import { compressComposerImageInWorker } from '@/web/components/conversation/hooks/composerImageCompressionClient';
 
 const MAX_IMAGE_EDGE_PX = 2048;
 const MAX_COMPRESSED_IMAGE_BYTES = 1_500_000;
@@ -28,15 +29,47 @@ export interface PreparedComposerImageAttachment {
     previewUrl: string;
 }
 
-function releaseCanvas(canvas: HTMLCanvasElement): void {
-    canvas.width = 0;
-    canvas.height = 0;
+type DrawableImageSource = ImageBitmap | HTMLImageElement;
+
+type CanvasSurface =
+    | {
+          kind: 'dom';
+          canvas: HTMLCanvasElement;
+          context: CanvasRenderingContext2D;
+      }
+    | {
+          kind: 'offscreen';
+          canvas: OffscreenCanvas;
+          context: OffscreenCanvasRenderingContext2D;
+      };
+
+type ReadableCanvasContext = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
+
+function releaseCanvas(surface: CanvasSurface): void {
+    surface.canvas.width = 0;
+    surface.canvas.height = 0;
 }
 
 function revokePreviewUrl(previewUrl: string): void {
     if (previewUrl.startsWith('blob:')) {
         URL.revokeObjectURL(previewUrl);
     }
+}
+
+function decodeBase64Buffer(bytesBase64: string): ArrayBuffer {
+    const binary = atob(bytesBase64);
+    const bytes = new Uint8Array(binary.length);
+
+    for (let index = 0; index < binary.length; index += 1) {
+        bytes[index] = binary.charCodeAt(index);
+    }
+
+    return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+}
+
+function createBlobPreviewUrl(attachment: ComposerImageAttachmentInput): string {
+    const blob = new Blob([decodeBase64Buffer(attachment.bytesBase64)], { type: attachment.mimeType });
+    return URL.createObjectURL(blob);
 }
 
 async function loadImageElement(file: File): Promise<HTMLImageElement> {
@@ -60,6 +93,33 @@ async function loadImageElement(file: File): Promise<HTMLImageElement> {
     }
 }
 
+async function loadDrawableImage(file: File): Promise<{
+    source: DrawableImageSource;
+    width: number;
+    height: number;
+    release: () => void;
+}> {
+    if (typeof createImageBitmap === 'function') {
+        const imageBitmap = await createImageBitmap(file);
+        return {
+            source: imageBitmap,
+            width: imageBitmap.width,
+            height: imageBitmap.height,
+            release: () => {
+                imageBitmap.close();
+            },
+        };
+    }
+
+    const image = await loadImageElement(file);
+    return {
+        source: image,
+        width: image.naturalWidth,
+        height: image.naturalHeight,
+        release: () => {},
+    };
+}
+
 function fitDimensions(width: number, height: number, maxEdge: number): { width: number; height: number } {
     if (width <= maxEdge && height <= maxEdge) {
         return { width, height };
@@ -79,11 +139,21 @@ function downscaleDimensions(width: number, height: number): { width: number; he
     };
 }
 
-function renderToCanvas(
-    image: CanvasImageSource,
-    width: number,
-    height: number
-): { canvas: HTMLCanvasElement; context: CanvasRenderingContext2D } {
+function createCanvasSurface(width: number, height: number): CanvasSurface {
+    if (typeof OffscreenCanvas !== 'undefined') {
+        const canvas = new OffscreenCanvas(width, height);
+        const context = canvas.getContext('2d');
+        if (!context) {
+            throw new Error('Image compression could not acquire an offscreen 2D canvas context.');
+        }
+
+        return {
+            kind: 'offscreen',
+            canvas,
+            context,
+        };
+    }
+
     const canvas = document.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
@@ -92,15 +162,24 @@ function renderToCanvas(
         throw new Error('Image compression could not acquire a 2D canvas context.');
     }
 
-    context.drawImage(image, 0, 0, width, height);
-    return { canvas, context };
+    return {
+        kind: 'dom',
+        canvas,
+        context,
+    };
 }
 
-function hasTransparentPixels(
-    context: CanvasRenderingContext2D,
+function renderToCanvas(
+    image: DrawableImageSource,
     width: number,
     height: number
-): boolean {
+): CanvasSurface {
+    const surface = createCanvasSurface(width, height);
+    surface.context.drawImage(image, 0, 0, width, height);
+    return surface;
+}
+
+function hasTransparentPixels(context: ReadableCanvasContext, width: number, height: number): boolean {
     const { data } = context.getImageData(0, 0, width, height);
     for (let index = 3; index < data.length; index += 4) {
         if (data[index] !== 255) {
@@ -112,12 +191,19 @@ function hasTransparentPixels(
 }
 
 async function canvasToBlob(
-    canvas: HTMLCanvasElement,
+    surface: CanvasSurface,
     mimeType: 'image/jpeg' | 'image/png',
     quality?: number
 ): Promise<Blob> {
+    if (surface.kind === 'offscreen') {
+        return surface.canvas.convertToBlob({
+            type: mimeType,
+            ...(quality !== undefined ? { quality } : {}),
+        });
+    }
+
     const blob = await new Promise<Blob | null>((resolve) => {
-        canvas.toBlob(resolve, mimeType, quality);
+        surface.canvas.toBlob(resolve, mimeType, quality);
     });
 
     if (!blob) {
@@ -166,11 +252,18 @@ async function finalizePreparedAttachment(
             sha256,
         },
         byteSize: blob.size,
-        previewUrl: `data:${mimeType};base64,${bytesBase64}`,
+        previewUrl: createBlobPreviewUrl({
+            clientId,
+            mimeType,
+            bytesBase64,
+            width,
+            height,
+            sha256,
+        }),
     };
 }
 
-export async function prepareComposerImageAttachment(
+async function prepareComposerImageAttachmentOnMainThread(
     file: File,
     clientId: string
 ): Promise<PreparedComposerImageAttachment> {
@@ -178,47 +271,72 @@ export async function prepareComposerImageAttachment(
         throw new Error(`"${file.name}" is not an image file.`);
     }
 
-    const image = await loadImageElement(file);
-    let dimensions = fitDimensions(image.naturalWidth, image.naturalHeight, MAX_IMAGE_EDGE_PX);
-    const initialRender = renderToCanvas(image, dimensions.width, dimensions.height);
-    const preservePng = hasTransparentPixels(initialRender.context, dimensions.width, dimensions.height);
-    releaseCanvas(initialRender.canvas);
+    const loadedImage = await loadDrawableImage(file);
 
-    while (true) {
-        const { canvas } = renderToCanvas(image, dimensions.width, dimensions.height);
+    try {
+        let dimensions = fitDimensions(loadedImage.width, loadedImage.height, MAX_IMAGE_EDGE_PX);
+        const initialRender = renderToCanvas(loadedImage.source, dimensions.width, dimensions.height);
+        const preservePng = hasTransparentPixels(initialRender.context, dimensions.width, dimensions.height);
+        releaseCanvas(initialRender);
 
-        try {
-            if (preservePng) {
-                const pngBlob = await canvasToBlob(canvas, 'image/png');
-                if (pngBlob.size <= MAX_COMPRESSED_IMAGE_BYTES) {
-                    return finalizePreparedAttachment(pngBlob, dimensions.width, dimensions.height, clientId);
-                }
-            } else {
-                for (const quality of JPEG_QUALITY_STEPS) {
-                    const jpegBlob = await canvasToBlob(canvas, 'image/jpeg', quality);
-                    if (jpegBlob.size <= MAX_COMPRESSED_IMAGE_BYTES) {
-                        return finalizePreparedAttachment(jpegBlob, dimensions.width, dimensions.height, clientId);
+        while (true) {
+            const surface = renderToCanvas(loadedImage.source, dimensions.width, dimensions.height);
+
+            try {
+                if (preservePng) {
+                    const pngBlob = await canvasToBlob(surface, 'image/png');
+                    if (pngBlob.size <= MAX_COMPRESSED_IMAGE_BYTES) {
+                        return finalizePreparedAttachment(pngBlob, dimensions.width, dimensions.height, clientId);
+                    }
+                } else {
+                    for (const quality of JPEG_QUALITY_STEPS) {
+                        const jpegBlob = await canvasToBlob(surface, 'image/jpeg', quality);
+                        if (jpegBlob.size <= MAX_COMPRESSED_IMAGE_BYTES) {
+                            return finalizePreparedAttachment(jpegBlob, dimensions.width, dimensions.height, clientId);
+                        }
                     }
                 }
+            } finally {
+                releaseCanvas(surface);
             }
-        } finally {
-            releaseCanvas(canvas);
-        }
 
-        const nextDimensions = downscaleDimensions(dimensions.width, dimensions.height);
-        if (nextDimensions.width === dimensions.width && nextDimensions.height === dimensions.height) {
-            break;
-        }
-        if (dimensions.width <= MIN_IMAGE_EDGE_PX && dimensions.height <= MIN_IMAGE_EDGE_PX) {
-            break;
-        }
+            const nextDimensions = downscaleDimensions(dimensions.width, dimensions.height);
+            if (nextDimensions.width === dimensions.width && nextDimensions.height === dimensions.height) {
+                break;
+            }
+            if (dimensions.width <= MIN_IMAGE_EDGE_PX && dimensions.height <= MIN_IMAGE_EDGE_PX) {
+                break;
+            }
 
-        dimensions = nextDimensions;
+            dimensions = nextDimensions;
+        }
+    } finally {
+        loadedImage.release();
     }
 
     throw new Error(
         `"${file.name}" could not be compressed below 1.5 MB.`
     );
+}
+
+export async function prepareComposerImageAttachment(
+    file: File,
+    clientId: string
+): Promise<PreparedComposerImageAttachment> {
+    if (typeof Worker === 'function') {
+        try {
+            const response = await compressComposerImageInWorker(file, clientId);
+            return {
+                attachment: response.attachment,
+                byteSize: response.byteSize,
+                previewUrl: createBlobPreviewUrl(response.attachment),
+            };
+        } catch {
+            // Fall back to the main thread path when workers or worker-side APIs are unavailable.
+        }
+    }
+
+    return prepareComposerImageAttachmentOnMainThread(file, clientId);
 }
 
 export function createPendingImage(file: File): ComposerPendingImage {

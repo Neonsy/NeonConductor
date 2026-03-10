@@ -1,4 +1,5 @@
 import type { ProviderListItem } from '@/web/components/settings/providerSettings/types';
+import { SettingsSelectionRail } from '@/web/components/settings/shared/settingsSelectionRail';
 
 import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
 
@@ -10,31 +11,24 @@ interface ProviderSidebarProps {
 
 export function ProviderSidebar({ providers, selectedProviderId, onSelectProvider }: ProviderSidebarProps) {
     return (
-        <aside className='border-border bg-background/40 min-h-0 overflow-y-auto border-r p-3'>
-            <p className='text-muted-foreground mb-2 text-xs font-semibold tracking-wide uppercase'>Providers</p>
-            <div className='space-y-2'>
-                {providers.map((provider) => (
-                    <button
-                        key={provider.id}
-                        type='button'
-                        className={`w-full rounded-md border px-2 py-2 text-left ${
-                            provider.id === selectedProviderId
-                                ? 'border-primary bg-primary/10'
-                                : 'border-border bg-card hover:bg-accent'
-                        }`}
-                        onClick={() => {
-                            onSelectProvider(provider.id);
-                        }}>
-                        <p className='text-sm font-medium'>
-                            {provider.label}{' '}
-                            {provider.isDefault ? <span className='text-primary text-xs'>(default)</span> : null}
-                        </p>
-                        <p className='text-muted-foreground text-xs'>
-                            auth: {provider.authState} ({provider.authMethod})
-                        </p>
-                    </button>
-                ))}
-            </div>
-        </aside>
+        <SettingsSelectionRail
+            title='Providers'
+            ariaLabel='Provider list'
+            {...(selectedProviderId ? { selectedId: selectedProviderId } : {})}
+            onSelect={(providerId) => {
+                const provider = providers.find((candidate) => candidate.id === providerId);
+                if (!provider) {
+                    return;
+                }
+
+                onSelectProvider(provider.id);
+            }}
+            items={providers.map((provider) => ({
+                id: provider.id,
+                title: provider.label,
+                subtitle: `Auth ${provider.authState} via ${provider.authMethod.replace('_', ' ')}`,
+                ...(provider.isDefault ? { meta: 'Default' } : {}),
+            }))}
+        />
     );
 }

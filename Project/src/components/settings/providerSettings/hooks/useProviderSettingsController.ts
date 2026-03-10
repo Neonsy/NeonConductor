@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 
 import { createProviderSettingsActions } from '@/web/components/settings/providerSettings/hooks/providerSettingsActions';
-import { createProviderSettingsRefetchers } from '@/web/components/settings/providerSettings/hooks/providerSettingsRefetch';
 import { resetProviderSettingsState } from '@/web/components/settings/providerSettings/hooks/providerSettingsState';
 import { useKiloRoutingDraft } from '@/web/components/settings/providerSettings/hooks/useKiloRoutingDraft';
 import { useProviderSettingsAuthPolling } from '@/web/components/settings/providerSettings/hooks/useProviderSettingsAuthPolling';
@@ -50,14 +49,12 @@ export function useProviderSettingsController(profileId: string) {
         }
     }, [providers, selectedProviderId]);
 
-    const refetchers = createProviderSettingsRefetchers(queries);
     const mutations = useProviderSettingsMutations({
         profileId,
         selectedProviderId,
         setStatusMessage,
         setApiKeyInput,
         setActiveAuthFlow,
-        ...refetchers,
     });
 
     useProviderSettingsAuthPolling({
@@ -119,6 +116,31 @@ export function useProviderSettingsController(profileId: string) {
     });
 
     return {
+        feedbackMessage:
+            mutations.setDefaultMutation.error?.message ??
+            mutations.setApiKeyMutation.error?.message ??
+            mutations.setEndpointProfileMutation.error?.message ??
+            mutations.syncCatalogMutation.error?.message ??
+            mutations.setModelRoutingPreferenceMutation.error?.message ??
+            mutations.setOrganizationMutation.error?.message ??
+            mutations.startAuthMutation.error?.message ??
+            mutations.pollAuthMutation.error?.message ??
+            mutations.cancelAuthMutation.error?.message ??
+            statusMessage,
+        feedbackTone:
+            mutations.setDefaultMutation.error ??
+            mutations.setApiKeyMutation.error ??
+            mutations.setEndpointProfileMutation.error ??
+            mutations.syncCatalogMutation.error ??
+            mutations.setModelRoutingPreferenceMutation.error ??
+            mutations.setOrganizationMutation.error ??
+            mutations.startAuthMutation.error ??
+            mutations.pollAuthMutation.error ??
+            mutations.cancelAuthMutation.error
+                ? ('error' as const)
+                : statusMessage
+                  ? ('success' as const)
+                  : ('info' as const),
         selectedProviderId,
         selectedModelId,
         apiKeyInput,

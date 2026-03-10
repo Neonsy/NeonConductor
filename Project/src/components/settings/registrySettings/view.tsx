@@ -1,5 +1,6 @@
 import { AssetCard, AssetSection, SummaryCard } from '@/web/components/settings/registrySettings/components';
 import { useRegistrySettingsController } from '@/web/components/settings/registrySettings/controller';
+import { SettingsFeedbackBanner } from '@/web/components/settings/shared/settingsFeedbackBanner';
 import { Button } from '@/web/components/ui/button';
 
 interface RegistrySettingsViewProps {
@@ -16,12 +17,13 @@ export function RegistrySettingsScreen({ profileId }: RegistrySettingsViewProps)
 
     return (
         <section className='min-h-full space-y-5 p-4'>
+            <SettingsFeedbackBanner message={controller.feedbackMessage} tone={controller.feedbackTone} />
             <div className='flex flex-wrap items-start justify-between gap-3'>
                 <div className='max-w-3xl space-y-1'>
                     <h4 className='text-base font-semibold'>Agent Registry</h4>
                     <p className='text-muted-foreground text-sm leading-6'>
-                        Refresh file-backed rules, skills, and custom agent modes from the global runtime asset root or a
-                        selected workspace. Registry resolution is explicit and backend-owned in this slice.
+                        Inspect the resolved rules, skills, and custom agent modes the runtime can actually use. Refresh
+                        either the global asset root or the selected workspace when file-backed assets change.
                     </p>
                 </div>
                 <div className='flex flex-wrap gap-2'>
@@ -33,7 +35,9 @@ export function RegistrySettingsScreen({ profileId }: RegistrySettingsViewProps)
                         onClick={() => {
                             void controller.refreshMutation.mutateAsync({ profileId });
                         }}>
-                        Refresh Global
+                        {controller.refreshMutation.isPending && !controller.selectedWorkspaceFingerprint
+                            ? 'Refreshing…'
+                            : 'Refresh Global'}
                     </Button>
                     <Button
                         type='button'
@@ -50,14 +54,16 @@ export function RegistrySettingsScreen({ profileId }: RegistrySettingsViewProps)
                                 workspaceFingerprint: controller.selectedWorkspaceFingerprint,
                             });
                         }}>
-                        Refresh Workspace
+                        {controller.refreshMutation.isPending && controller.selectedWorkspaceFingerprint
+                            ? 'Refreshing…'
+                            : 'Refresh Workspace'}
                     </Button>
                 </div>
             </div>
 
             <div className='grid gap-3 lg:grid-cols-[minmax(0,1fr)_320px]'>
                 <div className='border-border bg-card rounded-2xl border p-4 shadow-sm'>
-                    <p className='text-muted-foreground text-[11px] font-semibold tracking-[0.12em] uppercase'>Roots</p>
+                    <p className='text-muted-foreground text-[11px] font-semibold tracking-[0.12em] uppercase'>Registry Roots</p>
                     <div className='mt-3 space-y-3'>
                         <div>
                             <p className='text-sm font-semibold'>Global asset root</p>
@@ -87,7 +93,7 @@ export function RegistrySettingsScreen({ profileId }: RegistrySettingsViewProps)
                             <p className='text-muted-foreground mt-2 break-all text-xs'>
                                 {controller.selectedWorkspaceRoot
                                     ? controller.selectedWorkspaceRoot.absolutePath
-                                    : 'Select a workspace to inspect workspace-scoped assets.'}
+                                    : 'Choose a workspace to inspect workspace-scoped assets and refresh the local registry view.'}
                             </p>
                         </div>
                     </div>
@@ -97,12 +103,12 @@ export function RegistrySettingsScreen({ profileId }: RegistrySettingsViewProps)
                     <SummaryCard
                         label='Resolved Modes'
                         value={String(controller.resolvedAgentModes.length)}
-                        detail='Agent-only modes after precedence resolution'
+                        detail='Agent-capable modes after precedence resolution'
                     />
                     <SummaryCard
                         label='Resolved Rules'
                         value={String(controller.registryQuery.data?.resolved.rulesets.length ?? 0)}
-                        detail='Rulesets available to workspace-aware agent flows'
+                        detail='Rules the active runtime can load for agent flows'
                     />
                     <SummaryCard
                         label='Resolved Skills'
@@ -119,12 +125,14 @@ export function RegistrySettingsScreen({ profileId }: RegistrySettingsViewProps)
                 <input
                     id='registry-skill-search'
                     type='text'
+                    name='registrySkillSearch'
                     value={controller.skillQuery}
                     onChange={(event) => {
                         controller.setSkillQuery(event.target.value);
                     }}
                     className='border-border bg-background mt-2 h-10 w-full rounded-xl border px-3 text-sm'
-                    placeholder='Search by skill name, description, or tag'
+                    autoComplete='off'
+                    placeholder='Search by skill name, description, or tag…'
                 />
                 {controller.skillQuery.trim().length > 0 ? (
                     <div className='mt-4 space-y-3'>
@@ -145,7 +153,9 @@ export function RegistrySettingsScreen({ profileId }: RegistrySettingsViewProps)
                                 ))}
                             </div>
                         ) : (
-                            <p className='text-muted-foreground text-sm'>No skills matched that query.</p>
+                            <p className='text-muted-foreground rounded-2xl border border-dashed px-4 py-5 text-sm'>
+                                No skills matched that search yet.
+                            </p>
                         )}
                     </div>
                 ) : null}

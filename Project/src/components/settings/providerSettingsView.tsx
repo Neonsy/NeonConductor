@@ -5,6 +5,7 @@ import { KiloAccountSection } from '@/web/components/settings/providerSettings/k
 import { KiloRoutingSection } from '@/web/components/settings/providerSettings/kiloRoutingSection';
 import { ProviderSidebar } from '@/web/components/settings/providerSettings/providerSidebar';
 import { ProviderStatusSection } from '@/web/components/settings/providerSettings/providerStatusSection';
+import { SettingsFeedbackBanner } from '@/web/components/settings/shared/settingsFeedbackBanner';
 
 interface ProviderSettingsViewProps {
     profileId: string;
@@ -24,15 +25,16 @@ export function ProviderSettingsView({ profileId }: ProviderSettingsViewProps) {
             <div className='min-h-0 overflow-y-auto p-4'>
                 {controller.selectedProvider ? (
                     <div className='space-y-5'>
+                        <SettingsFeedbackBanner
+                            message={controller.feedbackMessage}
+                            tone={controller.feedbackTone}
+                        />
                         <div>
-                            <h4 className='text-base font-semibold'>{controller.selectedProvider.label}</h4>
-                            <p className='text-muted-foreground text-xs'>
+                            <h4 className='text-balance text-base font-semibold'>{controller.selectedProvider.label}</h4>
+                            <p className='text-muted-foreground text-sm'>
                                 Local runtime works with any configured provider. Kilo login is only required for
                                 Kilo-specific extras.
                             </p>
-                            {controller.statusMessage ? (
-                                <p className='text-primary mt-2 text-xs'>{controller.statusMessage}</p>
-                            ) : null}
                         </div>
 
                         <ProviderDefaultModelSection

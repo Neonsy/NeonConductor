@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { createTextMessage } from '@/app/backend/runtime/services/runExecution/contextParts';
 import { tokenCountingService } from '@/app/backend/runtime/services/context/tokenCountingService';
 
 describe('tokenCountingService', () => {
@@ -8,10 +9,7 @@ describe('tokenCountingService', () => {
             profileId: 'profile_test',
             providerId: 'openai',
             modelId: 'openai/gpt-5',
-            messages: [
-                { role: 'system', text: 'You are helpful.' },
-                { role: 'user', text: 'Explain context compaction.' },
-            ],
+            messages: [createTextMessage('system', 'You are helpful.'), createTextMessage('user', 'Explain context compaction.')],
         });
 
         expect(estimate.mode).toBe('estimated');
@@ -33,7 +31,7 @@ describe('tokenCountingService', () => {
             profileId: 'profile_test',
             providerId: 'openai',
             modelId: 'openai/not-a-real-model',
-            messages: [{ role: 'user', text: 'Count these tokens.' }],
+            messages: [createTextMessage('user', 'Count these tokens.')],
         });
 
         expect(estimate.mode).toBe('estimated');

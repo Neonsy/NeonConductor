@@ -28,6 +28,7 @@ interface ConversationSidebarProps {
     groupView: 'workspace' | 'branch';
     isCreatingThread: boolean;
     isAddingTag: boolean;
+    feedbackMessage?: string;
     onSelectThread: (threadId: string) => void;
     onToggleTagFilter: (tagId: string) => void;
     onToggleThreadFavorite: (threadId: string, nextFavorite: boolean) => void;
@@ -76,6 +77,7 @@ export function ConversationSidebar({
     groupView,
     isCreatingThread,
     isAddingTag,
+    feedbackMessage,
     onSelectThread,
     onToggleTagFilter,
     onToggleThreadFavorite,
@@ -118,6 +120,11 @@ export function ConversationSidebar({
     return (
         <aside className='border-border bg-card/40 flex min-h-0 w-[360px] flex-col border-r'>
             <div className='border-border space-y-3 border-b p-3'>
+                {feedbackMessage ? (
+                    <div aria-live='polite' className='rounded-2xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-xs text-destructive'>
+                        {feedbackMessage}
+                    </div>
+                ) : null}
                 <div className='grid grid-cols-2 gap-2'>
                     <Button
                         type='button'
@@ -147,6 +154,7 @@ export function ConversationSidebar({
                         Playground
                     </Button>
                     <select
+                        aria-label='Sort threads'
                         className='border-border bg-background h-9 rounded-md border px-2 text-sm'
                         value={sort}
                         onChange={(event) => {
@@ -168,6 +176,7 @@ export function ConversationSidebar({
                         {showAllModes ? 'Showing All Modes' : 'Show All Modes'}
                     </Button>
                     <select
+                        aria-label='Conversation grouping'
                         className='border-border bg-background h-9 rounded-md border px-2 text-sm'
                         value={groupView}
                         onChange={(event) => {
@@ -200,15 +209,19 @@ export function ConversationSidebar({
 
                 <div className='space-y-2'>
                     <input
+                        aria-label='Thread title'
+                        name='newThreadTitle'
                         value={newThreadTitle}
                         onChange={(event) => {
                             setNewThreadTitle(event.target.value);
                         }}
                         className='border-border bg-background h-9 w-full rounded-md border px-2 text-sm'
-                        placeholder='Optional thread title'
+                        autoComplete='off'
+                        placeholder='Optional thread title…'
                     />
                     <div className='grid grid-cols-2 gap-2'>
                         <select
+                            aria-label='Thread scope'
                             className='border-border bg-background h-9 rounded-md border px-2 text-sm'
                             value={newThreadScope}
                             onChange={(event) => {
@@ -229,12 +242,15 @@ export function ConversationSidebar({
                     </div>
                     {newThreadScope === 'workspace' ? (
                         <input
+                            aria-label='Workspace path'
+                            name='newThreadWorkspace'
                             value={newThreadWorkspace}
                             onChange={(event) => {
                                 setNewThreadWorkspace(event.target.value);
                             }}
                             className='border-border bg-background h-9 w-full rounded-md border px-2 text-sm'
-                            placeholder='workspace path'
+                            autoComplete='off'
+                            placeholder='Workspace path…'
                         />
                     ) : null}
                     {newThreadScope === 'detached' && topLevelTab !== 'chat' ? (
@@ -250,7 +266,7 @@ export function ConversationSidebar({
                         <button
                             key={tag.id}
                             type='button'
-                            className={`rounded-md border px-2 py-1 text-xs ${
+                            className={`focus-visible:ring-ring rounded-md border px-2 py-1 text-xs focus-visible:ring-2 ${
                                 selectedTagIds.includes(tag.id)
                                     ? 'bg-primary text-primary-foreground border-primary'
                                     : 'border-border bg-background text-foreground'
@@ -265,12 +281,15 @@ export function ConversationSidebar({
                 {selectedThread ? (
                     <div className='flex items-center gap-2'>
                         <input
+                            aria-label='Add tag to selected thread'
+                            name='newThreadTag'
                             value={newTagLabel}
                             onChange={(event) => {
                                 setNewTagLabel(event.target.value);
                             }}
                             className='border-border bg-background h-8 min-w-0 flex-1 rounded-md border px-2 text-xs'
-                            placeholder='Add tag to selected thread'
+                            autoComplete='off'
+                            placeholder='Add tag to the selected thread…'
                         />
                         <Button
                             type='button'
@@ -299,7 +318,7 @@ export function ConversationSidebar({
                                 {workspaceFingerprint ? (
                                     <button
                                         type='button'
-                                        className='hover:bg-destructive/10 hover:text-destructive rounded-md p-1 transition-colors'
+                                        className='hover:bg-destructive/10 hover:text-destructive focus-visible:ring-ring rounded-md p-1 transition-colors focus-visible:ring-2'
                                         aria-label={`Clear threads for ${group.label}`}
                                         onClick={() => {
                                             onRequestWorkspaceDelete(workspaceFingerprint, group.label);
@@ -329,7 +348,7 @@ export function ConversationSidebar({
                                                 style={{ paddingLeft: `${String(depth * 14 + 8)}px` }}>
                                                 <button
                                                     type='button'
-                                                    className='min-w-0 flex-1 text-left'
+                                                    className='focus-visible:ring-ring min-w-0 flex-1 rounded-md text-left focus-visible:ring-2'
                                                     onClick={() => {
                                                         onSelectThread(thread.id);
                                                     }}>
@@ -363,7 +382,7 @@ export function ConversationSidebar({
                                                 </button>
                                                 <button
                                                     type='button'
-                                                    className={`mt-0.5 rounded-md p-1 transition-colors ${
+                                                    className={`focus-visible:ring-ring mt-0.5 rounded-md p-1 transition-colors focus-visible:ring-2 ${
                                                         thread.isFavorite
                                                             ? 'text-amber-400 hover:text-amber-300'
                                                             : 'text-muted-foreground hover:text-foreground'

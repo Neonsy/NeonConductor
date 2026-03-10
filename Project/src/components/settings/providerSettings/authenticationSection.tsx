@@ -55,8 +55,13 @@ export function ProviderAuthenticationSection({
     onCancelFlow,
 }: ProviderAuthenticationSectionProps) {
     return (
-        <section className='space-y-2'>
-            <p className='text-sm font-semibold'>Authentication</p>
+        <section className='space-y-3 rounded-2xl border border-border/70 bg-card/40 p-4'>
+            <div className='space-y-1'>
+                <p className='text-sm font-semibold'>Authentication</p>
+                <p className='text-muted-foreground text-xs'>
+                    Connect the provider once, then keep model selection local to the active profile.
+                </p>
+            </div>
             <p className='text-muted-foreground text-xs'>
                 State: {selectedAuthState?.authState ?? selectedProviderAuthState} (
                 {selectedAuthState?.authMethod ?? selectedProviderAuthMethod})
@@ -64,14 +69,20 @@ export function ProviderAuthenticationSection({
 
             {methods.includes('api_key') ? (
                 <div className='grid grid-cols-[1fr_auto] gap-2'>
+                    <label className='sr-only' htmlFor='provider-api-key-input'>
+                        API key
+                    </label>
                     <input
+                        id='provider-api-key-input'
+                        name='providerApiKey'
                         type='password'
                         value={apiKeyInput}
                         onChange={(event) => {
                             onApiKeyInputChange(event.target.value);
                         }}
                         className='border-border bg-background h-9 rounded-md border px-2 text-sm'
-                        placeholder='Paste API key'
+                        autoComplete='off'
+                        placeholder='Paste API key…'
                     />
                     <Button
                         type='button'
@@ -79,14 +90,19 @@ export function ProviderAuthenticationSection({
                         variant='outline'
                         disabled={apiKeyInput.trim().length === 0 || isSavingApiKey || !selectedProviderId}
                         onClick={onSaveApiKey}>
-                        Save Key
+                        {isSavingApiKey ? 'Saving…' : 'Save API Key'}
                     </Button>
                 </div>
             ) : null}
 
             {endpointProfileOptions.length > 1 ? (
                 <div className='grid grid-cols-[1fr_auto] gap-2'>
+                    <label className='sr-only' htmlFor='provider-endpoint-profile'>
+                        Endpoint profile
+                    </label>
                     <select
+                        id='provider-endpoint-profile'
+                        name='providerEndpointProfile'
                         value={endpointProfileValue}
                         onChange={(event) => {
                             onEndpointProfileChange(event.target.value);
@@ -112,7 +128,7 @@ export function ProviderAuthenticationSection({
                 </Button>
             ) : null}
 
-            <div className='flex flex-wrap gap-2'>
+                <div className='flex flex-wrap gap-2'>
                 {methods.includes('oauth_device') ? (
                     <Button
                         type='button'
@@ -120,7 +136,7 @@ export function ProviderAuthenticationSection({
                         variant='outline'
                         disabled={isStartingAuth || !selectedProviderId}
                         onClick={onStartOAuthDevice}>
-                        Start OAuth Device
+                        {isStartingAuth ? 'Starting…' : 'Start OAuth Device'}
                     </Button>
                 ) : null}
                 {methods.includes('device_code') ? (
@@ -130,7 +146,7 @@ export function ProviderAuthenticationSection({
                         variant='outline'
                         disabled={isStartingAuth || !selectedProviderId}
                         onClick={onStartDeviceCode}>
-                        Start Device Code
+                        {isStartingAuth ? 'Starting…' : 'Start Device Code'}
                     </Button>
                 ) : null}
             </div>
@@ -155,7 +171,7 @@ export function ProviderAuthenticationSection({
                     ) : null}
                     <div className='mt-2 flex gap-2'>
                         <Button type='button' size='sm' variant='outline' disabled={isPollingAuth} onClick={onPollNow}>
-                            Poll Now
+                            {isPollingAuth ? 'Polling…' : 'Poll Now'}
                         </Button>
                         <Button
                             type='button'
@@ -163,7 +179,7 @@ export function ProviderAuthenticationSection({
                             variant='outline'
                             disabled={isCancellingAuth}
                             onClick={onCancelFlow}>
-                            Cancel
+                            {isCancellingAuth ? 'Cancelling…' : 'Cancel'}
                         </Button>
                     </div>
                 </div>

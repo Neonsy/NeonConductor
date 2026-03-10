@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 
+import { SettingsFeedbackBanner } from '@/web/components/settings/shared/settingsFeedbackBanner';
+import { SettingsSelectionRail } from '@/web/components/settings/shared/settingsSelectionRail';
 import { isProviderId } from '@/web/components/conversation/shell/workspace/helpers';
 import { trpc } from '@/web/trpc/client';
 
@@ -14,13 +16,15 @@ interface ContextSettingsViewProps {
 }
 
 export function ContextSettingsView({ activeProfileId }: ContextSettingsViewProps) {
+    const utils = trpc.useUtils();
     const [selectedProfileId, setSelectedProfileId] = useState(activeProfileId);
     const [globalEnabled, setGlobalEnabled] = useState(true);
     const [globalPercent, setGlobalPercent] = useState('90');
     const [profileOverrideMode, setProfileOverrideMode] = useState<'inherit' | 'percent' | 'fixed_tokens'>('inherit');
     const [profilePercent, setProfilePercent] = useState('90');
     const [profileFixedInputTokens, setProfileFixedInputTokens] = useState('');
-    const [statusMessage, setStatusMessage] = useState<string | undefined>(undefined);
+    const [feedbackMessage, setFeedbackMessage] = useState<string | undefined>(undefined);
+    const [feedbackTone, setFeedbackTone] = useState<'success' | 'error' | 'info'>('info');
 
     const profilesQuery = trpc.profile.list.useQuery(undefined, { refetchOnWindowFocus: false });
     const globalSettingsQuery = trpc.context.getGlobalSettings.useQuery(undefined, { refetchOnWindowFocus: false });
@@ -55,24 +59,51 @@ export function ContextSettingsView({ activeProfileId }: ContextSettingsViewProp
     );
 
     const setGlobalSettingsMutation = trpc.context.setGlobalSettings.useMutation({
-        onSuccess: async ({ settings }) => {
-            setStatusMessage('Saved global context defaults.');
+        onSuccess: ({ settings }) => {
+            setFeedbackTone('success');
+            setFeedbackMessage('Saved global context defaults.');
             setGlobalEnabled(settings.enabled);
             setGlobalPercent(String(settings.percent));
-            await globalSettingsQuery.refetch();
-            await resolvedContextStateQuery.refetch();
+            void utils.context.getGlobalSettings.setData(undefined, {
+                settings,
+            });
+            void utils.context.getResolvedState.invalidate({
+                profileId: selectedProfileId,
+                providerId: effectiveProviderId,
+                modelId: effectiveModelId,
+            });
+        },
+        onError: (error) => {
+            setFeedbackTone('error');
+            setFeedbackMessage(error.message);
         },
     });
     const setProfileSettingsMutation = trpc.context.setProfileSettings.useMutation({
-        onSuccess: async ({ settings }) => {
-            setStatusMessage('Saved profile context override.');
+        onSuccess: ({ settings }) => {
+            setFeedbackTone('success');
+            setFeedbackMessage('Saved profile context override.');
             setProfileOverrideMode(settings.overrideMode);
             setProfilePercent(settings.percent !== undefined ? String(settings.percent) : globalPercent);
             setProfileFixedInputTokens(
                 settings.fixedInputTokens !== undefined ? String(settings.fixedInputTokens) : ''
             );
-            await profileSettingsQuery.refetch();
-            await resolvedContextStateQuery.refetch();
+            void utils.context.getProfileSettings.setData(
+                {
+                    profileId: selectedProfileId,
+                },
+                {
+                    settings,
+                }
+            );
+            void utils.context.getResolvedState.invalidate({
+                profileId: selectedProfileId,
+                providerId: effectiveProviderId,
+                modelId: effectiveModelId,
+            });
+        },
+        onError: (error) => {
+            setFeedbackTone('error');
+            setFeedbackMessage(error.message);
         },
     });
 
@@ -108,31 +139,24 @@ export function ContextSettingsView({ activeProfileId }: ContextSettingsViewProp
 
     return (
         <section className='grid min-h-full grid-cols-[260px_1fr]'>
-            <aside className='border-border bg-background/40 min-h-0 overflow-y-auto border-r p-3'>
-                <p className='text-muted-foreground mb-2 text-xs font-semibold tracking-wide uppercase'>Profiles</p>
-                <div className='space-y-2'>
-                    {(profilesQuery.data?.profiles ?? []).map((profile) => (
-                        <button
-                            key={profile.id}
-                            type='button'
-                            className={`w-full rounded-md border px-2 py-2 text-left ${
-                                profile.id === selectedProfileId
-                                    ? 'border-primary bg-primary/10'
-                                    : 'border-border bg-card hover:bg-accent'
-                            }`}
-                            onClick={() => {
-                                setSelectedProfileId(profile.id);
-                                setStatusMessage(undefined);
-                            }}>
-                            <p className='text-sm font-medium'>{profile.name}</p>
-                            <p className='text-muted-foreground truncate text-[11px]'>{profile.id}</p>
-                        </button>
-                    ))}
-                </div>
-            </aside>
+            <SettingsSelectionRail
+                title='Profiles'
+                ariaLabel='Context settings profiles'
+                selectedId={selectedProfileId}
+                onSelect={(profileId) => {
+                    setSelectedProfileId(profileId);
+                    setFeedbackMessage(undefined);
+                }}
+                items={(profilesQuery.data?.profiles ?? []).map((profile) => ({
+                    id: profile.id,
+                    title: profile.name,
+                    subtitle: profile.id,
+                }))}
+            />
 
             <div className='min-h-0 overflow-y-auto p-4'>
                 <div className='space-y-6'>
+                    <SettingsFeedbackBanner message={feedbackMessage} tone={feedbackTone} />
                     <section className='space-y-3'>
                         <div>
                             <h4 className='text-sm font-semibold'>Global Default</h4>
@@ -148,6 +172,7 @@ export function ContextSettingsView({ activeProfileId }: ContextSettingsViewProp
                                 checked={globalEnabled}
                                 onChange={(event) => {
                                     setGlobalEnabled(event.target.checked);
+                                    setFeedbackMessage(undefined);
                                 }}
                             />
                             Enable automatic context management
@@ -156,12 +181,14 @@ export function ContextSettingsView({ activeProfileId }: ContextSettingsViewProp
                         <div className='max-w-sm space-y-1'>
                             <label className='text-sm font-medium'>Compact threshold (%)</label>
                             <input
+                                aria-label='Global context compact threshold percent'
                                 type='number'
                                 min={1}
                                 max={100}
                                 value={globalPercent}
                                 onChange={(event) => {
                                     setGlobalPercent(event.target.value);
+                                    setFeedbackMessage(undefined);
                                 }}
                                 className='border-border bg-background h-9 w-full rounded-md border px-2 text-sm'
                             />
@@ -177,7 +204,8 @@ export function ContextSettingsView({ activeProfileId }: ContextSettingsViewProp
                             onClick={() => {
                                 const percent = Number(globalPercent);
                                 if (!Number.isInteger(percent) || percent < 1 || percent > 100) {
-                                    setStatusMessage('Global compact threshold must be an integer between 1 and 100.');
+                                    setFeedbackTone('error');
+                                    setFeedbackMessage('Global compact threshold must be an integer between 1 and 100.');
                                     return;
                                 }
 
@@ -203,6 +231,7 @@ export function ContextSettingsView({ activeProfileId }: ContextSettingsViewProp
                         <div className='max-w-sm space-y-1'>
                             <label className='text-sm font-medium'>Override mode</label>
                             <select
+                                aria-label='Profile override mode'
                                 value={profileOverrideMode}
                                 onChange={(event) => {
                                     const value = event.target.value;
@@ -210,6 +239,7 @@ export function ContextSettingsView({ activeProfileId }: ContextSettingsViewProp
                                         return;
                                     }
                                     setProfileOverrideMode(value);
+                                    setFeedbackMessage(undefined);
                                 }}
                                 className='border-border bg-background h-9 w-full rounded-md border px-2 text-sm'>
                                 <option value='inherit'>Inherit global default</option>
@@ -222,12 +252,14 @@ export function ContextSettingsView({ activeProfileId }: ContextSettingsViewProp
                             <div className='max-w-sm space-y-1'>
                                 <label className='text-sm font-medium'>Profile threshold (%)</label>
                                 <input
+                                    aria-label='Profile-specific threshold percent'
                                     type='number'
                                     min={1}
                                     max={100}
                                     value={profilePercent}
                                     onChange={(event) => {
                                         setProfilePercent(event.target.value);
+                                        setFeedbackMessage(undefined);
                                     }}
                                     className='border-border bg-background h-9 w-full rounded-md border px-2 text-sm'
                                 />
@@ -238,11 +270,13 @@ export function ContextSettingsView({ activeProfileId }: ContextSettingsViewProp
                             <div className='max-w-sm space-y-1'>
                                 <label className='text-sm font-medium'>Fixed input tokens</label>
                                 <input
+                                    aria-label='Fixed input token budget'
                                     type='number'
                                     min={1}
                                     value={profileFixedInputTokens}
                                     onChange={(event) => {
                                         setProfileFixedInputTokens(event.target.value);
+                                        setFeedbackMessage(undefined);
                                     }}
                                     className='border-border bg-background h-9 w-full rounded-md border px-2 text-sm'
                                     disabled={!resolvedContextStateQuery.data?.policy.limits.modelLimitsKnown}
@@ -271,7 +305,8 @@ export function ContextSettingsView({ activeProfileId }: ContextSettingsViewProp
                                 if (profileOverrideMode === 'percent') {
                                     const percent = Number(profilePercent);
                                     if (!Number.isInteger(percent) || percent < 1 || percent > 100) {
-                                        setStatusMessage(
+                                        setFeedbackTone('error');
+                                        setFeedbackMessage(
                                             'Profile compact threshold must be an integer between 1 and 100.'
                                         );
                                         return;
@@ -287,7 +322,8 @@ export function ContextSettingsView({ activeProfileId }: ContextSettingsViewProp
 
                                 const fixedInputTokens = Number(profileFixedInputTokens);
                                 if (!Number.isInteger(fixedInputTokens) || fixedInputTokens < 1) {
-                                    setStatusMessage('Fixed input tokens must be a positive integer.');
+                                    setFeedbackTone('error');
+                                    setFeedbackMessage('Fixed input tokens must be a positive integer.');
                                     return;
                                 }
 
@@ -408,7 +444,6 @@ export function ContextSettingsView({ activeProfileId }: ContextSettingsViewProp
                         ) : null}
                     </section>
 
-                    {statusMessage ? <p className='text-primary text-xs'>{statusMessage}</p> : null}
                 </div>
             </div>
         </section>

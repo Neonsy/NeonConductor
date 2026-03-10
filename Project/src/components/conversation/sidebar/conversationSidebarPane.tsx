@@ -102,6 +102,9 @@ export function ConversationSidebarPane({
     refetchShellBootstrap,
     refetchSessions,
 }: ConversationSidebarPaneProps) {
+    const [feedbackMessage, setFeedbackMessage] = useState<string | undefined>(undefined);
+    const [optimisticFavoriteByThreadId, setOptimisticFavoriteByThreadId] = useState<Record<string, boolean>>({});
+    const [optimisticTagIdsByThreadId, setOptimisticTagIdsByThreadId] = useState<Record<string, string[]>>({});
     const [workspaceDeleteTarget, setWorkspaceDeleteTarget] = useState<
         | {
               workspaceFingerprint: string;
@@ -110,7 +113,17 @@ export function ConversationSidebarPane({
         | undefined
     >(undefined);
     const [includeFavoriteThreads, setIncludeFavoriteThreads] = useState(false);
-    const selectedThread = threads.find((thread) => thread.id === selectedThreadId);
+    const visibleThreads = threads.map((thread) => ({
+        ...thread,
+        ...(optimisticFavoriteByThreadId[thread.id] !== undefined
+            ? { isFavorite: optimisticFavoriteByThreadId[thread.id] }
+            : {}),
+    }));
+    const visibleThreadTagIdsByThread = new Map(threadTagIdsByThread);
+    for (const [threadId, tagIds] of Object.entries(optimisticTagIdsByThreadId)) {
+        visibleThreadTagIdsByThread.set(threadId, tagIds);
+    }
+    const selectedThread = visibleThreads.find((thread) => thread.id === selectedThreadId);
     const workspaceDeletePreviewQuery = trpc.conversation.getWorkspaceThreadDeletePreview.useQuery(
         {
             profileId,
@@ -127,9 +140,9 @@ export function ConversationSidebarPane({
         <>
             <ConversationSidebar
                 buckets={buckets}
-                threads={threads}
+                threads={visibleThreads}
                 tags={tags}
-                threadTagIdsByThread={threadTagIdsByThread}
+                threadTagIdsByThread={visibleThreadTagIdsByThread}
                 topLevelTab={topLevelTab}
                 {...(selectedThreadId ? { selectedThreadId } : {})}
                 selectedTagIds={selectedTagIds}
@@ -140,8 +153,9 @@ export function ConversationSidebarPane({
                 groupView={groupView}
                 isCreatingThread={isCreatingThread}
                 isAddingTag={isAddingTag}
+                {...(feedbackMessage ? { feedbackMessage } : {})}
                 onSelectThread={(threadId) => {
-                    const targetThread = threads.find((thread) => thread.id === threadId);
+                    const targetThread = visibleThreads.find((thread) => thread.id === threadId);
                     const nextTab = targetThread?.topLevelTab ?? topLevelTab;
                     const switchState = resolveTabSwitchNotice(topLevelTab, nextTab);
                     if (switchState.shouldSwitch) {
@@ -166,12 +180,30 @@ export function ConversationSidebarPane({
                     }
 
                     void (async () => {
-                        await setThreadFavorite({
-                            profileId,
-                            threadId,
-                            isFavorite: nextFavorite,
-                        });
-                        await refetchThreads();
+                        setFeedbackMessage(undefined);
+                        setOptimisticFavoriteByThreadId((current) => ({
+                            ...current,
+                            [threadId]: nextFavorite,
+                        }));
+
+                        try {
+                            await setThreadFavorite({
+                                profileId,
+                                threadId,
+                                isFavorite: nextFavorite,
+                            });
+                            await refetchThreads();
+                        } catch (error) {
+                            setFeedbackMessage(
+                                error instanceof Error ? error.message : 'Favorite status could not be updated.'
+                            );
+                        } finally {
+                            setOptimisticFavoriteByThreadId((current) => {
+                                const nextState = { ...current };
+                                delete nextState[threadId];
+                                return nextState;
+                            });
+                        }
                     })();
                 }}
                 onRequestWorkspaceDelete={(workspaceFingerprint, workspaceLabel) => {
@@ -202,23 +234,43 @@ export function ConversationSidebarPane({
                         return;
                     }
 
-                    const upserted = await upsertTag({
-                        profileId,
-                        label,
-                    });
-                    const existing = threadTagIdsByThread.get(threadId) ?? [];
-                    const nextTagIds = [...new Set([...existing, upserted.tag.id])];
-                    const validTagIds = nextTagIds.filter((tagId): tagId is EntityId<'tag'> => isEntityId(tagId, 'tag'));
-                    if (validTagIds.length !== nextTagIds.length) {
-                        return;
-                    }
+                    setFeedbackMessage(undefined);
 
-                    await setThreadTags({
-                        profileId,
-                        threadId,
-                        tagIds: validTagIds,
-                    });
-                    await Promise.all([refetchTags(), refetchShellBootstrap()]);
+                    try {
+                        const upserted = await upsertTag({
+                            profileId,
+                            label,
+                        });
+                        const existingTagIds = visibleThreadTagIdsByThread.get(threadId) ?? [];
+                        const nextTagIds = [...new Set([...existingTagIds, upserted.tag.id])];
+                        const validTagIds = nextTagIds.filter(
+                            (tagId): tagId is EntityId<'tag'> => isEntityId(tagId, 'tag')
+                        );
+                        if (validTagIds.length !== nextTagIds.length) {
+                            setFeedbackMessage('The selected tag could not be applied to this thread.');
+                            return;
+                        }
+
+                        setOptimisticTagIdsByThreadId((current) => ({
+                            ...current,
+                            [threadId]: validTagIds,
+                        }));
+
+                        await setThreadTags({
+                            profileId,
+                            threadId,
+                            tagIds: validTagIds,
+                        });
+                        await Promise.all([refetchTags(), refetchShellBootstrap()]);
+                    } catch (error) {
+                        setFeedbackMessage(error instanceof Error ? error.message : 'Thread tags could not be updated.');
+                    } finally {
+                        setOptimisticTagIdsByThreadId((current) => {
+                            const nextState = { ...current };
+                            delete nextState[threadId];
+                            return nextState;
+                        });
+                    }
                 }}
             />
             <ConfirmDialog
@@ -271,8 +323,12 @@ export function ConversationSidebarPane({
                                 refetchShellBootstrap(),
                                 refetchSessions(),
                             ]);
-                        } catch {
-                            // keep the dialog open so the mutation error can be surfaced by the existing mutation state
+                        } catch (error) {
+                            setFeedbackMessage(
+                                error instanceof Error
+                                    ? error.message
+                                    : 'Workspace threads could not be deleted.'
+                            );
                         }
                     })();
                 }}>

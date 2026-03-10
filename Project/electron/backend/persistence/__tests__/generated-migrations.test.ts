@@ -21,6 +21,7 @@ describe('generated migrations', () => {
             '013_static_model_limits.sql',
             '014_model_limit_overrides.sql',
             '015_thread_favorites.sql',
+            '016_message_media.sql',
         ]);
     });
 });

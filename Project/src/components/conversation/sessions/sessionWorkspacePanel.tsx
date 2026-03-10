@@ -109,7 +109,8 @@ interface SessionWorkspacePanelProps {
     modelOptions: Array<{ id: string; label: string; price?: number; latency?: number; tps?: number }>;
     runErrorMessage: string | undefined;
     contextState?: ResolvedContextState;
-    contextErrorMessage?: string;
+    contextFeedbackMessage?: string;
+    contextFeedbackTone?: 'success' | 'error' | 'info';
     canCompactContext?: boolean;
     isCompactingContext?: boolean;
     modePanel?: ReactNode;
@@ -169,7 +170,8 @@ export function SessionWorkspacePanel({
     modelOptions,
     runErrorMessage,
     contextState,
-    contextErrorMessage,
+    contextFeedbackMessage,
+    contextFeedbackTone,
     canCompactContext,
     isCompactingContext,
     modePanel,
@@ -308,7 +310,12 @@ export function SessionWorkspacePanel({
                     modelOptions={modelOptions}
                     runErrorMessage={runErrorMessage}
                     {...(contextState ? { contextState } : {})}
-                    {...(contextErrorMessage ? { contextErrorMessage } : {})}
+                    {...(contextFeedbackMessage
+                        ? {
+                              contextFeedbackMessage,
+                              ...(contextFeedbackTone ? { contextFeedbackTone } : {}),
+                          }
+                        : {})}
                     {...(canCompactContext !== undefined ? { canCompactContext } : {})}
                     {...(isCompactingContext !== undefined ? { isCompactingContext } : {})}
                     onProviderChange={onProviderChange}

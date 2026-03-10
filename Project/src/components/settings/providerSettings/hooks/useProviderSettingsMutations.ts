@@ -10,17 +10,11 @@ interface UseProviderSettingsMutationsInput {
     setStatusMessage: (value: string | undefined) => void;
     setApiKeyInput: (value: string) => void;
     setActiveAuthFlow: (value: ActiveAuthFlow | undefined) => void;
-    refetchProviders: () => void;
-    refetchDefaults: () => void;
-    refetchAuthState: () => void;
-    refetchListModels: () => void;
-    refetchKiloRoutingPreference: () => void;
-    refetchKiloModelProviders: () => void;
-    refetchAccountContext: () => void;
-    refetchOpenAIRateLimits: () => void;
 }
 
 export function useProviderSettingsMutations(input: UseProviderSettingsMutationsInput) {
+    const utils = trpc.useUtils();
+
     const setDefaultMutation = trpc.provider.setDefault.useMutation({
         onSuccess: (result) => {
             if (!result.success) {
@@ -31,13 +25,21 @@ export function useProviderSettingsMutations(input: UseProviderSettingsMutations
             }
 
             input.setStatusMessage('Default provider/model updated.');
-            input.refetchProviders();
-            input.refetchDefaults();
+            void utils.provider.getDefaults.setData(
+                { profileId: input.profileId },
+                {
+                    defaults: {
+                        providerId: result.defaultProviderId,
+                        modelId: result.defaultModelId,
+                    },
+                }
+            );
+            void utils.provider.listProviders.invalidate({ profileId: input.profileId });
         },
     });
 
     const setApiKeyMutation = trpc.provider.setApiKey.useMutation({
-        onSuccess: (result) => {
+        onSuccess: (result, variables) => {
             if (!result.success) {
                 input.setStatusMessage('Provider not found.');
                 return;
@@ -45,20 +47,43 @@ export function useProviderSettingsMutations(input: UseProviderSettingsMutations
 
             input.setApiKeyInput('');
             input.setStatusMessage('API key saved. Provider is ready.');
-            input.refetchProviders();
-            input.refetchAuthState();
-            if (input.selectedProviderId === 'openai') {
-                input.refetchOpenAIRateLimits();
+            void utils.provider.listProviders.invalidate({ profileId: input.profileId });
+            void utils.provider.getAuthState.setData(
+                {
+                    profileId: input.profileId,
+                    providerId: variables.providerId,
+                },
+                {
+                    found: true,
+                    state: result.state,
+                }
+            );
+            if (variables.providerId === 'openai') {
+                void utils.provider.getOpenAISubscriptionRateLimits.invalidate({ profileId: input.profileId });
             }
         },
     });
 
     const setEndpointProfileMutation = trpc.provider.setEndpointProfile.useMutation({
-        onSuccess: () => {
+        onSuccess: ({ endpointProfile }) => {
             input.setStatusMessage('Endpoint profile updated.');
-            input.refetchProviders();
-            input.refetchListModels();
-            input.refetchDefaults();
+            void utils.provider.getEndpointProfile.setData(
+                {
+                    profileId: input.profileId,
+                    providerId: input.selectedProviderId ?? 'openai',
+                },
+                {
+                    endpointProfile,
+                }
+            );
+            void Promise.all([
+                utils.provider.listProviders.invalidate({ profileId: input.profileId }),
+                utils.provider.listModels.invalidate({
+                    profileId: input.profileId,
+                    providerId: input.selectedProviderId ?? 'openai',
+                }),
+                utils.provider.getDefaults.invalidate({ profileId: input.profileId }),
+            ]);
         },
     });
 
@@ -72,26 +97,51 @@ export function useProviderSettingsMutations(input: UseProviderSettingsMutations
             }
 
             input.setStatusMessage(`Catalog synced (${String(result.modelCount)} models).`);
-            input.refetchListModels();
-            input.refetchDefaults();
+            void Promise.all([
+                utils.provider.listModels.invalidate({
+                    profileId: input.profileId,
+                    providerId: input.selectedProviderId ?? 'openai',
+                }),
+                utils.provider.getDefaults.invalidate({ profileId: input.profileId }),
+            ]);
         },
     });
 
     const setModelRoutingPreferenceMutation = trpc.provider.setModelRoutingPreference.useMutation({
-        onSuccess: () => {
-            input.refetchKiloRoutingPreference();
-            input.refetchKiloModelProviders();
+        onSuccess: ({ preference }) => {
+            void utils.provider.getModelRoutingPreference.setData(
+                {
+                    profileId: input.profileId,
+                    providerId: 'kilo',
+                    modelId: preference.modelId,
+                },
+                {
+                    preference,
+                }
+            );
+            void utils.provider.listModelProviders.invalidate({ profileId: input.profileId });
         },
     });
 
     const setOrganizationMutation = trpc.provider.setOrganization.useMutation({
         onSuccess: () => {
             input.setStatusMessage('Kilo organization updated.');
-            input.refetchAccountContext();
-            input.refetchAuthState();
-            input.refetchProviders();
-            input.refetchDefaults();
-            input.refetchListModels();
+            void Promise.all([
+                utils.provider.getAccountContext.invalidate({
+                    profileId: input.profileId,
+                    providerId: 'kilo',
+                }),
+                utils.provider.getAuthState.invalidate({
+                    profileId: input.profileId,
+                    providerId: 'kilo',
+                }),
+                utils.provider.listProviders.invalidate({ profileId: input.profileId }),
+                utils.provider.getDefaults.invalidate({ profileId: input.profileId }),
+                utils.provider.listModels.invalidate({
+                    profileId: input.profileId,
+                    providerId: input.selectedProviderId ?? 'kilo',
+                }),
+            ]);
         },
     });
 
@@ -105,16 +155,21 @@ export function useProviderSettingsMutations(input: UseProviderSettingsMutations
                 ...(result.verificationUri ? { verificationUri: result.verificationUri } : {}),
                 pollAfterSeconds: result.pollAfterSeconds ?? 5,
             });
-            input.refetchAuthState();
-            input.refetchProviders();
+            void Promise.all([
+                utils.provider.getAuthState.invalidate({
+                    profileId: input.profileId,
+                    providerId: variables.providerId,
+                }),
+                utils.provider.listProviders.invalidate({ profileId: input.profileId }),
+            ]);
             if (variables.providerId === 'openai') {
-                input.refetchOpenAIRateLimits();
+                void utils.provider.getOpenAISubscriptionRateLimits.invalidate({ profileId: input.profileId });
             }
         },
     });
 
     const pollAuthMutation = trpc.provider.pollAuth.useMutation({
-        onSuccess: (result) => {
+        onSuccess: (result, variables) => {
             if (result.flow.status === 'pending') {
                 input.setStatusMessage('Waiting for authorization confirmation...');
                 return;
@@ -122,13 +177,25 @@ export function useProviderSettingsMutations(input: UseProviderSettingsMutations
 
             input.setStatusMessage(`Auth flow ${result.flow.status}. State: ${result.state.authState}.`);
             input.setActiveAuthFlow(undefined);
-            input.refetchAuthState();
-            input.refetchProviders();
-            if (input.selectedProviderId === 'kilo') {
-                input.refetchAccountContext();
+            void utils.provider.getAuthState.setData(
+                {
+                    profileId: input.profileId,
+                    providerId: variables.providerId,
+                },
+                {
+                    found: true,
+                    state: result.state,
+                }
+            );
+            void utils.provider.listProviders.invalidate({ profileId: input.profileId });
+            if (variables.providerId === 'kilo') {
+                void utils.provider.getAccountContext.invalidate({
+                    profileId: input.profileId,
+                    providerId: 'kilo',
+                });
             }
-            if (input.selectedProviderId === 'openai') {
-                input.refetchOpenAIRateLimits();
+            if (variables.providerId === 'openai') {
+                void utils.provider.getOpenAISubscriptionRateLimits.invalidate({ profileId: input.profileId });
             }
         },
     });
@@ -137,10 +204,15 @@ export function useProviderSettingsMutations(input: UseProviderSettingsMutations
         onSuccess: () => {
             input.setStatusMessage('Auth flow cancelled.');
             input.setActiveAuthFlow(undefined);
-            input.refetchAuthState();
-            input.refetchProviders();
+            void Promise.all([
+                utils.provider.getAuthState.invalidate({
+                    profileId: input.profileId,
+                    providerId: input.selectedProviderId ?? 'openai',
+                }),
+                utils.provider.listProviders.invalidate({ profileId: input.profileId }),
+            ]);
             if (input.selectedProviderId === 'openai') {
-                input.refetchOpenAIRateLimits();
+                void utils.provider.getOpenAISubscriptionRateLimits.invalidate({ profileId: input.profileId });
             }
         },
     });

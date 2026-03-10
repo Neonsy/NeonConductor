@@ -1,4 +1,6 @@
 import { useProfileSettingsController } from '@/web/components/settings/profileSettings/useProfileSettingsController';
+import { SettingsFeedbackBanner } from '@/web/components/settings/shared/settingsFeedbackBanner';
+import { SettingsSelectionRail } from '@/web/components/settings/shared/settingsSelectionRail';
 import { Button } from '@/web/components/ui/button';
 import { ConfirmDialog } from '@/web/components/ui/confirmDialog';
 
@@ -15,46 +17,44 @@ export function ProfileSettingsView({ activeProfileId, onProfileActivated }: Pro
 
     return (
         <section className='grid min-h-full grid-cols-[280px_1fr]'>
-            <aside className='border-border bg-background/40 min-h-0 overflow-y-auto border-r p-3'>
-                <p className='text-muted-foreground mb-2 text-xs font-semibold tracking-wide uppercase'>Profiles</p>
-                <div className='space-y-2'>
-                    {controller.profiles.map((profile) => (
-                        <button
-                            key={profile.id}
-                            type='button'
-                            className={`w-full rounded-md border px-2 py-2 text-left ${
-                                profile.id === controller.selectedProfileId
-                                    ? 'border-primary bg-primary/10'
-                                    : 'border-border bg-card hover:bg-accent'
-                            }`}
-                            onClick={() => {
-                                controller.setSelectedProfileId(profile.id);
-                            }}>
-                            <p className='text-sm font-medium'>
-                                {profile.name}{' '}
-                                {profile.id === activeProfileId ? (
-                                    <span className='text-primary text-xs'>(active)</span>
-                                ) : null}
-                            </p>
-                            <p className='text-muted-foreground truncate text-[11px]'>{profile.id}</p>
-                        </button>
-                    ))}
-                </div>
-            </aside>
+            <SettingsSelectionRail
+                title='Profiles'
+                ariaLabel='Profile list'
+                {...(controller.selectedProfileId ? { selectedId: controller.selectedProfileId } : {})}
+                onSelect={(profileId) => {
+                    controller.setSelectedProfileId(profileId);
+                }}
+                items={controller.profiles.map((profile) => ({
+                    id: profile.id,
+                    title: profile.name,
+                    subtitle: profile.id,
+                    ...(profile.id === activeProfileId ? { meta: 'Active' } : {}),
+                }))}
+            />
 
             <div className='min-h-0 overflow-y-auto p-4'>
                 <div className='space-y-5'>
+                    <SettingsFeedbackBanner
+                        message={controller.feedbackMessage}
+                        tone={controller.feedbackTone}
+                    />
                     <section className='space-y-2'>
                         <p className='text-sm font-semibold'>Create Profile</p>
                         <div className='grid grid-cols-[1fr_auto] gap-2'>
+                            <label className='sr-only' htmlFor='profile-create-name'>
+                                New profile name
+                            </label>
                             <input
+                                id='profile-create-name'
+                                name='profileCreateName'
                                 type='text'
                                 value={controller.newProfileName}
                                 onChange={(event) => {
                                     controller.setNewProfileName(event.target.value);
                                 }}
                                 className='border-border bg-background h-9 rounded-md border px-2 text-sm'
-                                placeholder='New profile name (optional)'
+                                autoComplete='off'
+                                placeholder='New profile name…'
                             />
                             <Button
                                 type='button'
@@ -73,14 +73,20 @@ export function ProfileSettingsView({ activeProfileId, onProfileActivated }: Pro
                         <section className='space-y-3'>
                             <p className='text-sm font-semibold'>Selected Profile</p>
                             <div className='grid grid-cols-[1fr_auto_auto] gap-2'>
+                                <label className='sr-only' htmlFor='profile-rename-input'>
+                                    Profile name
+                                </label>
                                 <input
+                                    id='profile-rename-input'
+                                    name='profileRename'
                                     type='text'
                                     value={controller.renameValue}
                                     onChange={(event) => {
                                         controller.setRenameValue(event.target.value);
                                     }}
                                     className='border-border bg-background h-9 rounded-md border px-2 text-sm'
-                                    placeholder='Profile name'
+                                    autoComplete='off'
+                                    placeholder='Profile name…'
                                 />
                                 <Button
                                     type='button'
@@ -146,6 +152,7 @@ export function ProfileSettingsView({ activeProfileId, onProfileActivated }: Pro
                                     Controls default runtime approval behavior for workspace-scoped tool access.
                                 </p>
                                 <select
+                                    aria-label='Execution preset'
                                     className='border-border bg-background h-9 w-full max-w-sm rounded-md border px-2 text-sm'
                                     value={controller.executionPresetQuery.data?.preset ?? 'standard'}
                                     disabled={controller.setExecutionPresetMutation.isPending}
@@ -173,6 +180,7 @@ export function ProfileSettingsView({ activeProfileId, onProfileActivated }: Pro
                                     Controls default behavior when editing earlier user messages.
                                 </p>
                                 <select
+                                    aria-label='Conversation edit behavior'
                                     className='border-border bg-background h-9 w-full max-w-sm rounded-md border px-2 text-sm'
                                     value={controller.editPreferenceQuery.data?.value ?? 'ask'}
                                     disabled={controller.setEditPreferenceMutation.isPending}
@@ -196,6 +204,7 @@ export function ProfileSettingsView({ activeProfileId, onProfileActivated }: Pro
                                     Controls how new thread titles are generated from provider/model and prompt context.
                                 </p>
                                 <select
+                                    aria-label='Thread title generation mode'
                                     className='border-border bg-background h-9 w-full max-w-sm rounded-md border px-2 text-sm'
                                     value={controller.threadTitlePreferenceQuery.data?.mode ?? 'template'}
                                     disabled={controller.setThreadTitlePreferenceMutation.isPending}
@@ -210,14 +219,20 @@ export function ProfileSettingsView({ activeProfileId, onProfileActivated }: Pro
                                     <option value='template'>Template only</option>
                                     <option value='ai_optional'>Template + optional AI refine</option>
                                 </select>
+                                <label className='sr-only' htmlFor='thread-title-model-input'>
+                                    Thread title AI model
+                                </label>
                                 <input
+                                    id='thread-title-model-input'
+                                    name='threadTitleAiModel'
                                     type='text'
                                     value={controller.threadTitleAiModelInput}
                                     onChange={(event) => {
                                         controller.setThreadTitleAiModelInput(event.target.value);
                                     }}
                                     className='border-border bg-background h-9 w-full max-w-sm rounded-md border px-2 text-sm'
-                                    placeholder='Title AI model id (e.g. openai/gpt-5-mini)'
+                                    autoComplete='off'
+                                    placeholder='Title AI model id (for example openai/gpt-5-mini)…'
                                 />
                                 <Button
                                     type='button'
@@ -258,7 +273,6 @@ export function ProfileSettingsView({ activeProfileId, onProfileActivated }: Pro
                         </Button>
                     </section>
 
-                    {controller.statusMessage ? <p className='text-primary text-xs'>{controller.statusMessage}</p> : null}
                 </div>
             </div>
 

@@ -4,7 +4,7 @@ Why: Single TanStack Router configured with hash history for Electron; routeTree
 
 import { createHashHistory, createRouter } from '@tanstack/react-router';
 
-import { routeTree } from '@/web/routeTree.gen';
+import { routeTree } from './routeTree.gen';
 
 export const router = createRouter({ routeTree, history: createHashHistory() });
 export type AppRouter = typeof router;

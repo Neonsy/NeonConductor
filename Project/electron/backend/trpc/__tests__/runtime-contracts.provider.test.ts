@@ -15,7 +15,7 @@ import {
     listStaticModelDefinitions,
     toStaticProviderCatalogModel,
 } from '@/app/backend/providers/metadata/staticCatalog/registry';
-import { toProviderCatalogUpsert } from '@/app/backend/providers/metadata/normalize';
+import { normalizeCatalogMetadata, toProviderCatalogUpsert } from '@/app/backend/providers/metadata/normalize';
 
 registerRuntimeContractHooks();
 
@@ -211,8 +211,13 @@ describe('runtime contracts: provider and account flows', () => {
 
         const staleOnly = listStaticModelDefinitions('openai', 'default')
             .filter((definition) => definition.modelId === 'openai/gpt-5')
-            .map((definition) => toProviderCatalogUpsert(toStaticProviderCatalogModel(definition, 'default')));
-        await providerCatalogStore.replaceModels(profileId, 'openai', staleOnly);
+            .map((definition) => toStaticProviderCatalogModel(definition, 'default'));
+        const normalizedStaleOnly = normalizeCatalogMetadata('openai', staleOnly);
+        await providerCatalogStore.replaceModels(
+            profileId,
+            'openai',
+            normalizedStaleOnly.models.map(toProviderCatalogUpsert)
+        );
 
         const models = await caller.provider.listModels({ profileId, providerId: 'openai' });
         expect(models.models.some((model) => model.id === 'openai/gpt-5')).toBe(true);

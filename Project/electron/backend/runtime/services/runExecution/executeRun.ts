@@ -1,3 +1,5 @@
+import { Buffer } from 'node:buffer';
+
 import { messageMediaStore, runStore, runUsageStore, sessionStore, threadStore } from '@/app/backend/persistence/stores';
 import { getProviderAdapter } from '@/app/backend/providers/adapters';
 import { getProviderRuntimeBehavior } from '@/app/backend/providers/behaviors';
@@ -100,8 +102,17 @@ export async function executeRun(input: ExecuteRunInput): Promise<RunExecutionRe
                                   return part;
                               }
 
+                              const mediaPayload =
+                                  part.dataUrl
+                                      ? undefined
+                                      : part.mediaId
+                                        ? await messageMediaStore.getPayload(part.mediaId)
+                                        : null;
                               const dataUrl =
-                                  part.dataUrl ?? (part.mediaId ? await messageMediaStore.getDataUrl(part.mediaId) : null);
+                                  part.dataUrl ??
+                                  (mediaPayload
+                                      ? `data:${mediaPayload.mimeType};base64,${Buffer.from(mediaPayload.bytes).toString('base64')}`
+                                      : null);
                               if (!dataUrl) {
                                   return null;
                               }

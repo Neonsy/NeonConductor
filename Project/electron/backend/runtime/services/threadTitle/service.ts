@@ -1,7 +1,7 @@
 import { providerStore, runStore, settingsStore, threadStore } from '@/app/backend/persistence/stores';
 import { getProviderAdapter } from '@/app/backend/providers/adapters';
-import { isSupportedProviderId } from '@/app/backend/providers/registry';
 import type { ProviderRuntimeInput, ProviderRuntimePart } from '@/app/backend/providers/types';
+import { isSupportedProviderId } from '@/app/backend/providers/registry';
 import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
 import { resolveRunAuth } from '@/app/backend/runtime/services/runExecution/resolveRunAuth';
 import { appLog } from '@/app/main/logging';
@@ -74,6 +74,21 @@ function shouldRetitleThread(input: { title: string; runCount: number; parentThr
     return false;
 }
 
+function createTitleContextMessage(
+    role: 'system' | 'user' | 'assistant',
+    text: string
+): NonNullable<ProviderRuntimeInput['contextMessages']>[number] {
+    return {
+        role,
+        parts: [
+            {
+                type: 'text',
+                text,
+            },
+        ],
+    };
+}
+
 interface ApplyThreadTitleInput {
     profileId: string;
     sessionId: string;
@@ -134,14 +149,11 @@ async function generateAiTitle(input: {
             promptText:
                 'Return a concise thread title (max 70 chars) based on the user request. Return title text only.',
             contextMessages: [
-                {
-                    role: 'system',
-                    text: 'You produce short, clear conversation thread titles. Output plain text only.',
-                },
-                {
-                    role: 'user',
-                    text: `Request: ${input.prompt}\nTemplate: ${input.templateTitle}`,
-                },
+                createTitleContextMessage(
+                    'system',
+                    'You produce short, clear conversation thread titles. Output plain text only.'
+                ),
+                createTitleContextMessage('user', `Request: ${input.prompt}\nTemplate: ${input.templateTitle}`),
             ],
             runtimeOptions: {
                 reasoning: {

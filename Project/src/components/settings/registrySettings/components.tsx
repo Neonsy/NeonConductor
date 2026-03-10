@@ -37,7 +37,7 @@ export function AssetCard({
     const preview = previewMarkdown(bodyMarkdown);
 
     return (
-        <article className='border-border bg-card rounded-2xl border p-4 shadow-sm'>
+        <article className='border-border bg-card rounded-3xl border p-4 shadow-sm'>
             <div className='flex items-start justify-between gap-3'>
                 <div className='min-w-0'>
                     <p className='truncate text-sm font-semibold'>{title}</p>
@@ -51,11 +51,15 @@ export function AssetCard({
             </div>
             <AssetMeta asset={asset} />
             {preview.length > 0 ? (
-                <div className='border-border bg-background/70 mt-3 rounded-xl border p-3'>
+                <div className='border-border bg-background/70 mt-3 rounded-2xl border p-3'>
                     <MarkdownContent markdown={preview} className='space-y-2' />
                 </div>
             ) : null}
-            {asset.originPath ? <p className='text-muted-foreground mt-3 break-all text-[11px]'>{asset.originPath}</p> : null}
+            {asset.originPath ? (
+                <p className='text-muted-foreground mt-3 break-all rounded-xl bg-background/60 px-3 py-2 text-[11px]'>
+                    {asset.originPath}
+                </p>
+            ) : null}
         </article>
     );
 }
@@ -94,7 +98,7 @@ export function AssetSection<TAsset extends RegistryAsset>({
                     ))}
                 </div>
             ) : (
-                <p className='text-muted-foreground text-sm'>{emptyLabel}</p>
+                <p className='text-muted-foreground rounded-2xl border border-dashed px-4 py-5 text-sm'>{emptyLabel}</p>
             )}
         </section>
     );
