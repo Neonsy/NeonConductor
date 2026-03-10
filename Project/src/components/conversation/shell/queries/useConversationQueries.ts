@@ -1,5 +1,6 @@
 import type { ConversationUiState } from '@/web/components/conversation/hooks/useConversationUiState';
 import { isEntityId } from '@/web/components/conversation/shell/workspace/helpers';
+import { BOOT_CRITICAL_QUERY_OPTIONS } from '@/web/components/runtime/startupQueryOptions';
 import { trpc } from '@/web/trpc/client';
 
 import type { TopLevelTab } from '@/app/backend/runtime/contracts';
@@ -15,7 +16,7 @@ interface UseConversationQueriesInput {
 export function useConversationQueries(input: UseConversationQueriesInput) {
     const shellBootstrapQuery = trpc.runtime.getShellBootstrap.useQuery(
         { profileId: input.profileId },
-        { refetchOnWindowFocus: false }
+        BOOT_CRITICAL_QUERY_OPTIONS
     );
     const listBucketsQuery = trpc.conversation.listBuckets.useQuery(
         { profileId: input.profileId },

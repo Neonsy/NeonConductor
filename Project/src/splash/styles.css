@@ -1,7 +1,6 @@
 :root {
     color-scheme: dark;
     --surface: #090b12;
-    --border: rgba(255, 255, 255, 0.12);
     --text: #f6f7fb;
     --muted: rgba(231, 235, 244, 0.72);
     --accent: #7dd3fc;
@@ -32,23 +31,15 @@ body {
 body::before {
     content: '';
     position: fixed;
-    inset: 20px;
-    border-radius: 28px;
-    border: 1px solid rgba(255, 255, 255, 0.04);
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 28%);
+    inset: 16px;
+    border-radius: 32px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
     pointer-events: none;
 }
 
 .splash-shell {
-    width: min(360px, calc(100vw - 40px));
-    padding: 34px 28px 28px;
-    border-radius: 30px;
-    border: 1px solid var(--border);
-    background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015)),
-        rgba(9, 11, 18, 0.88);
-    box-shadow: 0 28px 80px rgba(0, 0, 0, 0.38);
-    backdrop-filter: blur(14px);
+    width: min(360px, calc(100vw - 48px));
+    padding: 38px 30px 30px;
     text-align: center;
 }
 

@@ -218,29 +218,35 @@ export function ConversationShell({
     useEffect(() => {
         onBootChromeReadyChange?.({
             shellBootstrapSettled: !queries.shellBootstrapQuery.isPending,
-            bucketListSettled: !queries.listBucketsQuery.isPending,
-            tagListSettled: !queries.listTagsQuery.isPending,
-            threadListSettled: !queries.listThreadsQuery.isPending,
-            sessionListSettled: !queries.sessionsQuery.isPending,
         });
 
         return () => {
             onBootChromeReadyChange?.({
                 shellBootstrapSettled: false,
-                bucketListSettled: false,
-                tagListSettled: false,
-                threadListSettled: false,
-                sessionListSettled: false,
             });
         };
-    }, [
-        onBootChromeReadyChange,
-        queries.listBucketsQuery.isPending,
-        queries.listTagsQuery.isPending,
-        queries.listThreadsQuery.isPending,
-        queries.sessionsQuery.isPending,
-        queries.shellBootstrapQuery.isPending,
-    ]);
+    }, [onBootChromeReadyChange, queries.shellBootstrapQuery.isPending]);
+
+    const sidebarStatusMessage = queries.listBucketsQuery.isPending
+        ? 'Loading conversation groups...'
+        : queries.listTagsQuery.isPending
+          ? 'Loading tags...'
+          : queries.listThreadsQuery.isPending
+            ? 'Loading threads...'
+            : queries.sessionsQuery.isPending
+              ? 'Loading sessions...'
+              : queries.listBucketsQuery.error?.message ??
+                queries.listTagsQuery.error?.message ??
+                queries.listThreadsQuery.error?.message ??
+                queries.sessionsQuery.error?.message;
+    const sidebarStatusTone = queries.listBucketsQuery.error ??
+        queries.listTagsQuery.error ??
+        queries.listThreadsQuery.error ??
+        queries.sessionsQuery.error
+        ? 'error'
+        : sidebarStatusMessage
+          ? 'info'
+          : undefined;
 
     const routingBadge = useConversationShellRoutingBadge({
         profileId,
@@ -308,6 +314,12 @@ export function ConversationShell({
                 isCreatingThread={mutations.createThreadMutation.isPending}
                 isAddingTag={mutations.upsertTagMutation.isPending || mutations.setThreadTagsMutation.isPending}
                 isDeletingWorkspaceThreads={mutations.deleteWorkspaceThreadsMutation.isPending}
+                {...(sidebarStatusMessage
+                    ? {
+                          statusMessage: sidebarStatusMessage,
+                          ...(sidebarStatusTone ? { statusTone: sidebarStatusTone } : {}),
+                      }
+                    : {})}
                 onTopLevelTabChange={onTopLevelTabChange}
                 onSetTabSwitchNotice={setTabSwitchNotice}
                 onSelectThreadId={uiState.setSelectedThreadId}

@@ -1,3 +1,4 @@
+import { BOOT_CRITICAL_QUERY_OPTIONS } from '@/web/components/runtime/startupQueryOptions';
 import { resolveWorkspaceActiveModeKey, MISSING_PROFILE_ID } from '@/web/components/runtime/workspaceSurfaceModel';
 import { refetchWorkspaceModeQueries } from '@/web/components/runtime/workspaceSurfaceRefetch';
 import { trpc } from '@/web/trpc/client';
@@ -17,7 +18,7 @@ export function useWorkspaceModeState(input: {
         },
         {
             enabled: Boolean(input.resolvedProfileId),
-            refetchOnWindowFocus: false,
+            ...BOOT_CRITICAL_QUERY_OPTIONS,
         }
     );
     const modeActiveQuery = trpc.mode.getActive.useQuery(
@@ -28,7 +29,7 @@ export function useWorkspaceModeState(input: {
         },
         {
             enabled: Boolean(input.resolvedProfileId),
-            refetchOnWindowFocus: false,
+            ...BOOT_CRITICAL_QUERY_OPTIONS,
         }
     );
     const setActiveModeMutation = trpc.mode.setActive.useMutation({
@@ -44,7 +45,7 @@ export function useWorkspaceModeState(input: {
         modes: modeActiveQuery.data?.modes ?? modeListQuery.data?.modes ?? [],
         activeModeKey: resolveWorkspaceActiveModeKey(input.topLevelTab, modeActiveQuery.data?.activeMode.modeKey),
         hasResolvedInitialMode:
-            Boolean(input.resolvedProfileId) && (modeActiveQuery.isSuccess || modeListQuery.isSuccess),
+            Boolean(input.resolvedProfileId) && (!modeActiveQuery.isPending || !modeListQuery.isPending),
         setActiveModeMutation,
         selectMode: async (modeKey: string) => {
             if (!modeKey || setActiveModeMutation.isPending || !input.resolvedProfileId) {

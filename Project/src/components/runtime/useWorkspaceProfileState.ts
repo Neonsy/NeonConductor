@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 
+import { BOOT_CRITICAL_QUERY_OPTIONS } from '@/web/components/runtime/startupQueryOptions';
 import { resolveActiveWorkspaceProfileId } from '@/web/components/runtime/workspaceSurfaceModel';
 import { refetchWorkspaceProfileQueries } from '@/web/components/runtime/workspaceSurfaceRefetch';
 import { trpc } from '@/web/trpc/client';
@@ -9,12 +10,8 @@ import type { TopLevelTab } from '@/app/backend/runtime/contracts';
 export function useWorkspaceProfileState(input: { setTopLevelTab: (value: TopLevelTab) => void }) {
     const [activeProfileId, setActiveProfileId] = useState<string | undefined>(undefined);
 
-    const profileListQuery = trpc.profile.list.useQuery(undefined, {
-        refetchOnWindowFocus: false,
-    });
-    const activeProfileQuery = trpc.profile.getActive.useQuery(undefined, {
-        refetchOnWindowFocus: false,
-    });
+    const profileListQuery = trpc.profile.list.useQuery(undefined, BOOT_CRITICAL_QUERY_OPTIONS);
+    const activeProfileQuery = trpc.profile.getActive.useQuery(undefined, BOOT_CRITICAL_QUERY_OPTIONS);
 
     const profiles = profileListQuery.data?.profiles ?? [];
     const resolvedProfileId = resolveActiveWorkspaceProfileId({

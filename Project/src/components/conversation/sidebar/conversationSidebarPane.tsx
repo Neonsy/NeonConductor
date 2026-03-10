@@ -26,6 +26,8 @@ interface ConversationSidebarPaneProps {
     isCreatingThread: boolean;
     isAddingTag: boolean;
     isDeletingWorkspaceThreads: boolean;
+    statusMessage?: string;
+    statusTone?: 'info' | 'error';
     onTopLevelTabChange: (nextTab: TopLevelTab) => void;
     onSetTabSwitchNotice: (nextNotice: string | undefined) => void;
     onSelectThreadId: (threadId: string | undefined) => void;
@@ -80,6 +82,8 @@ export function ConversationSidebarPane({
     isCreatingThread,
     isAddingTag,
     isDeletingWorkspaceThreads,
+    statusMessage,
+    statusTone,
     onTopLevelTabChange,
     onSetTabSwitchNotice,
     onSelectThreadId,
@@ -154,6 +158,7 @@ export function ConversationSidebarPane({
                 isCreatingThread={isCreatingThread}
                 isAddingTag={isAddingTag}
                 {...(feedbackMessage ? { feedbackMessage } : {})}
+                {...(statusMessage ? { statusMessage, statusTone } : {})}
                 onSelectThread={(threadId) => {
                     const targetThread = visibleThreads.find((thread) => thread.id === threadId);
                     const nextTab = targetThread?.topLevelTab ?? topLevelTab;

@@ -29,6 +29,8 @@ interface ConversationSidebarProps {
     isCreatingThread: boolean;
     isAddingTag: boolean;
     feedbackMessage?: string;
+    statusMessage?: string;
+    statusTone?: 'info' | 'error';
     onSelectThread: (threadId: string) => void;
     onToggleTagFilter: (tagId: string) => void;
     onToggleThreadFavorite: (threadId: string, nextFavorite: boolean) => void;
@@ -78,6 +80,8 @@ export function ConversationSidebar({
     isCreatingThread,
     isAddingTag,
     feedbackMessage,
+    statusMessage,
+    statusTone = 'info',
     onSelectThread,
     onToggleTagFilter,
     onToggleThreadFavorite,
@@ -123,6 +127,17 @@ export function ConversationSidebar({
                 {feedbackMessage ? (
                     <div aria-live='polite' className='rounded-2xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-xs text-destructive'>
                         {feedbackMessage}
+                    </div>
+                ) : null}
+                {statusMessage ? (
+                    <div
+                        aria-live='polite'
+                        className={`rounded-2xl px-3 py-2 text-xs ${
+                            statusTone === 'error'
+                                ? 'border border-destructive/20 bg-destructive/10 text-destructive'
+                                : 'border border-border/70 bg-background/80 text-muted-foreground'
+                        }`}>
+                        {statusMessage}
                     </div>
                 ) : null}
                 <div className='grid grid-cols-2 gap-2'>
@@ -306,6 +321,15 @@ export function ConversationSidebar({
             </div>
 
             <div className='min-h-0 flex-1 overflow-y-auto p-2'>
+                {groupedThreadRows.length === 0 ? (
+                    <div className='text-muted-foreground flex h-full min-h-48 items-center justify-center rounded-2xl border border-dashed border-border/70 bg-background/30 px-6 text-center text-sm'>
+                        {statusMessage && statusTone !== 'error'
+                            ? 'The sidebar is still loading. The workspace is ready to use.'
+                            : statusTone === 'error'
+                              ? 'Conversation lists could not be loaded yet. Retry or keep working in the current shell.'
+                              : 'No conversations are available yet.'}
+                    </div>
+                ) : null}
                 {groupedThreadRows.map((group) => {
                     const workspaceFingerprint = group.workspaceFingerprint;
 
