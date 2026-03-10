@@ -1,6 +1,7 @@
 import type { MessagePartRecord, MessageRecord } from '@/app/backend/persistence/types';
 import { createTextPart } from '@/app/backend/runtime/services/runExecution/contextParts';
 import type { RunContextMessage, RunContextPart } from '@/app/backend/runtime/services/runExecution/types';
+import { readImageMimeType } from '@/app/shared/imageMimeType';
 
 export interface ReplayMessage {
     messageId: MessageRecord['id'];
@@ -39,16 +40,17 @@ function extractReplayParts(parts: MessagePartRecord[]): RunContextPart[] {
             const mimeType = part.payload['mimeType'];
             const width = part.payload['width'];
             const height = part.payload['height'];
+            const normalizedMimeType = readImageMimeType(mimeType);
             if (
                 typeof mediaId === 'string' &&
-                typeof mimeType === 'string' &&
+                normalizedMimeType &&
                 typeof width === 'number' &&
                 typeof height === 'number'
             ) {
                 replayParts.push({
                     type: 'image',
                     mediaId,
-                    mimeType: mimeType as 'image/jpeg' | 'image/png' | 'image/webp',
+                    mimeType: normalizedMimeType,
                     width,
                     height,
                 });

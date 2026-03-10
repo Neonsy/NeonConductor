@@ -26,7 +26,11 @@ interface ProviderAuthView {
     authMethod: string;
 }
 
-interface UseConversationShellComposerInput {
+interface UseConversationShellComposerInput<
+    TPlanStartResult extends { plan: unknown },
+    TRunStartAcceptedResult extends { accepted: true },
+    TRunStartRejectedResult extends { accepted: false; message?: string },
+> {
     profileId: string;
     selectedSessionId: string | undefined;
     isPlanningMode: boolean;
@@ -45,13 +49,23 @@ interface UseConversationShellComposerInput {
     isStartingRun: boolean;
     canAttachImages: boolean;
     imageAttachmentBlockedReason?: string;
-    startPlan: (input: PlanStartInput) => Promise<unknown>;
-    startRun: (input: SessionStartRunInput) => Promise<unknown>;
-    refetchActivePlan: () => void;
-    refetchSessionWorkspace: () => void;
+    startPlan: (input: PlanStartInput) => Promise<TPlanStartResult>;
+    startRun: (input: SessionStartRunInput) => Promise<TRunStartAcceptedResult | TRunStartRejectedResult>;
+    onPlanStarted: (result: TPlanStartResult) => void;
+    onRunStarted: (result: TRunStartAcceptedResult) => void;
 }
 
-export function useConversationShellComposer(input: UseConversationShellComposerInput) {
+export function useConversationShellComposer<
+    TPlanStartResult extends { plan: unknown },
+    TRunStartAcceptedResult extends { accepted: true },
+    TRunStartRejectedResult extends { accepted: false; message?: string },
+>(
+    input: UseConversationShellComposerInput<
+        TPlanStartResult,
+        TRunStartAcceptedResult,
+        TRunStartRejectedResult
+    >
+) {
     const [prompt, setPrompt] = useState('');
     const [pendingImages, setPendingImages] = useState<ComposerPendingImage[]>([]);
     const [runSubmitError, setRunSubmitError] = useState<string | undefined>(undefined);
@@ -260,7 +274,11 @@ export function useConversationShellComposer(input: UseConversationShellComposer
                 return;
             }
 
-            void submitPromptFromComposer({
+            void submitPromptFromComposer<
+                TPlanStartResult,
+                TRunStartAcceptedResult,
+                TRunStartRejectedResult
+            >({
                 prompt,
                 ...(readyAttachments.length > 0 ? { attachments: readyAttachments } : {}),
                 isStartingRun: input.isStartingRun,
@@ -281,11 +299,11 @@ export function useConversationShellComposer(input: UseConversationShellComposer
                     setPrompt('');
                     clearPendingImages();
                 },
-                onPlanRefetch: () => {
-                    input.refetchActivePlan();
+                onPlanStarted: (result) => {
+                    input.onPlanStarted(result);
                 },
-                onRuntimeRefetch: () => {
-                    input.refetchSessionWorkspace();
+                onRunStarted: (result) => {
+                    input.onRunStarted(result);
                 },
                 onError: (message) => {
                     setRunSubmitError(message);

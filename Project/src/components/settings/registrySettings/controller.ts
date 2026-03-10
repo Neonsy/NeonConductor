@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useDeferredValue, useEffect, useState } from 'react';
 
-import { invalidateShellBootstrap } from '@/web/lib/runtime/invalidation/queryInvalidation';
+import { patchRegistryRefreshCaches } from '@/web/components/settings/registrySettings/registryRefreshCache';
+import { filterResolvedSkillfiles } from '@/web/components/settings/registrySettings/registrySkillSearch';
+import { PROGRESSIVE_QUERY_OPTIONS } from '@/web/lib/query/progressiveQueryOptions';
 import { trpc } from '@/web/trpc/client';
 
 export function useRegistrySettingsController(profileId: string) {
@@ -12,45 +14,30 @@ export function useRegistrySettingsController(profileId: string) {
 
     const workspaceRootsQuery = trpc.runtime.listWorkspaceRoots.useQuery(
         { profileId },
-        { refetchOnWindowFocus: false }
+        PROGRESSIVE_QUERY_OPTIONS
     );
     const registryQuery = trpc.registry.listResolved.useQuery(
         {
             profileId,
             ...(selectedWorkspaceFingerprint ? { workspaceFingerprint: selectedWorkspaceFingerprint } : {}),
         },
-        { refetchOnWindowFocus: false }
+        PROGRESSIVE_QUERY_OPTIONS
     );
-    const skillSearchQuery = trpc.registry.searchSkills.useQuery(
-        {
-            profileId,
-            query: skillQuery.trim(),
-            ...(selectedWorkspaceFingerprint ? { workspaceFingerprint: selectedWorkspaceFingerprint } : {}),
-        },
-        {
-            enabled: skillQuery.trim().length > 0,
-            refetchOnWindowFocus: false,
-        }
-    );
+    const deferredSkillQuery = useDeferredValue(skillQuery.trim());
     const refreshMutation = trpc.registry.refresh.useMutation({
-        onSuccess: async () => {
+        onSuccess: (result, variables) => {
             setFeedbackTone('success');
             setFeedbackMessage(
-                selectedWorkspaceFingerprint ? 'Refreshed registry data for the selected workspace.' : 'Refreshed global registry data.'
+                variables.workspaceFingerprint
+                    ? 'Refreshed registry data for the selected workspace.'
+                    : 'Refreshed global registry data.'
             );
-            await Promise.all([
-                utils.registry.listResolved.invalidate({
-                    profileId,
-                    ...(selectedWorkspaceFingerprint ? { workspaceFingerprint: selectedWorkspaceFingerprint } : {}),
-                }),
-                utils.registry.searchSkills.invalidate({
-                    profileId,
-                    ...(selectedWorkspaceFingerprint ? { workspaceFingerprint: selectedWorkspaceFingerprint } : {}),
-                }),
-                utils.mode.list.invalidate({ profileId, topLevelTab: 'agent' }),
-                utils.mode.getActive.invalidate({ profileId, topLevelTab: 'agent' }),
-                invalidateShellBootstrap(utils, profileId),
-            ]);
+            patchRegistryRefreshCaches({
+                utils,
+                profileId,
+                ...(variables.workspaceFingerprint ? { workspaceFingerprint: variables.workspaceFingerprint } : {}),
+                refreshResult: result,
+            });
         },
         onError: (error) => {
             setFeedbackTone('error');
@@ -76,7 +63,7 @@ export function useRegistrySettingsController(profileId: string) {
     const selectedWorkspaceRoot = selectedWorkspaceFingerprint
         ? workspaceRoots.find((workspaceRoot) => workspaceRoot.fingerprint === selectedWorkspaceFingerprint)
         : undefined;
-    const skillMatches = skillSearchQuery.data?.skillfiles ?? [];
+    const skillMatches = filterResolvedSkillfiles(registryQuery.data?.resolved.skillfiles ?? [], deferredSkillQuery);
 
     return {
         selectedWorkspaceFingerprint,
@@ -85,7 +72,6 @@ export function useRegistrySettingsController(profileId: string) {
         setSkillQuery,
         workspaceRoots,
         registryQuery,
-        skillSearchQuery,
         refreshMutation,
         resolvedAgentModes,
         selectedWorkspaceRoot,

@@ -45,6 +45,19 @@ function readFixedInputTokens(value: unknown, field: string): number | undefined
     return fixedInputTokens;
 }
 
+function readOptionalContextPreviewTarget(value: unknown, field: string) {
+    if (value === undefined) {
+        return undefined;
+    }
+
+    const source = readObject(value, field);
+    return {
+        profileId: readProfileId(source),
+        providerId: readProviderId(source.providerId, `${field}.providerId`),
+        modelId: readString(source.modelId, `${field}.modelId`),
+    };
+}
+
 export function parseContextPolicyInput(input: unknown): ContextPolicyInput {
     const source = readObject(input, 'input');
     return {
@@ -56,10 +69,12 @@ export function parseContextPolicyInput(input: unknown): ContextPolicyInput {
 
 export function parseSetContextGlobalSettingsInput(input: unknown): SetContextGlobalSettingsInput {
     const source = readObject(input, 'input');
+    const preview = readOptionalContextPreviewTarget(source.preview, 'preview');
     return {
         enabled: readBoolean(source.enabled, 'enabled'),
         mode: readEnumValue(source.mode, 'mode', contextSettingModes),
         percent: readPercentValue(source.percent, 'percent'),
+        ...(preview ? { preview } : {}),
     };
 }
 
@@ -69,6 +84,7 @@ export function parseSetContextProfileSettingsInput(input: unknown): SetContextP
     const overrideMode = readEnumValue(source.overrideMode, 'overrideMode', contextProfileOverrideModes);
     const percent = readOptionalPercentValue(source.percent, 'percent');
     const fixedInputTokens = readFixedInputTokens(source.fixedInputTokens, 'fixedInputTokens');
+    const preview = readOptionalContextPreviewTarget(source.preview, 'preview');
 
     if (overrideMode === 'percent' && percent === undefined) {
         throw new Error('Invalid "percent": required when overrideMode is "percent".');
@@ -88,6 +104,7 @@ export function parseSetContextProfileSettingsInput(input: unknown): SetContextP
             profileId,
             overrideMode,
             percent,
+            ...(preview ? { preview } : {}),
         };
     }
 
@@ -99,12 +116,14 @@ export function parseSetContextProfileSettingsInput(input: unknown): SetContextP
             profileId,
             overrideMode,
             fixedInputTokens,
+            ...(preview ? { preview } : {}),
         };
     }
 
     return {
         profileId,
         overrideMode,
+        ...(preview ? { preview } : {}),
     };
 }
 
@@ -147,6 +166,7 @@ export function parseCompactSessionInput(input: unknown): CompactSessionInput {
         providerId: readProviderId(source.providerId, 'providerId'),
         modelId: readString(source.modelId, 'modelId'),
         topLevelTab: readEnumValue(source.topLevelTab, 'topLevelTab', topLevelTabs),
+        modeKey: readString(source.modeKey, 'modeKey'),
         ...(workspaceFingerprint ? { workspaceFingerprint } : {}),
     };
 }

@@ -1,16 +1,18 @@
 import type { ModeExecutionPanelProps } from '@/web/components/conversation/panels/modeExecutionPanel';
 import { DEFAULT_RUN_OPTIONS, type RunTargetSelection } from '@/web/components/conversation/shell/workspace/helpers';
 
-import type { EntityId, RuntimeProviderId } from '@/app/backend/runtime/contracts';
+import type { OrchestratorRunRecord, OrchestratorStepRecord } from '@/app/backend/persistence/types';
+import type { EntityId, PlanRecordView, RuntimeProviderId } from '@/app/backend/runtime/contracts';
 
-interface MutationLike<TInput> {
+interface MutationLike<TInput, TResult> {
     isPending: boolean;
-    mutateAsync: (input: TInput) => Promise<unknown>;
+    mutateAsync: (input: TInput) => Promise<TResult>;
 }
 
 interface BuildConversationPlanOrchestratorInput {
     profileId: string;
-    refetchPlanWorkspace: () => Promise<unknown>;
+    applyPlanWorkspaceUpdate: (result: { found: false } | { found: true; plan: PlanRecordView }) => void;
+    applyOrchestratorWorkspaceUpdate: (result: { found: false } | { found: true; run: OrchestratorRunRecord; steps: OrchestratorStepRecord[] }) => void;
     onError: (message: string) => void;
     resolvedRunTarget: RunTargetSelection | undefined;
     workspaceFingerprint: string | undefined;
@@ -23,23 +25,23 @@ interface BuildConversationPlanOrchestratorInput {
         modeKey: string;
         prompt: string;
         workspaceFingerprint?: string;
-    }>;
+    }, { plan: PlanRecordView }>;
     planAnswerMutation: MutationLike<{
         profileId: string;
         planId: EntityId<'plan'>;
         questionId: string;
         answer: string;
-    }>;
+    }, { found: false } | { found: true; plan: PlanRecordView }>;
     planReviseMutation: MutationLike<{
         profileId: string;
         planId: EntityId<'plan'>;
         summaryMarkdown: string;
         items: Array<{ description: string }>;
-    }>;
+    }, { found: false } | { found: true; plan: PlanRecordView }>;
     planApproveMutation: MutationLike<{
         profileId: string;
         planId: EntityId<'plan'>;
-    }>;
+    }, { found: false } | { found: true; plan: PlanRecordView }>;
     planImplementMutation: MutationLike<{
         profileId: string;
         planId: EntityId<'plan'>;
@@ -47,11 +49,11 @@ interface BuildConversationPlanOrchestratorInput {
         providerId?: RuntimeProviderId;
         modelId?: string;
         workspaceFingerprint?: string;
-    }>;
+    }, { found: false } | { found: true; plan: PlanRecordView } | { found: true; plan: PlanRecordView; started: true; mode: 'agent.code' | 'orchestrator.orchestrate' }>;
     orchestratorAbortMutation: MutationLike<{
         profileId: string;
         orchestratorRunId: EntityId<'orch'>;
-    }>;
+    }, { aborted: false; reason: 'not_found' } | { aborted: true; runId: EntityId<'orch'>; latest: { found: false } | { found: true; run: OrchestratorRunRecord; steps: OrchestratorStepRecord[] } }>;
 }
 
 export function buildConversationPlanOrchestrator(input: BuildConversationPlanOrchestratorInput): {
@@ -83,8 +85,8 @@ export function buildConversationPlanOrchestrator(input: BuildConversationPlanOr
                     questionId,
                     answer,
                 })
-                .then(() => {
-                    void input.refetchPlanWorkspace();
+                .then((result) => {
+                    input.applyPlanWorkspaceUpdate(result);
                 });
         },
         onRevisePlan: (planId, summaryMarkdown, items) => {
@@ -95,8 +97,8 @@ export function buildConversationPlanOrchestrator(input: BuildConversationPlanOr
                     summaryMarkdown,
                     items: items.map((description) => ({ description })),
                 })
-                .then(() => {
-                    void input.refetchPlanWorkspace();
+                .then((result) => {
+                    input.applyPlanWorkspaceUpdate(result);
                 });
         },
         onApprovePlan: (planId) => {
@@ -105,8 +107,8 @@ export function buildConversationPlanOrchestrator(input: BuildConversationPlanOr
                     profileId: input.profileId,
                     planId,
                 })
-                .then(() => {
-                    void input.refetchPlanWorkspace();
+                .then((result) => {
+                    input.applyPlanWorkspaceUpdate(result);
                 })
                 .catch((error: unknown) => {
                     const message = error instanceof Error ? error.message : String(error);
@@ -123,8 +125,15 @@ export function buildConversationPlanOrchestrator(input: BuildConversationPlanOr
                     ...(input.resolvedRunTarget ? { modelId: input.resolvedRunTarget.modelId } : {}),
                     ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
                 })
-                .then(() => {
-                    void input.refetchPlanWorkspace();
+                .then((result) => {
+                    input.applyPlanWorkspaceUpdate(
+                        result.found
+                            ? {
+                                  found: true,
+                                  plan: result.plan,
+                              }
+                            : { found: false }
+                    );
                 })
                 .catch((error: unknown) => {
                     const message = error instanceof Error ? error.message : String(error);
@@ -137,8 +146,10 @@ export function buildConversationPlanOrchestrator(input: BuildConversationPlanOr
                     profileId: input.profileId,
                     orchestratorRunId,
                 })
-                .then(() => {
-                    void input.refetchPlanWorkspace();
+                .then((result) => {
+                    if (result.aborted) {
+                        input.applyOrchestratorWorkspaceUpdate(result.latest);
+                    }
                 });
         },
     };

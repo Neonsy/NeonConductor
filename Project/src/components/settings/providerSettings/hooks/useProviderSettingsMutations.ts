@@ -1,7 +1,9 @@
 import { methodLabel } from '@/web/components/settings/providerSettings/helpers';
+import { patchProviderCache } from '@/web/components/settings/providerSettings/providerSettingsCache';
 import type { ActiveAuthFlow } from '@/web/components/settings/providerSettings/types';
 import { trpc } from '@/web/trpc/client';
 
+import type { ProviderAuthStateRecord } from '@/app/backend/persistence/types';
 import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
 
 interface UseProviderSettingsMutationsInput {
@@ -14,6 +16,46 @@ interface UseProviderSettingsMutationsInput {
 
 export function useProviderSettingsMutations(input: UseProviderSettingsMutationsInput) {
     const utils = trpc.useUtils();
+    const selectedProviderId = input.selectedProviderId ?? 'openai';
+    type ProviderListQueryData = Awaited<ReturnType<typeof utils.provider.listProviders.fetch>>;
+    type ProviderAuthStateQueryData = Awaited<ReturnType<typeof utils.provider.getAuthState.fetch>>;
+
+    const updateProviderListItem = (
+        providerId: RuntimeProviderId,
+        updater: (provider: ProviderListQueryData['providers'][number]) => ProviderListQueryData['providers'][number]
+    ) => {
+        void utils.provider.listProviders.setData({ profileId: input.profileId }, (current) => {
+            if (!current) {
+                return current;
+            }
+
+            return {
+                providers: current.providers.map((provider) =>
+                    provider.id === providerId ? updater(provider) : provider
+                ),
+            };
+        });
+    };
+
+    const setAuthStateCache = (providerId: RuntimeProviderId, state: ProviderAuthStateRecord) => {
+        const nextAuthState: ProviderAuthStateQueryData = {
+            found: true,
+            state,
+        };
+
+        void utils.provider.getAuthState.setData(
+            {
+                profileId: input.profileId,
+                providerId,
+            },
+            nextAuthState
+        );
+        updateProviderListItem(providerId, (provider) => ({
+            ...provider,
+            authState: state.authState,
+            authMethod: state.authMethod,
+        }));
+    };
 
     const setDefaultMutation = trpc.provider.setDefault.useMutation({
         onSuccess: (result) => {
@@ -34,7 +76,18 @@ export function useProviderSettingsMutations(input: UseProviderSettingsMutations
                     },
                 }
             );
-            void utils.provider.listProviders.invalidate({ profileId: input.profileId });
+            void utils.provider.listProviders.setData({ profileId: input.profileId }, (current) => {
+                if (!current) {
+                    return current;
+                }
+
+                return {
+                    providers: current.providers.map((provider) => ({
+                        ...provider,
+                        isDefault: provider.id === result.defaultProviderId,
+                    })),
+                };
+            });
         },
     });
 
@@ -47,7 +100,6 @@ export function useProviderSettingsMutations(input: UseProviderSettingsMutations
 
             input.setApiKeyInput('');
             input.setStatusMessage('API key saved. Provider is ready.');
-            void utils.provider.listProviders.invalidate({ profileId: input.profileId });
             void utils.provider.getAuthState.setData(
                 {
                     profileId: input.profileId,
@@ -58,6 +110,11 @@ export function useProviderSettingsMutations(input: UseProviderSettingsMutations
                     state: result.state,
                 }
             );
+            updateProviderListItem(variables.providerId, (provider) => ({
+                ...provider,
+                authState: result.state.authState,
+                authMethod: result.state.authMethod,
+            }));
             if (variables.providerId === 'openai') {
                 void utils.provider.getOpenAISubscriptionRateLimits.invalidate({ profileId: input.profileId });
             }
@@ -65,25 +122,17 @@ export function useProviderSettingsMutations(input: UseProviderSettingsMutations
     });
 
     const setEndpointProfileMutation = trpc.provider.setEndpointProfile.useMutation({
-        onSuccess: ({ endpointProfile }) => {
+        onSuccess: ({ endpointProfile, defaults, models, provider }) => {
             input.setStatusMessage('Endpoint profile updated.');
-            void utils.provider.getEndpointProfile.setData(
-                {
-                    profileId: input.profileId,
-                    providerId: input.selectedProviderId ?? 'openai',
-                },
-                {
-                    endpointProfile,
-                }
-            );
-            void Promise.all([
-                utils.provider.listProviders.invalidate({ profileId: input.profileId }),
-                utils.provider.listModels.invalidate({
-                    profileId: input.profileId,
-                    providerId: input.selectedProviderId ?? 'openai',
-                }),
-                utils.provider.getDefaults.invalidate({ profileId: input.profileId }),
-            ]);
+            patchProviderCache({
+                utils,
+                profileId: input.profileId,
+                providerId: selectedProviderId,
+                endpointProfile,
+                defaults,
+                models,
+                ...(provider ? { provider } : {}),
+            });
         },
     });
 
@@ -97,51 +146,43 @@ export function useProviderSettingsMutations(input: UseProviderSettingsMutations
             }
 
             input.setStatusMessage(`Catalog synced (${String(result.modelCount)} models).`);
-            void Promise.all([
-                utils.provider.listModels.invalidate({
-                    profileId: input.profileId,
-                    providerId: input.selectedProviderId ?? 'openai',
-                }),
-                utils.provider.getDefaults.invalidate({ profileId: input.profileId }),
-            ]);
+            patchProviderCache({
+                utils,
+                profileId: input.profileId,
+                providerId: selectedProviderId,
+                defaults: result.defaults,
+                models: result.models,
+                ...(result.provider ? { provider: result.provider } : {}),
+            });
         },
     });
 
     const setModelRoutingPreferenceMutation = trpc.provider.setModelRoutingPreference.useMutation({
-        onSuccess: ({ preference }) => {
-            void utils.provider.getModelRoutingPreference.setData(
-                {
-                    profileId: input.profileId,
-                    providerId: 'kilo',
-                    modelId: preference.modelId,
-                },
-                {
-                    preference,
-                }
-            );
-            void utils.provider.listModelProviders.invalidate({ profileId: input.profileId });
+        onSuccess: ({ preference, providers }) => {
+            patchProviderCache({
+                utils,
+                profileId: input.profileId,
+                providerId: 'kilo',
+                routingPreference: preference,
+                routingProviders: providers,
+                routingModelId: preference.modelId,
+            });
         },
     });
 
     const setOrganizationMutation = trpc.provider.setOrganization.useMutation({
-        onSuccess: () => {
+        onSuccess: (result) => {
             input.setStatusMessage('Kilo organization updated.');
-            void Promise.all([
-                utils.provider.getAccountContext.invalidate({
-                    profileId: input.profileId,
-                    providerId: 'kilo',
-                }),
-                utils.provider.getAuthState.invalidate({
-                    profileId: input.profileId,
-                    providerId: 'kilo',
-                }),
-                utils.provider.listProviders.invalidate({ profileId: input.profileId }),
-                utils.provider.getDefaults.invalidate({ profileId: input.profileId }),
-                utils.provider.listModels.invalidate({
-                    profileId: input.profileId,
-                    providerId: input.selectedProviderId ?? 'kilo',
-                }),
-            ]);
+            patchProviderCache({
+                utils,
+                profileId: input.profileId,
+                providerId: 'kilo',
+                accountContext: result,
+                authState: result.authState,
+                defaults: result.defaults,
+                models: result.models,
+                ...(result.provider ? { provider: result.provider } : {}),
+            });
         },
     });
 
@@ -155,13 +196,13 @@ export function useProviderSettingsMutations(input: UseProviderSettingsMutations
                 ...(result.verificationUri ? { verificationUri: result.verificationUri } : {}),
                 pollAfterSeconds: result.pollAfterSeconds ?? 5,
             });
-            void Promise.all([
-                utils.provider.getAuthState.invalidate({
-                    profileId: input.profileId,
-                    providerId: variables.providerId,
-                }),
-                utils.provider.listProviders.invalidate({ profileId: input.profileId }),
-            ]);
+            setAuthStateCache(variables.providerId, {
+                profileId: input.profileId,
+                providerId: variables.providerId,
+                authMethod: variables.method,
+                authState: 'pending',
+                updatedAt: new Date().toISOString(),
+            });
             if (variables.providerId === 'openai') {
                 void utils.provider.getOpenAISubscriptionRateLimits.invalidate({ profileId: input.profileId });
             }
@@ -170,6 +211,8 @@ export function useProviderSettingsMutations(input: UseProviderSettingsMutations
 
     const pollAuthMutation = trpc.provider.pollAuth.useMutation({
         onSuccess: (result, variables) => {
+            setAuthStateCache(variables.providerId, result.state);
+
             if (result.flow.status === 'pending') {
                 input.setStatusMessage('Waiting for authorization confirmation...');
                 return;
@@ -177,17 +220,6 @@ export function useProviderSettingsMutations(input: UseProviderSettingsMutations
 
             input.setStatusMessage(`Auth flow ${result.flow.status}. State: ${result.state.authState}.`);
             input.setActiveAuthFlow(undefined);
-            void utils.provider.getAuthState.setData(
-                {
-                    profileId: input.profileId,
-                    providerId: variables.providerId,
-                },
-                {
-                    found: true,
-                    state: result.state,
-                }
-            );
-            void utils.provider.listProviders.invalidate({ profileId: input.profileId });
             if (variables.providerId === 'kilo') {
                 void utils.provider.getAccountContext.invalidate({
                     profileId: input.profileId,
@@ -201,17 +233,11 @@ export function useProviderSettingsMutations(input: UseProviderSettingsMutations
     });
 
     const cancelAuthMutation = trpc.provider.cancelAuth.useMutation({
-        onSuccess: () => {
+        onSuccess: (result, variables) => {
             input.setStatusMessage('Auth flow cancelled.');
             input.setActiveAuthFlow(undefined);
-            void Promise.all([
-                utils.provider.getAuthState.invalidate({
-                    profileId: input.profileId,
-                    providerId: input.selectedProviderId ?? 'openai',
-                }),
-                utils.provider.listProviders.invalidate({ profileId: input.profileId }),
-            ]);
-            if (input.selectedProviderId === 'openai') {
+            setAuthStateCache(variables.providerId, result.state);
+            if (variables.providerId === 'openai') {
                 void utils.provider.getOpenAISubscriptionRateLimits.invalidate({ profileId: input.profileId });
             }
         },

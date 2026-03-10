@@ -3,6 +3,7 @@ import { parseEntityId } from '@/app/backend/persistence/stores/shared/rowParser
 import { nowIso } from '@/app/backend/persistence/stores/shared/utils';
 import type { MessageMediaRecord } from '@/app/backend/persistence/types';
 import type { SessionMessageMediaPayload } from '@/app/backend/runtime/contracts';
+import { readImageMimeType } from '@/app/shared/imageMimeType';
 
 function normalizeMediaBytes(bytes: ArrayBuffer | Uint8Array): Uint8Array {
     if (bytes instanceof Uint8Array) {
@@ -112,8 +113,13 @@ export class MessageMediaStore {
             return null;
         }
 
+        const mimeType = readImageMimeType(row.mime_type);
+        if (!mimeType) {
+            throw new Error(`Unsupported media mime type "${row.mime_type}" in message_media.`);
+        }
+
         return {
-            mimeType: row.mime_type as SessionMessageMediaPayload['mimeType'],
+            mimeType,
             bytes: normalizeMediaBytes(row.bytes_blob),
             byteSize: row.byte_size,
             width: row.width,
@@ -144,8 +150,13 @@ export class MessageMediaStore {
             return null;
         }
 
+        const mimeType = readImageMimeType(row.mime_type);
+        if (!mimeType) {
+            throw new Error(`Unsupported media mime type "${row.mime_type}" in message_media.`);
+        }
+
         return {
-            mimeType: row.mime_type as SessionMessageMediaPayload['mimeType'],
+            mimeType,
             bytes: normalizeMediaBytes(row.bytes_blob),
             byteSize: row.byte_size,
             width: row.width,

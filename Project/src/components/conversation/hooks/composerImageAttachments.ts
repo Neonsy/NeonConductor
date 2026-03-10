@@ -1,5 +1,6 @@
 import type { ComposerImageAttachmentInput } from '@/app/backend/runtime/contracts';
 import { compressComposerImageInWorker } from '@/web/components/conversation/hooks/composerImageCompressionClient';
+import { readImageMimeType } from '@/app/shared/imageMimeType';
 
 const MAX_IMAGE_EDGE_PX = 2048;
 const MAX_COMPRESSED_IMAGE_BYTES = 1_500_000;
@@ -240,7 +241,10 @@ async function finalizePreparedAttachment(
     const buffer = await blob.arrayBuffer();
     const bytesBase64 = bufferToBase64(buffer);
     const sha256 = await sha256Hex(buffer);
-    const mimeType = blob.type as ComposerImageAttachmentInput['mimeType'];
+    const mimeType = readImageMimeType(blob.type);
+    if (!mimeType) {
+        throw new Error('Image compression produced an unsupported image type.');
+    }
 
     return {
         attachment: {

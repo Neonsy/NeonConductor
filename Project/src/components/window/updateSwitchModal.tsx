@@ -1,20 +1,26 @@
-import { Button } from '@/web/components/ui/button';
-import { trpc } from '@/web/trpc/client';
+import { useId, useRef } from 'react';
 
-const ACTIVE_PHASES = new Set(['checking', 'downloading', 'downloaded']);
+import { Button } from '@/web/components/ui/button';
+import { DialogSurface } from '@/web/components/ui/dialogSurface';
+import {
+    getUpdatesStatusRefetchInterval,
+    isActiveUpdatePhase,
+    UPDATES_STATUS_QUERY_OPTIONS,
+} from '@/web/components/window/updatesStatusQueryOptions';
+import { trpc } from '@/web/trpc/client';
 
 export default function UpdateSwitchModal() {
     const { data: status } = trpc.updates.getSwitchStatus.useQuery(undefined, {
-        refetchInterval: (query) => {
-            const phase = query.state.data?.phase;
-            return phase && ACTIVE_PHASES.has(phase) ? 300 : false;
-        },
-        refetchIntervalInBackground: true,
+        ...UPDATES_STATUS_QUERY_OPTIONS,
+        refetchInterval: (query) => getUpdatesStatusRefetchInterval(query.state.data),
     });
     const restartMutation = trpc.updates.restartToApplyUpdate.useMutation();
     const dismissMutation = trpc.updates.dismissStatus.useMutation();
+    const titleId = useId();
+    const descriptionId = useId();
+    const primaryActionRef = useRef<HTMLButtonElement>(null);
 
-    if (!status || !ACTIVE_PHASES.has(status.phase)) {
+    if (!status || !isActiveUpdatePhase(status.phase)) {
         return null;
     }
 
@@ -23,11 +29,26 @@ export default function UpdateSwitchModal() {
         status.phase === 'downloading' ? Math.max(0, Math.min(100, Math.round(status.percent ?? 0))) : null;
 
     return (
-        <div className='bg-background/70 fixed inset-0 z-50 flex items-center justify-center px-4 backdrop-blur-sm'>
+        <DialogSurface
+            open
+            titleId={titleId}
+            descriptionId={descriptionId}
+            initialFocusRef={primaryActionRef}
+            onClose={() => {
+                if (dismissMutation.isPending || restartMutation.isPending) {
+                    return;
+                }
+
+                if (isDownloaded) {
+                    void dismissMutation.mutateAsync();
+                }
+            }}>
             <section className='border-border bg-card text-card-foreground w-full max-w-md rounded-xl border p-5 shadow-xl'>
                 <p className='text-primary text-xs font-semibold tracking-[0.16em] uppercase'>Updater</p>
-                <h2 className='mt-3 text-base font-semibold'>{status.message || 'Preparing update...'}</h2>
-                <p className='text-muted-foreground mt-2 text-sm'>
+                <h2 id={titleId} className='mt-3 text-base font-semibold'>
+                    {status.message || 'Preparing update...'}
+                </h2>
+                <p id={descriptionId} className='text-muted-foreground mt-2 text-sm'>
                     {isDownloaded
                         ? 'The update is downloaded and ready. Restart now to apply it, or dismiss this prompt and install it on quit.'
                         : 'Please wait while NeonConductor checks and downloads the selected release channel.'}
@@ -56,6 +77,7 @@ export default function UpdateSwitchModal() {
                             Later
                         </Button>
                         <Button
+                            ref={primaryActionRef}
                             type='button'
                             disabled={dismissMutation.isPending || restartMutation.isPending}
                             onClick={() => {
@@ -66,6 +88,6 @@ export default function UpdateSwitchModal() {
                     </div>
                 ) : null}
             </section>
-        </div>
+        </DialogSurface>
     );
 }

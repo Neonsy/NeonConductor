@@ -6,6 +6,7 @@ import { getProviderAdapter } from '@/app/backend/providers/adapters';
 import type { ComposerImageAttachmentInput } from '@/app/backend/runtime/contracts';
 import {
     createEntityId,
+    type EntityId,
     type CompactSessionResult,
     type ResolvedContextPolicy,
     type ResolvedContextState,
@@ -14,6 +15,8 @@ import {
 import { errOp, okOp, type OperationalResult } from '@/app/backend/runtime/services/common/operationalError';
 import { contextPolicyService } from '@/app/backend/runtime/services/context/policyService';
 import { tokenCountingService } from '@/app/backend/runtime/services/context/tokenCountingService';
+import { buildSessionSystemPrelude } from '@/app/backend/runtime/services/runExecution/contextPrelude';
+import { resolveModeExecution } from '@/app/backend/runtime/services/runExecution/mode';
 import {
     buildReplayMessages,
     toPartsMap,
@@ -337,6 +340,45 @@ class SessionContextService {
             ...(estimated.estimate ? { estimate: estimated.estimate } : {}),
             ...(compaction ? { compaction } : {}),
         });
+    }
+
+    async getResolvedStateForExecutionTarget(input: {
+        profileId: string;
+        sessionId: EntityId<'sess'>;
+        providerId: ResolvedContextPolicy['providerId'];
+        modelId: string;
+        topLevelTab: 'chat' | 'agent' | 'orchestrator';
+        modeKey: string;
+        workspaceFingerprint?: string;
+    }): Promise<OperationalResult<ResolvedContextState>> {
+        const resolvedModeResult = await resolveModeExecution({
+            profileId: input.profileId,
+            topLevelTab: input.topLevelTab,
+            modeKey: input.modeKey,
+            ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
+        });
+        if (resolvedModeResult.isErr()) {
+            return errOp(resolvedModeResult.error.code, resolvedModeResult.error.message);
+        }
+
+        const systemPreludeResult = await buildSessionSystemPrelude({
+            profileId: input.profileId,
+            sessionId: input.sessionId,
+            topLevelTab: input.topLevelTab,
+            resolvedMode: resolvedModeResult.value,
+            ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
+        });
+        if (systemPreludeResult.isErr()) {
+            return errOp(systemPreludeResult.error.code, systemPreludeResult.error.message);
+        }
+
+        return okOp(await this.getResolvedState({
+            profileId: input.profileId,
+            sessionId: input.sessionId,
+            providerId: input.providerId,
+            modelId: input.modelId,
+            systemMessages: systemPreludeResult.value,
+        }));
     }
 
     async compactSession(input: {

@@ -1,6 +1,5 @@
 import { BOOT_CRITICAL_QUERY_OPTIONS } from '@/web/components/runtime/startupQueryOptions';
 import { resolveWorkspaceActiveModeKey, MISSING_PROFILE_ID } from '@/web/components/runtime/workspaceSurfaceModel';
-import { refetchWorkspaceModeQueries } from '@/web/components/runtime/workspaceSurfaceRefetch';
 import { trpc } from '@/web/trpc/client';
 
 import type { TopLevelTab } from '@/app/backend/runtime/contracts';
@@ -10,34 +9,39 @@ export function useWorkspaceModeState(input: {
     topLevelTab: TopLevelTab;
     workspaceFingerprint?: string;
 }) {
+    const utils = trpc.useUtils();
+    const modeQueryInput = {
+        profileId: input.resolvedProfileId ?? MISSING_PROFILE_ID,
+        topLevelTab: input.topLevelTab,
+        ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
+    };
     const modeListQuery = trpc.mode.list.useQuery(
-        {
-            profileId: input.resolvedProfileId ?? MISSING_PROFILE_ID,
-            topLevelTab: input.topLevelTab,
-            ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
-        },
+        modeQueryInput,
         {
             enabled: Boolean(input.resolvedProfileId),
             ...BOOT_CRITICAL_QUERY_OPTIONS,
         }
     );
     const modeActiveQuery = trpc.mode.getActive.useQuery(
-        {
-            profileId: input.resolvedProfileId ?? MISSING_PROFILE_ID,
-            topLevelTab: input.topLevelTab,
-            ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
-        },
+        modeQueryInput,
         {
             enabled: Boolean(input.resolvedProfileId),
             ...BOOT_CRITICAL_QUERY_OPTIONS,
         }
     );
     const setActiveModeMutation = trpc.mode.setActive.useMutation({
-        onSuccess: () => {
-            void refetchWorkspaceModeQueries({
-                modeListQuery,
-                modeActiveQuery,
-            });
+        onSuccess: (result) => {
+            if (!result.updated || !input.resolvedProfileId) {
+                return;
+            }
+
+            utils.mode.getActive.setData(modeQueryInput, (current) => ({
+                activeMode: result.mode,
+                modes: current?.modes ?? modeListQuery.data?.modes ?? [result.mode],
+            }));
+            utils.mode.list.setData(modeQueryInput, (current) => ({
+                modes: current?.modes ?? modeActiveQuery.data?.modes ?? [result.mode],
+            }));
         },
     });
 

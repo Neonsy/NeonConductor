@@ -18,6 +18,7 @@ export function createProviderSettingsActions(input: {
         | undefined;
     setSelectedProviderId: (value: RuntimeProviderId) => void;
     setStatusMessage: (value: string | undefined) => void;
+    onPreviewProvider: (providerId: RuntimeProviderId) => void;
     mutations: {
         setDefaultMutation: { mutateAsync: (input: { profileId: string; providerId: RuntimeProviderId; modelId: string }) => Promise<unknown> };
         syncCatalogMutation: { mutateAsync: (input: { profileId: string; providerId: RuntimeProviderId; force: boolean }) => Promise<unknown> };
@@ -74,6 +75,7 @@ export function createProviderSettingsActions(input: {
 
     return {
         selectProvider: (providerId: RuntimeProviderId) => {
+            input.onPreviewProvider(providerId);
             selectProviderWithReset({
                 providerId,
                 setSelectedProviderId: input.setSelectedProviderId,

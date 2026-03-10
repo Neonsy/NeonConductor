@@ -1,3 +1,7 @@
+import { useId, useRef } from 'react';
+
+import { DialogSurface } from '@/web/components/ui/dialogSurface';
+
 import type { ReactNode } from 'react';
 
 interface ConfirmDialogProps {
@@ -27,27 +31,45 @@ export function ConfirmDialog({
     onConfirm,
     onCancel,
 }: ConfirmDialogProps): ReactNode {
+    const titleId = useId();
+    const descriptionId = useId();
+    const cancelButtonRef = useRef<HTMLButtonElement>(null);
+
     if (!open) {
         return null;
     }
 
     return (
-        <div className='bg-background/70 fixed inset-0 z-50 flex items-center justify-center px-4 backdrop-blur-sm'>
-            <section className='border-border bg-card text-card-foreground w-full max-w-sm rounded-xl border p-5 shadow-xl'>
-                <h2 className='text-base font-semibold'>{title}</h2>
-                <p className='text-muted-foreground mt-2 text-sm'>{message}</p>
+        <DialogSurface
+            open={open}
+            titleId={titleId}
+            descriptionId={descriptionId}
+            initialFocusRef={cancelButtonRef}
+            onClose={() => {
+                if (!busy) {
+                    onCancel();
+                }
+            }}>
+            <div className='border-border bg-card text-card-foreground w-full max-w-sm rounded-xl border p-5 shadow-xl'>
+                <h2 id={titleId} className='text-base font-semibold'>
+                    {title}
+                </h2>
+                <p id={descriptionId} className='text-muted-foreground mt-2 text-sm'>
+                    {message}
+                </p>
                 {children ? <div className='mt-4'>{children}</div> : null}
                 <div className='mt-5 flex justify-end gap-2'>
                     <button
+                        ref={cancelButtonRef}
                         type='button'
-                        className='border-border bg-background hover:bg-accent rounded-md border px-3 py-1.5 text-sm'
+                        className='border-border bg-background hover:bg-accent focus-visible:ring-ring rounded-md border px-3 py-1.5 text-sm focus-visible:ring-2 focus-visible:outline-none'
                         onClick={onCancel}
                         disabled={busy}>
                         {cancelLabel}
                     </button>
                     <button
                         type='button'
-                        className={`rounded-md px-3 py-1.5 text-sm text-white ${
+                        className={`focus-visible:ring-ring rounded-md px-3 py-1.5 text-sm text-white focus-visible:ring-2 focus-visible:outline-none ${
                             destructive ? 'bg-destructive hover:bg-destructive/85' : 'bg-primary hover:bg-primary/85'
                         }`}
                         onClick={onConfirm}
@@ -55,7 +77,7 @@ export function ConfirmDialog({
                         {busy ? 'Working...' : confirmLabel}
                     </button>
                 </div>
-            </section>
-        </div>
+            </div>
+        </DialogSurface>
     );
 }

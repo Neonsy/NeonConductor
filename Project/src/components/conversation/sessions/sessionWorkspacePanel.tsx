@@ -4,7 +4,9 @@ import { MessageTimelinePanel } from '@/web/components/conversation/panels/messa
 import { PendingPermissionsPanel } from '@/web/components/conversation/panels/pendingPermissionsPanel';
 import { RunChangeSummaryPanel } from '@/web/components/conversation/panels/runChangeSummaryPanel';
 import { WorkspaceStatusPanel } from '@/web/components/conversation/panels/workspaceStatusPanel';
+import { isEntityId } from '@/web/components/conversation/shell/workspace/helpers';
 import { Button } from '@/web/components/ui/button';
+import { trpc } from '@/web/trpc/client';
 
 import type {
     MessagePartRecord,
@@ -193,6 +195,8 @@ export function SessionWorkspacePanel({
     onEditMessage,
     onBranchFromMessage,
 }: SessionWorkspacePanelProps) {
+    const utils = trpc.useUtils();
+
     return (
         <div className='grid min-h-0 flex-1 grid-cols-[280px_1fr]'>
             <aside className='border-border min-h-0 overflow-y-auto border-r p-3'>
@@ -216,6 +220,26 @@ export function SessionWorkspacePanel({
                                     ? 'border-primary bg-primary/10'
                                     : 'border-border bg-card hover:bg-accent'
                             }`}
+                            onMouseEnter={() => {
+                                void utils.session.status.prefetch({
+                                    profileId,
+                                    sessionId: session.id,
+                                });
+                                void utils.session.listRuns.prefetch({
+                                    profileId,
+                                    sessionId: session.id,
+                                });
+                            }}
+                            onFocus={() => {
+                                void utils.session.status.prefetch({
+                                    profileId,
+                                    sessionId: session.id,
+                                });
+                                void utils.session.listRuns.prefetch({
+                                    profileId,
+                                    sessionId: session.id,
+                                });
+                            }}
                             onClick={() => {
                                 onSelectSession(session.id);
                             }}>
@@ -248,6 +272,44 @@ export function SessionWorkspacePanel({
                                     ? 'border-primary bg-primary/10 text-primary'
                                     : 'border-border bg-card text-foreground'
                             }`}
+                            onMouseEnter={() => {
+                                if (!isEntityId(selectedSessionId, 'sess')) {
+                                    return;
+                                }
+
+                                void utils.session.listMessages.prefetch({
+                                    profileId,
+                                    sessionId: selectedSessionId,
+                                    runId: run.id,
+                                });
+                                void utils.diff.listByRun.prefetch({
+                                    profileId,
+                                    runId: run.id,
+                                });
+                                void utils.checkpoint.list.prefetch({
+                                    profileId,
+                                    sessionId: selectedSessionId,
+                                });
+                            }}
+                            onFocus={() => {
+                                if (!isEntityId(selectedSessionId, 'sess')) {
+                                    return;
+                                }
+
+                                void utils.session.listMessages.prefetch({
+                                    profileId,
+                                    sessionId: selectedSessionId,
+                                    runId: run.id,
+                                });
+                                void utils.diff.listByRun.prefetch({
+                                    profileId,
+                                    runId: run.id,
+                                });
+                                void utils.checkpoint.list.prefetch({
+                                    profileId,
+                                    sessionId: selectedSessionId,
+                                });
+                            }}
                             onClick={() => {
                                 onSelectRun(run.id);
                             }}>

@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import { getImagePreviewStatusLabel, getPendingImagePreviewState } from '@/web/components/conversation/messages/imagePreviewState';
 import { ImageLightboxModal } from '@/web/components/conversation/panels/imageLightboxModal';
 import { Button } from '@/web/components/ui/button';
+import { readRelatedTargetNode } from '@/web/lib/dom/readRelatedTargetNode';
 
 import type { ResolvedContextState } from '@/app/backend/runtime/contracts';
 
@@ -171,7 +172,7 @@ export function ComposerActionPanel({
                     setIsDragActive(true);
                 }}
                 onDragLeave={(event) => {
-                    if (event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                    if (event.currentTarget.contains(readRelatedTargetNode(event.relatedTarget))) {
                         return;
                     }
 
@@ -469,7 +470,7 @@ export function ComposerActionPanel({
                             }
                         }}
                         rows={4}
-                        className='bg-background/70 min-h-[112px] w-full resize-y px-3 py-3 text-sm outline-none'
+                        className='border-border bg-background/70 focus-visible:ring-ring focus-visible:border-ring min-h-[112px] w-full resize-y border-t px-3 py-3 text-sm focus-visible:ring-2 focus-visible:outline-none'
                         autoComplete='off'
                         spellCheck
                         placeholder='Prompt for the selected session…'

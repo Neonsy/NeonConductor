@@ -1,7 +1,9 @@
+import type { RunRecord, SessionSummaryRecord, ThreadListRecord } from '@/app/backend/persistence/types';
 import type {
     ComposerImageAttachmentInput,
     EntityId,
     ModeDefinition,
+    ResolvedContextState,
     ProviderAuthMethod,
     RuntimeProviderId,
     RuntimeRunOptions,
@@ -112,4 +114,8 @@ export type StartRunResult =
           accepted: true;
           runId: EntityId<'run'>;
           runStatus: RunStatus;
+          run: RunRecord;
+          session: SessionSummaryRecord;
+          thread?: ThreadListRecord;
+          resolvedContextState: ResolvedContextState;
       };

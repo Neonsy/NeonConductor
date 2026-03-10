@@ -50,6 +50,8 @@ export interface WorkspaceThreadDeletePreview {
 export interface DeleteWorkspaceThreadsResult extends WorkspaceThreadDeletePreview {
     deletedThreadIds: EntityId<'thr'>[];
     deletedTagIds: EntityId<'tag'>[];
+    deletedConversationIds: string[];
+    sessionIds: EntityId<'sess'>[];
 }
 
 function createThreadId(): string {
@@ -217,6 +219,75 @@ async function resolveWorkspaceThreadDeletion(
 }
 
 export class ThreadStore {
+    async getListRecordById(profileId: string, threadId: string): Promise<ThreadListRecord | null> {
+        const { db } = getPersistence();
+        const row = await db
+            .selectFrom('threads')
+            .innerJoin('conversations', 'conversations.id', 'threads.conversation_id')
+            .leftJoin('sessions', (join) =>
+                join
+                    .onRef('sessions.thread_id', '=', 'threads.id')
+                    .onRef('sessions.profile_id', '=', 'threads.profile_id')
+            )
+            .select((eb) => [
+                'threads.id as id',
+                'threads.profile_id as profile_id',
+                'threads.conversation_id as conversation_id',
+                'threads.title as title',
+                'threads.top_level_tab as top_level_tab',
+                'threads.parent_thread_id as parent_thread_id',
+                'threads.root_thread_id as root_thread_id',
+                'threads.is_favorite as is_favorite',
+                'threads.execution_environment_mode as execution_environment_mode',
+                'threads.execution_branch as execution_branch',
+                'threads.base_branch as base_branch',
+                'threads.worktree_id as worktree_id',
+                'threads.last_assistant_at as last_assistant_at',
+                'threads.created_at as created_at',
+                'threads.updated_at as updated_at',
+                'conversations.scope as scope',
+                'conversations.workspace_fingerprint as workspace_fingerprint',
+                eb.fn.count<number>('sessions.id').as('session_count'),
+                eb.fn.max<string>('sessions.updated_at').as('latest_session_updated_at'),
+            ])
+            .where('threads.profile_id', '=', profileId)
+            .where('threads.id', '=', threadId)
+            .groupBy([
+                'threads.id',
+                'threads.profile_id',
+                'threads.conversation_id',
+                'threads.title',
+                'threads.top_level_tab',
+                'threads.parent_thread_id',
+                'threads.root_thread_id',
+                'threads.is_favorite',
+                'threads.execution_environment_mode',
+                'threads.execution_branch',
+                'threads.base_branch',
+                'threads.worktree_id',
+                'threads.last_assistant_at',
+                'threads.created_at',
+                'threads.updated_at',
+                'conversations.scope',
+                'conversations.workspace_fingerprint',
+            ])
+            .executeTakeFirst();
+
+        return row ? mapThreadListRecord(row) : null;
+    }
+
+    async listIdsByWorktree(profileId: string, worktreeId: EntityId<'wt'>): Promise<EntityId<'thr'>[]> {
+        const { db } = getPersistence();
+        const rows = await db
+            .selectFrom('threads')
+            .select('id')
+            .where('profile_id', '=', profileId)
+            .where('worktree_id', '=', worktreeId)
+            .execute();
+
+        return rows.map((row) => parseEntityId(row.id, 'threads.id', 'thr'));
+    }
+
     async create(input: {
         profileId: string;
         conversationId: string;
@@ -618,6 +689,8 @@ export class ThreadStore {
                 deletableThreadCount: 0,
                 deletedThreadIds: [],
                 deletedTagIds: [],
+                deletedConversationIds: [],
+                sessionIds: [],
             };
         }
 
@@ -660,6 +733,8 @@ export class ThreadStore {
             deletableThreadCount: resolved.deletableThreadIds.length,
             deletedThreadIds: resolved.deletableThreadIds,
             deletedTagIds: resolved.deletedTagIds,
+            deletedConversationIds: resolved.deletedConversationIds,
+            sessionIds: resolved.sessionIds,
         };
     }
 

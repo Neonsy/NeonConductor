@@ -7,10 +7,8 @@ import {
     setContextProfileSettingsInputSchema,
 } from '@/app/backend/runtime/contracts';
 import { sessionContextService } from '@/app/backend/runtime/services/context/sessionContextService';
-import { buildSessionSystemPrelude } from '@/app/backend/runtime/services/runExecution/contextPrelude';
-import { resolveModeExecution } from '@/app/backend/runtime/services/runExecution/mode';
 import { publicProcedure, router } from '@/app/backend/trpc/init';
-import { toTrpcError, unwrapResultOrThrow } from '@/app/backend/trpc/trpcErrorMap';
+import { toTrpcError } from '@/app/backend/trpc/trpcErrorMap';
 
 export const contextRouter = router({
     getGlobalSettings: publicProcedure.query(async () => {
@@ -19,8 +17,18 @@ export const contextRouter = router({
         };
     }),
     setGlobalSettings: publicProcedure.input(setContextGlobalSettingsInputSchema).mutation(async ({ input }) => {
+        const settings = await appContextSettingsStore.set(input);
+        const resolvedState = input.preview
+            ? await sessionContextService.getResolvedState({
+                  profileId: input.preview.profileId,
+                  providerId: input.preview.providerId,
+                  modelId: input.preview.modelId,
+              })
+            : undefined;
+
         return {
-            settings: await appContextSettingsStore.set(input),
+            settings,
+            ...(resolvedState ? { resolvedState } : {}),
         };
     }),
     getProfileSettings: publicProcedure.input(profileInputSchema).query(async ({ input }) => {
@@ -29,8 +37,18 @@ export const contextRouter = router({
         };
     }),
     setProfileSettings: publicProcedure.input(setContextProfileSettingsInputSchema).mutation(async ({ input }) => {
+        const settings = await profileContextSettingsStore.set(input);
+        const resolvedState = input.preview
+            ? await sessionContextService.getResolvedState({
+                  profileId: input.preview.profileId,
+                  providerId: input.preview.providerId,
+                  modelId: input.preview.modelId,
+              })
+            : undefined;
+
         return {
-            settings: await profileContextSettingsStore.set(input),
+            settings,
+            ...(resolvedState ? { resolvedState } : {}),
         };
     }),
     getResolvedState: publicProcedure.input(resolvedContextStateInputSchema).query(async ({ input }) => {
@@ -42,30 +60,21 @@ export const contextRouter = router({
             });
         }
 
-        const resolvedModeResult = await resolveModeExecution({
-            profileId: input.profileId,
-            topLevelTab: input.topLevelTab,
-            modeKey: input.modeKey,
-            ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
-        });
-        const resolvedMode = unwrapResultOrThrow(resolvedModeResult, toTrpcError);
-
-        const systemPreludeResult = await buildSessionSystemPrelude({
-            profileId: input.profileId,
-            sessionId: input.sessionId,
-            topLevelTab: input.topLevelTab,
-            ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
-            resolvedMode,
-        });
-        const systemPrelude = unwrapResultOrThrow(systemPreludeResult, toTrpcError);
-
-        return sessionContextService.getResolvedState({
+        const resolvedState = await sessionContextService.getResolvedStateForExecutionTarget({
             profileId: input.profileId,
             sessionId: input.sessionId,
             providerId: input.providerId,
             modelId: input.modelId,
-            systemMessages: systemPrelude,
+            topLevelTab: input.topLevelTab,
+            modeKey: input.modeKey,
+            ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
         });
+        return resolvedState.match(
+            (value) => value,
+            (error) => {
+                throw toTrpcError(error);
+            }
+        );
     }),
     compactSession: publicProcedure.input(compactSessionInputSchema).mutation(async ({ input }) => {
         const result = await sessionContextService.compactSession({
@@ -75,6 +84,31 @@ export const contextRouter = router({
             modelId: input.modelId,
             source: 'manual',
         });
-        return unwrapResultOrThrow(result, toTrpcError);
+        const compacted = result.match(
+            (value) => value,
+            (error) => {
+                throw toTrpcError(error);
+            }
+        );
+        const resolvedStateResult = await sessionContextService.getResolvedStateForExecutionTarget({
+            profileId: input.profileId,
+            sessionId: input.sessionId,
+            providerId: input.providerId,
+            modelId: input.modelId,
+            topLevelTab: input.topLevelTab,
+            modeKey: input.modeKey,
+            ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
+        });
+        const resolvedState = resolvedStateResult.match(
+            (value) => value,
+            (error) => {
+                throw toTrpcError(error);
+            }
+        );
+
+        return {
+            ...compacted,
+            resolvedState,
+        };
     }),
 });

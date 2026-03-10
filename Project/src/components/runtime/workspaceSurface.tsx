@@ -7,10 +7,13 @@ import { useRendererBootReadySignal } from '@/web/components/runtime/useRenderer
 import { useWorkspaceSurfaceController } from '@/web/components/runtime/workspaceSurfaceController';
 import { WorkspaceSurfaceHeader } from '@/web/components/runtime/workspaceSurfaceHeader';
 import { SettingsSheet } from '@/web/components/settings/settingsSheet';
-import { useState } from 'react';
+import { prefetchSettingsData } from '@/web/components/settings/settingsPrefetch';
+import { trpc } from '@/web/trpc/client';
+import { startTransition, useState } from 'react';
 
 export function WorkspaceSurface() {
     const controller = useWorkspaceSurfaceController();
+    const utils = trpc.useUtils();
     const [conversationShellBootReadiness, setConversationShellBootReadiness] = useState(
         INITIAL_CONVERSATION_SHELL_BOOT_CHROME_READINESS
     );
@@ -33,12 +36,47 @@ export function WorkspaceSurface() {
                 modes={controller.modes}
                 activeModeKey={controller.activeModeKey}
                 isSwitchingProfile={controller.profileSetActiveMutation.isPending}
-                onTopLevelTabChange={controller.setTopLevelTab}
+                onTopLevelTabChange={(nextTab) => {
+                    startTransition(() => {
+                        controller.setTopLevelTab(nextTab);
+                    });
+                }}
+                onPreviewTopLevelTab={(nextTab) => {
+                    if (!controller.resolvedProfileId || nextTab !== 'agent') {
+                        return;
+                    }
+
+                    const modeInput = {
+                        profileId: controller.resolvedProfileId,
+                        topLevelTab: 'agent' as const,
+                        ...(controller.currentWorkspaceFingerprint
+                            ? { workspaceFingerprint: controller.currentWorkspaceFingerprint }
+                            : {}),
+                    };
+                    void Promise.all([
+                        utils.mode.list.prefetch(modeInput),
+                        utils.mode.getActive.prefetch(modeInput),
+                        utils.registry.listResolved.prefetch({
+                            profileId: controller.resolvedProfileId,
+                            ...(controller.currentWorkspaceFingerprint
+                                ? { workspaceFingerprint: controller.currentWorkspaceFingerprint }
+                                : {}),
+                        }),
+                    ]);
+                }}
                 onProfileChange={(profileId) => {
                     void controller.selectProfile(profileId);
                 }}
                 onOpenSettings={() => {
-                    controller.setShowSettings(true);
+                    if (controller.resolvedProfileId) {
+                        prefetchSettingsData({
+                            profileId: controller.resolvedProfileId,
+                            trpcUtils: utils,
+                        });
+                    }
+                    startTransition(() => {
+                        controller.setShowSettings(true);
+                    });
                 }}
                 onModeChange={(modeKey) => {
                     void controller.selectMode(modeKey);

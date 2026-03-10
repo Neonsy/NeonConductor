@@ -7,9 +7,15 @@ interface ProviderSidebarProps {
     providers: ProviderListItem[];
     selectedProviderId: RuntimeProviderId | undefined;
     onSelectProvider: (providerId: RuntimeProviderId) => void;
+    onPreviewProvider?: (providerId: RuntimeProviderId) => void;
 }
 
-export function ProviderSidebar({ providers, selectedProviderId, onSelectProvider }: ProviderSidebarProps) {
+export function ProviderSidebar({
+    providers,
+    selectedProviderId,
+    onSelectProvider,
+    onPreviewProvider,
+}: ProviderSidebarProps) {
     return (
         <SettingsSelectionRail
             title='Providers'
@@ -22,6 +28,14 @@ export function ProviderSidebar({ providers, selectedProviderId, onSelectProvide
                 }
 
                 onSelectProvider(provider.id);
+            }}
+            onItemIntent={(providerId) => {
+                const provider = providers.find((candidate) => candidate.id === providerId);
+                if (!provider) {
+                    return;
+                }
+
+                onPreviewProvider?.(provider.id);
             }}
             items={providers.map((provider) => ({
                 id: provider.id,

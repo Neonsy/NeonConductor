@@ -48,7 +48,13 @@ export const sessionRouter = router({
             })
         );
 
-        return { created: true as const, session: session.session };
+        const thread = await threadStore.getListRecordById(input.profileId, session.session.threadId);
+
+        return {
+            created: true as const,
+            session: session.session,
+            ...(thread ? { thread } : {}),
+        };
     }),
     list: publicProcedure.input(profileInputSchema).query(async ({ input }) => {
         return { sessions: await sessionStore.list(input.profileId) };

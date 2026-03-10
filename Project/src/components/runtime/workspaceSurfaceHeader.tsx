@@ -14,6 +14,7 @@ interface WorkspaceSurfaceHeaderProps {
     activeModeKey: string;
     isSwitchingProfile: boolean;
     onTopLevelTabChange: (topLevelTab: TopLevelTab) => void;
+    onPreviewTopLevelTab?: (topLevelTab: TopLevelTab) => void;
     onProfileChange: (profileId: string) => void;
     onOpenSettings: () => void;
     onModeChange: (modeKey: string) => void;
@@ -27,6 +28,7 @@ export function WorkspaceSurfaceHeader({
     activeModeKey,
     isSwitchingProfile,
     onTopLevelTabChange,
+    onPreviewTopLevelTab,
     onProfileChange,
     onOpenSettings,
     onModeChange,
@@ -43,6 +45,12 @@ export function WorkspaceSurfaceHeader({
                                 ? 'border-primary bg-primary/10 text-primary'
                                 : 'border-border bg-background hover:bg-accent'
                         }`}
+                        onMouseEnter={() => {
+                            onPreviewTopLevelTab?.(tab.id);
+                        }}
+                        onFocus={() => {
+                            onPreviewTopLevelTab?.(tab.id);
+                        }}
                         onClick={() => {
                             onTopLevelTabChange(tab.id);
                         }}>

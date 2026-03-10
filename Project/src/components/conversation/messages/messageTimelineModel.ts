@@ -1,5 +1,6 @@
 import { buildMessageCopyPayloads } from '@/web/components/conversation/messages/messageCopy';
 import { isEntityId } from '@/web/components/conversation/shell/workspace/helpers';
+import { readImageMimeType } from '@/app/shared/imageMimeType';
 
 import type { MessagePartRecord, MessageRecord } from '@/app/backend/persistence/types';
 import type { EntityId } from '@/app/backend/runtime/contracts';
@@ -96,11 +97,12 @@ function buildBodyEntries(message: MessageRecord, parts: MessagePartRecord[]): M
             const height = part.payload['height'];
             const imageEntryType = mapImageEntryType(message.role);
             const mediaId = typeof rawMediaId === 'string' ? rawMediaId : undefined;
+            const normalizedMimeType = readImageMimeType(mimeType);
 
             if (
                 imageEntryType &&
                 isEntityId(mediaId, 'media') &&
-                typeof mimeType === 'string' &&
+                normalizedMimeType &&
                 typeof width === 'number' &&
                 typeof height === 'number'
             ) {
@@ -108,7 +110,7 @@ function buildBodyEntries(message: MessageRecord, parts: MessagePartRecord[]): M
                     id: part.id,
                     type: imageEntryType,
                     mediaId,
-                    mimeType: mimeType as 'image/jpeg' | 'image/png' | 'image/webp',
+                    mimeType: normalizedMimeType,
                     width,
                     height,
                 });

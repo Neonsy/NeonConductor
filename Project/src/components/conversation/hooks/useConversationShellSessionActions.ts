@@ -6,6 +6,7 @@ import {
 } from '@/web/components/conversation/shell/sessionTargetState';
 import { isEntityId } from '@/web/components/conversation/shell/workspace/helpers';
 
+import type { SessionSummaryRecord, ThreadListRecord } from '@/app/backend/persistence/types';
 import type { SessionCreateInput, RuntimeProviderId } from '@/app/backend/runtime/contracts';
 import type { EntityId } from '@/app/backend/runtime/contracts';
 
@@ -17,16 +18,19 @@ interface UseConversationShellSessionActionsInput {
         | { created: false; reason: string }
         | {
               created: true;
-              session: {
-                  id: EntityId<'sess'>;
-              };
+              session: SessionSummaryRecord;
+              thread?: ThreadListRecord;
           }
     >;
     onClearError: () => void;
     onError: (message: string) => void;
     onSelectSessionId: (sessionId: string | undefined) => void;
     onSelectRunId: (runId: string | undefined) => void;
-    refetchSessionIndex: () => void;
+    onSessionCreated: (result: {
+        sessionId: EntityId<'sess'>;
+        session: SessionSummaryRecord;
+        thread?: ThreadListRecord;
+    }) => void;
 }
 
 export function useConversationShellSessionActions(input: UseConversationShellSessionActionsInput) {
@@ -79,7 +83,11 @@ export function useConversationShellSessionActions(input: UseConversationShellSe
                 input.onSelectSessionId(result.session.id);
                 input.onSelectRunId(undefined);
                 input.onClearError();
-                input.refetchSessionIndex();
+                input.onSessionCreated({
+                    sessionId: result.session.id,
+                    session: result.session,
+                    ...(result.thread ? { thread: result.thread } : {}),
+                });
             });
         },
     };

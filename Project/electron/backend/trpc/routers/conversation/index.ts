@@ -218,11 +218,12 @@ export const conversationRouter = router({
                     domain: 'thread',
                     entityId: updatedThread.id,
                     eventType: 'conversation.thread.favorite.updated',
-                    payload: {
-                        profileId: input.profileId,
-                        threadId: updatedThread.id,
-                        isFavorite: updatedThread.isFavorite,
-                    },
+                payload: {
+                    profileId: input.profileId,
+                    threadId: updatedThread.id,
+                    isFavorite: updatedThread.isFavorite,
+                    thread: updatedThread,
+                },
                     ...eventMetadata({
                         requestId: ctx.requestId,
                         correlationId: ctx.correlationId,
@@ -243,7 +244,20 @@ export const conversationRouter = router({
     }),
     upsertTag: publicProcedure.input(conversationUpsertTagInputSchema).mutation(async ({ input }) => {
         const result = await tagStore.upsert(input.profileId, input.label);
-        return { tag: unwrapResultOrThrow(result, toTrpcError) };
+        const tag = unwrapResultOrThrow(result, toTrpcError);
+        await runtimeEventLogService.append(
+            runtimeUpsertEvent({
+                entityType: 'tag',
+                domain: 'tag',
+                entityId: tag.id,
+                eventType: 'conversation.tag.upserted',
+                payload: {
+                    profileId: input.profileId,
+                    tag,
+                },
+            })
+        );
+        return { tag };
     }),
     setThreadTags: publicProcedure.input(conversationSetThreadTagsInputSchema).mutation(async ({ input, ctx }) => {
         const result = await tagStore.setThreadTags(input.profileId, input.threadId, input.tagIds);
@@ -303,6 +317,9 @@ export const conversationRouter = router({
                             workspaceFingerprint: input.workspaceFingerprint,
                             deletedThreadIds: result.deletedThreadIds,
                             tagIds: result.deletedTagIds,
+                            deletedTagIds: result.deletedTagIds,
+                            deletedConversationIds: result.deletedConversationIds,
+                            sessionIds: result.sessionIds,
                             includeFavorites: input.includeFavorites ?? false,
                             totalThreadCount: result.totalThreadCount,
                             favoriteThreadCount: result.favoriteThreadCount,

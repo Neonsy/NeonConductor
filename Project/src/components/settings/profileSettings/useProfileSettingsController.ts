@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { createProfileSettingsActions } from '@/web/components/settings/profileSettings/actions';
 import { resolveSelectedProfileId } from '@/web/components/settings/profileSettings/selection';
 import { invalidateRuntimeResetQueries } from '@/web/lib/runtime/invalidation/queryInvalidation';
+import { PROGRESSIVE_QUERY_OPTIONS } from '@/web/lib/query/progressiveQueryOptions';
 import { trpc } from '@/web/trpc/client';
 
 import type { ProfileRecord } from '@/app/backend/persistence/types';
@@ -22,7 +23,7 @@ export function useProfileSettingsController(input: {
     const [factoryResetConfirmationText, setFactoryResetConfirmationText] = useState('');
 
     const utils = trpc.useUtils();
-    const profilesQuery = trpc.profile.list.useQuery(undefined, { refetchOnWindowFocus: false });
+    const profilesQuery = trpc.profile.list.useQuery(undefined, PROGRESSIVE_QUERY_OPTIONS);
     const createMutation = trpc.profile.create.useMutation();
     const renameMutation = trpc.profile.rename.useMutation();
     const duplicateMutation = trpc.profile.duplicate.useMutation();
@@ -65,13 +66,31 @@ export function useProfileSettingsController(input: {
         });
     }
 
+    function setActiveProfileCache(profileId: string) {
+        const nextActiveProfile = profiles.find((profile) => profile.id === profileId);
+        if (!nextActiveProfile) {
+            return;
+        }
+
+        utils.profile.getActive.setData(undefined, {
+            activeProfileId: profileId,
+            profile: nextActiveProfile,
+        });
+        updateProfileList((profiles) =>
+            profiles.map((profile) => ({
+                ...profile,
+                isActive: profile.id === profileId,
+            }))
+        );
+    }
+
     const editPreferenceQuery = trpc.conversation.getEditPreference.useQuery(
         {
             profileId: selectedProfileIdForSettings,
         },
         {
             enabled: Boolean(selectedProfileIdForSettings),
-            refetchOnWindowFocus: false,
+            ...PROGRESSIVE_QUERY_OPTIONS,
         }
     );
     const setEditPreferenceMutation = trpc.conversation.setEditPreference.useMutation({
@@ -120,7 +139,7 @@ export function useProfileSettingsController(input: {
         },
         {
             enabled: Boolean(selectedProfileIdForSettings),
-            refetchOnWindowFocus: false,
+            ...PROGRESSIVE_QUERY_OPTIONS,
         }
     );
     const setThreadTitlePreferenceMutation = trpc.conversation.setThreadTitlePreference.useMutation({
@@ -170,7 +189,7 @@ export function useProfileSettingsController(input: {
         },
         {
             enabled: Boolean(selectedProfileIdForSettings),
-            refetchOnWindowFocus: false,
+            ...PROGRESSIVE_QUERY_OPTIONS,
         }
     );
     const setExecutionPresetMutation = trpc.profile.setExecutionPreset.useMutation({
@@ -242,12 +261,7 @@ export function useProfileSettingsController(input: {
         renameValue,
         threadTitleAiModelInput,
         updateProfileList,
-        invalidateProfileList: async () => {
-            await utils.profile.list.invalidate();
-        },
-        invalidateActiveProfile: async () => {
-            await utils.profile.getActive.invalidate();
-        },
+        setActiveProfileCache,
         createMutation,
         renameMutation,
         duplicateMutation,

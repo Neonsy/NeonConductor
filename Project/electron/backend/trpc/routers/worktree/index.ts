@@ -1,3 +1,4 @@
+import { worktreeStore } from '@/app/backend/persistence/stores';
 import {
     worktreeByIdInputSchema,
     worktreeConfigureThreadInputSchema,
@@ -32,8 +33,15 @@ export const worktreeRouter = router({
     }),
     configureThread: publicProcedure.input(worktreeConfigureThreadInputSchema).mutation(async ({ input }) => {
         const result = await worktreeService.configureThread(input);
+        const thread = unwrapResultOrThrow(result, toTrpcError);
+        const worktree =
+            input.mode === 'worktree' && input.worktreeId
+                ? await worktreeStore.getById(input.profileId, input.worktreeId)
+                : undefined;
+
         return {
-            thread: unwrapResultOrThrow(result, toTrpcError),
+            thread,
+            ...(worktree ? { worktree } : {}),
         };
     }),
 });

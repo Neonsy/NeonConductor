@@ -63,12 +63,21 @@ export interface WorktreeRefreshResult {
     reason?: 'not_found';
 }
 
+export interface WorktreeRemoveResult {
+    removed: boolean;
+    worktreeId?: EntityId<'wt'>;
+    affectedThreadIds: EntityId<'thr'>[];
+    reason?: 'not_found' | 'active_session' | 'workspace_unresolved' | 'git_failed';
+    message?: string;
+}
+
 export interface WorktreeRemoveInput extends WorktreeByIdInput {
     removeFiles?: boolean;
 }
 
 export interface WorktreeRemoveOrphanedResult {
     removedWorktreeIds: EntityId<'wt'>[];
+    affectedThreadIds: EntityId<'thr'>[];
 }
 
 export interface WorktreeConfigureThreadInput extends ProfileInput {

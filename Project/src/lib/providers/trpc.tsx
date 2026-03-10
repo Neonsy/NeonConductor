@@ -1,7 +1,7 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ipcLink } from 'electron-trpc-experimental/renderer';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { useEffect } from 'react';
 
+import { queryClient, trpcClient } from '@/web/lib/providers/trpcCore';
 import { useRuntimeEventStreamStore } from '@/web/lib/runtime/eventStream';
 import { invalidateQueriesForRuntimeEvent } from '@/web/lib/runtime/runtimeEventInvalidation';
 import { trpcClient as runtimeClient } from '@/web/lib/trpcClient';
@@ -17,19 +17,6 @@ import {
 import type { WindowStateEvent } from '@/app/backend/trpc/routers/system/windowControls';
 
 import type { ReactNode } from 'react';
-
-const queryClient = new QueryClient({
-    defaultOptions: {
-        queries: {
-            staleTime: 1000 * 60,
-            retry: 1,
-        },
-    },
-});
-
-const trpcClient = trpc.createClient({
-    links: [ipcLink()],
-});
 
 interface TRPCProviderProps {
     children: ReactNode;

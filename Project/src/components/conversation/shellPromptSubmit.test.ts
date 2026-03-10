@@ -7,7 +7,7 @@ describe('submitPrompt', () => {
     it('starts plan mode and clears prompt state on success', async () => {
         const startPlan = vi.fn().mockResolvedValue({});
         const onPromptCleared = vi.fn();
-        const onPlanRefetch = vi.fn();
+        const onPlanStarted = vi.fn();
         const startRun = vi.fn();
 
         await submitPrompt({
@@ -25,8 +25,8 @@ describe('submitPrompt', () => {
             startPlan,
             startRun,
             onPromptCleared,
-            onPlanRefetch,
-            onRuntimeRefetch: vi.fn(),
+            onPlanStarted,
+            onRunStarted: vi.fn(),
             onError: vi.fn(),
         });
 
@@ -40,7 +40,7 @@ describe('submitPrompt', () => {
         });
         expect(startRun).not.toHaveBeenCalled();
         expect(onPromptCleared).toHaveBeenCalledOnce();
-        expect(onPlanRefetch).toHaveBeenCalledOnce();
+        expect(onPlanStarted).toHaveBeenCalledOnce();
     });
 
     it('returns actionable provider auth errors for run mode', async () => {
@@ -73,8 +73,8 @@ describe('submitPrompt', () => {
             startPlan: vi.fn(),
             startRun: vi.fn(),
             onPromptCleared: vi.fn(),
-            onPlanRefetch: vi.fn(),
-            onRuntimeRefetch: vi.fn(),
+            onPlanStarted: vi.fn(),
+            onRunStarted: vi.fn(),
             onError,
         });
 
@@ -84,9 +84,36 @@ describe('submitPrompt', () => {
     });
 
     it('submits ready image attachments for executable runs', async () => {
-        const startRun = vi.fn().mockResolvedValue({});
+        const startRun = vi.fn().mockResolvedValue({
+            accepted: true,
+            runId: 'run_test',
+            runStatus: 'running',
+            run: {
+                id: 'run_test',
+                sessionId: 'sess_test',
+                profileId: 'profile_default',
+                prompt: '',
+                status: 'running',
+                providerId: 'openai',
+                modelId: 'openai/gpt-5',
+                authMethod: 'api_key',
+                createdAt: '2026-03-10T00:00:00.000Z',
+                updatedAt: '2026-03-10T00:00:00.000Z',
+            },
+            session: {
+                id: 'sess_test',
+                profileId: 'profile_default',
+                conversationId: 'conv_test',
+                threadId: 'thr_test',
+                kind: 'local',
+                runStatus: 'running',
+                turnCount: 1,
+                createdAt: '2026-03-10T00:00:00.000Z',
+                updatedAt: '2026-03-10T00:00:00.000Z',
+            },
+        });
         const onPromptCleared = vi.fn();
-        const onRuntimeRefetch = vi.fn();
+        const onRunStarted = vi.fn();
 
         await submitPrompt({
             prompt: '',
@@ -125,8 +152,8 @@ describe('submitPrompt', () => {
             startPlan: vi.fn(),
             startRun,
             onPromptCleared,
-            onPlanRefetch: vi.fn(),
-            onRuntimeRefetch,
+            onPlanStarted: vi.fn(),
+            onRunStarted,
             onError: vi.fn(),
         });
 
@@ -142,6 +169,6 @@ describe('submitPrompt', () => {
             })
         );
         expect(onPromptCleared).toHaveBeenCalledOnce();
-        expect(onRuntimeRefetch).toHaveBeenCalledOnce();
+        expect(onRunStarted).toHaveBeenCalledOnce();
     });
 });

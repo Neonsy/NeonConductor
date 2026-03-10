@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { ConfirmDialog } from '@/web/components/ui/confirmDialog';
 import PrivacyModeToggle from '@/web/components/window/privacyModeToggle';
@@ -7,11 +7,15 @@ import { MacTitleBarButtons, WindowsTitleBarButtons } from '@/web/components/win
 import { useTitleBarWindowControls } from '@/web/components/window/titlebar/useTitleBarWindowControls';
 import { useWindowCloseShortcut } from '@/web/components/window/titlebar/useWindowCloseShortcut';
 import { UpdateControlsPanel } from '@/web/components/window/updateControlsPanel';
+import { prefetchUpdateControlsData } from '@/web/components/window/updateControlsPrefetch';
+import { trpc } from '@/web/trpc/client';
 
 import type { MouseEvent as ReactMouseEvent } from 'react';
 
 export default function TitleBar() {
     const controls = useTitleBarWindowControls();
+    const utils = trpc.useUtils();
+    const helpButtonRef = useRef<HTMLButtonElement>(null);
     const [showUpdatesPanel, setShowUpdatesPanel] = useState(false);
     const [confirmClose, setConfirmClose] = useState(false);
 
@@ -29,6 +33,11 @@ export default function TitleBar() {
     };
 
     const handleHelpMenuClick = () => {
+        if (!showUpdatesPanel) {
+            prefetchUpdateControlsData({
+                trpcUtils: utils,
+            });
+        }
         setShowUpdatesPanel((current) => !current);
     };
 
@@ -56,6 +65,7 @@ export default function TitleBar() {
                 ) : null}
 
                 <button
+                    ref={helpButtonRef}
                     type='button'
                     data-no-drag='true'
                     className='text-foreground/75 hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring h-7 rounded-md px-2 text-[12px] font-medium transition-colors [-webkit-app-region:no-drag] focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset disabled:opacity-55'
@@ -90,6 +100,7 @@ export default function TitleBar() {
             </div>
             <UpdateControlsPanel
                 open={showUpdatesPanel}
+                anchorRef={helpButtonRef}
                 onClose={() => {
                     setShowUpdatesPanel(false);
                 }}

@@ -1,6 +1,8 @@
-import { useDeferredValue, useEffect, useState } from 'react';
+import { useState } from 'react';
 
 import { Button } from '@/web/components/ui/button';
+import { PROGRESSIVE_QUERY_OPTIONS } from '@/web/lib/query/progressiveQueryOptions';
+import { useDebouncedQueryValue } from '@/web/lib/hooks/useDebouncedQueryValue';
 import { trpc } from '@/web/trpc/client';
 
 import type { EntityId, SkillfileDefinition } from '@/app/backend/runtime/contracts';
@@ -32,66 +34,84 @@ export function AttachedSkillsPanel({
     missingAssetKeys,
 }: AttachedSkillsPanelProps) {
     const [query, setQuery] = useState('');
-    const deferredQuery = useDeferredValue(query.trim());
+    const debouncedQuery = useDebouncedQueryValue(query.trim());
     const [mutationError, setMutationError] = useState<string | undefined>(undefined);
-    const [optimisticAttachedSkills, setOptimisticAttachedSkills] = useState(attachedSkills);
-    const [optimisticMissingAssetKeys, setOptimisticMissingAssetKeys] = useState(missingAssetKeys);
     const utils = trpc.useUtils();
     const searchQuery = trpc.registry.searchSkills.useQuery(
         {
             profileId,
-            ...(deferredQuery.length > 0 ? { query: deferredQuery } : {}),
+            ...(debouncedQuery.length > 0 ? { query: debouncedQuery } : {}),
             ...(workspaceFingerprint ? { workspaceFingerprint } : {}),
             ...(worktreeId ? { worktreeId } : {}),
         },
-        {
-            refetchOnWindowFocus: false,
-        }
+        PROGRESSIVE_QUERY_OPTIONS
     );
     const setAttachedSkillsMutation = trpc.session.setAttachedSkills.useMutation({
-        onSuccess: async () => {
+        onMutate: async ({ assetKeys }) => {
             setMutationError(undefined);
-            await utils.session.getAttachedSkills.invalidate({ profileId, sessionId });
+            const previousAttachedSkills = utils.session.getAttachedSkills.getData({
+                profileId,
+                sessionId,
+            });
+            const skillfilesByAssetKey = new Map(
+                [...attachedSkills, ...(searchQuery.data?.skillfiles ?? [])].map((skillfile) => [skillfile.assetKey, skillfile])
+            );
+            const nextSkillfiles = assetKeys.flatMap((assetKey) => {
+                const skillfile = skillfilesByAssetKey.get(assetKey);
+                return skillfile ? [skillfile] : [];
+            });
+            const nextMissingAssetKeys = assetKeys.filter((assetKey) => !skillfilesByAssetKey.has(assetKey));
+
+            void utils.session.getAttachedSkills.setData(
+                {
+                    profileId,
+                    sessionId,
+                },
+                {
+                    sessionId,
+                    skillfiles: nextSkillfiles,
+                    ...(nextMissingAssetKeys.length > 0 ? { missingAssetKeys: nextMissingAssetKeys } : {}),
+                }
+            );
+
+            return {
+                previousAttachedSkills,
+            };
         },
-        onError: (error) => {
+        onSuccess: (nextAttachedSkills) => {
+            setMutationError(undefined);
+            void utils.session.getAttachedSkills.setData(
+                {
+                    profileId,
+                    sessionId,
+                },
+                nextAttachedSkills
+            );
+        },
+        onError: (error, _variables, context) => {
+            if (context?.previousAttachedSkills) {
+                void utils.session.getAttachedSkills.setData(
+                    {
+                        profileId,
+                        sessionId,
+                    },
+                    context.previousAttachedSkills
+                );
+            }
             setMutationError(error.message);
         },
     });
-
-    useEffect(() => {
-        setOptimisticAttachedSkills(attachedSkills);
-    }, [attachedSkills]);
-
-    useEffect(() => {
-        setOptimisticMissingAssetKeys(missingAssetKeys);
-    }, [missingAssetKeys]);
-
-    const attachedAssetKeys = optimisticAttachedSkills.map((skillfile) => skillfile.assetKey);
+    const attachedAssetKeys = attachedSkills.map((skillfile) => skillfile.assetKey);
     const attachedAssetKeySet = new Set(attachedAssetKeys);
     const visibleResults = searchQuery.data?.skillfiles.slice(0, 8) ?? [];
-    const knownSkillfilesByAssetKey = new Map(
-        [...attachedSkills, ...(searchQuery.data?.skillfiles ?? [])].map((skillfile) => [skillfile.assetKey, skillfile])
-    );
 
     const applyAttachedSkills = (assetKeys: string[]) => {
         setMutationError(undefined);
-        const previousAttachedSkills = optimisticAttachedSkills;
-        const previousMissingAssetKeys = optimisticMissingAssetKeys;
-        const nextAttachedSkills = assetKeys.flatMap((assetKey) => {
-            const skillfile = knownSkillfilesByAssetKey.get(assetKey);
-            return skillfile ? [skillfile] : [];
-        });
-        const nextMissingAssetKeys = assetKeys.filter((assetKey) => !knownSkillfilesByAssetKey.has(assetKey));
-
-        setOptimisticAttachedSkills(nextAttachedSkills);
-        setOptimisticMissingAssetKeys(nextMissingAssetKeys);
         void setAttachedSkillsMutation.mutateAsync({
             profileId,
             sessionId,
             assetKeys,
         }).catch((error: unknown) => {
-            setOptimisticAttachedSkills(previousAttachedSkills);
-            setOptimisticMissingAssetKeys(previousMissingAssetKeys);
             setMutationError(error instanceof Error ? error.message : 'Attached skills could not be updated.');
         });
     };
@@ -106,7 +126,7 @@ export function AttachedSkillsPanel({
                     </p>
                 </div>
                 <div className='text-muted-foreground text-right text-xs [font-variant-numeric:tabular-nums]'>
-                    <p>{optimisticAttachedSkills.length} attached</p>
+                    <p>{attachedSkills.length} attached</p>
                     <p>{searchQuery.data?.skillfiles.length ?? 0} available</p>
                 </div>
             </div>
@@ -125,9 +145,9 @@ export function AttachedSkillsPanel({
                 />
             </label>
 
-            {optimisticMissingAssetKeys.length > 0 ? (
+            {missingAssetKeys.length > 0 ? (
                 <div className='border-amber-500/30 bg-amber-500/10 mt-3 rounded-xl border px-3 py-2 text-xs'>
-                    Unresolved attached skills: {optimisticMissingAssetKeys.join(', ')}. Any save here will prune them.
+                    Unresolved attached skills: {missingAssetKeys.join(', ')}. Any save here will prune them.
                 </div>
             ) : null}
             {mutationError ? (
@@ -137,8 +157,8 @@ export function AttachedSkillsPanel({
             ) : null}
 
             <div className='mt-3 space-y-2'>
-                {optimisticAttachedSkills.length > 0 ? (
-                    optimisticAttachedSkills.map((skillfile) => (
+                {attachedSkills.length > 0 ? (
+                    attachedSkills.map((skillfile) => (
                         <div
                             key={skillfile.assetKey}
                             className='border-border bg-background/70 flex min-h-11 items-start justify-between gap-3 rounded-xl border px-3 py-3'>
@@ -211,7 +231,7 @@ export function AttachedSkillsPanel({
                     })
                 ) : (
                     <p className='text-muted-foreground rounded-xl border border-dashed px-3 py-3 text-sm'>
-                        {deferredQuery.length > 0 ? 'No resolved skills match this search.' : 'No resolved skills available.'}
+                        {debouncedQuery.length > 0 ? 'No resolved skills match this search.' : 'No resolved skills available.'}
                     </p>
                 )}
             </div>

@@ -95,10 +95,13 @@ export interface ContextPolicyInput {
     modelId: string;
 }
 
+export interface ContextPreviewTargetInput extends ContextPolicyInput {}
+
 export interface SetContextGlobalSettingsInput {
     enabled: boolean;
     mode: ContextSettingMode;
     percent: number;
+    preview?: ContextPreviewTargetInput;
 }
 
 export interface SetContextProfileSettingsInput {
@@ -106,6 +109,7 @@ export interface SetContextProfileSettingsInput {
     overrideMode: ContextProfileOverrideMode;
     percent?: number;
     fixedInputTokens?: number;
+    preview?: ContextPreviewTargetInput;
 }
 
 export interface ResolvedContextStateInput extends ContextPolicyInput {
@@ -126,6 +130,7 @@ export interface ResolvedContextState {
 export interface CompactSessionInput extends ContextPolicyInput {
     sessionId: EntityId<'sess'>;
     topLevelTab: TopLevelTab;
+    modeKey: string;
     workspaceFingerprint?: string;
 }
 

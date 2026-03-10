@@ -15,6 +15,7 @@ interface SettingsSelectionRailProps {
     selectedId?: string;
     emptyMessage?: string;
     onSelect: (itemId: string) => void;
+    onItemIntent?: (itemId: string) => void;
 }
 
 export function SettingsSelectionRail({
@@ -24,6 +25,7 @@ export function SettingsSelectionRail({
     selectedId,
     emptyMessage = 'Nothing to configure yet.',
     onSelect,
+    onItemIntent,
 }: SettingsSelectionRailProps) {
     return (
         <aside className='border-border bg-background/50 min-h-0 overflow-y-auto border-r p-3'>
@@ -49,6 +51,12 @@ export function SettingsSelectionRail({
                                 )}
                                 onClick={() => {
                                     onSelect(item.id);
+                                }}
+                                onMouseEnter={() => {
+                                    onItemIntent?.(item.id);
+                                }}
+                                onFocus={() => {
+                                    onItemIntent?.(item.id);
                                 }}>
                                 <div className='flex items-start justify-between gap-2'>
                                     <p className='min-w-0 truncate text-sm font-medium'>{item.title}</p>

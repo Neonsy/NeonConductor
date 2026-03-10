@@ -6,6 +6,7 @@ import type {
     WorktreeConfigureThreadInput,
     WorktreeCreateInput,
     WorktreeRefreshResult,
+    WorktreeRemoveResult,
     WorktreeRemoveInput,
     WorktreeRemoveOrphanedResult,
 } from '@/app/backend/runtime/contracts';
@@ -114,19 +115,17 @@ export class WorktreeService {
         };
     }
 
-    async remove(input: WorktreeRemoveInput): Promise<
-        | { removed: false; reason: 'not_found' | 'active_session' | 'workspace_unresolved' | 'git_failed'; message?: string }
-        | { removed: true; worktreeId: string }
-    > {
+    async remove(input: WorktreeRemoveInput): Promise<WorktreeRemoveResult> {
         const worktree = await worktreeStore.getById(input.profileId, input.worktreeId);
         if (!worktree) {
-            return { removed: false, reason: 'not_found' };
+            return { removed: false, reason: 'not_found', affectedThreadIds: [] };
         }
         if (await worktreeStore.hasRunningSession(input.profileId, worktree.id)) {
             return {
                 removed: false,
                 reason: 'active_session',
                 message: 'Active sessions are still running in this managed worktree.',
+                affectedThreadIds: [],
             };
         }
 
@@ -136,8 +135,11 @@ export class WorktreeService {
                 removed: false,
                 reason: 'workspace_unresolved',
                 message: 'Base workspace root could not be resolved.',
+                affectedThreadIds: [],
             };
         }
+
+        const affectedThreadIds = await threadStore.listIdsByWorktree(input.profileId, worktree.id);
 
         try {
             await access(worktree.absolutePath);
@@ -151,6 +153,7 @@ export class WorktreeService {
                     removed: false,
                     reason: 'git_failed',
                     message: removed.error.detail,
+                    affectedThreadIds: [],
                 };
             }
         } catch {
@@ -161,12 +164,14 @@ export class WorktreeService {
         return {
             removed: true,
             worktreeId: input.worktreeId,
+            affectedThreadIds,
         };
     }
 
     async removeOrphaned(profileId: string): Promise<WorktreeRemoveOrphanedResult> {
         const orphaned = await worktreeStore.listOrphaned(profileId);
         const removedWorktreeIds: WorktreeRemoveOrphanedResult['removedWorktreeIds'] = [];
+        const affectedThreadIds: WorktreeRemoveOrphanedResult['affectedThreadIds'] = [];
 
         for (const worktree of orphaned) {
             const removed = await this.remove({
@@ -176,10 +181,11 @@ export class WorktreeService {
             });
             if (removed.removed) {
                 removedWorktreeIds.push(worktree.id);
+                affectedThreadIds.push(...removed.affectedThreadIds);
             }
         }
 
-        return { removedWorktreeIds };
+        return { removedWorktreeIds, affectedThreadIds };
     }
 
     async configureThread(input: WorktreeConfigureThreadInput): Promise<OperationalResult<ThreadRecord>> {

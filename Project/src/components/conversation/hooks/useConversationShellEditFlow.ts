@@ -5,9 +5,10 @@ import type { MessageTimelineEntry } from '@/web/components/conversation/message
 import { toEditFailureMessage, type PendingMessageEdit } from '@/web/components/conversation/shell/editFlow';
 import { createPendingMessageEdit } from '@/web/components/conversation/shell/pendingMessageEdit';
 import { DEFAULT_RUN_OPTIONS, isEntityId } from '@/web/components/conversation/shell/workspace/helpers';
+import { PROGRESSIVE_QUERY_OPTIONS } from '@/web/lib/query/progressiveQueryOptions';
 import { trpc } from '@/web/trpc/client';
 
-import type { ThreadListRecord } from '@/app/backend/persistence/types';
+import type { RunRecord, SessionSummaryRecord, ThreadListRecord } from '@/app/backend/persistence/types';
 import type { RuntimeProviderId, SessionEditInput, TopLevelTab } from '@/app/backend/runtime/contracts';
 
 interface UseConversationShellEditFlowInput {
@@ -27,10 +28,13 @@ interface UseConversationShellEditFlowInput {
         | {
               edited: true;
               sessionId: string;
+              session: SessionSummaryRecord;
               sourceSessionId: string;
               editMode: 'truncate' | 'branch';
               started: boolean;
               runId?: string;
+              run?: RunRecord;
+              thread?: ThreadListRecord;
               threadId?: string;
               topLevelTab?: TopLevelTab;
           }
@@ -41,18 +45,23 @@ interface UseConversationShellEditFlowInput {
     onClearError: () => void;
     onError: (message: string) => void;
     onPromptReset: () => void;
-    refetchSessionWorkspace: () => void;
+    onSessionEdited: (input: {
+        sessionId: string;
+        session: SessionSummaryRecord;
+        runId?: string;
+        run?: RunRecord;
+        thread?: ThreadListRecord;
+    }) => void;
 }
 
 export function useConversationShellEditFlow(input: UseConversationShellEditFlowInput) {
     const [pendingMessageEdit, setPendingMessageEdit] = useState<PendingMessageEdit | undefined>(undefined);
+    const utils = trpc.useUtils();
     const editPreferenceQuery = trpc.conversation.getEditPreference.useQuery(
         {
             profileId: input.profileId,
         },
-        {
-            refetchOnWindowFocus: false,
-        }
+        PROGRESSIVE_QUERY_OPTIONS
     );
 
     const editPreference: 'ask' | 'truncate' | 'branch' =
@@ -128,7 +137,14 @@ export function useConversationShellEditFlow(input: UseConversationShellEditFlow
                                 profileId: input.profileId,
                                 value: dialogInput.editMode,
                             });
-                            void editPreferenceQuery.refetch();
+                            void utils.conversation.getEditPreference.setData(
+                                {
+                                    profileId: input.profileId,
+                                },
+                                {
+                                    value: dialogInput.editMode,
+                                }
+                            );
                         }
 
                         if (result.threadId && isEntityId(result.threadId, 'thr')) {
@@ -145,7 +161,13 @@ export function useConversationShellEditFlow(input: UseConversationShellEditFlow
                         }
                         setPendingMessageEdit(undefined);
                         input.onPromptReset();
-                        input.refetchSessionWorkspace();
+                        input.onSessionEdited({
+                            sessionId: result.sessionId,
+                            session: result.session,
+                            ...(result.runId ? { runId: result.runId } : {}),
+                            ...(result.run ? { run: result.run } : {}),
+                            ...(result.thread ? { thread: result.thread } : {}),
+                        });
                     })
                     .catch((error: unknown) => {
                         const message = error instanceof Error ? error.message : String(error);

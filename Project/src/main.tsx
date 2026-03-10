@@ -32,7 +32,9 @@ if (rootElement) {
     createRoot(rootElement).render(
         <Providers>
             <StrictMode>
-                <RouterProvider router={router} />
+                <RouterProvider
+                    router={router}
+                />
             </StrictMode>
             {/* Keep DevTools outside StrictMode to avoid dev-only WS close noise from double-mount. */}
             {isDev && <DevTools router={router} />}

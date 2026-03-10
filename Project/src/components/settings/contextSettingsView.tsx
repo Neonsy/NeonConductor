@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react';
 import { SettingsFeedbackBanner } from '@/web/components/settings/shared/settingsFeedbackBanner';
 import { SettingsSelectionRail } from '@/web/components/settings/shared/settingsSelectionRail';
 import { isProviderId } from '@/web/components/conversation/shell/workspace/helpers';
+import { setResolvedContextStateCache } from '@/web/components/context/contextStateCache';
+import { PROGRESSIVE_QUERY_OPTIONS } from '@/web/lib/query/progressiveQueryOptions';
 import { trpc } from '@/web/trpc/client';
 
 import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
@@ -26,15 +28,15 @@ export function ContextSettingsView({ activeProfileId }: ContextSettingsViewProp
     const [feedbackMessage, setFeedbackMessage] = useState<string | undefined>(undefined);
     const [feedbackTone, setFeedbackTone] = useState<'success' | 'error' | 'info'>('info');
 
-    const profilesQuery = trpc.profile.list.useQuery(undefined, { refetchOnWindowFocus: false });
-    const globalSettingsQuery = trpc.context.getGlobalSettings.useQuery(undefined, { refetchOnWindowFocus: false });
+    const profilesQuery = trpc.profile.list.useQuery(undefined, PROGRESSIVE_QUERY_OPTIONS);
+    const globalSettingsQuery = trpc.context.getGlobalSettings.useQuery(undefined, PROGRESSIVE_QUERY_OPTIONS);
     const profileSettingsQuery = trpc.context.getProfileSettings.useQuery(
         { profileId: selectedProfileId },
-        { enabled: selectedProfileId.length > 0, refetchOnWindowFocus: false }
+        { enabled: selectedProfileId.length > 0, ...PROGRESSIVE_QUERY_OPTIONS }
     );
     const shellBootstrapQuery = trpc.runtime.getShellBootstrap.useQuery(
         { profileId: selectedProfileId },
-        { enabled: selectedProfileId.length > 0, refetchOnWindowFocus: false }
+        { enabled: selectedProfileId.length > 0, ...PROGRESSIVE_QUERY_OPTIONS }
     );
 
     const defaultProviderId = shellBootstrapQuery.data?.defaults.providerId;
@@ -54,12 +56,17 @@ export function ContextSettingsView({ activeProfileId }: ContextSettingsViewProp
         },
         {
             enabled: selectedProfileId.length > 0 && Boolean(defaultProviderId) && Boolean(defaultModelId),
-            refetchOnWindowFocus: false,
+            ...PROGRESSIVE_QUERY_OPTIONS,
         }
     );
+    const resolvedContextStateQueryInput = {
+        profileId: selectedProfileId,
+        providerId: effectiveProviderId,
+        modelId: effectiveModelId,
+    };
 
     const setGlobalSettingsMutation = trpc.context.setGlobalSettings.useMutation({
-        onSuccess: ({ settings }) => {
+        onSuccess: ({ settings, resolvedState }) => {
             setFeedbackTone('success');
             setFeedbackMessage('Saved global context defaults.');
             setGlobalEnabled(settings.enabled);
@@ -67,11 +74,13 @@ export function ContextSettingsView({ activeProfileId }: ContextSettingsViewProp
             void utils.context.getGlobalSettings.setData(undefined, {
                 settings,
             });
-            void utils.context.getResolvedState.invalidate({
-                profileId: selectedProfileId,
-                providerId: effectiveProviderId,
-                modelId: effectiveModelId,
-            });
+            if (resolvedState) {
+                setResolvedContextStateCache({
+                    utils,
+                    queryInput: resolvedContextStateQueryInput,
+                    state: resolvedState,
+                });
+            }
         },
         onError: (error) => {
             setFeedbackTone('error');
@@ -79,7 +88,7 @@ export function ContextSettingsView({ activeProfileId }: ContextSettingsViewProp
         },
     });
     const setProfileSettingsMutation = trpc.context.setProfileSettings.useMutation({
-        onSuccess: ({ settings }) => {
+        onSuccess: ({ settings, resolvedState }) => {
             setFeedbackTone('success');
             setFeedbackMessage('Saved profile context override.');
             setProfileOverrideMode(settings.overrideMode);
@@ -95,11 +104,13 @@ export function ContextSettingsView({ activeProfileId }: ContextSettingsViewProp
                     settings,
                 }
             );
-            void utils.context.getResolvedState.invalidate({
-                profileId: selectedProfileId,
-                providerId: effectiveProviderId,
-                modelId: effectiveModelId,
-            });
+            if (resolvedState) {
+                setResolvedContextStateCache({
+                    utils,
+                    queryInput: resolvedContextStateQueryInput,
+                    state: resolvedState,
+                });
+            }
         },
         onError: (error) => {
             setFeedbackTone('error');
@@ -213,6 +224,7 @@ export function ContextSettingsView({ activeProfileId }: ContextSettingsViewProp
                                     enabled: globalEnabled,
                                     mode: 'percent',
                                     percent,
+                                    preview: resolvedContextStateQueryInput,
                                 });
                             }}>
                             Save global defaults
@@ -298,6 +310,7 @@ export function ContextSettingsView({ activeProfileId }: ContextSettingsViewProp
                                     void setProfileSettingsMutation.mutateAsync({
                                         profileId: selectedProfileId,
                                         overrideMode: 'inherit',
+                                        preview: resolvedContextStateQueryInput,
                                     });
                                     return;
                                 }
@@ -316,6 +329,7 @@ export function ContextSettingsView({ activeProfileId }: ContextSettingsViewProp
                                         profileId: selectedProfileId,
                                         overrideMode: 'percent',
                                         percent,
+                                        preview: resolvedContextStateQueryInput,
                                     });
                                     return;
                                 }
@@ -331,6 +345,7 @@ export function ContextSettingsView({ activeProfileId }: ContextSettingsViewProp
                                     profileId: selectedProfileId,
                                     overrideMode: 'fixed_tokens',
                                     fixedInputTokens,
+                                    preview: resolvedContextStateQueryInput,
                                 });
                             }}>
                             Save profile override

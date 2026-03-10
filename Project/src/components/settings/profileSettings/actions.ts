@@ -14,17 +14,16 @@ export function createProfileSettingsActions(input: {
     renameValue: string;
     threadTitleAiModelInput: string;
     updateProfileList: (updater: (profiles: ProfileRecord[]) => ProfileRecord[]) => void;
-    invalidateProfileList: () => Promise<void>;
-    invalidateActiveProfile: () => Promise<void>;
-    createMutation: { mutateAsync: (input: { name?: string }) => Promise<{ profile: { id: string; name: string } }> };
+    setActiveProfileCache: (profileId: string) => void;
+    createMutation: { mutateAsync: (input: { name?: string }) => Promise<{ profile: ProfileRecord }> };
     renameMutation: {
         mutateAsync: (input: { profileId: string; name: string }) => Promise<
-            { updated: false; reason: 'profile_not_found' } | { updated: true; profile: { name: string } }
+            { updated: false; reason: 'profile_not_found' } | { updated: true; profile: ProfileRecord }
         >;
     };
     duplicateMutation: {
         mutateAsync: (input: { profileId: string }) => Promise<
-            { duplicated: false; reason: 'profile_not_found' } | { duplicated: true; profile: { id: string; name: string } }
+            { duplicated: false; reason: 'profile_not_found' } | { duplicated: true; profile: ProfileRecord }
         >;
     };
     deleteMutation: {
@@ -36,7 +35,7 @@ export function createProfileSettingsActions(input: {
     };
     setActiveMutation: {
         mutateAsync: (input: { profileId: string }) => Promise<
-            { updated: false; reason: 'profile_not_found' } | { updated: true; profile: { id: string; name: string } }
+            { updated: false; reason: 'profile_not_found' } | { updated: true; profile: ProfileRecord }
         >;
     };
     setEditPreferenceMutation: {
@@ -63,7 +62,7 @@ export function createProfileSettingsActions(input: {
             input.setStatusMessage(`Created profile "${result.profile.name}".`);
             input.setNewProfileName('');
             input.setSelectedProfileId(result.profile.id);
-            await input.invalidateProfileList();
+            input.updateProfileList((profiles) => [...profiles, result.profile]);
         },
         renameProfile: async () => {
             if (!input.selectedProfile) {
@@ -114,7 +113,7 @@ export function createProfileSettingsActions(input: {
             }
 
             input.setSelectedProfileId(result.profile.id);
-            await input.invalidateProfileList();
+            input.updateProfileList((profiles) => [...profiles, result.profile]);
         },
         activateProfile: async () => {
             if (!input.selectedProfile || input.selectedProfile.id === input.activeProfileId) {
@@ -135,13 +134,7 @@ export function createProfileSettingsActions(input: {
             }
 
             input.onProfileActivated(result.profile.id);
-            input.updateProfileList((profiles) =>
-                profiles.map((profile) => ({
-                    ...profile,
-                    isActive: profile.id === result.profile.id,
-                }))
-            );
-            await input.invalidateActiveProfile();
+            input.setActiveProfileCache(result.profile.id);
         },
         updateEditPreference: async (value: 'ask' | 'truncate' | 'branch') => {
             if (!input.selectedProfile) {
@@ -207,10 +200,10 @@ export function createProfileSettingsActions(input: {
 
             if (result.activeProfileId) {
                 input.onProfileActivated(result.activeProfileId);
+                input.setActiveProfileCache(result.activeProfileId);
             }
             input.setSelectedProfileId(undefined);
-            await input.invalidateProfileList();
-            await input.invalidateActiveProfile();
+            input.updateProfileList((profiles) => profiles.filter((profile) => profile.id !== input.selectedProfile?.id));
         },
     };
 }

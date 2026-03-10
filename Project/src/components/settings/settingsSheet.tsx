@@ -1,5 +1,5 @@
 import { X } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { startTransition, useRef, useState } from 'react';
 
 import { ContextSettingsView } from '@/web/components/settings/contextSettingsView';
 import { ProfileSettingsView } from '@/web/components/settings/profileSettingsView';
@@ -37,7 +37,9 @@ export function SettingsSheet({ open, profileId, onClose, onProfileActivated }: 
     }
 
     function moveToSection(section: SettingsSection) {
-        setActiveSection(section);
+        startTransition(() => {
+            setActiveSection(section);
+        });
         sectionButtonRefs.current[section]?.focus();
     }
 
@@ -82,7 +84,9 @@ export function SettingsSheet({ open, profileId, onClose, onProfileActivated }: 
                                     moveToSection(nextSection);
                                 }}
                                 onClick={() => {
-                                    setActiveSection(section);
+                                    startTransition(() => {
+                                        setActiveSection(section);
+                                    });
                                 }}>
                                 {SECTION_LABELS[section]}
                             </button>

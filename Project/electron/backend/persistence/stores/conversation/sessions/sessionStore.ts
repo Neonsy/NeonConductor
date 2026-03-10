@@ -110,7 +110,7 @@ export class SessionStore {
         const nextStatus = mapRunStatusToSessionStatus(nextRun?.status ?? null);
         const nextPendingRunId = nextRun?.status === 'running' ? nextRun.id : null;
 
-        await db
+        const updatedSession = await db
             .updateTable('sessions')
             .set({
                 run_status: nextStatus,
@@ -119,14 +119,21 @@ export class SessionStore {
             })
             .where('id', '=', sessionId)
             .where('profile_id', '=', profileId)
-            .execute();
+            .returningAll()
+            .executeTakeFirst();
 
-        const updatedSession = await this.getSessionSummaryRow(profileId, sessionId);
         if (!updatedSession) {
             return errOp('not_found', `Session "${sessionId}" not found while refreshing status.`);
         }
 
-        return okOp(mapSessionSummary(updatedSession, updatedSession.turn_count ?? 0));
+        const turnCountRow = await db
+            .selectFrom('runs')
+            .select((expressionBuilder) => expressionBuilder.fn.count<number>('id').as('turn_count'))
+            .where('profile_id', '=', profileId)
+            .where('session_id', '=', sessionId)
+            .executeTakeFirst();
+
+        return okOp(mapSessionSummary(updatedSession, turnCountRow?.turn_count ?? 0));
     }
 
     async create(

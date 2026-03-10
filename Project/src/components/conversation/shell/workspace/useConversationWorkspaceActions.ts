@@ -2,7 +2,7 @@ import { useState } from 'react';
 
 import { useConversationMutations } from '@/web/components/conversation/shell/actions/useConversationMutations';
 import { isEntityId } from '@/web/components/conversation/shell/workspace/helpers';
-import { invalidateShellBootstrap } from '@/web/lib/runtime/invalidation/queryInvalidation';
+import { patchWorktreeCaches } from '@/web/components/conversation/shell/workspace/worktreeCache';
 import { trpc } from '@/web/trpc/client';
 
 import type { PermissionRecord } from '@/app/backend/persistence/types';
@@ -14,6 +14,15 @@ import type {
 
 interface UseConversationWorkspaceActionsInput {
     profileId: string;
+    listThreadsInput: {
+        profileId: string;
+        activeTab: 'chat' | 'agent' | 'orchestrator';
+        showAllModes: boolean;
+        groupView: 'workspace' | 'branch';
+        scope?: 'detached' | 'workspace';
+        workspaceFingerprint?: string;
+        sort?: 'latest' | 'alphabetical';
+    };
     mutations: ReturnType<typeof useConversationMutations>;
     onResolvePermission: () => void;
 }
@@ -22,15 +31,6 @@ export function useConversationWorkspaceActions(input: UseConversationWorkspaceA
     const utils = trpc.useUtils();
     const [feedbackMessage, setFeedbackMessage] = useState<string | undefined>(undefined);
     const [feedbackTone, setFeedbackTone] = useState<'success' | 'error' | 'info'>('info');
-
-    async function invalidateExecutionEnvironmentQueries() {
-        await Promise.all([
-            utils.worktree.list.invalidate(),
-            utils.session.list.invalidate({ profileId: input.profileId }),
-            utils.conversation.listThreads.invalidate({ profileId: input.profileId }),
-            invalidateShellBootstrap(utils, input.profileId),
-        ]);
-    }
 
     return {
         feedbackMessage,
@@ -53,7 +53,15 @@ export function useConversationWorkspaceActions(input: UseConversationWorkspaceA
                     ? { selectedApprovalResource: payload.selectedApprovalResource }
                     : {}),
             });
-            await utils.permission.listPending.invalidate();
+            void utils.permission.listPending.setData(undefined, (current) => {
+                if (!current) {
+                    return current;
+                }
+
+                return {
+                    requests: current.requests.filter((request) => request.id !== payload.requestId),
+                };
+            });
         },
         async configureThreadExecution(payload: {
             threadId: EntityId<'thr'>;
@@ -67,7 +75,7 @@ export function useConversationWorkspaceActions(input: UseConversationWorkspaceA
                     ? payload.executionInput.worktreeId
                     : undefined;
             try {
-                await input.mutations.configureThreadWorktreeMutation.mutateAsync({
+                const result = await input.mutations.configureThreadWorktreeMutation.mutateAsync({
                     profileId: input.profileId,
                     threadId: payload.threadId,
                     mode: payload.executionInput.mode,
@@ -77,7 +85,13 @@ export function useConversationWorkspaceActions(input: UseConversationWorkspaceA
                     ...(payload.executionInput.baseBranch ? { baseBranch: payload.executionInput.baseBranch } : {}),
                     ...(selectedWorktreeId ? { worktreeId: selectedWorktreeId } : {}),
                 });
-                await invalidateExecutionEnvironmentQueries();
+                patchWorktreeCaches({
+                    utils,
+                    profileId: input.profileId,
+                    listThreadsInput: input.listThreadsInput,
+                    thread: result.thread,
+                    ...(result.worktree ? { worktree: result.worktree } : {}),
+                });
                 setFeedbackTone('success');
                 setFeedbackMessage('Execution environment updated.');
             } catch (error: unknown) {
@@ -88,11 +102,26 @@ export function useConversationWorkspaceActions(input: UseConversationWorkspaceA
         },
         async refreshWorktree(worktreeId: `wt_${string}`) {
             try {
-                await input.mutations.refreshWorktreeMutation.mutateAsync({
+                const result = await input.mutations.refreshWorktreeMutation.mutateAsync({
                     profileId: input.profileId,
                     worktreeId,
                 });
-                await invalidateExecutionEnvironmentQueries();
+                if (!result.refreshed || !result.worktree) {
+                    const message = result.reason === 'not_found'
+                        ? 'Managed worktree no longer exists.'
+                        : 'Managed worktree refresh failed.';
+                    setFeedbackTone('error');
+                    setFeedbackMessage(message);
+                    return;
+                }
+                if (result.worktree) {
+                    patchWorktreeCaches({
+                        utils,
+                        profileId: input.profileId,
+                        listThreadsInput: input.listThreadsInput,
+                        worktree: result.worktree,
+                    });
+                }
                 setFeedbackTone('success');
                 setFeedbackMessage('Managed worktree status refreshed.');
             } catch (error: unknown) {
@@ -103,12 +132,24 @@ export function useConversationWorkspaceActions(input: UseConversationWorkspaceA
         },
         async removeWorktree(worktreeId: `wt_${string}`) {
             try {
-                await input.mutations.removeWorktreeMutation.mutateAsync({
+                const result = await input.mutations.removeWorktreeMutation.mutateAsync({
                     profileId: input.profileId,
                     worktreeId,
                     removeFiles: true,
                 });
-                await invalidateExecutionEnvironmentQueries();
+                if (!result.removed || !result.worktreeId) {
+                    setFeedbackTone('error');
+                    setFeedbackMessage(result.message ?? 'Managed worktree removal failed.');
+                    return;
+                }
+                if (result.removed && result.worktreeId) {
+                    patchWorktreeCaches({
+                        utils,
+                        profileId: input.profileId,
+                        listThreadsInput: input.listThreadsInput,
+                        removedWorktreeIds: [result.worktreeId],
+                    });
+                }
                 setFeedbackTone('success');
                 setFeedbackMessage('Managed worktree removed.');
             } catch (error: unknown) {
@@ -119,11 +160,18 @@ export function useConversationWorkspaceActions(input: UseConversationWorkspaceA
         },
         async removeOrphanedWorktrees(workspaceFingerprint: string | undefined) {
             try {
-                await input.mutations.removeOrphanedWorktreesMutation.mutateAsync({
+                const result = await input.mutations.removeOrphanedWorktreesMutation.mutateAsync({
                     profileId: input.profileId,
                     ...(workspaceFingerprint ? { workspaceFingerprint } : {}),
                 });
-                await invalidateExecutionEnvironmentQueries();
+                if (result.removedWorktreeIds.length > 0) {
+                    patchWorktreeCaches({
+                        utils,
+                        profileId: input.profileId,
+                        listThreadsInput: input.listThreadsInput,
+                        removedWorktreeIds: result.removedWorktreeIds,
+                    });
+                }
                 setFeedbackTone('success');
                 setFeedbackMessage('Removed orphaned managed worktrees.');
             } catch (error: unknown) {

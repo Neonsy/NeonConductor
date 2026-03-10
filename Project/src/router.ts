@@ -4,9 +4,14 @@ Why: Single TanStack Router configured with hash history for Electron; routeTree
 
 import { createHashHistory, createRouter } from '@tanstack/react-router';
 
+import { routerContextValue } from './routerContextValue';
 import { routeTree } from './routeTree.gen';
 
-export const router = createRouter({ routeTree, history: createHashHistory() });
+export const router = createRouter({
+    routeTree,
+    history: createHashHistory(),
+    context: routerContextValue,
+});
 export type AppRouter = typeof router;
 
 declare module '@tanstack/react-router' {

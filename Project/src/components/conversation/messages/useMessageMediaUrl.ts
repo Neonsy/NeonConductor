@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { acquireMessageMediaObjectUrl, releaseMessageMediaObjectUrl } from '@/web/components/conversation/messages/messageMediaObjectUrlCache';
+import { SECONDARY_QUERY_OPTIONS } from '@/web/lib/query/secondaryQueryOptions';
 import { trpc } from '@/web/trpc/client';
 
 import type { EntityId, SessionMessageMediaPayload } from '@/app/backend/runtime/contracts';
@@ -77,7 +78,7 @@ export function useMessageMediaUrl(input: {
         },
         {
             enabled: input.enabled,
-            refetchOnWindowFocus: false,
+            ...SECONDARY_QUERY_OPTIONS,
             staleTime: Number.POSITIVE_INFINITY,
             gcTime: 1000 * 60 * 20,
         }

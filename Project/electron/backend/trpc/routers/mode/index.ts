@@ -4,7 +4,8 @@ import {
     modeListInputSchema,
     modeSetActiveInputSchema,
 } from '@/app/backend/runtime/contracts';
-import { resolveActiveMode, toActiveModeKey } from '@/app/backend/runtime/services/mode/activeMode';
+import { resolveActiveMode } from '@/app/backend/runtime/services/mode/activeMode';
+import { toActiveModeKey } from '@/app/backend/runtime/services/mode/selection';
 import { resolveModesForTab } from '@/app/backend/runtime/services/registry/service';
 import { runtimeUpsertEvent } from '@/app/backend/runtime/services/runtimeEventEnvelope';
 import { runtimeEventLogService } from '@/app/backend/runtime/services/runtimeEventLog';

@@ -1,12 +1,23 @@
-import { useState } from 'react';
+import { startTransition, useState, useTransition } from 'react';
 
 import { isEntityId } from '@/web/components/conversation/shell/workspace/helpers';
+import {
+    patchThreadListRecord,
+    removeDeletedSidebarRecords,
+    replaceThreadTagRelations,
+    toThreadListRecord,
+    upsertBucketRecord,
+    upsertTagRecord,
+    upsertThreadListRecord,
+} from '@/web/components/conversation/sidebar/sidebarCache';
 import { resolveTabSwitchNotice } from '@/web/components/conversation/shell/workspace/tabSwitch';
 import { ConversationSidebar } from '@/web/components/conversation/sidebar/sidebar';
 import { ConfirmDialog } from '@/web/components/ui/confirmDialog';
+import { SECONDARY_QUERY_OPTIONS } from '@/web/lib/query/secondaryQueryOptions';
 import { trpc } from '@/web/trpc/client';
 
-import type { ConversationRecord, TagRecord, ThreadListRecord } from '@/app/backend/persistence/types';
+import type { ConversationRecord, TagRecord, ThreadListRecord, ThreadRecord, ThreadTagRecord } from '@/app/backend/persistence/types';
+import type { SessionSummaryRecord } from '@/app/backend/persistence/types';
 import type { EntityId, TopLevelTab } from '@/app/backend/runtime/contracts';
 
 interface ConversationSidebarPaneProps {
@@ -14,9 +25,11 @@ interface ConversationSidebarPaneProps {
     topLevelTab: TopLevelTab;
     buckets: ConversationRecord[];
     threads: ThreadListRecord[];
+    sessions: SessionSummaryRecord[];
     tags: TagRecord[];
     threadTagIdsByThread: Map<string, string[]>;
     selectedThreadId: string | undefined;
+    selectedSessionId: string | undefined;
     selectedTagIds: string[];
     scopeFilter: 'all' | 'workspace' | 'detached';
     workspaceFilter: string | undefined;
@@ -45,24 +58,28 @@ interface ConversationSidebarPaneProps {
         scope: 'detached' | 'workspace';
         workspacePath?: string;
         title: string;
-    }) => Promise<{ thread: { id: string } }>;
-    upsertTag: (input: { profileId: string; label: string }) => Promise<{ tag: { id: string } }>;
-    setThreadTags: (input: { profileId: string; threadId: EntityId<'thr'>; tagIds: EntityId<'tag'>[] }) => Promise<unknown>;
+    }) => Promise<{ bucket: ConversationRecord; thread: ThreadRecord }>;
+    upsertTag: (input: { profileId: string; label: string }) => Promise<{ tag: TagRecord }>;
+    setThreadTags: (input: {
+        profileId: string;
+        threadId: EntityId<'thr'>;
+        tagIds: EntityId<'tag'>[];
+    }) => Promise<{ threadTags: ThreadTagRecord[] }>;
     setThreadFavorite: (input: {
         profileId: string;
         threadId: EntityId<'thr'>;
         isFavorite: boolean;
-    }) => Promise<unknown>;
+    }) => Promise<{ updated: boolean; thread?: ThreadRecord }>;
     deleteWorkspaceThreads: (input: {
         profileId: string;
         workspaceFingerprint: string;
         includeFavorites?: boolean;
-    }) => Promise<{ deletedThreadIds: string[] }>;
-    refetchBuckets: () => Promise<unknown>;
-    refetchThreads: () => Promise<unknown>;
-    refetchTags: () => Promise<unknown>;
-    refetchShellBootstrap: () => Promise<unknown>;
-    refetchSessions: () => Promise<unknown>;
+    }) => Promise<{
+        deletedThreadIds: string[];
+        deletedTagIds: string[];
+        deletedConversationIds: string[];
+        sessionIds: string[];
+    }>;
 }
 
 export function ConversationSidebarPane({
@@ -70,9 +87,11 @@ export function ConversationSidebarPane({
     topLevelTab,
     buckets,
     threads,
+    sessions,
     tags,
     threadTagIdsByThread,
     selectedThreadId,
+    selectedSessionId,
     selectedTagIds,
     scopeFilter,
     workspaceFilter,
@@ -100,15 +119,10 @@ export function ConversationSidebarPane({
     setThreadTags,
     setThreadFavorite,
     deleteWorkspaceThreads,
-    refetchBuckets,
-    refetchThreads,
-    refetchTags,
-    refetchShellBootstrap,
-    refetchSessions,
 }: ConversationSidebarPaneProps) {
+    const utils = trpc.useUtils();
     const [feedbackMessage, setFeedbackMessage] = useState<string | undefined>(undefined);
-    const [optimisticFavoriteByThreadId, setOptimisticFavoriteByThreadId] = useState<Record<string, boolean>>({});
-    const [optimisticTagIdsByThreadId, setOptimisticTagIdsByThreadId] = useState<Record<string, string[]>>({});
+    const [, startSelectionTransition] = useTransition();
     const [workspaceDeleteTarget, setWorkspaceDeleteTarget] = useState<
         | {
               workspaceFingerprint: string;
@@ -117,17 +131,16 @@ export function ConversationSidebarPane({
         | undefined
     >(undefined);
     const [includeFavoriteThreads, setIncludeFavoriteThreads] = useState(false);
-    const visibleThreads = threads.map((thread) => ({
-        ...thread,
-        ...(optimisticFavoriteByThreadId[thread.id] !== undefined
-            ? { isFavorite: optimisticFavoriteByThreadId[thread.id] }
-            : {}),
-    }));
-    const visibleThreadTagIdsByThread = new Map(threadTagIdsByThread);
-    for (const [threadId, tagIds] of Object.entries(optimisticTagIdsByThreadId)) {
-        visibleThreadTagIdsByThread.set(threadId, tagIds);
-    }
-    const selectedThread = visibleThreads.find((thread) => thread.id === selectedThreadId);
+    const selectedThread = threads.find((thread) => thread.id === selectedThreadId);
+    const threadListQueryInput = {
+        profileId,
+        activeTab: topLevelTab,
+        showAllModes,
+        groupView,
+        ...(scopeFilter !== 'all' ? { scope: scopeFilter } : {}),
+        ...(workspaceFilter ? { workspaceFingerprint: workspaceFilter } : {}),
+        ...(sort ? { sort } : {}),
+    };
     const workspaceDeletePreviewQuery = trpc.conversation.getWorkspaceThreadDeletePreview.useQuery(
         {
             profileId,
@@ -136,7 +149,7 @@ export function ConversationSidebarPane({
         },
         {
             enabled: Boolean(workspaceDeleteTarget),
-            refetchOnWindowFocus: false,
+            ...SECONDARY_QUERY_OPTIONS,
         }
     );
 
@@ -144,9 +157,9 @@ export function ConversationSidebarPane({
         <>
             <ConversationSidebar
                 buckets={buckets}
-                threads={visibleThreads}
+                threads={threads}
                 tags={tags}
-                threadTagIdsByThread={visibleThreadTagIdsByThread}
+                threadTagIdsByThread={threadTagIdsByThread}
                 topLevelTab={topLevelTab}
                 {...(selectedThreadId ? { selectedThreadId } : {})}
                 selectedTagIds={selectedTagIds}
@@ -160,24 +173,46 @@ export function ConversationSidebarPane({
                 {...(feedbackMessage ? { feedbackMessage } : {})}
                 {...(statusMessage ? { statusMessage, statusTone } : {})}
                 onSelectThread={(threadId) => {
-                    const targetThread = visibleThreads.find((thread) => thread.id === threadId);
-                    const nextTab = targetThread?.topLevelTab ?? topLevelTab;
-                    const switchState = resolveTabSwitchNotice(topLevelTab, nextTab);
-                    if (switchState.shouldSwitch) {
-                        onTopLevelTabChange(nextTab);
-                        onSetTabSwitchNotice(switchState.notice);
-                        window.setTimeout(() => {
+                    startSelectionTransition(() => {
+                        const targetThread = threads.find((thread) => thread.id === threadId);
+                        const nextTab = targetThread?.topLevelTab ?? topLevelTab;
+                        const switchState = resolveTabSwitchNotice(topLevelTab, nextTab);
+                        if (switchState.shouldSwitch) {
+                            onTopLevelTabChange(nextTab);
+                            onSetTabSwitchNotice(switchState.notice);
+                            window.setTimeout(() => {
+                                onSetTabSwitchNotice(undefined);
+                            }, 2200);
+                        } else {
                             onSetTabSwitchNotice(undefined);
-                        }, 2200);
-                    } else {
-                        onSetTabSwitchNotice(undefined);
+                        }
+                        onSelectThreadId(threadId);
+                    });
+                }}
+                onPreviewThread={(threadId) => {
+                    const latestSession = sessions
+                        .filter((session) => session.threadId === threadId)
+                        .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+                        .at(0);
+                    if (!latestSession) {
+                        return;
                     }
-                    onSelectThreadId(threadId);
+
+                    void utils.session.status.prefetch({
+                        profileId,
+                        sessionId: latestSession.id,
+                    });
+                    void utils.session.listRuns.prefetch({
+                        profileId,
+                        sessionId: latestSession.id,
+                    });
                 }}
                 onToggleTagFilter={(tagId) => {
-                    onSelectTagIds((current) =>
-                        current.includes(tagId) ? current.filter((value) => value !== tagId) : [...current, tagId]
-                    );
+                    startSelectionTransition(() => {
+                        onSelectTagIds((current) =>
+                            current.includes(tagId) ? current.filter((value) => value !== tagId) : [...current, tagId]
+                        );
+                    });
                 }}
                 onToggleThreadFavorite={(threadId, nextFavorite) => {
                     if (!isEntityId(threadId, 'thr')) {
@@ -186,28 +221,58 @@ export function ConversationSidebarPane({
 
                     void (async () => {
                         setFeedbackMessage(undefined);
-                        setOptimisticFavoriteByThreadId((current) => ({
-                            ...current,
-                            [threadId]: nextFavorite,
-                        }));
+                        const currentThread = threads.find((thread) => thread.id === threadId);
+                        if (!currentThread) {
+                            return;
+                        }
+
+                        const previousThreadList = utils.conversation.listThreads.getData(threadListQueryInput);
+                        void utils.conversation.listThreads.setData(threadListQueryInput, (current) => {
+                            if (!current) {
+                                return current;
+                            }
+
+                            return {
+                                ...current,
+                                threads: patchThreadListRecord(current.threads, {
+                                    ...currentThread,
+                                    isFavorite: nextFavorite,
+                                }),
+                            };
+                        });
 
                         try {
-                            await setThreadFavorite({
+                            const result = await setThreadFavorite({
                                 profileId,
                                 threadId,
                                 isFavorite: nextFavorite,
                             });
-                            await refetchThreads();
+                            if (!result.updated || !result.thread) {
+                                setFeedbackMessage('Favorite status could not be updated.');
+                                if (previousThreadList) {
+                                    void utils.conversation.listThreads.setData(threadListQueryInput, previousThreadList);
+                                }
+                                return;
+                            }
+                            const updatedThread = result.thread;
+
+                            void utils.conversation.listThreads.setData(threadListQueryInput, (current) => {
+                                if (!current) {
+                                    return current;
+                                }
+
+                                return {
+                                    ...current,
+                                    threads: patchThreadListRecord(current.threads, updatedThread),
+                                };
+                            });
                         } catch (error) {
+                            if (previousThreadList) {
+                                void utils.conversation.listThreads.setData(threadListQueryInput, previousThreadList);
+                            }
                             setFeedbackMessage(
                                 error instanceof Error ? error.message : 'Favorite status could not be updated.'
                             );
-                        } finally {
-                            setOptimisticFavoriteByThreadId((current) => {
-                                const nextState = { ...current };
-                                delete nextState[threadId];
-                                return nextState;
-                            });
                         }
                     })();
                 }}
@@ -218,21 +283,60 @@ export function ConversationSidebarPane({
                         workspaceLabel,
                     });
                 }}
-                onScopeFilterChange={onScopeFilterChange}
-                onWorkspaceFilterChange={onWorkspaceFilterChange}
-                onSortChange={onSortChange}
-                onShowAllModesChange={onShowAllModesChange}
-                onGroupViewChange={onGroupViewChange}
+                onScopeFilterChange={(scope) => {
+                    startTransition(() => {
+                        onScopeFilterChange(scope);
+                    });
+                }}
+                onWorkspaceFilterChange={(nextWorkspaceFingerprint) => {
+                    startTransition(() => {
+                        onWorkspaceFilterChange(nextWorkspaceFingerprint);
+                    });
+                }}
+                onSortChange={(nextSort) => {
+                    startTransition(() => {
+                        onSortChange(nextSort);
+                    });
+                }}
+                onShowAllModesChange={(nextShowAllModes) => {
+                    startTransition(() => {
+                        onShowAllModesChange(nextShowAllModes);
+                    });
+                }}
+                onGroupViewChange={(nextGroupView) => {
+                    startTransition(() => {
+                        onGroupViewChange(nextGroupView);
+                    });
+                }}
                 onCreateThread={async (input) => {
                     const result = await createThread({
                         profileId,
                         topLevelTab,
                         ...input,
                     });
+                    const createdThread = toThreadListRecord(result);
+                    void utils.conversation.listBuckets.setData({ profileId }, (current) => {
+                        if (!current) {
+                            return current;
+                        }
+
+                        return {
+                            buckets: upsertBucketRecord(current.buckets, result.bucket),
+                        };
+                    });
+                    void utils.conversation.listThreads.setData(threadListQueryInput, (current) => {
+                        if (!current) {
+                            return current;
+                        }
+
+                        return {
+                            ...current,
+                            threads: upsertThreadListRecord(current.threads, createdThread, sort),
+                        };
+                    });
                     onSelectThreadId(result.thread.id);
                     onSelectSessionId(undefined);
                     onSelectRunId(undefined);
-                    await Promise.all([refetchBuckets(), refetchThreads()]);
                 }}
                 onAddTagToThread={async (threadId, label) => {
                     if (!isEntityId(threadId, 'thr')) {
@@ -240,13 +344,15 @@ export function ConversationSidebarPane({
                     }
 
                     setFeedbackMessage(undefined);
+                    const previousTags = utils.conversation.listTags.getData({ profileId });
+                    const previousShellBootstrap = utils.runtime.getShellBootstrap.getData({ profileId });
 
                     try {
                         const upserted = await upsertTag({
                             profileId,
                             label,
                         });
-                        const existingTagIds = visibleThreadTagIdsByThread.get(threadId) ?? [];
+                        const existingTagIds = threadTagIdsByThread.get(threadId) ?? [];
                         const nextTagIds = [...new Set([...existingTagIds, upserted.tag.id])];
                         const validTagIds = nextTagIds.filter(
                             (tagId): tagId is EntityId<'tag'> => isEntityId(tagId, 'tag')
@@ -256,25 +362,56 @@ export function ConversationSidebarPane({
                             return;
                         }
 
-                        setOptimisticTagIdsByThreadId((current) => ({
-                            ...current,
-                            [threadId]: validTagIds,
-                        }));
+                        void utils.conversation.listTags.setData({ profileId }, (current) => {
+                            if (!current) {
+                                return current;
+                            }
 
-                        await setThreadTags({
+                            return {
+                                tags: upsertTagRecord(current.tags, upserted.tag),
+                            };
+                        });
+                        void utils.runtime.getShellBootstrap.setData({ profileId }, (current) => {
+                            if (!current) {
+                                return current;
+                            }
+
+                            const optimisticThreadTags: ThreadTagRecord[] = validTagIds.map((tagId) => ({
+                                profileId,
+                                threadId,
+                                tagId,
+                                createdAt: new Date().toISOString(),
+                            }));
+
+                            return {
+                                ...current,
+                                threadTags: replaceThreadTagRelations(current.threadTags, threadId, optimisticThreadTags),
+                            };
+                        });
+
+                        const result = await setThreadTags({
                             profileId,
                             threadId,
                             tagIds: validTagIds,
                         });
-                        await Promise.all([refetchTags(), refetchShellBootstrap()]);
-                    } catch (error) {
-                        setFeedbackMessage(error instanceof Error ? error.message : 'Thread tags could not be updated.');
-                    } finally {
-                        setOptimisticTagIdsByThreadId((current) => {
-                            const nextState = { ...current };
-                            delete nextState[threadId];
-                            return nextState;
+                        void utils.runtime.getShellBootstrap.setData({ profileId }, (current) => {
+                            if (!current) {
+                                return current;
+                            }
+
+                            return {
+                                ...current,
+                                threadTags: replaceThreadTagRelations(current.threadTags, threadId, result.threadTags),
+                            };
                         });
+                    } catch (error) {
+                        if (previousTags) {
+                            void utils.conversation.listTags.setData({ profileId }, previousTags);
+                        }
+                        if (previousShellBootstrap) {
+                            void utils.runtime.getShellBootstrap.setData({ profileId }, previousShellBootstrap);
+                        }
+                        setFeedbackMessage(error instanceof Error ? error.message : 'Thread tags could not be updated.');
                     }
                 }}
             />
@@ -300,6 +437,12 @@ export function ConversationSidebarPane({
                     }
 
                     void (async () => {
+                        const previousBucketList = utils.conversation.listBuckets.getData({ profileId });
+                        const previousThreadList = utils.conversation.listThreads.getData(threadListQueryInput);
+                        const previousTagList = utils.conversation.listTags.getData({ profileId });
+                        const previousShellBootstrap = utils.runtime.getShellBootstrap.getData({ profileId });
+                        const previousSessionList = utils.session.list.getData({ profileId });
+
                         try {
                             const result = await deleteWorkspaceThreads({
                                 profileId,
@@ -311,6 +454,12 @@ export function ConversationSidebarPane({
                                 onSelectSessionId(undefined);
                                 onSelectRunId(undefined);
                             } else if (
+                                selectedSessionId &&
+                                result.sessionIds.includes(selectedSessionId)
+                            ) {
+                                onSelectSessionId(undefined);
+                                onSelectRunId(undefined);
+                            } else if (
                                 selectedThread &&
                                 selectedThread.workspaceFingerprint === workspaceDeleteTarget.workspaceFingerprint &&
                                 result.deletedThreadIds.length > 0
@@ -319,16 +468,66 @@ export function ConversationSidebarPane({
                                 onSelectRunId(undefined);
                             }
 
+                            const deletedSidebarRecords = removeDeletedSidebarRecords({
+                                buckets,
+                                threads,
+                                tags,
+                                threadTags: previousShellBootstrap?.threadTags ?? [],
+                                deletedThreadIds: result.deletedThreadIds,
+                                deletedTagIds: result.deletedTagIds,
+                                deletedConversationIds: result.deletedConversationIds,
+                            });
+                            void utils.conversation.listBuckets.setData({ profileId }, {
+                                buckets: deletedSidebarRecords.buckets,
+                            });
+                            void utils.conversation.listThreads.setData(threadListQueryInput, (current) => {
+                                if (!current) {
+                                    return current;
+                                }
+
+                                return {
+                                    ...current,
+                                    threads: deletedSidebarRecords.threads,
+                                };
+                            });
+                            void utils.conversation.listTags.setData({ profileId }, {
+                                tags: deletedSidebarRecords.tags,
+                            });
+                            if (previousShellBootstrap) {
+                                void utils.runtime.getShellBootstrap.setData({ profileId }, {
+                                    ...previousShellBootstrap,
+                                    threadTags: deletedSidebarRecords.threadTags,
+                                });
+                            }
+                            if (previousSessionList) {
+                                void utils.session.list.setData(
+                                    { profileId },
+                                    {
+                                        sessions: previousSessionList.sessions.filter(
+                                            (session) => !result.sessionIds.includes(session.id)
+                                        ),
+                                    }
+                                );
+                            }
+
                             setWorkspaceDeleteTarget(undefined);
                             setIncludeFavoriteThreads(false);
-                            await Promise.all([
-                                refetchBuckets(),
-                                refetchThreads(),
-                                refetchTags(),
-                                refetchShellBootstrap(),
-                                refetchSessions(),
-                            ]);
                         } catch (error) {
+                            if (previousBucketList) {
+                                void utils.conversation.listBuckets.setData({ profileId }, previousBucketList);
+                            }
+                            if (previousThreadList) {
+                                void utils.conversation.listThreads.setData(threadListQueryInput, previousThreadList);
+                            }
+                            if (previousTagList) {
+                                void utils.conversation.listTags.setData({ profileId }, previousTagList);
+                            }
+                            if (previousShellBootstrap) {
+                                void utils.runtime.getShellBootstrap.setData({ profileId }, previousShellBootstrap);
+                            }
+                            if (previousSessionList) {
+                                void utils.session.list.setData({ profileId }, previousSessionList);
+                            }
                             setFeedbackMessage(
                                 error instanceof Error
                                     ? error.message

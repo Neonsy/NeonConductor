@@ -18,6 +18,9 @@ function createInvalidateLeaf(calls: InvalidationCall[], key: string) {
             });
             return Promise.resolve(undefined);
         },
+        setData: vi.fn(),
+        getData: vi.fn(),
+        prefetch: vi.fn(() => Promise.resolve(undefined)),
     };
 }
 

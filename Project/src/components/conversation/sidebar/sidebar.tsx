@@ -32,6 +32,7 @@ interface ConversationSidebarProps {
     statusMessage?: string;
     statusTone?: 'info' | 'error';
     onSelectThread: (threadId: string) => void;
+    onPreviewThread?: (threadId: string) => void;
     onToggleTagFilter: (tagId: string) => void;
     onToggleThreadFavorite: (threadId: string, nextFavorite: boolean) => void;
     onRequestWorkspaceDelete: (workspaceFingerprint: string, workspaceLabel: string) => void;
@@ -83,6 +84,7 @@ export function ConversationSidebar({
     statusMessage,
     statusTone = 'info',
     onSelectThread,
+    onPreviewThread,
     onToggleTagFilter,
     onToggleThreadFavorite,
     onRequestWorkspaceDelete,
@@ -373,6 +375,12 @@ export function ConversationSidebar({
                                                 <button
                                                     type='button'
                                                     className='focus-visible:ring-ring min-w-0 flex-1 rounded-md text-left focus-visible:ring-2'
+                                                    onMouseEnter={() => {
+                                                        onPreviewThread?.(thread.id);
+                                                    }}
+                                                    onFocus={() => {
+                                                        onPreviewThread?.(thread.id);
+                                                    }}
                                                     onClick={() => {
                                                         onSelectThread(thread.id);
                                                     }}>

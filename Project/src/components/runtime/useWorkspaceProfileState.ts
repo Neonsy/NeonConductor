@@ -2,13 +2,13 @@ import { useEffect, useState } from 'react';
 
 import { BOOT_CRITICAL_QUERY_OPTIONS } from '@/web/components/runtime/startupQueryOptions';
 import { resolveActiveWorkspaceProfileId } from '@/web/components/runtime/workspaceSurfaceModel';
-import { refetchWorkspaceProfileQueries } from '@/web/components/runtime/workspaceSurfaceRefetch';
 import { trpc } from '@/web/trpc/client';
 
 import type { TopLevelTab } from '@/app/backend/runtime/contracts';
 
 export function useWorkspaceProfileState(input: { setTopLevelTab: (value: TopLevelTab) => void }) {
     const [activeProfileId, setActiveProfileId] = useState<string | undefined>(undefined);
+    const utils = trpc.useUtils();
 
     const profileListQuery = trpc.profile.list.useQuery(undefined, BOOT_CRITICAL_QUERY_OPTIONS);
     const activeProfileQuery = trpc.profile.getActive.useQuery(undefined, BOOT_CRITICAL_QUERY_OPTIONS);
@@ -29,16 +29,28 @@ export function useWorkspaceProfileState(input: { setTopLevelTab: (value: TopLev
     }, [activeProfileId, resolvedProfileId]);
 
     const profileSetActiveMutation = trpc.profile.setActive.useMutation({
-        onSuccess: async (result) => {
+        onSuccess: (result) => {
             if (!result.updated) {
                 return;
             }
 
             setActiveProfileId(result.profile.id);
             input.setTopLevelTab('chat');
-            await refetchWorkspaceProfileQueries({
-                profileListQuery,
-                activeProfileQuery,
+            utils.profile.getActive.setData(undefined, {
+                activeProfileId: result.profile.id,
+                profile: result.profile,
+            });
+            utils.profile.list.setData(undefined, (current) => {
+                if (!current) {
+                    return current;
+                }
+
+                return {
+                    profiles: current.profiles.map((profile) => ({
+                        ...profile,
+                        isActive: profile.id === result.profile.id,
+                    })),
+                };
             });
         },
     });
@@ -50,10 +62,6 @@ export function useWorkspaceProfileState(input: { setTopLevelTab: (value: TopLev
         setResolvedProfile: (profileId: string) => {
             setActiveProfileId(profileId);
             input.setTopLevelTab('chat');
-            void refetchWorkspaceProfileQueries({
-                profileListQuery,
-                activeProfileQuery,
-            });
         },
         selectProfile: async (profileId: string) => {
             if (!profileId || profileId === resolvedProfileId) {

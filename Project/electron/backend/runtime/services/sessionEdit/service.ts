@@ -1,4 +1,5 @@
 import { messageStore } from '@/app/backend/persistence/stores';
+import type { RunRecord, SessionSummaryRecord, ThreadListRecord } from '@/app/backend/persistence/types';
 import type { EntityId, RuntimeRunOptions, SessionEditInput } from '@/app/backend/runtime/contracts';
 import { runExecutionService } from '@/app/backend/runtime/services/runExecution/service';
 import { sessionHistoryService } from '@/app/backend/runtime/services/sessionHistory/service';
@@ -39,16 +40,19 @@ export type SessionEditResult =
           reason: SessionEditFailureReason;
           sessionId?: EntityId<'sess'>;
       }
-    | {
+      | {
           edited: true;
           editMode: SessionEditInput['editMode'];
           sourceSessionId: EntityId<'sess'>;
           sessionId: EntityId<'sess'>;
+          session: SessionSummaryRecord;
+          thread?: ThreadListRecord;
           sourceThreadId?: string;
           threadId?: string;
           topLevelTab?: 'chat' | 'agent' | 'orchestrator';
           started: boolean;
           runId?: EntityId<'run'>;
+          run?: RunRecord;
           runStatus?: 'running' | 'completed' | 'aborted' | 'error' | 'idle';
       };
 
@@ -135,11 +139,14 @@ export class SessionEditService {
             editMode: input.editMode,
             sourceSessionId: input.sessionId,
             sessionId: workingSessionId,
+            session: started.session,
+            ...(started.thread ? { thread: started.thread } : {}),
             ...(sourceThreadId ? { sourceThreadId } : {}),
             ...(threadId ? { threadId } : {}),
             ...(threadTopLevelTab ? { topLevelTab: threadTopLevelTab } : {}),
             started: true,
             runId: started.runId,
+            ...(started.run ? { run: started.run } : {}),
             runStatus: started.runStatus,
         };
     }

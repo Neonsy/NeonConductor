@@ -1,8 +1,9 @@
-import { modeStore, rulesetStore, skillfileStore } from '@/app/backend/persistence/stores';
+import { modeStore, rulesetStore, settingsStore, skillfileStore } from '@/app/backend/persistence/stores';
 import type {
     ModeDefinitionRecord,
     SkillfileDefinitionRecord,
 } from '@/app/backend/persistence/types';
+import { pickActiveMode, toActiveModeKey } from '@/app/backend/runtime/services/mode/selection';
 import { buildDiscoveredAssets, replaceDiscoveredModes, replaceDiscoveredRulesets, replaceDiscoveredSkillfiles } from '@/app/backend/runtime/services/registry/discovery';
 import { resolveRegistryPaths } from '@/app/backend/runtime/services/registry/filesystem';
 import { resolveAssetDefinitions, resolveModeDefinitions } from '@/app/backend/runtime/services/registry/resolution';
@@ -226,6 +227,16 @@ export async function refreshRegistry(input: {
         };
     }
 
+    const [resolvedRegistry, persistedAgentModeKey] = await Promise.all([
+        listResolvedRegistry(input),
+        settingsStore.getStringOptional(input.profileId, toActiveModeKey('agent', input.workspaceFingerprint)),
+    ]);
+    const agentModes = resolvedRegistry.resolved.modes.filter((mode) => mode.topLevelTab === 'agent');
+    const activeAgentMode = pickActiveMode(agentModes, persistedAgentModeKey, 'agent') ?? agentModes[0];
+    if (!activeAgentMode) {
+        throw new Error(`No enabled agent modes found for profile "${input.profileId}".`);
+    }
+
     return {
         paths,
         refreshed: {
@@ -234,8 +245,11 @@ export async function refreshRegistry(input: {
                 rulesets: globalAssets.rulesets.length,
                 skillfiles: globalAssets.skillfiles.length,
             },
-            ...(workspaceCounts ? { workspace: workspaceCounts } : {}),
+                ...(workspaceCounts ? { workspace: workspaceCounts } : {}),
         },
+        resolvedRegistry,
+        agentModes,
+        activeAgentMode,
     };
 }
 

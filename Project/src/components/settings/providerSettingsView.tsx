@@ -20,6 +20,7 @@ export function ProviderSettingsView({ profileId }: ProviderSettingsViewProps) {
                 providers={controller.providerItems}
                 selectedProviderId={controller.selectedProviderId}
                 onSelectProvider={controller.selectProvider}
+                onPreviewProvider={controller.prefetchProvider}
             />
 
             <div className='min-h-0 overflow-y-auto p-4'>

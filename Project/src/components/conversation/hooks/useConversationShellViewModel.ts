@@ -4,6 +4,7 @@ import { useThreadSidebarState } from '@/web/components/conversation/hooks/useTh
 import { useConversationQueries } from '@/web/components/conversation/shell/queries/useConversationQueries';
 import { isEntityId } from '@/web/components/conversation/shell/workspace/helpers';
 import { useConversationRunTarget } from '@/web/components/conversation/shell/workspace/useConversationRunTarget';
+import { PROGRESSIVE_QUERY_OPTIONS } from '@/web/lib/query/progressiveQueryOptions';
 import { trpc } from '@/web/trpc/client';
 
 import type { TopLevelTab } from '@/app/backend/runtime/contracts';
@@ -72,7 +73,7 @@ export function useConversationShellViewModel(input: {
         },
         {
             enabled: input.topLevelTab === 'agent',
-            refetchOnWindowFocus: false,
+            ...PROGRESSIVE_QUERY_OPTIONS,
         }
     );
     const pendingPermissions =

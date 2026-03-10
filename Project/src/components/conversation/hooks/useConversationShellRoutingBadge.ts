@@ -1,4 +1,5 @@
 import { formatRoutingBadge } from '@/web/components/conversation/shell/routingBadge';
+import { SECONDARY_QUERY_OPTIONS } from '@/web/lib/query/secondaryQueryOptions';
 import { trpc } from '@/web/trpc/client';
 
 interface UseConversationShellRoutingBadgeInput {
@@ -16,7 +17,7 @@ export function useConversationShellRoutingBadge(input: UseConversationShellRout
         },
         {
             enabled: input.providerId === 'kilo' && Boolean(input.modelId),
-            refetchOnWindowFocus: false,
+            ...SECONDARY_QUERY_OPTIONS,
         }
     );
 

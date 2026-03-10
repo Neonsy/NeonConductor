@@ -1,3 +1,4 @@
+import { PROGRESSIVE_QUERY_OPTIONS } from '@/web/lib/query/progressiveQueryOptions';
 import { trpc } from '@/web/trpc/client';
 
 import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
@@ -11,11 +12,11 @@ interface UseProviderSettingsQueriesInput {
 export function useProviderSettingsQueries(input: UseProviderSettingsQueriesInput) {
     const providersQuery = trpc.provider.listProviders.useQuery(
         { profileId: input.profileId },
-        { refetchOnWindowFocus: false }
+        PROGRESSIVE_QUERY_OPTIONS
     );
     const defaultsQuery = trpc.provider.getDefaults.useQuery(
         { profileId: input.profileId },
-        { refetchOnWindowFocus: false }
+        PROGRESSIVE_QUERY_OPTIONS
     );
 
     const listModelsQuery = trpc.provider.listModels.useQuery(
@@ -25,7 +26,7 @@ export function useProviderSettingsQueries(input: UseProviderSettingsQueriesInpu
         },
         {
             enabled: Boolean(input.selectedProviderId),
-            refetchOnWindowFocus: false,
+            ...PROGRESSIVE_QUERY_OPTIONS,
         }
     );
 
@@ -36,7 +37,7 @@ export function useProviderSettingsQueries(input: UseProviderSettingsQueriesInpu
         },
         {
             enabled: Boolean(input.selectedProviderId),
-            refetchOnWindowFocus: false,
+            ...PROGRESSIVE_QUERY_OPTIONS,
         }
     );
 
@@ -48,7 +49,7 @@ export function useProviderSettingsQueries(input: UseProviderSettingsQueriesInpu
         },
         {
             enabled: input.selectedProviderId === 'kilo' && input.selectedModelId.trim().length > 0,
-            refetchOnWindowFocus: false,
+            ...PROGRESSIVE_QUERY_OPTIONS,
         }
     );
 
@@ -60,7 +61,7 @@ export function useProviderSettingsQueries(input: UseProviderSettingsQueriesInpu
         },
         {
             enabled: input.selectedProviderId === 'kilo' && input.selectedModelId.trim().length > 0,
-            refetchOnWindowFocus: false,
+            ...PROGRESSIVE_QUERY_OPTIONS,
         }
     );
 
@@ -71,7 +72,7 @@ export function useProviderSettingsQueries(input: UseProviderSettingsQueriesInpu
         },
         {
             enabled: input.selectedProviderId === 'kilo',
-            refetchOnWindowFocus: false,
+            ...PROGRESSIVE_QUERY_OPTIONS,
         }
     );
 
@@ -81,7 +82,7 @@ export function useProviderSettingsQueries(input: UseProviderSettingsQueriesInpu
         },
         {
             enabled: Boolean(input.selectedProviderId),
-            refetchOnWindowFocus: false,
+            ...PROGRESSIVE_QUERY_OPTIONS,
         }
     );
 
@@ -91,7 +92,7 @@ export function useProviderSettingsQueries(input: UseProviderSettingsQueriesInpu
         },
         {
             enabled: input.selectedProviderId === 'openai',
-            refetchOnWindowFocus: false,
+            ...PROGRESSIVE_QUERY_OPTIONS,
         }
     );
 
@@ -101,7 +102,7 @@ export function useProviderSettingsQueries(input: UseProviderSettingsQueriesInpu
         },
         {
             enabled: input.selectedProviderId === 'openai',
-            refetchOnWindowFocus: false,
+            ...PROGRESSIVE_QUERY_OPTIONS,
         }
     );
 

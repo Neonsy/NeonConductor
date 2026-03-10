@@ -73,12 +73,24 @@ export class OrchestratorExecutionService {
     async abort(
         profileId: string,
         orchestratorRunId: EntityId<'orch'>
-    ): Promise<{ aborted: false; reason: 'not_found' } | { aborted: true; runId: EntityId<'orch'> }> {
-        return abortOrchestratorRun({
+    ): Promise<
+        | { aborted: false; reason: 'not_found' }
+        | { aborted: true; runId: EntityId<'orch'>; latest: { found: false } | { found: true; run: OrchestratorRunRecord; steps: OrchestratorStepRecord[] } }
+    > {
+        const result = await abortOrchestratorRun({
             profileId,
             orchestratorRunId,
             activeRuns: this.activeRuns,
         });
+
+        if (!result.aborted) {
+            return result;
+        }
+
+        return {
+            ...result,
+            latest: await getOrchestratorStatus(profileId, orchestratorRunId),
+        };
     }
 
     private async executeSequentially(input: {

@@ -21,7 +21,24 @@ interface ProviderAuthView {
     authMethod: string;
 }
 
-interface SubmitPromptInput {
+type PlanStartSuccessResult = { plan: unknown };
+type RunStartAcceptedResult = { accepted: true };
+type RunStartRejectedResult = { accepted: false; message?: string };
+
+function isAcceptedRunResult<
+    TRunStartAcceptedResult extends RunStartAcceptedResult,
+    TRunStartRejectedResult extends RunStartRejectedResult,
+>(
+    result: TRunStartAcceptedResult | TRunStartRejectedResult
+): result is TRunStartAcceptedResult {
+    return result.accepted;
+}
+
+interface SubmitPromptInput<
+    TPlanStartResult extends PlanStartSuccessResult,
+    TRunStartAcceptedResult extends RunStartAcceptedResult,
+    TRunStartRejectedResult extends RunStartRejectedResult,
+> {
     prompt: string;
     attachments?: ComposerImageAttachmentInput[];
     isStartingRun: boolean;
@@ -35,15 +52,21 @@ interface SubmitPromptInput {
     resolvedRunTarget: RunTargetSelection | undefined;
     runtimeOptions: RuntimeRunOptions;
     providerById: Map<RuntimeProviderId, ProviderAuthView>;
-    startPlan: (input: PlanStartInput) => Promise<unknown>;
-    startRun: (input: SessionStartRunInput) => Promise<unknown>;
+    startPlan: (input: PlanStartInput) => Promise<TPlanStartResult>;
+    startRun: (input: SessionStartRunInput) => Promise<TRunStartAcceptedResult | TRunStartRejectedResult>;
     onPromptCleared: () => void;
-    onPlanRefetch: () => void;
-    onRuntimeRefetch: () => void;
+    onPlanStarted: (result: TPlanStartResult) => void;
+    onRunStarted: (result: TRunStartAcceptedResult) => void;
     onError: (message: string) => void;
 }
 
-export async function submitPrompt(input: SubmitPromptInput): Promise<void> {
+export async function submitPrompt<
+    TPlanStartResult extends PlanStartSuccessResult,
+    TRunStartAcceptedResult extends RunStartAcceptedResult,
+    TRunStartRejectedResult extends RunStartRejectedResult,
+>(
+    input: SubmitPromptInput<TPlanStartResult, TRunStartAcceptedResult, TRunStartRejectedResult>
+): Promise<void> {
     const trimmedPrompt = input.prompt.trim();
     const attachments = input.attachments ?? [];
     if ((trimmedPrompt.length === 0 && attachments.length === 0) || input.isStartingRun) {
@@ -61,7 +84,7 @@ export async function submitPrompt(input: SubmitPromptInput): Promise<void> {
         }
 
         try {
-            await input.startPlan({
+            const result = await input.startPlan({
                 profileId: input.profileId,
                 sessionId: input.selectedSessionId,
                 topLevelTab: input.topLevelTab,
@@ -70,7 +93,7 @@ export async function submitPrompt(input: SubmitPromptInput): Promise<void> {
                 ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
             });
             input.onPromptCleared();
-            input.onPlanRefetch();
+            input.onPlanStarted(result);
         } catch (error: unknown) {
             const message = error instanceof Error ? error.message : String(error);
             input.onError(`Plan start failed: ${message}`);
@@ -84,6 +107,7 @@ export async function submitPrompt(input: SubmitPromptInput): Promise<void> {
     }
 
     const selectedProvider = input.providerById.get(input.resolvedRunTarget.providerId);
+    const providerLabel = selectedProvider?.label ?? input.resolvedRunTarget.providerId;
     if (selectedProvider && !isProviderRunnable(selectedProvider.authState, selectedProvider.authMethod)) {
         input.onError(
             `${selectedProvider.label} is not authenticated. Open Settings > Providers to connect it before running.`
@@ -92,7 +116,7 @@ export async function submitPrompt(input: SubmitPromptInput): Promise<void> {
     }
 
     try {
-        await input.startRun({
+        const result = await input.startRun({
             profileId: input.profileId,
             sessionId: input.selectedSessionId,
             prompt: trimmedPrompt,
@@ -105,11 +129,15 @@ export async function submitPrompt(input: SubmitPromptInput): Promise<void> {
             ...(input.worktreeId ? { worktreeId: input.worktreeId } : {}),
             runtimeOptions: input.runtimeOptions,
         });
+        if (!isAcceptedRunResult(result)) {
+            const message = typeof result.message === 'string' ? result.message : 'Run start was rejected.';
+            input.onError(toActionableRunError(message, providerLabel));
+            return;
+        }
         input.onPromptCleared();
-        input.onRuntimeRefetch();
+        input.onRunStarted(result);
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
-        const providerLabel = selectedProvider?.label ?? input.resolvedRunTarget.providerId;
         input.onError(toActionableRunError(message, providerLabel));
     }
 }

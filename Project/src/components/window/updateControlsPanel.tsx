@@ -1,7 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
+import type { RefObject } from 'react';
 
 import { Button } from '@/web/components/ui/button';
 import { ConfirmDialog } from '@/web/components/ui/confirmDialog';
+import { PROGRESSIVE_QUERY_OPTIONS } from '@/web/lib/query/progressiveQueryOptions';
+import {
+    getUpdatesStatusRefetchInterval,
+    UPDATES_STATUS_QUERY_OPTIONS,
+} from '@/web/components/window/updatesStatusQueryOptions';
 import { trpc } from '@/web/trpc/client';
 
 type UpdateChannel = 'stable' | 'beta' | 'alpha';
@@ -9,6 +15,7 @@ type UpdateChannel = 'stable' | 'beta' | 'alpha';
 interface UpdateControlsPanelProps {
     open: boolean;
     onClose: () => void;
+    anchorRef?: RefObject<HTMLElement | null>;
 }
 
 const CHANNEL_OPTIONS: Array<{ id: UpdateChannel; label: string; description: string }> = [
@@ -17,12 +24,60 @@ const CHANNEL_OPTIONS: Array<{ id: UpdateChannel; label: string; description: st
     { id: 'alpha', label: 'Alpha', description: 'Earliest builds with highest risk.' },
 ];
 
-export function UpdateControlsPanel({ open, onClose }: UpdateControlsPanelProps) {
-    const channelQuery = trpc.updates.getChannel.useQuery(undefined, { refetchOnWindowFocus: false });
-    const checkMutation = trpc.updates.checkForUpdates.useMutation();
+export function UpdateControlsPanel({ open, onClose, anchorRef }: UpdateControlsPanelProps) {
+    const utils = trpc.useUtils();
+    const panelRef = useRef<HTMLElement>(null);
+    const titleId = useId();
+    const descriptionId = useId();
+    const [feedbackMessage, setFeedbackMessage] = useState<string | undefined>(undefined);
+    const [feedbackTone, setFeedbackTone] = useState<'success' | 'error' | 'info'>('info');
+    const [panelPosition, setPanelPosition] = useState<{ top: number; left: number } | undefined>(undefined);
+    const channelQuery = trpc.updates.getChannel.useQuery(undefined, PROGRESSIVE_QUERY_OPTIONS);
+    const switchStatusQuery = trpc.updates.getSwitchStatus.useQuery(undefined, {
+        enabled: open,
+        ...UPDATES_STATUS_QUERY_OPTIONS,
+        refetchInterval: (query) => getUpdatesStatusRefetchInterval(query.state.data),
+    });
+    const checkMutation = trpc.updates.checkForUpdates.useMutation({
+        onSuccess: (result) => {
+            setFeedbackTone(result.started ? 'success' : 'info');
+            setFeedbackMessage(result.message);
+            if (result.started) {
+                void utils.updates.getSwitchStatus.invalidate();
+            }
+        },
+        onError: (error) => {
+            setFeedbackTone('error');
+            setFeedbackMessage(error.message);
+        },
+    });
     const setChannelMutation = trpc.updates.setChannel.useMutation({
-        onSuccess: () => {
-            void channelQuery.refetch();
+        onMutate: async (nextChannel) => {
+            setFeedbackMessage(undefined);
+            const previousChannelState = utils.updates.getChannel.getData(undefined);
+            void utils.updates.getChannel.setData(undefined, {
+                channel: nextChannel,
+            });
+            return {
+                previousChannelState,
+            };
+        },
+        onSuccess: (result) => {
+            void utils.updates.getChannel.setData(undefined, {
+                channel: result.channel,
+            });
+            setFeedbackTone(result.changed ? 'success' : 'info');
+            setFeedbackMessage(result.message);
+            if (result.checkStarted) {
+                void utils.updates.getSwitchStatus.invalidate();
+            }
+        },
+        onError: (error, _variables, context) => {
+            if (context?.previousChannelState) {
+                void utils.updates.getChannel.setData(undefined, context.previousChannelState);
+            }
+            setFeedbackTone('error');
+            setFeedbackMessage(error.message);
         },
     });
     const [pendingChannel, setPendingChannel] = useState<UpdateChannel | null>(null);
@@ -31,20 +86,119 @@ export function UpdateControlsPanel({ open, onClose }: UpdateControlsPanelProps)
 
     const selectedMeta = CHANNEL_OPTIONS.find((option) => option.id === currentChannel);
 
+    useEffect(() => {
+        if (!open || !anchorRef?.current) {
+            setPanelPosition(undefined);
+            return;
+        }
+
+        const updatePosition = () => {
+            const bounds = anchorRef.current?.getBoundingClientRect();
+            if (!bounds) {
+                return;
+            }
+
+            setPanelPosition({
+                top: bounds.bottom + 8,
+                left: Math.max(8, bounds.left),
+            });
+        };
+
+        updatePosition();
+        window.addEventListener('resize', updatePosition);
+        window.addEventListener('scroll', updatePosition, true);
+
+        return () => {
+            window.removeEventListener('resize', updatePosition);
+            window.removeEventListener('scroll', updatePosition, true);
+        };
+    }, [anchorRef, open]);
+
+    useEffect(() => {
+        if (!open) {
+            return;
+        }
+
+        const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        panelRef.current?.focus();
+
+        const handlePointerDown = (event: MouseEvent) => {
+            const target = event.target;
+            if (!(target instanceof Node)) {
+                return;
+            }
+
+            if (panelRef.current?.contains(target) || anchorRef?.current?.contains(target)) {
+                return;
+            }
+
+            onClose();
+        };
+
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                onClose();
+            }
+        };
+
+        document.addEventListener('mousedown', handlePointerDown);
+        document.addEventListener('keydown', handleKeyDown);
+
+        return () => {
+            document.removeEventListener('mousedown', handlePointerDown);
+            document.removeEventListener('keydown', handleKeyDown);
+            previousFocus?.focus();
+        };
+    }, [anchorRef, onClose, open]);
+
     if (!open) {
         return null;
     }
 
     return (
         <>
-            <div className='fixed inset-0 z-40' onClick={onClose} />
-            <section className='border-border bg-card text-card-foreground absolute top-10 left-2 z-50 w-[320px] rounded-xl border p-3 shadow-xl'>
+            <section
+                ref={panelRef}
+                role='dialog'
+                aria-modal='false'
+                aria-labelledby={titleId}
+                aria-describedby={descriptionId}
+                tabIndex={-1}
+                className='border-border bg-card text-card-foreground fixed z-50 w-[320px] rounded-xl border p-3 shadow-xl outline-none'
+                style={{
+                    top: `${String(panelPosition?.top ?? 48)}px`,
+                    left: `${String(panelPosition?.left ?? 8)}px`,
+                }}>
                 <div className='mb-2'>
-                    <p className='text-xs font-semibold tracking-[0.12em] uppercase'>Updates</p>
-                    <p className='text-muted-foreground mt-1 text-xs'>
+                    <p id={titleId} className='text-xs font-semibold tracking-[0.12em] uppercase'>
+                        Updates
+                    </p>
+                    <p id={descriptionId} className='text-muted-foreground mt-1 text-xs'>
                         Current: <span className='text-foreground font-medium'>{selectedMeta?.label ?? 'Stable'}</span>
                     </p>
                 </div>
+
+                {switchStatusQuery.data && switchStatusQuery.data.phase !== 'idle' ? (
+                    <div
+                        aria-live='polite'
+                        className='border-border bg-background/70 mb-3 rounded-lg border px-3 py-2 text-xs'>
+                        {switchStatusQuery.data.message}
+                    </div>
+                ) : null}
+                {feedbackMessage ? (
+                    <div
+                        aria-live='polite'
+                        className={`mb-3 rounded-lg border px-3 py-2 text-xs ${
+                            feedbackTone === 'error'
+                                ? 'border-destructive/20 bg-destructive/10 text-destructive'
+                                : feedbackTone === 'success'
+                                  ? 'border-primary/20 bg-primary/10 text-primary'
+                                  : 'border-border bg-background/70 text-muted-foreground'
+                        }`}>
+                        {feedbackMessage}
+                    </div>
+                ) : null}
 
                 <div className='space-y-1.5'>
                     {CHANNEL_OPTIONS.map((channel) => {
@@ -77,7 +231,7 @@ export function UpdateControlsPanel({ open, onClose }: UpdateControlsPanelProps)
                         type='button'
                         size='sm'
                         variant='outline'
-                        disabled={checkMutation.isPending}
+                        disabled={checkMutation.isPending || switchStatusQuery.data?.canInteract === false}
                         onClick={() => {
                             void checkMutation.mutateAsync();
                         }}>

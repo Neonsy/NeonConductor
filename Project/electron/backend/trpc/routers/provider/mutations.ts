@@ -12,6 +12,7 @@ import {
     providerSetOrganizationInputSchema,
     providerStartAuthInputSchema,
     providerSyncCatalogInputSchema,
+    type RuntimeProviderId,
 } from '@/app/backend/runtime/contracts';
 import { publicProcedure } from '@/app/backend/trpc/init';
 import {
@@ -20,6 +21,11 @@ import {
     emitProviderUpsertEvent,
 } from '@/app/backend/trpc/routers/provider/events';
 import { isProviderNotFoundCode, mapAuthErrorToOperationalCode, throwWithCode } from '@/app/backend/trpc/routers/provider/shared';
+
+async function getProviderListItem(profileId: string, providerId: RuntimeProviderId) {
+    const providers = await providerManagementService.listProviders(profileId);
+    return providers.find((provider) => provider.id === providerId) ?? null;
+}
 
 export const providerMutationProcedures = {
     startAuth: publicProcedure.input(providerStartAuthInputSchema).mutation(async ({ input, ctx }) => {
@@ -62,6 +68,7 @@ export const providerMutationProcedures = {
                 flowId: input.flowId,
                 flowStatus: result.value.flow.status,
                 authState: result.value.state.authState,
+                state: result.value.state,
             },
         });
 
@@ -85,6 +92,7 @@ export const providerMutationProcedures = {
                 flowId: input.flowId,
                 flowStatus: result.value.flow.status,
                 authState: result.value.state.authState,
+                state: result.value.state,
             },
         });
 
@@ -106,6 +114,7 @@ export const providerMutationProcedures = {
                 profileId: input.profileId,
                 providerId: input.providerId,
                 flowId: input.flowId,
+                state: result.value.state,
             },
         });
 
@@ -127,6 +136,7 @@ export const providerMutationProcedures = {
                 profileId: input.profileId,
                 providerId: input.providerId,
                 authState: stateResult.value.authState,
+                state: stateResult.value,
             },
         });
 
@@ -148,6 +158,15 @@ export const providerMutationProcedures = {
                 throwWithCode(endpointResult.error.code, endpointResult.error.message);
             }
 
+            const [provider, defaults, models] = await Promise.all([
+                getProviderListItem(input.profileId, input.providerId),
+                providerManagementService.getDefaults(input.profileId),
+                providerManagementService.listModels(input.profileId, input.providerId),
+            ]);
+            if (models.isErr()) {
+                throwWithCode(models.error.code, models.error.message);
+            }
+
             await emitProviderUpsertEvent({
                 providerId: input.providerId,
                 eventType: 'provider.endpoint-profile.set',
@@ -155,10 +174,19 @@ export const providerMutationProcedures = {
                     profileId: input.profileId,
                     providerId: input.providerId,
                     value: endpointResult.value.value,
+                    endpointProfile: endpointResult.value,
+                    defaults,
+                    models: models.value,
+                    ...(provider ? { provider } : {}),
                 },
             });
 
-            return { endpointProfile: endpointResult.value };
+            return {
+                endpointProfile: endpointResult.value,
+                defaults,
+                models: models.value,
+                ...(provider ? { provider } : {}),
+            };
         }),
     setOrganization: publicProcedure.input(providerSetOrganizationInputSchema).mutation(async ({ input }) => {
         const result = await providerManagementService.setOrganization(
@@ -170,6 +198,16 @@ export const providerMutationProcedures = {
             throwWithCode(mapAuthErrorToOperationalCode(result.error.code), result.error.message);
         }
 
+        const [provider, defaults, models, authState] = await Promise.all([
+            getProviderListItem(input.profileId, input.providerId),
+            providerManagementService.getDefaults(input.profileId),
+            providerManagementService.listModels(input.profileId, input.providerId),
+            providerManagementService.getAuthState(input.profileId, input.providerId),
+        ]);
+        if (models.isErr()) {
+            throwWithCode(models.error.code, models.error.message);
+        }
+
         await emitProviderUpsertEvent({
             providerId: input.providerId,
             eventType: 'provider.organization.set',
@@ -177,10 +215,21 @@ export const providerMutationProcedures = {
                 profileId: input.profileId,
                 providerId: input.providerId,
                 organizationId: input.organizationId ?? null,
+                accountContext: result.value,
+                authState,
+                defaults,
+                models: models.value,
+                ...(provider ? { provider } : {}),
             },
         });
 
-        return result.value;
+        return {
+            ...result.value,
+            authState,
+            defaults,
+            models: models.value,
+            ...(provider ? { provider } : {}),
+        };
     }),
     setModelRoutingPreference: publicProcedure
         .input(providerSetModelRoutingPreferenceInputSchema)
@@ -192,6 +241,11 @@ export const providerMutationProcedures = {
 
             const preference = result.value;
 
+            const providers = await providerManagementService.listModelProviders(input);
+            if (providers.isErr()) {
+                throwWithCode(providers.error.code, providers.error.message);
+            }
+
             await emitProviderUpsertEvent({
                 providerId: input.providerId,
                 eventType: 'provider.kilo-routing.set',
@@ -202,10 +256,15 @@ export const providerMutationProcedures = {
                     routingMode: preference.routingMode,
                     sort: preference.sort ?? null,
                     pinnedProviderId: preference.pinnedProviderId ?? null,
+                    preference,
+                    providers: providers.value,
                 },
             });
 
-            return { preference };
+            return {
+                preference,
+                providers: providers.value,
+            };
         }),
     setApiKey: publicProcedure.input(providerSetApiKeyInputSchema).mutation(async ({ input, ctx }) => {
         const stateResult = await providerManagementService.setApiKey(input.profileId, input.providerId, input.apiKey, {
@@ -228,6 +287,7 @@ export const providerMutationProcedures = {
             payload: {
                 profileId: input.profileId,
                 providerId: input.providerId,
+                state: stateResult.value,
             },
         });
 
@@ -258,6 +318,7 @@ export const providerMutationProcedures = {
             payload: {
                 profileId: input.profileId,
                 providerId: input.providerId,
+                state: clearResult.value.authState,
             },
         });
 
@@ -285,6 +346,15 @@ export const providerMutationProcedures = {
             throwWithCode(result.error.code, result.error.message);
         }
 
+        const [provider, defaults, models] = await Promise.all([
+            getProviderListItem(input.profileId, input.providerId),
+            providerManagementService.getDefaults(input.profileId),
+            providerManagementService.listModels(input.profileId, input.providerId),
+        ]);
+        if (models.isErr()) {
+            throwWithCode(models.error.code, models.error.message);
+        }
+
         await emitProviderSyncEvent({
             providerId: input.providerId,
             eventType: 'provider.catalog.sync',
@@ -295,10 +365,18 @@ export const providerMutationProcedures = {
                 status: result.value.status,
                 reason: result.value.reason ?? null,
                 modelCount: result.value.modelCount,
+                defaults,
+                models: models.value,
+                ...(provider ? { provider } : {}),
             },
         });
 
-        return result.value;
+        return {
+            ...result.value,
+            defaults,
+            models: models.value,
+            ...(provider ? { provider } : {}),
+        };
     }),
     setDefault: publicProcedure.input(providerSetDefaultInputSchema).mutation(async ({ input }) => {
         const result = await providerManagementService.setDefault(input.profileId, input.providerId, input.modelId);
@@ -311,6 +389,10 @@ export const providerMutationProcedures = {
                     profileId: input.profileId,
                     providerId: input.providerId,
                     modelId: input.modelId,
+                    defaults: {
+                        providerId: result.defaultProviderId,
+                        modelId: result.defaultModelId,
+                    },
                 },
             });
         }

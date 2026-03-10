@@ -3,6 +3,7 @@ import { invalidateProviderQueries } from '@/web/lib/runtime/invalidation/provid
 import { invalidateMessageQueries, invalidateRunQueries, invalidateSessionQueries } from '@/web/lib/runtime/invalidation/sessionDomain';
 import { getRuntimeEventContext, type RuntimeEventContext, type TrpcUtils } from '@/web/lib/runtime/invalidation/shared';
 import { invalidateConversationQueries, invalidateTagQueries, invalidateThreadQueries } from '@/web/lib/runtime/invalidation/threadDomain';
+import { applyRuntimeEventPatches } from '@/web/lib/runtime/runtimeEventPatches';
 
 import type { RuntimeEventDomain, RuntimeEventRecordV1 } from '@/app/backend/persistence/types';
 
@@ -54,5 +55,10 @@ export async function invalidateQueriesForRuntimeEvent(
     event: RuntimeEventRecordV1
 ): Promise<void> {
     const context = getRuntimeEventContext(event);
+    const patched = await applyRuntimeEventPatches(utils, event, context);
+    if (patched) {
+        return;
+    }
+
     await runtimeEventInvalidators[event.domain](utils, event, context);
 }

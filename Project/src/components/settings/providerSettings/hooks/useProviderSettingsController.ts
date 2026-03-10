@@ -6,16 +6,19 @@ import { useKiloRoutingDraft } from '@/web/components/settings/providerSettings/
 import { useProviderSettingsAuthPolling } from '@/web/components/settings/providerSettings/hooks/useProviderSettingsAuthPolling';
 import { useProviderSettingsMutations } from '@/web/components/settings/providerSettings/hooks/useProviderSettingsMutations';
 import { useProviderSettingsQueries } from '@/web/components/settings/providerSettings/hooks/useProviderSettingsQueries';
+import { prefetchProviderSettingsData } from '@/web/components/settings/providerSettings/providerSettingsPrefetch';
 import { resolveSelectedModelId, resolveSelectedProviderId } from '@/web/components/settings/providerSettings/selection';
 import type {
     ActiveAuthFlow,
     ProviderAuthStateView,
     ProviderListItem,
 } from '@/web/components/settings/providerSettings/types';
+import { trpc } from '@/web/trpc/client';
 
 import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
 
 export function useProviderSettingsController(profileId: string) {
+    const utils = trpc.useUtils();
     const [selectedProviderId, setSelectedProviderId] = useState<RuntimeProviderId | undefined>(undefined);
     const [selectedModelId, setSelectedModelId] = useState('');
     const [apiKeyInput, setApiKeyInput] = useState('');
@@ -113,6 +116,13 @@ export function useProviderSettingsController(profileId: string) {
         setSelectedProviderId,
         setStatusMessage,
         mutations,
+        onPreviewProvider: (providerId) => {
+            prefetchProviderSettingsData({
+                profileId,
+                providerId,
+                trpcUtils: utils,
+            });
+        },
     });
 
     return {
@@ -161,6 +171,13 @@ export function useProviderSettingsController(profileId: string) {
         queries,
         mutations,
         ...actions,
+        prefetchProvider: (providerId: RuntimeProviderId) => {
+            prefetchProviderSettingsData({
+                profileId,
+                providerId,
+                trpcUtils: utils,
+            });
+        },
         setSelectedModelId,
         setApiKeyInput,
         setStatusMessage,

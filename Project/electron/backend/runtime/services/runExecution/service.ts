@@ -1,7 +1,8 @@
-import { sessionStore, threadStore } from '@/app/backend/persistence/stores';
+import { runStore, sessionStore, threadStore } from '@/app/backend/persistence/stores';
 import type { ProviderRuntimeTransportSelection } from '@/app/backend/providers/types';
 import type { EntityId } from '@/app/backend/runtime/contracts';
 import { withCorrelationContext } from '@/app/backend/runtime/services/common/logContext';
+import { sessionContextService } from '@/app/backend/runtime/services/context/sessionContextService';
 import type { RunExecutionError } from '@/app/backend/runtime/services/runExecution/errors';
 import { persistRunStart } from '@/app/backend/runtime/services/runExecution/persistRunStart';
 import { prepareRunStart } from '@/app/backend/runtime/services/runExecution/prepareRunStart';
@@ -208,10 +209,42 @@ export class RunExecutionService {
             ),
         });
 
+        const [run, sessionStatus, thread, resolvedContextStateResult] = await Promise.all([
+            runStore.getById(persisted.run.id),
+            sessionStore.status(input.profileId, input.sessionId),
+            threadStore.getListRecordById(input.profileId, sessionThread.thread.id),
+            sessionContextService.getResolvedStateForExecutionTarget({
+                profileId: input.profileId,
+                sessionId: input.sessionId,
+                providerId: prepared.activeTarget.providerId,
+                modelId: prepared.activeTarget.modelId,
+                topLevelTab: input.topLevelTab,
+                modeKey: input.modeKey,
+                ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
+            }),
+        ]);
+
+        if (!run || !sessionStatus.found) {
+            throw new Error('Run start persisted successfully but the updated session state could not be reloaded.');
+        }
+
+        const resolvedContextState = resolvedContextStateResult.isOk()
+            ? resolvedContextStateResult.value
+            : await sessionContextService.getResolvedState({
+                  profileId: input.profileId,
+                  sessionId: input.sessionId,
+                  providerId: prepared.activeTarget.providerId,
+                  modelId: prepared.activeTarget.modelId,
+              });
+
         return {
             accepted: true,
             runId: persisted.run.id,
             runStatus: 'running',
+            run,
+            session: sessionStatus.session,
+            resolvedContextState,
+            ...(thread ? { thread } : {}),
         };
     }
 

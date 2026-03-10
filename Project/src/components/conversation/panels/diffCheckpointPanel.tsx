@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { startTransition, useEffect, useState } from 'react';
 
 import { MarkdownContent } from '@/web/components/content/markdown/markdownContent';
 import { Button } from '@/web/components/ui/button';
+import { PROGRESSIVE_QUERY_OPTIONS } from '@/web/lib/query/progressiveQueryOptions';
 import { trpc } from '@/web/trpc/client';
 
 import type { CheckpointRecord, DiffFileArtifact, DiffRecord } from '@/app/backend/persistence/types';
@@ -55,6 +56,7 @@ export function DiffCheckpointPanel({
     const [confirmRollbackId, setConfirmRollbackId] = useState<CheckpointRecord['id'] | undefined>(undefined);
     const [rollbackTargetId, setRollbackTargetId] = useState<CheckpointRecord['id'] | undefined>(undefined);
     const [feedbackMessage, setFeedbackMessage] = useState<string | undefined>(undefined);
+    const utils = trpc.useUtils();
     const patchQuery = trpc.diff.getFilePatch.useQuery(
         selectedDiff && selectedPath
             ? {
@@ -69,12 +71,12 @@ export function DiffCheckpointPanel({
               },
         {
             enabled: Boolean(selectedDiff && selectedPath),
-            refetchOnWindowFocus: false,
+            ...PROGRESSIVE_QUERY_OPTIONS,
         }
     );
     const openPathMutation = trpc.system.openPath.useMutation();
     const rollbackMutation = trpc.checkpoint.rollback.useMutation({
-        onSuccess: (result) => {
+        onSuccess: async (result) => {
             if (!result.rolledBack) {
                 setFeedbackMessage(result.message ?? 'Rollback could not be completed.');
                 return;
@@ -94,6 +96,18 @@ export function DiffCheckpointPanel({
     useEffect(() => {
         setSelectedPath(firstSelectablePath);
     }, [firstSelectablePath, selectedDiff?.id]);
+
+    const prefetchPatch = (path: string) => {
+        if (!selectedDiff) {
+            return;
+        }
+
+        void utils.diff.getFilePatch.prefetch({
+            profileId,
+            diffId: selectedDiff.id,
+            path,
+        });
+    };
 
     const patchMarkdown = patchQuery.data?.found && patchQuery.data.patch ? `\`\`\`diff\n${patchQuery.data.patch}\n\`\`\`` : '';
     const fileGroups = selectedDiff?.artifact.kind === 'git' ? groupFilesByDirectory(selectedDiff.artifact.files) : [];
@@ -144,8 +158,16 @@ export function DiffCheckpointPanel({
                                                                 ? 'border-primary bg-primary/10'
                                                                 : 'border-border bg-background/60 hover:bg-accent'
                                                         }`}
+                                                        onMouseEnter={() => {
+                                                            prefetchPatch(file.path);
+                                                        }}
+                                                        onFocus={() => {
+                                                            prefetchPatch(file.path);
+                                                        }}
                                                         onClick={() => {
-                                                            setSelectedPath(file.path);
+                                                            startTransition(() => {
+                                                                setSelectedPath(file.path);
+                                                            });
                                                         }}>
                                                         <span className='truncate font-mono text-[12px]'>{file.path}</span>
                                                         <span className='text-muted-foreground ml-3 shrink-0 text-[11px] uppercase'>
@@ -275,10 +297,15 @@ export function DiffCheckpointPanel({
                             ) : null}
                         </header>
                         <div className='max-h-[32rem] overflow-auto p-3'>
-                            {patchQuery.isLoading ? (
+                            {patchQuery.isPending && !patchQuery.data ? (
                                 <p className='text-muted-foreground text-sm'>Loading patch…</p>
                             ) : patchQuery.data?.found ? (
-                                <MarkdownContent markdown={patchMarkdown} />
+                                <>
+                                    {patchQuery.isFetching ? (
+                                        <p className='text-muted-foreground mb-3 text-xs'>Updating patch preview…</p>
+                                    ) : null}
+                                    <MarkdownContent markdown={patchMarkdown} />
+                                </>
                             ) : selectedDiff.artifact.kind === 'git' ? (
                                 <p className='text-muted-foreground rounded-xl border border-dashed px-4 py-5 text-sm'>
                                     Select a changed file to inspect its patch.

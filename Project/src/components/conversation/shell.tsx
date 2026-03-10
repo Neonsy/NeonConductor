@@ -7,23 +7,27 @@ import { useConversationShellSessionActions } from '@/web/components/conversatio
 import { useConversationShellViewModel } from '@/web/components/conversation/hooks/useConversationShellViewModel';
 import { useConversationUiState } from '@/web/components/conversation/hooks/useConversationUiState';
 import { useThreadSidebarState } from '@/web/components/conversation/hooks/useThreadSidebarState';
+import { setResolvedContextStateCache } from '@/web/components/context/contextStateCache';
 import { MessageEditDialog } from '@/web/components/conversation/panels/messageEditDialog';
 import { useConversationMutations } from '@/web/components/conversation/shell/actions/useConversationMutations';
 import { buildConversationPlanOrchestrator } from '@/web/components/conversation/shell/composition/buildConversationPlanOrchestrator';
 import { buildConversationWorkspacePanels } from '@/web/components/conversation/shell/composition/buildConversationWorkspacePanels';
 import { buildConversationWorkspaceSectionState } from '@/web/components/conversation/shell/composition/buildConversationWorkspaceSectionState';
 import { ConversationWorkspaceSection } from '@/web/components/conversation/shell/composition/conversationWorkspaceSection';
+import { applyConversationSessionCacheUpdate } from '@/web/components/conversation/shell/conversationShellCache';
+import { setActivePlanCache, setOrchestratorLatestCache } from '@/web/components/conversation/shell/planCache';
 import { useConversationQueries } from '@/web/components/conversation/shell/queries/useConversationQueries';
-import { useConversationRefetch } from '@/web/components/conversation/shell/queries/useConversationRefetch';
 import { useConversationSync } from '@/web/components/conversation/shell/queries/useConversationSync';
 import { DEFAULT_RUN_OPTIONS, isEntityId, isProviderId } from '@/web/components/conversation/shell/workspace/helpers';
 import { useConversationRunTarget } from '@/web/components/conversation/shell/workspace/useConversationRunTarget';
 import { useConversationWorkspaceActions } from '@/web/components/conversation/shell/workspace/useConversationWorkspaceActions';
 import { ConversationSidebarPane } from '@/web/components/conversation/sidebar/conversationSidebarPane';
+import { PROGRESSIVE_QUERY_OPTIONS } from '@/web/lib/query/progressiveQueryOptions';
 import { useRuntimeEventStreamStore } from '@/web/lib/runtime/eventStream';
 import { trpc } from '@/web/trpc/client';
 
-import type { TopLevelTab } from '@/app/backend/runtime/contracts';
+import type { RunRecord, SessionSummaryRecord, ThreadListRecord } from '@/app/backend/persistence/types';
+import type { PlanRecordView, TopLevelTab } from '@/app/backend/runtime/contracts';
 import type { ConversationShellBootChromeReadiness } from '@/web/components/runtime/bootReadiness';
 
 interface ConversationShellProps {
@@ -56,10 +60,44 @@ export function ConversationShell({
         topLevelTab,
     });
     const mutations = useConversationMutations();
-    const refetch = useConversationRefetch({ queries });
+    type PlanStartResult = Awaited<ReturnType<typeof mutations.planStartMutation.mutateAsync>>;
+    type RunStartResult = Awaited<ReturnType<typeof mutations.startRunMutation.mutateAsync>>;
+    type AcceptedRunStartResult = Extract<RunStartResult, { accepted: true }>;
     const streamState = useRuntimeEventStreamStore((state) => state.connectionState);
     const selectedSessionId = uiState.selectedSessionId;
     const selectedRunId = uiState.selectedRunId;
+    const applySessionWorkspaceUpdate = useEffectEvent((input: {
+        session: SessionSummaryRecord;
+        run?: RunRecord;
+        thread?: ThreadListRecord;
+    }) => {
+        if (!isEntityId(input.session.id, 'sess')) {
+            return;
+        }
+
+        applyConversationSessionCacheUpdate({
+            utils,
+            profileId,
+            listThreadsInput: queries.listThreadsInput,
+            session: input.session,
+            ...(input.run ? { run: input.run } : {}),
+            ...(input.thread ? { thread: input.thread } : {}),
+            ...(input.run ? { seedEmptyMessagesForRun: input.run.id } : {}),
+        });
+    });
+    const applyPlanWorkspaceUpdate = useEffectEvent((result: { found: false } | { found: true; plan: PlanRecordView }) => {
+        if (!isEntityId(selectedSessionId, 'sess')) {
+            return;
+        }
+
+        setActivePlanCache({
+            utils,
+            profileId,
+            sessionId: selectedSessionId,
+            topLevelTab,
+            planResult: result,
+        });
+    });
 
     const sessionActions = useConversationShellSessionActions({
         profileId,
@@ -74,8 +112,20 @@ export function ConversationShell({
         },
         onSelectSessionId: uiState.setSelectedSessionId,
         onSelectRunId: uiState.setSelectedRunId,
-        refetchSessionIndex: () => {
-            void refetch.refetchSessionIndex();
+        onSessionCreated: ({ sessionId, session, thread }) => {
+            void utils.session.listRuns.setData(
+                {
+                    profileId,
+                    sessionId,
+                },
+                {
+                    runs: [],
+                }
+            );
+            applySessionWorkspaceUpdate({
+                session,
+                ...(thread ? { thread } : {}),
+            });
         },
     });
     const sidebarState = useThreadSidebarState({
@@ -118,6 +168,17 @@ export function ConversationShell({
     const contextSessionId = hasSelectedSession ? selectedSessionId : fallbackContextSessionId;
     const contextProviderId = runTargetState.selectedProviderIdForComposer ?? 'openai';
     const contextModelId = runTargetState.selectedModelIdForComposer ?? 'openai/gpt-5';
+    const contextStateQueryInput = {
+        profileId,
+        sessionId: contextSessionId,
+        providerId: contextProviderId,
+        modelId: contextModelId,
+        topLevelTab,
+        modeKey,
+        ...(shellViewModel.selectedThread?.workspaceFingerprint
+            ? { workspaceFingerprint: shellViewModel.selectedThread.workspaceFingerprint }
+            : {}),
+    };
     const isPlanningComposerMode = modeKey === 'plan' && (topLevelTab === 'agent' || topLevelTab === 'orchestrator');
     const canAttachImages =
         topLevelTab !== 'orchestrator' &&
@@ -129,24 +190,14 @@ export function ConversationShell({
           ? undefined
           : 'Select a vision-capable model to attach images.';
     const contextStateQuery = trpc.context.getResolvedState.useQuery(
-        {
-            profileId,
-            sessionId: contextSessionId,
-            providerId: contextProviderId,
-            modelId: contextModelId,
-            topLevelTab,
-            modeKey,
-            ...(shellViewModel.selectedThread?.workspaceFingerprint
-                ? { workspaceFingerprint: shellViewModel.selectedThread.workspaceFingerprint }
-                : {}),
-        },
+        contextStateQueryInput,
         {
             enabled:
                 hasSelectedSession &&
                 topLevelTab !== 'orchestrator' &&
                 Boolean(runTargetState.selectedProviderIdForComposer) &&
                 Boolean(runTargetState.selectedModelIdForComposer),
-            refetchOnWindowFocus: false,
+            ...PROGRESSIVE_QUERY_OPTIONS,
         }
     );
     const composer = useConversationShellComposer({
@@ -167,12 +218,24 @@ export function ConversationShell({
         ...(imageAttachmentBlockedReason ? { imageAttachmentBlockedReason } : {}),
         startPlan: mutations.planStartMutation.mutateAsync,
         startRun: mutations.startRunMutation.mutateAsync,
-        refetchActivePlan: () => {
-            void queries.activePlanQuery.refetch();
+        onPlanStarted: (result: PlanStartResult) => {
+            applyPlanWorkspaceUpdate({
+                found: true,
+                plan: result.plan,
+            });
         },
-        refetchSessionWorkspace: () => {
-            void refetch.refetchSessionWorkspace();
-            void contextStateQuery.refetch();
+        onRunStarted: (acceptedRun: AcceptedRunStartResult) => {
+            uiState.setSelectedRunId(acceptedRun.run.id);
+            applySessionWorkspaceUpdate({
+                session: acceptedRun.session,
+                run: acceptedRun.run,
+                ...(acceptedRun.thread ? { thread: acceptedRun.thread } : {}),
+            });
+            setResolvedContextStateCache({
+                utils,
+                queryInput: contextStateQueryInput,
+                state: acceptedRun.resolvedContextState,
+            });
         },
     });
     const editFlow = useConversationShellEditFlow({
@@ -191,8 +254,12 @@ export function ConversationShell({
         onPromptReset: () => {
             composer.resetComposer();
         },
-        refetchSessionWorkspace: () => {
-            void refetch.refetchSessionWorkspace();
+        onSessionEdited: ({ session, run, thread }) => {
+            applySessionWorkspaceUpdate({
+                session,
+                ...(run ? { run } : {}),
+                ...(thread ? { thread } : {}),
+            });
         },
     });
     const resetForProfile = useEffectEvent(() => {
@@ -214,6 +281,81 @@ export function ConversationShell({
     useEffect(() => {
         onSelectedWorkspaceFingerprintChange?.(shellViewModel.selectedThread?.workspaceFingerprint);
     }, [onSelectedWorkspaceFingerprintChange, shellViewModel.selectedThread?.workspaceFingerprint]);
+
+    useEffect(() => {
+        if (!isEntityId(uiState.selectedThreadId, 'thr')) {
+            return;
+        }
+
+        const nextSession = (queries.sessionsQuery.data?.sessions ?? [])
+            .filter((session) => session.threadId === uiState.selectedThreadId)
+            .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+            .at(0);
+        if (!nextSession) {
+            return;
+        }
+
+        void utils.session.listRuns.prefetch({
+            profileId,
+            sessionId: nextSession.id,
+        });
+    }, [profileId, queries.sessionsQuery.data?.sessions, uiState.selectedThreadId, utils.session.listRuns]);
+
+    useEffect(() => {
+        if (!hasSelectedSession) {
+            return;
+        }
+
+        void utils.session.listRuns.prefetch({
+            profileId,
+            sessionId: selectedSessionId,
+        });
+
+        const preferredRunId =
+            isEntityId(uiState.selectedRunId, 'run')
+                ? uiState.selectedRunId
+                : shellViewModel.sessionRunSelection.runs.at(0)?.id;
+        if (preferredRunId) {
+            void utils.session.listMessages.prefetch({
+                profileId,
+                sessionId: selectedSessionId,
+                runId: preferredRunId,
+            });
+            void utils.diff.listByRun.prefetch({
+                profileId,
+                runId: preferredRunId,
+            });
+        }
+
+        if (topLevelTab !== 'chat') {
+            void utils.checkpoint.list.prefetch({
+                profileId,
+                sessionId: selectedSessionId,
+            });
+        }
+    }, [
+        hasSelectedSession,
+        profileId,
+        selectedSessionId,
+        shellViewModel.sessionRunSelection.runs,
+        topLevelTab,
+        uiState.selectedRunId,
+        utils.checkpoint.list,
+        utils.diff.listByRun,
+        utils.session.listMessages,
+        utils.session.listRuns,
+    ]);
+
+    useEffect(() => {
+        if (topLevelTab === 'chat' || !shellViewModel.selectedThread?.workspaceFingerprint) {
+            return;
+        }
+
+        void utils.worktree.list.prefetch({
+            profileId,
+            workspaceFingerprint: shellViewModel.selectedThread.workspaceFingerprint,
+        });
+    }, [profileId, shellViewModel.selectedThread?.workspaceFingerprint, topLevelTab, utils.worktree.list]);
 
     useEffect(() => {
         onBootChromeReadyChange?.({
@@ -255,7 +397,18 @@ export function ConversationShell({
     });
     const planOrchestrator = buildConversationPlanOrchestrator({
         profileId,
-        refetchPlanWorkspace: refetch.refetchPlanWorkspace,
+        applyPlanWorkspaceUpdate,
+        applyOrchestratorWorkspaceUpdate: (latest) => {
+            if (!isEntityId(selectedSessionId, 'sess')) {
+                return;
+            }
+            setOrchestratorLatestCache({
+                utils,
+                profileId,
+                sessionId: selectedSessionId,
+                latest,
+            });
+        },
         onError: composer.setRunSubmitError,
         resolvedRunTarget: runTargetState.resolvedRunTarget,
         workspaceFingerprint: shellViewModel.selectedThread?.workspaceFingerprint,
@@ -272,6 +425,7 @@ export function ConversationShell({
     });
     const workspaceActions = useConversationWorkspaceActions({
         profileId,
+        listThreadsInput: queries.listThreadsInput,
         mutations,
         onResolvePermission: composer.clearRunSubmitError,
     });
@@ -302,9 +456,11 @@ export function ConversationShell({
                 topLevelTab={topLevelTab}
                 buckets={queries.listBucketsQuery.data?.buckets ?? []}
                 threads={sidebarState.visibleThreads}
+                sessions={queries.sessionsQuery.data?.sessions ?? []}
                 tags={queries.listTagsQuery.data?.tags ?? []}
                 threadTagIdsByThread={sidebarState.threadTagIdsByThread}
                 selectedThreadId={uiState.selectedThreadId}
+                selectedSessionId={selectedSessionId}
                 selectedTagIds={uiState.selectedTagIds}
                 scopeFilter={uiState.scopeFilter}
                 workspaceFilter={uiState.workspaceFilter}
@@ -336,11 +492,6 @@ export function ConversationShell({
                 setThreadTags={mutations.setThreadTagsMutation.mutateAsync}
                 setThreadFavorite={mutations.setThreadFavoriteMutation.mutateAsync}
                 deleteWorkspaceThreads={mutations.deleteWorkspaceThreadsMutation.mutateAsync}
-                refetchBuckets={queries.listBucketsQuery.refetch}
-                refetchThreads={queries.listThreadsQuery.refetch}
-                refetchTags={queries.listTagsQuery.refetch}
-                refetchShellBootstrap={queries.shellBootstrapQuery.refetch}
-                refetchSessions={queries.sessionsQuery.refetch}
             />
 
             <ConversationWorkspaceSection
@@ -420,21 +571,16 @@ export function ConversationShell({
                             providerId: contextProviderId,
                             modelId: contextModelId,
                             topLevelTab,
+                            modeKey,
                             ...(shellViewModel.selectedThread?.workspaceFingerprint
                                 ? { workspaceFingerprint: shellViewModel.selectedThread.workspaceFingerprint }
                                 : {}),
                         })
-                        .then(async () => {
-                            await utils.context.getResolvedState.invalidate({
-                                profileId,
-                                sessionId: contextSessionId,
-                                providerId: contextProviderId,
-                                modelId: contextModelId,
-                                topLevelTab,
-                                modeKey,
-                                ...(shellViewModel.selectedThread?.workspaceFingerprint
-                                    ? { workspaceFingerprint: shellViewModel.selectedThread.workspaceFingerprint }
-                                    : {}),
+                        .then((result) => {
+                            setResolvedContextStateCache({
+                                utils,
+                                queryInput: contextStateQueryInput,
+                                state: result.resolvedState,
                             });
                             setContextFeedbackTone('success');
                             setContextFeedbackMessage('Context compacted for the current session.');
