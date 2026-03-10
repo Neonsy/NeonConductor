@@ -57,6 +57,8 @@ const {
     },
     defaultUserDataPath: 'C:\\Users\\Neon\\AppData\\Roaming\\neon-conductor',
     appState: {
+        appPath: 'M:\\Neonsy\\Projects\\NeonConductor\\Project',
+        isPackaged: false,
         userDataPath: 'C:\\Users\\Neon\\AppData\\Roaming\\neon-conductor',
     },
 }));
@@ -67,7 +69,11 @@ vi.mock('electron', () => ({
     app: {
         whenReady: () => Promise.resolve(),
         getVersion: () => '0.0.1',
+        getAppPath: () => appState.appPath,
         getPath: (pathName: string) => (pathName === 'userData' ? appState.userDataPath : 'unknown'),
+        get isPackaged() {
+            return appState.isPackaged;
+        },
         setPath: (pathName: string, nextValue: string) => {
             appSetPathSpy(pathName, nextValue);
             if (pathName === 'userData') {
@@ -161,6 +167,8 @@ describe('bootstrapMainProcess', () => {
         vi.clearAllMocks();
         vi.resetModules();
         appState.userDataPath = defaultUserDataPath;
+        appState.appPath = 'M:\\Neonsy\\Projects\\NeonConductor\\Project';
+        appState.isPackaged = false;
         runtimeEnvState.isDev = true;
         runtimeEnvState.devServerUrl = 'http://localhost:5173';
         getSecretStoreInfoSpy.mockReturnValue({
@@ -205,9 +213,9 @@ describe('bootstrapMainProcess', () => {
         expect(initializeSecretStoreSpy).toHaveBeenCalled();
         expect(attachCspHeadersSpy).toHaveBeenCalled();
         expect(createSplashWindowSpy).toHaveBeenCalledWith({
-            isDev: true,
-            mainDirname: 'M:\\Neonsy\\Projects\\NeonConductor\\Project\\electron\\main',
-            devServerUrl: 'http://localhost:5173',
+            appPath: 'M:\\Neonsy\\Projects\\NeonConductor\\Project',
+            isPackaged: false,
+            resourcesPath: process.resourcesPath,
         });
         expect(createMainWindowSpy).toHaveBeenCalled();
         expect(createSplashWindowSpy.mock.invocationCallOrder[0]).toBeLessThan(
@@ -227,9 +235,9 @@ describe('bootstrapMainProcess', () => {
         expect(updateSplashWindowPhaseSpy).toHaveBeenCalledWith(
             { id: 'window-splash' },
             {
-                isDev: true,
-                mainDirname: 'M:\\Neonsy\\Projects\\NeonConductor\\Project\\electron\\main',
-                devServerUrl: 'http://localhost:5173',
+                appPath: 'M:\\Neonsy\\Projects\\NeonConductor\\Project',
+                isPackaged: false,
+                resourcesPath: process.resourcesPath,
             },
             'delayed'
         );
@@ -260,6 +268,7 @@ describe('bootstrapMainProcess', () => {
     it('keeps packaged startup under the selected release channel namespace', async () => {
         runtimeEnvState.isDev = false;
         runtimeEnvState.devServerUrl = undefined;
+        appState.isPackaged = true;
         const { bootstrapMainProcess } = await import('@/app/main/bootstrap');
 
         bootstrapMainProcess(
@@ -283,8 +292,9 @@ describe('bootstrapMainProcess', () => {
         expect(process.env['NEONCONDUCTOR_RUNTIME_NAMESPACE']).toBe('beta');
         expect(process.env['NEONCONDUCTOR_PERSISTENCE_CHANNEL']).toBe('beta');
         expect(createSplashWindowSpy).toHaveBeenCalledWith({
-            isDev: false,
-            mainDirname: 'M:\\Neonsy\\Projects\\NeonConductor\\Project\\electron\\main',
+            appPath: 'M:\\Neonsy\\Projects\\NeonConductor\\Project',
+            isPackaged: true,
+            resourcesPath: process.resourcesPath,
         });
     });
 });

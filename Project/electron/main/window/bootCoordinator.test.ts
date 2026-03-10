@@ -1,5 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+const { appQuitSpy } = vi.hoisted(() => ({
+    appQuitSpy: vi.fn(),
+}));
+
+vi.mock('electron', () => ({
+    app: {
+        quit: appQuitSpy,
+    },
+}));
+
 import {
     BOOT_SPLASH_DELAY_MS,
     completeBootWindowHandoff,
@@ -13,17 +23,30 @@ function createMockWindow(id: number) {
         maximized: false,
         destroyed: false,
     };
+    const eventHandlers = new Map<string, Array<() => void>>();
+
+    const emit = (eventName: string) => {
+        for (const handler of eventHandlers.get(eventName) ?? []) {
+            handler();
+        }
+    };
 
     return {
         id,
         close: vi.fn(() => {
             windowState.destroyed = true;
+            emit('closed');
         }),
         isDestroyed: vi.fn(() => windowState.destroyed),
         isMaximized: vi.fn(() => windowState.maximized),
         isVisible: vi.fn(() => windowState.visible),
         maximize: vi.fn(() => {
             windowState.maximized = true;
+        }),
+        once: vi.fn((eventName: string, handler: () => void) => {
+            const handlers = eventHandlers.get(eventName) ?? [];
+            handlers.push(handler);
+            eventHandlers.set(eventName, handlers);
         }),
         show: vi.fn(() => {
             windowState.visible = true;
@@ -34,6 +57,7 @@ function createMockWindow(id: number) {
 describe('bootCoordinator', () => {
     beforeEach(() => {
         vi.useFakeTimers();
+        vi.clearAllMocks();
         resetBootWindowStateForTests();
     });
 
@@ -92,5 +116,21 @@ describe('bootCoordinator', () => {
         expect(completeBootWindowHandoff(otherWindow as never)).toEqual({ success: false });
         expect(splashWindow.close).not.toHaveBeenCalled();
         expect(mainWindow.show).not.toHaveBeenCalled();
+    });
+
+    it('closes the hidden main window and quits the app when the splash is closed before handoff', () => {
+        const mainWindow = createMockWindow(400);
+        const splashWindow = createMockWindow(500);
+
+        registerBootWindows({
+            mainWindow: mainWindow as never,
+            splashWindow: splashWindow as never,
+            onDelayedSplash: vi.fn(),
+        });
+
+        splashWindow.close();
+
+        expect(mainWindow.close).toHaveBeenCalledTimes(1);
+        expect(appQuitSpy).toHaveBeenCalledTimes(1);
     });
 });

@@ -1,24 +1,33 @@
 import { BrowserWindow } from 'electron';
 import { readFileSync } from 'node:fs';
-import path from 'node:path';
+
+import { resolveRuntimeAssetPath } from '@/app/main/runtime/assets';
 
 export type SplashPhase = 'starting' | 'delayed';
 
 export interface SplashWindowOptions {
-    isDev: boolean;
-    mainDirname: string;
+    appPath: string;
+    isPackaged: boolean;
+    resourcesPath?: string;
+}
+
+function getSplashSubtitle(phase: SplashPhase): string {
+    return phase === 'delayed'
+        ? 'Still starting. Preparing the workspace and runtime.'
+        : 'Preparing the workspace and loading your agent shell.';
 }
 
 export function resolveSplashAssetPath(input: {
-    isDev: boolean;
-    mainDirname: string;
+    appPath: string;
+    isPackaged: boolean;
     resourcesPath?: string;
 }): string {
-    if (input.isDev) {
-        return path.resolve(input.mainDirname, '../../src/assets/appicon.png');
-    }
-
-    return path.resolve(input.resourcesPath ?? process.resourcesPath, 'assets', 'appicon.png');
+    return resolveRuntimeAssetPath({
+        isPackaged: input.isPackaged,
+        appPath: input.appPath,
+        relativePath: input.isPackaged ? 'assets/appicon.png' : 'src/assets/appicon.png',
+        ...(input.resourcesPath ? { resourcesPath: input.resourcesPath } : {}),
+    });
 }
 
 function readSplashImageDataUrl(assetPath: string): string {
@@ -30,10 +39,7 @@ export function buildSplashHtml(input: {
     imageDataUrl: string;
     phase: SplashPhase;
 }): string {
-    const subtitle =
-        input.phase === 'delayed'
-            ? 'Still starting. Preparing the workspace and runtime.'
-            : 'Preparing the workspace and loading your agent shell.';
+    const subtitle = getSplashSubtitle(input.phase);
 
     return `<!doctype html>
 <html lang="en">
@@ -99,10 +105,6 @@ export function buildSplashHtml(input: {
             margin: 0 auto 22px;
             display: grid;
             place-items: center;
-            border-radius: 28px;
-            background:
-                radial-gradient(circle at top, rgba(125, 211, 252, 0.2), transparent 54%),
-                var(--accent-soft);
             overflow: hidden;
         }
 
@@ -159,15 +161,33 @@ export function buildSplashHtml(input: {
         }
     </style>
 </head>
-<body>
+<body data-phase="${input.phase}">
     <main>
         <div class="mascot-shell">
             <img src="${input.imageDataUrl}" alt="NeonConductor mascot" />
         </div>
         <h1>NeonConductor</h1>
-        <p>${subtitle}</p>
+        <p id="splash-subtitle">${subtitle}</p>
         <div class="progress" aria-hidden="true"></div>
     </main>
+    <script>
+        (() => {
+            const subtitles = {
+                starting: ${JSON.stringify(getSplashSubtitle('starting'))},
+                delayed: ${JSON.stringify(getSplashSubtitle('delayed'))},
+            };
+
+            window.__setSplashPhase = (phase) => {
+                const nextPhase = phase === 'delayed' ? 'delayed' : 'starting';
+                const subtitle = document.getElementById('splash-subtitle');
+                document.body.dataset.phase = nextPhase;
+                if (subtitle) {
+                    subtitle.textContent = subtitles[nextPhase];
+                }
+                return true;
+            };
+        })();
+    </script>
 </body>
 </html>`;
 }
@@ -176,16 +196,18 @@ function toHtmlDataUrl(html: string): string {
     return `data:text/html;charset=UTF-8,${encodeURIComponent(html)}`;
 }
 
-export function updateSplashWindowPhase(
+function loadSplashWindowHtml(
     splashWindow: BrowserWindow,
     options: SplashWindowOptions,
     phase: SplashPhase
 ): Promise<void> {
     const assetPath = resolveSplashAssetPath({
-        isDev: options.isDev,
-        mainDirname: options.mainDirname,
+        appPath: options.appPath,
+        isPackaged: options.isPackaged,
+        ...(options.resourcesPath ? { resourcesPath: options.resourcesPath } : {}),
     });
     const imageDataUrl = readSplashImageDataUrl(assetPath);
+
     return splashWindow.loadURL(
         toHtmlDataUrl(
             buildSplashHtml({
@@ -196,10 +218,28 @@ export function updateSplashWindowPhase(
     );
 }
 
+export function updateSplashWindowPhase(
+    splashWindow: BrowserWindow,
+    options: SplashWindowOptions,
+    phase: SplashPhase
+): Promise<void> {
+    return splashWindow.webContents
+        .executeJavaScript(`window.__setSplashPhase?.(${JSON.stringify(phase)}) ?? false`, true)
+        .then((updated) => {
+            if (updated === true) {
+                return;
+            }
+
+            return loadSplashWindowHtml(splashWindow, options, phase);
+        })
+        .catch(() => loadSplashWindowHtml(splashWindow, options, phase));
+}
+
 export function createSplashWindow(options: SplashWindowOptions): BrowserWindow {
     const assetPath = resolveSplashAssetPath({
-        isDev: options.isDev,
-        mainDirname: options.mainDirname,
+        appPath: options.appPath,
+        isPackaged: options.isPackaged,
+        ...(options.resourcesPath ? { resourcesPath: options.resourcesPath } : {}),
     });
 
     const splashWindow = new BrowserWindow({
@@ -233,7 +273,7 @@ export function createSplashWindow(options: SplashWindowOptions): BrowserWindow 
     });
     splashWindow.removeMenu();
 
-    void updateSplashWindowPhase(splashWindow, options, 'starting');
+    void loadSplashWindowHtml(splashWindow, options, 'starting');
 
     return splashWindow;
 }

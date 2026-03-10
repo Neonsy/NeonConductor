@@ -217,11 +217,11 @@ export function ConversationShell({
 
     useEffect(() => {
         onBootChromeReadyChange?.({
-            shellBootstrapSettled: queries.shellBootstrapQuery.status === 'success',
-            bucketListSettled: queries.listBucketsQuery.status === 'success',
-            tagListSettled: queries.listTagsQuery.status === 'success',
-            threadListSettled: queries.listThreadsQuery.status === 'success',
-            sessionListSettled: queries.sessionsQuery.status === 'success',
+            shellBootstrapSettled: !queries.shellBootstrapQuery.isPending,
+            bucketListSettled: !queries.listBucketsQuery.isPending,
+            tagListSettled: !queries.listTagsQuery.isPending,
+            threadListSettled: !queries.listThreadsQuery.isPending,
+            sessionListSettled: !queries.sessionsQuery.isPending,
         });
 
         return () => {
@@ -235,11 +235,11 @@ export function ConversationShell({
         };
     }, [
         onBootChromeReadyChange,
-        queries.listBucketsQuery.status,
-        queries.listTagsQuery.status,
-        queries.listThreadsQuery.status,
-        queries.sessionsQuery.status,
-        queries.shellBootstrapQuery.status,
+        queries.listBucketsQuery.isPending,
+        queries.listTagsQuery.isPending,
+        queries.listThreadsQuery.isPending,
+        queries.sessionsQuery.isPending,
+        queries.shellBootstrapQuery.isPending,
     ]);
 
     const routingBadge = useConversationShellRoutingBadge({

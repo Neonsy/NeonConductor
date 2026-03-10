@@ -1,5 +1,3 @@
-import { get_encoding } from 'tiktoken';
-
 import { resolveEndpointProfile } from '@/app/backend/providers/service/endpointProfiles';
 import type {
     RuntimeProviderId,
@@ -10,6 +8,11 @@ import type {
 import { extractTextFromParts } from '@/app/backend/runtime/services/runExecution/contextParts';
 import { resolveRunAuth } from '@/app/backend/runtime/services/runExecution/resolveRunAuth';
 import type { RunContextMessage } from '@/app/backend/runtime/services/runExecution/types';
+import {
+    countEncodedTextWithTokenizer,
+    type TokenizerEncodingName,
+    type TokenizerRuntimeError,
+} from '@/app/backend/runtime/services/context/tokenizerRuntime';
 import { appLog } from '@/app/main/logging';
 
 interface ProviderTokenCounter {
@@ -30,46 +33,92 @@ const TOTAL_OVERHEAD_TOKENS = 3;
 const ZAI_CODING_BASE_URL = process.env['ZAI_CODING_BASE_URL']?.trim() || 'https://api.z.ai/api/coding/paas/v4';
 const ZAI_GENERAL_BASE_URL = process.env['ZAI_GENERAL_BASE_URL']?.trim() || 'https://api.z.ai/api/paas/v4';
 
-function resolveEncoding(modelId: string) {
+function resolveEncodingName(modelId: string): TokenizerEncodingName {
     const normalizedModelId = modelId.includes('/') ? (modelId.split('/').at(-1) ?? modelId) : modelId;
     const normalizedLookup = normalizedModelId.toLowerCase();
-    const encodingName =
+    return (
         normalizedLookup.startsWith('gpt-3.5') ||
         normalizedLookup.startsWith('gpt-4') ||
         normalizedLookup.startsWith('text-embedding-3') ||
         normalizedLookup.startsWith('text-embedding-ada')
             ? 'cl100k_base'
-            : DEFAULT_ENCODING;
-
-    return get_encoding(encodingName);
+            : DEFAULT_ENCODING
+    );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
-function buildEstimatedPart(modelId: string, message: RunContextMessage): TokenCountEstimatePart {
+function buildHeuristicEstimatedPart(message: RunContextMessage): TokenCountEstimatePart {
     const text = extractTextFromParts(message.parts);
-    const encoding = resolveEncoding(modelId);
-    try {
-        const tokenCount = encoding.encode(text).length + MESSAGE_OVERHEAD_TOKENS;
-        return {
-            role: message.role,
-            textLength: text.length,
-            tokenCount,
-            containsImages: message.parts.some((part) => part.type === 'image'),
-        };
-    } finally {
-        encoding.free();
-    }
+    const estimatedTokens = Math.ceil(text.length / 4);
+
+    return {
+        role: message.role,
+        textLength: text.length,
+        tokenCount: estimatedTokens + MESSAGE_OVERHEAD_TOKENS,
+        containsImages: message.parts.some((part) => part.type === 'image'),
+    };
 }
 
-function buildEstimatedCount(input: {
+async function buildEstimatedPart(input: {
+    modelId: string;
+    message: RunContextMessage;
+}): Promise<{
+    part: TokenCountEstimatePart;
+    tokenizerError?: TokenizerRuntimeError;
+}> {
+    const text = extractTextFromParts(input.message.parts);
+    const tokenCountResult = await countEncodedTextWithTokenizer({
+        encodingName: resolveEncodingName(input.modelId),
+        text,
+    });
+
+    if (tokenCountResult.isErr()) {
+        return {
+            part: buildHeuristicEstimatedPart(input.message),
+            tokenizerError: tokenCountResult.error,
+        };
+    }
+
+    return {
+        part: {
+            role: input.message.role,
+            textLength: text.length,
+            tokenCount: tokenCountResult.value + MESSAGE_OVERHEAD_TOKENS,
+            containsImages: input.message.parts.some((part) => part.type === 'image'),
+        },
+    };
+}
+
+async function buildEstimatedCount(input: {
     providerId: RuntimeProviderId;
     modelId: string;
     messages: RunContextMessage[];
-}): TokenCountEstimate {
-    const parts = input.messages.map((message) => buildEstimatedPart(input.modelId, message));
+}): Promise<TokenCountEstimate> {
+    const estimatedParts = await Promise.all(
+        input.messages.map((message) =>
+            buildEstimatedPart({
+                modelId: input.modelId,
+                message,
+            })
+        )
+    );
+    const tokenizerError = estimatedParts.find((entry) => entry.tokenizerError)?.tokenizerError;
+
+    if (tokenizerError) {
+        appLog.warn({
+            tag: 'context.token-count',
+            message: 'Estimated token counting fell back to heuristic sizing because the tokenizer runtime was unavailable.',
+            providerId: input.providerId,
+            modelId: input.modelId,
+            errorCode: tokenizerError.code,
+            error: tokenizerError.message,
+        });
+    }
+
+    const parts = estimatedParts.map((entry) => entry.part);
     return {
         providerId: input.providerId,
         modelId: input.modelId,

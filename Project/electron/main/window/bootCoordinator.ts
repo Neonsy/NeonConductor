@@ -1,4 +1,4 @@
-import type { BrowserWindow } from 'electron';
+import { app, type BrowserWindow } from 'electron';
 
 export const BOOT_SPLASH_DELAY_MS = 3000;
 
@@ -27,6 +27,14 @@ function clearDelayedTimer(): void {
     bootWindowState.delayedTimer = null;
 }
 
+function resetBootWindowState(): void {
+    clearDelayedTimer();
+    bootWindowState.mainWindow = null;
+    bootWindowState.splashWindow = null;
+    bootWindowState.delayedSplashCallback = null;
+    bootWindowState.handoffCompleted = false;
+}
+
 function isSameWindow(left: BrowserWindow | null, right: BrowserWindow | null): boolean {
     if (!left || !right) {
         return false;
@@ -46,6 +54,22 @@ export function registerBootWindows(input: {
     bootWindowState.splashWindow = input.splashWindow;
     bootWindowState.delayedSplashCallback = input.onDelayedSplash;
     bootWindowState.handoffCompleted = false;
+
+    input.splashWindow.once('closed', () => {
+        if (bootWindowState.handoffCompleted) {
+            resetBootWindowState();
+            return;
+        }
+
+        clearDelayedTimer();
+
+        if (bootWindowState.mainWindow && !bootWindowState.mainWindow.isDestroyed()) {
+            bootWindowState.mainWindow.close();
+        }
+
+        resetBootWindowState();
+        app.quit();
+    });
 
     bootWindowState.delayedTimer = setTimeout(() => {
         if (bootWindowState.handoffCompleted) {
@@ -93,9 +117,5 @@ export function completeBootWindowHandoff(window: BrowserWindow | null): { succe
 }
 
 export function resetBootWindowStateForTests(): void {
-    clearDelayedTimer();
-    bootWindowState.mainWindow = null;
-    bootWindowState.splashWindow = null;
-    bootWindowState.delayedSplashCallback = null;
-    bootWindowState.handoffCompleted = false;
+    resetBootWindowState();
 }

@@ -43,19 +43,24 @@ export function bootstrapMainProcess(deps: BootstrapDeps, importMetaUrl: string)
         mainDirname,
         ...(devServerUrl ? { devServerUrl } : {}),
     };
+    const splashWindowOptions = {
+        appPath: app.getAppPath(),
+        isPackaged: app.isPackaged,
+        resourcesPath: process.resourcesPath,
+    };
     const runtimeCspOptions = {
         isDev,
         ...(devServerUrl ? { devServerUrl } : {}),
     };
 
     function createBootManagedMainWindow(): BrowserWindow {
-        const splashWindow = createSplashWindow(runtimeWindowOptions);
+        const splashWindow = createSplashWindow(splashWindowOptions);
         const nextMainWindow = createMainWindow(runtimeWindowOptions);
         registerBootWindows({
             mainWindow: nextMainWindow,
             splashWindow,
             onDelayedSplash: () => {
-                void updateSplashWindowPhase(splashWindow, runtimeWindowOptions, 'delayed');
+                void updateSplashWindowPhase(splashWindow, splashWindowOptions, 'delayed');
             },
         });
         return nextMainWindow;
