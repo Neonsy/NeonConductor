@@ -4,14 +4,21 @@ import { buildConversationSidebarModel } from '@/web/components/conversation/sid
 import { SidebarThreadList } from '@/web/components/conversation/sidebar/sections/sidebarThreadList';
 import { Button } from '@/web/components/ui/button';
 
-import type { ConversationRecord, TagRecord, ThreadListRecord } from '@/app/backend/persistence/types';
+import type { ConversationRecord, SessionSummaryRecord, TagRecord, ThreadListRecord } from '@/app/backend/persistence/types';
 
 interface SidebarThreadBrowserProps {
     buckets: ConversationRecord[];
     threads: ThreadListRecord[];
+    sessions: SessionSummaryRecord[];
     tags: TagRecord[];
+    workspaceRoots: Array<{
+        fingerprint: string;
+        label: string;
+        absolutePath: string;
+    }>;
     threadTagIdsByThread: Map<string, string[]>;
     selectedThreadId?: string;
+    selectedWorkspaceFingerprint?: string;
     selectedTagIds: string[];
     scopeFilter: 'all' | 'workspace' | 'detached';
     workspaceFilter?: string;
@@ -26,6 +33,8 @@ interface SidebarThreadBrowserProps {
     onToggleTagFilter: (tagId: string) => void;
     onToggleThreadFavorite: (threadId: string, nextFavorite: boolean) => Promise<void>;
     onRequestWorkspaceDelete: (workspaceFingerprint: string, workspaceLabel: string) => void;
+    onRequestNewThread: (workspaceFingerprint?: string) => void;
+    onSelectWorkspaceFingerprint: (workspaceFingerprint: string | undefined) => void;
     onScopeFilterChange: (scope: 'all' | 'workspace' | 'detached') => void;
     onWorkspaceFilterChange: (workspaceFingerprint?: string) => void;
     onSortChange: (sort: 'latest' | 'alphabetical') => void;
@@ -49,9 +58,12 @@ function matchesThreadSearch(thread: ThreadListRecord, searchValue: string): boo
 export function SidebarThreadBrowser({
     buckets,
     threads,
+    sessions,
     tags,
+    workspaceRoots,
     threadTagIdsByThread,
     selectedThreadId,
+    selectedWorkspaceFingerprint,
     selectedTagIds,
     scopeFilter,
     workspaceFilter,
@@ -66,6 +78,8 @@ export function SidebarThreadBrowser({
     onToggleTagFilter,
     onToggleThreadFavorite,
     onRequestWorkspaceDelete,
+    onRequestNewThread,
+    onSelectWorkspaceFingerprint,
     onScopeFilterChange,
     onWorkspaceFilterChange,
     onSortChange,
@@ -78,16 +92,17 @@ export function SidebarThreadBrowser({
     const deferredSearchValue = useDeferredValue(searchValue.trim().toLowerCase());
     const visibleThreads = threads.filter((thread) => matchesThreadSearch(thread, deferredSearchValue));
     const selectedThread = threads.find((thread) => thread.id === selectedThreadId);
-    const { workspaceOptions, tagLabelById, groupedThreadRows } = buildConversationSidebarModel({
+    const { workspaceOptions, tagLabelById, workspaceGroups, playgroundRows } = buildConversationSidebarModel({
         buckets,
         threads: visibleThreads,
         tags,
+        workspaceRoots,
         groupView,
         ...(selectedThreadId ? { selectedThreadId } : {}),
     });
     const resultsLabel =
         deferredSearchValue.length > 0
-            ? `${String(groupedThreadRows.reduce((count, group) => count + group.rows.length, 0))} matches`
+            ? `${String(workspaceGroups.reduce((count, group) => count + group.rows.length, 0) + playgroundRows.length)} matches`
             : `${String(visibleThreads.length)} threads`;
 
     return (
@@ -105,11 +120,12 @@ export function SidebarThreadBrowser({
                     placeholder='Search threads, workspaces, or tabs…'
                 />
 
-                <div className='grid grid-cols-[minmax(0,1fr)_112px] gap-2'>
-                    <div className='grid grid-cols-3 gap-2'>
+                <div className='space-y-2'>
+                    <div className='flex flex-wrap gap-2'>
                         <Button
                             type='button'
                             size='sm'
+                            className='rounded-xl whitespace-nowrap'
                             variant={scopeFilter === 'all' ? 'secondary' : 'outline'}
                             onClick={() => {
                                 onScopeFilterChange('all');
@@ -119,6 +135,7 @@ export function SidebarThreadBrowser({
                         <Button
                             type='button'
                             size='sm'
+                            className='rounded-xl whitespace-nowrap'
                             variant={scopeFilter === 'workspace' ? 'secondary' : 'outline'}
                             onClick={() => {
                                 onScopeFilterChange('workspace');
@@ -128,6 +145,7 @@ export function SidebarThreadBrowser({
                         <Button
                             type='button'
                             size='sm'
+                            className='rounded-xl whitespace-nowrap'
                             variant={scopeFilter === 'detached' ? 'secondary' : 'outline'}
                             onClick={() => {
                                 onScopeFilterChange('detached');
@@ -138,7 +156,7 @@ export function SidebarThreadBrowser({
 
                     <select
                         aria-label='Sort threads'
-                        className='border-border bg-background h-8 rounded-xl border px-3 text-sm'
+                        className='border-border bg-background h-8 w-full rounded-xl border px-3 text-sm'
                         value={sort}
                         onChange={(event) => {
                             onSortChange(event.target.value === 'alphabetical' ? 'alphabetical' : 'latest');
@@ -153,7 +171,7 @@ export function SidebarThreadBrowser({
                         <div>
                             <p className='text-sm font-medium'>Filters</p>
                             <p className='text-muted-foreground text-xs'>
-                                {resultsLabel} · tags and branch grouping stay optional.
+                                {resultsLabel} · tags and grouping stay optional.
                             </p>
                         </div>
                         <span className='text-muted-foreground text-[11px] font-semibold tracking-[0.12em] uppercase'>
@@ -262,7 +280,10 @@ export function SidebarThreadBrowser({
             </div>
 
             <SidebarThreadList
-                groupedThreadRows={groupedThreadRows}
+                workspaceGroups={workspaceGroups}
+                playgroundRows={playgroundRows}
+                sessions={sessions}
+                {...(selectedWorkspaceFingerprint ? { selectedWorkspaceFingerprint } : {})}
                 threadTagIdsByThread={threadTagIdsByThread}
                 tagLabelById={tagLabelById}
                 {...(selectedThreadId ? { selectedThreadId } : {})}
@@ -274,6 +295,8 @@ export function SidebarThreadBrowser({
                 onSelectThread={onSelectThread}
                 onToggleThreadFavorite={onToggleThreadFavorite}
                 onRequestWorkspaceDelete={onRequestWorkspaceDelete}
+                onRequestNewThread={onRequestNewThread}
+                onSelectWorkspaceFingerprint={onSelectWorkspaceFingerprint}
             />
         </>
     );

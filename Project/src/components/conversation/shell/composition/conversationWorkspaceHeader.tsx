@@ -1,3 +1,5 @@
+import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+
 import type { TopLevelTab } from '@/shared/contracts';
 
 interface ConversationWorkspaceHeaderProps {
@@ -7,6 +9,8 @@ interface ConversationWorkspaceHeaderProps {
     lastSequence: number;
     tabSwitchNotice?: string;
     topLevelTab: TopLevelTab;
+    isSidebarCollapsed: boolean;
+    onToggleSidebar: () => void;
     onTopLevelTabChange: (topLevelTab: TopLevelTab) => void;
 }
 
@@ -51,6 +55,8 @@ export function ConversationWorkspaceHeader({
     lastSequence,
     tabSwitchNotice,
     topLevelTab,
+    isSidebarCollapsed,
+    onToggleSidebar,
     onTopLevelTabChange,
 }: ConversationWorkspaceHeaderProps) {
     const liveUpdateStatus = buildLiveUpdateStatus({
@@ -61,14 +67,25 @@ export function ConversationWorkspaceHeader({
 
     return (
         <header className='border-border flex items-center justify-between gap-4 border-b px-4 py-3'>
-            <div className='min-w-0'>
-                <p className='truncate text-sm font-semibold'>{threadTitle ?? 'No conversation selected'}</p>
-                <p
-                    className={`text-xs ${streamState === 'error' ? 'text-amber-300' : 'text-muted-foreground'}`}
-                    title={liveUpdateStatus.title}>
-                    {liveUpdateStatus.message}
-                </p>
-                {tabSwitchNotice ? <p className='text-primary text-xs'>{tabSwitchNotice}</p> : null}
+            <div className='flex min-w-0 items-start gap-3'>
+                <button
+                    type='button'
+                    className='border-border bg-card hover:bg-accent inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border transition-colors'
+                    aria-label={isSidebarCollapsed ? 'Expand threads sidebar' : 'Collapse threads sidebar'}
+                    title={isSidebarCollapsed ? 'Expand threads sidebar' : 'Collapse threads sidebar'}
+                    onClick={onToggleSidebar}>
+                    {isSidebarCollapsed ? <PanelLeftOpen className='h-4 w-4' /> : <PanelLeftClose className='h-4 w-4' />}
+                </button>
+
+                <div className='min-w-0'>
+                    <p className='truncate text-sm font-semibold'>{threadTitle ?? 'No conversation selected'}</p>
+                    <p
+                        className={`text-xs ${streamState === 'error' ? 'text-amber-300' : 'text-muted-foreground'}`}
+                        title={liveUpdateStatus.title}>
+                        {liveUpdateStatus.message}
+                    </p>
+                    {tabSwitchNotice ? <p className='text-primary text-xs'>{tabSwitchNotice}</p> : null}
+                </div>
             </div>
 
             <div className='flex flex-wrap gap-2'>

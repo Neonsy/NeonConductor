@@ -14,9 +14,11 @@ import type {
     RuntimeEventsSubscriptionInput,
     RuntimeRegisterWorkspaceRootInput,
     RuntimeResetInput,
+    RuntimeSetWorkspacePreferenceInput,
     WindowStateSubscriptionInput,
 } from '@/app/backend/runtime/contracts/types';
 import { FACTORY_RESET_CONFIRMATION_TEXT } from '@/app/backend/runtime/contracts/types';
+import { providerIds, topLevelTabs } from '@/shared/contracts';
 
 export function parseRuntimeEventsSubscriptionInput(input: unknown): RuntimeEventsSubscriptionInput {
     if (input === undefined) {
@@ -131,9 +133,43 @@ export function parseRuntimeRegisterWorkspaceRootInput(input: unknown): RuntimeR
     };
 }
 
+export function parseRuntimeSetWorkspacePreferenceInput(input: unknown): RuntimeSetWorkspacePreferenceInput {
+    const source = readObject(input, 'input');
+    const profileId = readOptionalString(source.profileId, 'profileId');
+    const workspaceFingerprint = readOptionalString(source.workspaceFingerprint, 'workspaceFingerprint');
+    const defaultTopLevelTab = source.defaultTopLevelTab === undefined
+        ? undefined
+        : readEnumValue(source.defaultTopLevelTab, 'defaultTopLevelTab', topLevelTabs);
+    const defaultProviderId = source.defaultProviderId === undefined
+        ? undefined
+        : readEnumValue(source.defaultProviderId, 'defaultProviderId', providerIds);
+    const defaultModelId = readOptionalString(source.defaultModelId, 'defaultModelId');
+
+    if (!profileId || profileId.trim().length === 0) {
+        throw new Error('Invalid "profileId": expected non-empty string.');
+    }
+
+    if (!workspaceFingerprint || workspaceFingerprint.trim().length === 0) {
+        throw new Error('Invalid "workspaceFingerprint": expected non-empty string.');
+    }
+
+    if ((defaultProviderId && !defaultModelId) || (!defaultProviderId && defaultModelId)) {
+        throw new Error('Invalid workspace default model selection: provider and model must be set together.');
+    }
+
+    return {
+        profileId: profileId.trim(),
+        workspaceFingerprint: workspaceFingerprint.trim(),
+        ...(defaultTopLevelTab ? { defaultTopLevelTab } : {}),
+        ...(defaultProviderId ? { defaultProviderId } : {}),
+        ...(defaultModelId?.trim().length ? { defaultModelId: defaultModelId.trim() } : {}),
+    };
+}
+
 export const runtimeEventsSubscriptionInputSchema = createParser(parseRuntimeEventsSubscriptionInput);
 export const windowStateSubscriptionInputSchema = createParser(parseWindowStateSubscriptionInput);
 export const runtimeResetInputSchema = createParser(parseRuntimeResetInput);
 export const runtimeFactoryResetInputSchema = createParser(parseRuntimeFactoryResetInput);
 export const contextBudgetInputSchema = createParser(parseContextBudgetInput);
 export const runtimeRegisterWorkspaceRootInputSchema = createParser(parseRuntimeRegisterWorkspaceRootInput);
+export const runtimeSetWorkspacePreferenceInputSchema = createParser(parseRuntimeSetWorkspacePreferenceInput);

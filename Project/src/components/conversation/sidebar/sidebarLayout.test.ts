@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { ConversationSidebar } from '@/web/components/conversation/sidebar/sidebar';
 
 import type { ConversationRecord, TagRecord, ThreadListRecord } from '@/app/backend/persistence/types';
+import type { SessionSummaryRecord } from '@/app/backend/persistence/types';
 
 const buckets: ConversationRecord[] = [
     {
@@ -48,6 +49,20 @@ const tags: TagRecord[] = [
     },
 ];
 
+const sessions: SessionSummaryRecord[] = [
+    {
+        id: 'sess_root',
+        profileId: 'profile_default',
+        conversationId: 'conv_workspace',
+        threadId: 'thr_root',
+        kind: 'local',
+        runStatus: 'completed',
+        turnCount: 1,
+        updatedAt: '2026-03-12T09:00:00.000Z',
+        createdAt: '2026-03-12T09:00:00.000Z',
+    },
+];
+
 vi.mock('@/web/trpc/client', () => ({
     trpc: {
         conversation: {
@@ -66,11 +81,13 @@ describe('conversation sidebar layout', () => {
         const html = renderToStaticMarkup(
             createElement(ConversationSidebar, {
                 profileId: 'profile_default',
+                isCollapsed: false,
+                onToggleCollapsed: vi.fn(),
                 buckets,
                 threads,
+                sessions,
                 tags,
                 threadTagIdsByThread: new Map([['thr_root', ['tag_ui']]]),
-                topLevelTab: 'chat',
                 workspaceRoots: [
                     {
                         fingerprint: 'ws_alpha',
@@ -84,7 +101,6 @@ describe('conversation sidebar layout', () => {
                 sort: 'latest',
                 showAllModes: false,
                 groupView: 'workspace',
-                isCreatingThread: false,
                 isAddingTag: false,
                 isDeletingWorkspaceThreads: false,
                 onSelectThread: vi.fn(),
@@ -95,15 +111,20 @@ describe('conversation sidebar layout', () => {
                 onSortChange: vi.fn(),
                 onShowAllModesChange: vi.fn(),
                 onGroupViewChange: vi.fn(),
-                onCreateThread: vi.fn(async () => {}),
+                onRequestNewThread: vi.fn(),
+                onSelectWorkspaceFingerprint: vi.fn(),
                 onAddTagToThread: vi.fn(async () => {}),
                 onDeleteWorkspaceThreads: vi.fn(async () => {}),
+                onNavigateToWorkspaces: vi.fn(),
             })
         );
 
+        expect(html).toContain('Sessions');
         expect(html).toContain('Search threads, workspaces, or tabs');
         expect(html).toContain('Filters');
-        expect(html).toContain('New');
+        expect(html).toContain('Add workspace');
+        expect(html).toContain('New thread');
+        expect(html).toContain('Workspace parent');
         expect(html).not.toContain('Optional thread title');
     });
 });

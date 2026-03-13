@@ -8,6 +8,7 @@ import {
 
 import type { ProviderModelRecord, RunRecord } from '@/app/backend/persistence/types';
 import type { ProviderListItem } from '@/app/backend/providers/service/types';
+import type { WorkspacePreferenceRecord } from '@/app/backend/runtime/contracts/types/runtime';
 import { canonicalizeProviderModelId } from '@/shared/kiloModels';
 
 import type { RuntimeProviderId } from '@/shared/contracts';
@@ -21,6 +22,7 @@ interface UseConversationRunTargetInput {
               modelId: string;
           }
         | undefined;
+    workspacePreference?: WorkspacePreferenceRecord;
     sessionOverride?: { providerId?: RuntimeProviderId; modelId?: string };
     runs: RunRecord[];
     requiresTools?: boolean;
@@ -108,6 +110,23 @@ export function useConversationRunTarget(input: UseConversationRunTargetInput) {
             };
             break;
         }
+    }
+
+    if (
+        !resolvedRunTarget &&
+        input.workspacePreference?.defaultProviderId &&
+        input.workspacePreference.defaultModelId &&
+        canAutoResolve(
+            getOption(input.workspacePreference.defaultProviderId, input.workspacePreference.defaultModelId)
+        )
+    ) {
+        resolvedRunTarget = {
+            providerId: input.workspacePreference.defaultProviderId,
+            modelId: canonicalizeProviderModelId(
+                input.workspacePreference.defaultProviderId,
+                input.workspacePreference.defaultModelId
+            ),
+        };
     }
 
     if (

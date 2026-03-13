@@ -6,6 +6,7 @@ import {
     runtimeEventsSubscriptionInputSchema,
     runtimeRegisterWorkspaceRootInputSchema,
     runtimeResetInputSchema,
+    runtimeSetWorkspacePreferenceInputSchema,
 } from '@/app/backend/runtime/contracts';
 import { runtimeEventBus } from '@/app/backend/runtime/services/runtimeEventBus';
 import { runtimeResetEvent } from '@/app/backend/runtime/services/runtimeEventEnvelope';
@@ -14,6 +15,7 @@ import { runtimeFactoryResetService } from '@/app/backend/runtime/services/runti
 import { runtimeResetService } from '@/app/backend/runtime/services/runtimeReset';
 import { runtimeShellBootstrapService } from '@/app/backend/runtime/services/runtimeShellBootstrap';
 import { runtimeSnapshotService } from '@/app/backend/runtime/services/runtimeSnapshot';
+import { setWorkspacePreference } from '@/app/backend/runtime/services/workspace/preferences';
 import { publicProcedure, router } from '@/app/backend/trpc/init';
 import { raiseMappedTrpcError, toTrpcError } from '@/app/backend/trpc/trpcErrorMap';
 
@@ -68,6 +70,12 @@ export const runtimeRouter = router({
 
         return {
             workspaceRoot,
+        };
+    }),
+    setWorkspacePreference: publicProcedure.input(runtimeSetWorkspacePreferenceInputSchema).mutation(async ({ input }) => {
+        const workspacePreference = await setWorkspacePreference(input);
+        return {
+            workspacePreference,
         };
     }),
     subscribeEvents: publicProcedure.input(runtimeEventsSubscriptionInputSchema).subscription(async function* ({

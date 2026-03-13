@@ -1,6 +1,5 @@
 import { startTransition, useTransition } from 'react';
 
-import { applyConversationSessionCacheUpdate } from '@/web/components/conversation/shell/conversationShellCache';
 import { isEntityId } from '@/web/components/conversation/shell/workspace/helpers';
 import { resolveTabSwitchNotice } from '@/web/components/conversation/shell/workspace/tabSwitch';
 import { ConversationSidebar } from '@/web/components/conversation/sidebar/sidebar';
@@ -8,14 +7,17 @@ import {
     patchThreadListRecord,
     removeDeletedSidebarRecords,
     replaceThreadTagRelations,
-    toThreadListRecord,
-    upsertBucketRecord,
     upsertTagRecord,
-    upsertThreadListRecord,
 } from '@/web/components/conversation/sidebar/sidebarCache';
 import { trpc } from '@/web/trpc/client';
 
-import type { ConversationRecord, TagRecord, ThreadListRecord, ThreadRecord, ThreadTagRecord } from '@/app/backend/persistence/types';
+import type {
+    ConversationRecord,
+    TagRecord,
+    ThreadListRecord,
+    ThreadRecord,
+    ThreadTagRecord,
+} from '@/app/backend/persistence/types';
 import type { SessionSummaryRecord } from '@/app/backend/persistence/types';
 
 import type { EntityId, TopLevelTab } from '@/shared/contracts';
@@ -23,6 +25,8 @@ import type { EntityId, TopLevelTab } from '@/shared/contracts';
 interface ConversationSidebarPaneProps {
     profileId: string;
     topLevelTab: TopLevelTab;
+    isCollapsed: boolean;
+    onToggleCollapsed: () => void;
     workspaceRoots: Array<{
         fingerprint: string;
         label: string;
@@ -42,7 +46,6 @@ interface ConversationSidebarPaneProps {
     sort: 'latest' | 'alphabetical';
     showAllModes: boolean;
     groupView: 'workspace' | 'branch';
-    isCreatingThread: boolean;
     isAddingTag: boolean;
     isDeletingWorkspaceThreads: boolean;
     statusMessage?: string;
@@ -58,25 +61,9 @@ interface ConversationSidebarPaneProps {
     onSortChange: (sort: 'latest' | 'alphabetical') => void;
     onShowAllModesChange: (showAllModes: boolean) => void;
     onGroupViewChange: (groupView: 'workspace' | 'branch') => void;
-    createThread: (input: {
-        profileId: string;
-        topLevelTab: TopLevelTab;
-        scope: 'detached' | 'workspace';
-        workspacePath?: string;
-        title: string;
-    }) => Promise<{ bucket: ConversationRecord; thread: ThreadRecord }>;
-    createSession: (input: {
-        profileId: string;
-        threadId: EntityId<'thr'>;
-        kind: 'local';
-    }) => Promise<
-        | { created: false; reason: string }
-        | {
-              created: true;
-              session: SessionSummaryRecord;
-              thread?: ThreadListRecord;
-          }
-    >;
+    onRequestNewThread: (workspaceFingerprint?: string) => void;
+    onSelectWorkspaceFingerprint: (workspaceFingerprint: string | undefined) => void;
+    onNavigateToWorkspaces: () => void;
     upsertTag: (input: { profileId: string; label: string }) => Promise<{ tag: TagRecord }>;
     setThreadTags: (input: {
         profileId: string;
@@ -103,6 +90,8 @@ interface ConversationSidebarPaneProps {
 export function ConversationSidebarPane({
     profileId,
     topLevelTab,
+    isCollapsed,
+    onToggleCollapsed,
     workspaceRoots,
     preferredWorkspaceFingerprint,
     buckets,
@@ -118,7 +107,6 @@ export function ConversationSidebarPane({
     sort,
     showAllModes,
     groupView,
-    isCreatingThread,
     isAddingTag,
     isDeletingWorkspaceThreads,
     statusMessage,
@@ -134,8 +122,9 @@ export function ConversationSidebarPane({
     onSortChange,
     onShowAllModesChange,
     onGroupViewChange,
-    createThread,
-    createSession,
+    onRequestNewThread,
+    onSelectWorkspaceFingerprint,
+    onNavigateToWorkspaces,
     upsertTag,
     setThreadTags,
     setThreadFavorite,
@@ -155,68 +144,71 @@ export function ConversationSidebarPane({
     };
     return (
         <ConversationSidebar
-                profileId={profileId}
-                buckets={buckets}
-                threads={threads}
-                tags={tags}
-                threadTagIdsByThread={threadTagIdsByThread}
-                topLevelTab={topLevelTab}
-                workspaceRoots={workspaceRoots}
-                {...(preferredWorkspaceFingerprint ? { preferredWorkspaceFingerprint } : {})}
-                {...(selectedThreadId ? { selectedThreadId } : {})}
-                selectedTagIds={selectedTagIds}
-                scopeFilter={scopeFilter}
-                {...(workspaceFilter ? { workspaceFilter } : {})}
-                sort={sort}
-                showAllModes={showAllModes}
-                groupView={groupView}
-                isCreatingThread={isCreatingThread}
-                isAddingTag={isAddingTag}
-                isDeletingWorkspaceThreads={isDeletingWorkspaceThreads}
-                {...(statusMessage ? { statusMessage, statusTone } : {})}
-                onSelectThread={(threadId) => {
-                    startSelectionTransition(() => {
-                        const targetThread = threads.find((thread) => thread.id === threadId);
-                        const nextTab = targetThread?.topLevelTab ?? topLevelTab;
-                        const switchState = resolveTabSwitchNotice(topLevelTab, nextTab);
-                        if (switchState.shouldSwitch) {
-                            onTopLevelTabChange(nextTab);
-                            onSetTabSwitchNotice(switchState.notice);
-                            window.setTimeout(() => {
-                                onSetTabSwitchNotice(undefined);
-                            }, 2200);
-                        } else {
+            profileId={profileId}
+            isCollapsed={isCollapsed}
+            onToggleCollapsed={onToggleCollapsed}
+            buckets={buckets}
+            threads={threads}
+            sessions={sessions}
+            tags={tags}
+            threadTagIdsByThread={threadTagIdsByThread}
+            workspaceRoots={workspaceRoots}
+            {...(preferredWorkspaceFingerprint ? { preferredWorkspaceFingerprint } : {})}
+            {...(selectedThreadId ? { selectedThreadId } : {})}
+            selectedTagIds={selectedTagIds}
+            scopeFilter={scopeFilter}
+            {...(workspaceFilter ? { workspaceFilter } : {})}
+            sort={sort}
+            showAllModes={showAllModes}
+            groupView={groupView}
+            isAddingTag={isAddingTag}
+            isDeletingWorkspaceThreads={isDeletingWorkspaceThreads}
+            {...(statusMessage ? { statusMessage, statusTone } : {})}
+            onSelectWorkspaceFingerprint={onSelectWorkspaceFingerprint}
+            onNavigateToWorkspaces={onNavigateToWorkspaces}
+            onSelectThread={(threadId) => {
+                startSelectionTransition(() => {
+                    const targetThread = threads.find((thread) => thread.id === threadId);
+                    const nextTab = targetThread?.topLevelTab ?? topLevelTab;
+                    const switchState = resolveTabSwitchNotice(topLevelTab, nextTab);
+                    if (switchState.shouldSwitch) {
+                        onTopLevelTabChange(nextTab);
+                        onSetTabSwitchNotice(switchState.notice);
+                        window.setTimeout(() => {
                             onSetTabSwitchNotice(undefined);
-                        }
-                        onSelectThreadId(threadId);
-                    });
-                }}
-                onPreviewThread={(threadId) => {
-                    const latestSession = sessions
-                        .filter((session) => session.threadId === threadId)
-                        .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
-                        .at(0);
-                    if (!latestSession) {
-                        return;
+                        }, 2200);
+                    } else {
+                        onSetTabSwitchNotice(undefined);
                     }
+                    onSelectThreadId(threadId);
+                });
+            }}
+            onPreviewThread={(threadId) => {
+                const latestSession = sessions
+                    .filter((session) => session.threadId === threadId)
+                    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+                    .at(0);
+                if (!latestSession) {
+                    return;
+                }
 
-                    void utils.session.status.prefetch({
-                        profileId,
-                        sessionId: latestSession.id,
-                    });
-                    void utils.session.listRuns.prefetch({
-                        profileId,
-                        sessionId: latestSession.id,
-                    });
-                }}
-                onToggleTagFilter={(tagId) => {
-                    startSelectionTransition(() => {
-                        onSelectTagIds((current) =>
-                            current.includes(tagId) ? current.filter((value) => value !== tagId) : [...current, tagId]
-                        );
-                    });
-                }}
-                onToggleThreadFavorite={async (threadId, nextFavorite) => {
+                void utils.session.status.prefetch({
+                    profileId,
+                    sessionId: latestSession.id,
+                });
+                void utils.session.listRuns.prefetch({
+                    profileId,
+                    sessionId: latestSession.id,
+                });
+            }}
+            onToggleTagFilter={(tagId) => {
+                startSelectionTransition(() => {
+                    onSelectTagIds((current) =>
+                        current.includes(tagId) ? current.filter((value) => value !== tagId) : [...current, tagId]
+                    );
+                });
+            }}
+            onToggleThreadFavorite={async (threadId, nextFavorite) => {
                     if (!isEntityId(threadId, 'thr')) {
                         throw new Error('Favorite status could not be updated.');
                     }
@@ -297,82 +289,7 @@ export function ConversationSidebarPane({
                         onGroupViewChange(nextGroupView);
                     });
                 }}
-                onCreateThread={async (input) => {
-                    const result = await createThread({
-                        profileId,
-                        topLevelTab,
-                        ...input,
-                    });
-                    const createdThread = toThreadListRecord(result);
-                    utils.conversation.listBuckets.setData({ profileId }, (current) => {
-                        if (!current) {
-                            return current;
-                        }
-
-                        return {
-                            buckets: upsertBucketRecord(current.buckets, result.bucket),
-                        };
-                    });
-                    utils.conversation.listThreads.setData(threadListQueryInput, (current) => {
-                        if (!current) {
-                            return current;
-                        }
-
-                        return {
-                            ...current,
-                            threads: upsertThreadListRecord(current.threads, createdThread, sort),
-                        };
-                    });
-
-                    if (!isEntityId(result.thread.id, 'thr')) {
-                        onSelectThreadId(result.thread.id);
-                        onSelectSessionId(undefined);
-                        onSelectRunId(undefined);
-                        return;
-                    }
-
-                    onSelectThreadId(result.thread.id);
-                    onSelectRunId(undefined);
-                    try {
-                        const starterSession = await createSession({
-                            profileId,
-                            threadId: result.thread.id,
-                            kind: 'local',
-                        });
-                        if (!starterSession.created) {
-                            onSelectSessionId(undefined);
-                            return {
-                                feedbackMessage: 'The starter session could not be created automatically.',
-                            };
-                        }
-
-                        utils.session.listRuns.setData(
-                            {
-                                profileId,
-                                sessionId: starterSession.session.id,
-                            },
-                            {
-                                runs: [],
-                            }
-                        );
-                        applyConversationSessionCacheUpdate({
-                            utils,
-                            profileId,
-                            listThreadsInput: threadListQueryInput,
-                            session: starterSession.session,
-                            thread: createdThread,
-                        });
-                        onSelectSessionId(starterSession.session.id);
-                    } catch (error) {
-                        onSelectSessionId(undefined);
-                        return {
-                            feedbackMessage:
-                                error instanceof Error
-                                    ? error.message
-                                    : 'The starter session could not be created automatically.',
-                        };
-                    }
-                }}
+            onRequestNewThread={onRequestNewThread}
                 onAddTagToThread={async (threadId, label) => {
                     if (!isEntityId(threadId, 'thr')) {
                         throw new Error('Thread tags could not be updated.');

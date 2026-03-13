@@ -41,6 +41,14 @@ export function useConversationShellSessionActions(input: UseConversationShellSe
 
     return {
         sessionOverride: input.selectedSessionId ? sessionTargetBySessionId[input.selectedSessionId] : undefined,
+        setSessionTarget: (sessionId: EntityId<'sess'>, providerId: RuntimeProviderId, modelId: string) => {
+            if (modelId.trim().length === 0) {
+                return;
+            }
+
+            setSessionTargetBySessionId((current) => applySessionModelOverride(current, sessionId, providerId, modelId));
+            input.onClearError();
+        },
         resetSessionActions: () => {
             setSessionTargetBySessionId({});
         },

@@ -1,9 +1,17 @@
 import { startTransition, useDeferredValue, useMemo, useState } from 'react';
 
+import { buildModelPickerOption } from '@/web/components/modelSelection/modelCapabilities';
+import { ModelPicker } from '@/web/components/modelSelection/modelPicker';
+import { resolveSelectedModelId, resolveSelectedProviderId } from '@/web/components/settings/providerSettings/selection';
 import { ConfirmDialog } from '@/web/components/ui/confirmDialog';
 import { DialogSurface } from '@/web/components/ui/dialogSurface';
 import { PROGRESSIVE_QUERY_OPTIONS } from '@/web/lib/query/progressiveQueryOptions';
 import { trpc } from '@/web/trpc/client';
+
+import type { ProviderModelRecord } from '@/app/backend/persistence/types';
+import type { ProviderListItem } from '@/app/backend/providers/service/types';
+import type { WorkspacePreferenceRecord } from '@/app/backend/runtime/contracts/types/runtime';
+import type { RuntimeProviderId, TopLevelTab } from '@/shared/contracts';
 
 interface WorkspacesSurfaceProps {
     profileId: string;
@@ -16,6 +24,7 @@ interface WorkspacesSurfaceProps {
     selectedWorkspaceFingerprint: string | undefined;
     onSelectedWorkspaceFingerprintChange: (workspaceFingerprint: string | undefined) => void;
     onOpenSessions: () => void;
+    onCreateThreadForWorkspace: (workspaceFingerprint: string) => void;
 }
 
 function formatTimestamp(value: string | undefined): string {
@@ -26,12 +35,235 @@ function formatTimestamp(value: string | undefined): string {
     return new Date(value).toLocaleString();
 }
 
+function topLevelTabLabel(value: TopLevelTab): string {
+    if (value === 'chat') {
+        return 'Chat';
+    }
+
+    if (value === 'agent') {
+        return 'Agent';
+    }
+
+    return 'Orchestrator';
+}
+
+function buildWorkspaceModelOptions(
+    provider: ProviderListItem | undefined,
+    models: ProviderModelRecord[]
+) {
+    if (!provider) {
+        return [];
+    }
+
+    return models
+        .filter((model) => model.providerId === provider.id)
+        .map((model) =>
+            buildModelPickerOption({
+                model,
+                provider,
+                compatibilityContext: {
+                    surface: 'settings',
+                },
+            })
+        );
+}
+
+function resolveWorkspaceDefaultDraft(input: {
+    providers: ProviderListItem[];
+    providerModels: ProviderModelRecord[];
+    defaults:
+        | {
+              providerId: string;
+              modelId: string;
+          }
+        | undefined;
+    workspacePreference?: WorkspacePreferenceRecord;
+}): {
+    topLevelTab: TopLevelTab;
+    providerId: RuntimeProviderId | undefined;
+    modelId: string;
+} {
+    const nextProviderId = resolveSelectedProviderId(
+        input.providers,
+        input.workspacePreference?.defaultProviderId
+    );
+    const nextModelId = resolveSelectedModelId({
+        selectedProviderId: nextProviderId,
+        selectedModelId: input.workspacePreference?.defaultModelId ?? '',
+        models: input.providerModels.filter((model) => model.providerId === nextProviderId),
+        defaults: input.defaults,
+    });
+
+    return {
+        topLevelTab: input.workspacePreference?.defaultTopLevelTab ?? 'agent',
+        providerId: nextProviderId,
+        modelId: nextModelId,
+    };
+}
+
+function WorkspaceDefaultsSection({
+    profileId,
+    workspaceFingerprint,
+    providers,
+    providerModels,
+    defaults,
+    workspacePreference,
+}: {
+    profileId: string;
+    workspaceFingerprint: string;
+    providers: ProviderListItem[];
+    providerModels: ProviderModelRecord[];
+    defaults:
+        | {
+              providerId: string;
+              modelId: string;
+          }
+        | undefined;
+    workspacePreference?: WorkspacePreferenceRecord;
+}) {
+    const utils = trpc.useUtils();
+    const initialDraft = resolveWorkspaceDefaultDraft({
+        providers,
+        providerModels,
+        defaults,
+        ...(workspacePreference ? { workspacePreference } : {}),
+    });
+    const [topLevelTab, setTopLevelTab] = useState<TopLevelTab>(initialDraft.topLevelTab);
+    const [providerId, setProviderId] = useState<RuntimeProviderId | undefined>(initialDraft.providerId);
+    const [modelId, setModelId] = useState(initialDraft.modelId);
+    const setWorkspacePreferenceMutation = trpc.runtime.setWorkspacePreference.useMutation({
+        onSuccess: ({ workspacePreference }) => {
+            utils.runtime.getShellBootstrap.setData({ profileId }, (current) =>
+                current
+                    ? {
+                          ...current,
+                          workspacePreferences: [
+                              workspacePreference,
+                              ...current.workspacePreferences.filter(
+                                  (record) => record.workspaceFingerprint !== workspacePreference.workspaceFingerprint
+                              ),
+                          ],
+                      }
+                    : current
+            );
+        },
+    });
+    const selectedProvider = providerId ? providers.find((provider) => provider.id === providerId) : undefined;
+    const modelOptions = buildWorkspaceModelOptions(selectedProvider, providerModels);
+    const selectedModelId =
+        modelId && modelOptions.some((option) => option.id === modelId) ? modelId : modelOptions[0]?.id ?? '';
+    const selectedModelOption = modelOptions.find((option) => option.id === selectedModelId);
+
+    return (
+        <article className='border-border/70 bg-card/55 rounded-[24px] border p-5'>
+            <div className='space-y-1'>
+                <p className='text-sm font-semibold'>Workspace defaults</p>
+                <p className='text-muted-foreground text-xs leading-5'>
+                    New threads in this workspace start from these defaults before the active header can override them.
+                </p>
+            </div>
+
+            <div className='mt-4 grid gap-4 md:grid-cols-[minmax(0,0.26fr)_minmax(0,0.26fr)_minmax(0,0.48fr)]'>
+                <label className='space-y-2'>
+                    <span className='text-muted-foreground text-[11px] font-semibold tracking-[0.12em] uppercase'>
+                        Mode
+                    </span>
+                    <select
+                        className='border-border bg-card h-10 w-full rounded-2xl border px-3 text-sm'
+                        value={topLevelTab}
+                        onChange={(event) => {
+                            const nextValue = event.target.value;
+                            if (nextValue === 'chat' || nextValue === 'agent' || nextValue === 'orchestrator') {
+                                setTopLevelTab(nextValue);
+                            }
+                        }}>
+                        <option value='chat'>{topLevelTabLabel('chat')}</option>
+                        <option value='agent'>{topLevelTabLabel('agent')}</option>
+                        <option value='orchestrator'>{topLevelTabLabel('orchestrator')}</option>
+                    </select>
+                </label>
+
+                <label className='space-y-2'>
+                    <span className='text-muted-foreground text-[11px] font-semibold tracking-[0.12em] uppercase'>
+                        Provider
+                    </span>
+                    <select
+                        className='border-border bg-card h-10 w-full rounded-2xl border px-3 text-sm'
+                        value={providerId ?? ''}
+                        onChange={(event) => {
+                            const nextProviderId = providers.find((provider) => provider.id === event.target.value)?.id;
+                            setProviderId(nextProviderId);
+                            const nextProvider = nextProviderId
+                                ? providers.find((provider) => provider.id === nextProviderId)
+                                : undefined;
+                            const nextModelId =
+                                buildWorkspaceModelOptions(nextProvider, providerModels)[0]?.id ?? '';
+                            setModelId(nextModelId);
+                        }}>
+                        {providers.map((provider) => (
+                            <option key={provider.id} value={provider.id}>
+                                {provider.label}
+                            </option>
+                        ))}
+                    </select>
+                </label>
+
+                <label className='space-y-2'>
+                    <span className='text-muted-foreground text-[11px] font-semibold tracking-[0.12em] uppercase'>
+                        Model
+                    </span>
+                    <ModelPicker
+                        providerId={providerId}
+                        selectedModelId={selectedModelId}
+                        models={modelOptions}
+                        ariaLabel='Workspace default model'
+                        placeholder='Select a model'
+                        onSelectModel={setModelId}
+                        onSelectOption={(option) => {
+                            if (option.providerId && option.providerId !== providerId) {
+                                setProviderId(option.providerId as RuntimeProviderId);
+                            }
+                            setModelId(option.id);
+                        }}
+                    />
+                    {selectedModelOption?.compatibilityReason ? (
+                        <p className='text-muted-foreground text-xs'>{selectedModelOption.compatibilityReason}</p>
+                    ) : null}
+                </label>
+            </div>
+
+            <div className='mt-4 flex items-center justify-end gap-2 border-t border-border/70 pt-4'>
+                <button
+                    type='button'
+                    className='rounded-full border border-primary/40 bg-primary/10 px-4 py-2 text-sm font-medium text-primary disabled:cursor-not-allowed disabled:opacity-60'
+                    disabled={!providerId || selectedModelId.length === 0 || setWorkspacePreferenceMutation.isPending}
+                    onClick={() => {
+                        void setWorkspacePreferenceMutation.mutateAsync({
+                            profileId,
+                            workspaceFingerprint,
+                            defaultTopLevelTab: topLevelTab,
+                            ...(providerId
+                                ? {
+                                      defaultProviderId: providerId,
+                                      defaultModelId: selectedModelId,
+                                  }
+                                : {}),
+                        });
+                    }}>
+                    {setWorkspacePreferenceMutation.isPending ? 'Saving…' : 'Save defaults'}
+                </button>
+            </div>
+        </article>
+    );
+}
+
 export function WorkspacesSurface({
     profileId,
     workspaceRoots,
     selectedWorkspaceFingerprint,
     onSelectedWorkspaceFingerprintChange,
     onOpenSessions,
+    onCreateThreadForWorkspace,
 }: WorkspacesSurfaceProps) {
     const utils = trpc.useUtils();
     const [searchValue, setSearchValue] = useState('');
@@ -39,8 +271,14 @@ export function WorkspacesSurface({
     const [workspaceLabelDraft, setWorkspaceLabelDraft] = useState('');
     const [workspacePathDraft, setWorkspacePathDraft] = useState('');
     const [isPickingWorkspaceDirectory, setIsPickingWorkspaceDirectory] = useState(false);
+    const [workspaceDefaultTopLevelTabDraft, setWorkspaceDefaultTopLevelTabDraft] = useState<TopLevelTab>('agent');
+    const [workspaceDefaultProviderIdDraft, setWorkspaceDefaultProviderIdDraft] = useState<RuntimeProviderId | undefined>(
+        undefined
+    );
+    const [workspaceDefaultModelIdDraft, setWorkspaceDefaultModelIdDraft] = useState('');
     const [confirmDeleteWorkspaceFingerprint, setConfirmDeleteWorkspaceFingerprint] = useState<string | undefined>(undefined);
     const deferredSearchValue = useDeferredValue(searchValue.trim().toLowerCase());
+    const shellBootstrapQuery = trpc.runtime.getShellBootstrap.useQuery({ profileId }, PROGRESSIVE_QUERY_OPTIONS);
 
     const sessionsQuery = trpc.session.list.useQuery({ profileId }, PROGRESSIVE_QUERY_OPTIONS);
     const threadsQuery = trpc.conversation.listThreads.useQuery(
@@ -73,30 +311,24 @@ export function WorkspacesSurface({
             ...PROGRESSIVE_QUERY_OPTIONS,
         }
     );
-    const registerWorkspaceRootMutation = trpc.runtime.registerWorkspaceRoot.useMutation({
-        onSuccess: (result) => {
-            utils.runtime.listWorkspaceRoots.setData({ profileId }, (current) => ({
-                workspaceRoots: current
-                    ? [result.workspaceRoot, ...current.workspaceRoots.filter((root) => root.fingerprint !== result.workspaceRoot.fingerprint)]
-                    : [result.workspaceRoot],
-            }));
+    const setWorkspacePreferenceMutation = trpc.runtime.setWorkspacePreference.useMutation({
+        onSuccess: ({ workspacePreference }) => {
             utils.runtime.getShellBootstrap.setData({ profileId }, (current) =>
                 current
                     ? {
                           ...current,
-                          workspaceRoots: [
-                              result.workspaceRoot,
-                              ...current.workspaceRoots.filter((root) => root.fingerprint !== result.workspaceRoot.fingerprint),
+                          workspacePreferences: [
+                              workspacePreference,
+                              ...current.workspacePreferences.filter(
+                                  (record) => record.workspaceFingerprint !== workspacePreference.workspaceFingerprint
+                              ),
                           ],
                       }
                     : current
             );
-            onSelectedWorkspaceFingerprintChange(result.workspaceRoot.fingerprint);
-            setWorkspaceLabelDraft('');
-            setWorkspacePathDraft('');
-            setIsCreateOpen(false);
         },
     });
+    const registerWorkspaceRootMutation = trpc.runtime.registerWorkspaceRoot.useMutation();
     const deleteWorkspaceThreadsMutation = trpc.conversation.deleteWorkspaceThreads.useMutation({
         onSuccess: async () => {
             setConfirmDeleteWorkspaceFingerprint(undefined);
@@ -127,6 +359,13 @@ export function WorkspacesSurface({
     const selectedWorkspace = selectedWorkspaceFingerprint
         ? workspaceRoots.find((workspaceRoot) => workspaceRoot.fingerprint === selectedWorkspaceFingerprint)
         : undefined;
+    const providers = shellBootstrapQuery.data?.providers ?? [];
+    const providerModels = shellBootstrapQuery.data?.providerModels ?? [];
+    const workspacePreferences = shellBootstrapQuery.data?.workspacePreferences ?? [];
+    const runtimeDefaults = shellBootstrapQuery.data?.defaults;
+    const selectedWorkspacePreference = selectedWorkspaceFingerprint
+        ? workspacePreferences.find((workspacePreference) => workspacePreference.workspaceFingerprint === selectedWorkspaceFingerprint)
+        : undefined;
     const allThreads = threadsQuery.data?.threads ?? [];
     const allSessions = sessionsQuery.data?.sessions ?? [];
     const selectedWorkspaceThreads = selectedWorkspaceFingerprint
@@ -143,6 +382,70 @@ export function WorkspacesSurface({
         : undefined;
     const desktopBridge = typeof window !== 'undefined' ? window.neonDesktop : undefined;
     const hasDesktopDirectoryPicker = Boolean(desktopBridge);
+
+    const openCreateWorkspace = () => {
+        const initialDraft = resolveWorkspaceDefaultDraft({
+            providers,
+            providerModels,
+            defaults: runtimeDefaults,
+        });
+        setWorkspaceLabelDraft('');
+        setWorkspacePathDraft('');
+        setWorkspaceDefaultTopLevelTabDraft(initialDraft.topLevelTab);
+        setWorkspaceDefaultProviderIdDraft(initialDraft.providerId);
+        setWorkspaceDefaultModelIdDraft(initialDraft.modelId);
+        setIsCreateOpen(true);
+    };
+
+    const createDefaultProvider = workspaceDefaultProviderIdDraft
+        ? providers.find((provider) => provider.id === workspaceDefaultProviderIdDraft)
+        : undefined;
+    const createModelOptions = buildWorkspaceModelOptions(createDefaultProvider, providerModels);
+    const createSelectedModelId =
+        workspaceDefaultModelIdDraft && createModelOptions.some((option) => option.id === workspaceDefaultModelIdDraft)
+            ? workspaceDefaultModelIdDraft
+            : createModelOptions[0]?.id ?? '';
+    const createSelectedModelOption = createModelOptions.find((option) => option.id === createSelectedModelId);
+
+    const handleCreateWorkspace = async () => {
+        const result = await registerWorkspaceRootMutation.mutateAsync({
+            profileId,
+            absolutePath: workspacePathDraft,
+            label: workspaceLabelDraft,
+        });
+
+        utils.runtime.listWorkspaceRoots.setData({ profileId }, (current) => ({
+            workspaceRoots: current
+                ? [result.workspaceRoot, ...current.workspaceRoots.filter((root) => root.fingerprint !== result.workspaceRoot.fingerprint)]
+                : [result.workspaceRoot],
+        }));
+        utils.runtime.getShellBootstrap.setData({ profileId }, (current) =>
+            current
+                ? {
+                      ...current,
+                      workspaceRoots: [
+                          result.workspaceRoot,
+                          ...current.workspaceRoots.filter((root) => root.fingerprint !== result.workspaceRoot.fingerprint),
+                      ],
+                  }
+                : current
+        );
+
+        await setWorkspacePreferenceMutation.mutateAsync({
+            profileId,
+            workspaceFingerprint: result.workspaceRoot.fingerprint,
+            defaultTopLevelTab: workspaceDefaultTopLevelTabDraft,
+            ...(workspaceDefaultProviderIdDraft
+                ? { defaultProviderId: workspaceDefaultProviderIdDraft, defaultModelId: createSelectedModelId }
+                : {}),
+        });
+
+        onSelectedWorkspaceFingerprintChange(result.workspaceRoot.fingerprint);
+        setWorkspaceLabelDraft('');
+        setWorkspacePathDraft('');
+        setIsCreateOpen(false);
+        onCreateThreadForWorkspace(result.workspaceRoot.fingerprint);
+    };
 
     const browseForWorkspaceDirectory = () => {
         if (!desktopBridge || isPickingWorkspaceDirectory) {
@@ -180,7 +483,7 @@ export function WorkspacesSurface({
                     </p>
                 </div>
 
-                <div className='space-y-2'>
+                    <div className='space-y-2'>
                     <input
                         type='search'
                         value={searchValue}
@@ -195,7 +498,7 @@ export function WorkspacesSurface({
                         type='button'
                         className='border-border bg-card hover:bg-accent w-full rounded-2xl border px-3 py-2 text-sm font-medium'
                         onClick={() => {
-                            setIsCreateOpen(true);
+                            openCreateWorkspace();
                         }}>
                         New workspace
                     </button>
@@ -373,6 +676,16 @@ export function WorkspacesSurface({
                                     </dl>
                                 </article>
 
+                                <WorkspaceDefaultsSection
+                                    key={selectedWorkspace.fingerprint}
+                                    profileId={profileId}
+                                    workspaceFingerprint={selectedWorkspace.fingerprint}
+                                    providers={providers}
+                                    providerModels={providerModels}
+                                    defaults={runtimeDefaults}
+                                    {...(selectedWorkspacePreference ? { workspacePreference: selectedWorkspacePreference } : {})}
+                                />
+
                                 <article className='border-destructive/30 bg-destructive/5 rounded-[24px] border p-5'>
                                     <div className='space-y-1'>
                                         <p className='text-sm font-semibold'>Destructive actions</p>
@@ -475,6 +788,77 @@ export function WorkspacesSurface({
                                 sessions, tool execution, and registry discovery.
                             </p>
                         </div>
+
+                        <div className='space-y-4 rounded-2xl border border-border/70 bg-card/35 px-4 py-4'>
+                            <div className='space-y-1'>
+                                <p className='text-sm font-medium'>Workspace defaults</p>
+                                <p className='text-muted-foreground text-xs leading-5'>
+                                    These defaults seed new threads in the workspace before the active header can override them.
+                                </p>
+                            </div>
+
+                            <div className='grid gap-4 md:grid-cols-[minmax(0,0.26fr)_minmax(0,0.26fr)_minmax(0,0.48fr)]'>
+                                <label className='space-y-2'>
+                                    <span className='text-sm font-medium'>Mode</span>
+                                    <select
+                                        className='border-border bg-card h-10 w-full rounded-2xl border px-3 text-sm'
+                                        value={workspaceDefaultTopLevelTabDraft}
+                                        onChange={(event) => {
+                                            const nextValue = event.target.value;
+                                            if (nextValue === 'chat' || nextValue === 'agent' || nextValue === 'orchestrator') {
+                                                setWorkspaceDefaultTopLevelTabDraft(nextValue);
+                                            }
+                                        }}>
+                                        <option value='chat'>{topLevelTabLabel('chat')}</option>
+                                        <option value='agent'>{topLevelTabLabel('agent')}</option>
+                                        <option value='orchestrator'>{topLevelTabLabel('orchestrator')}</option>
+                                    </select>
+                                </label>
+
+                                <label className='space-y-2'>
+                                    <span className='text-sm font-medium'>Provider</span>
+                                    <select
+                                        className='border-border bg-card h-10 w-full rounded-2xl border px-3 text-sm'
+                                        value={workspaceDefaultProviderIdDraft ?? ''}
+                                        onChange={(event) => {
+                                            const nextProviderId = providers.find((provider) => provider.id === event.target.value)?.id;
+                                            setWorkspaceDefaultProviderIdDraft(nextProviderId);
+                                            const nextProvider = nextProviderId
+                                                ? providers.find((provider) => provider.id === nextProviderId)
+                                                : undefined;
+                                            const nextModelId = buildWorkspaceModelOptions(nextProvider, providerModels)[0]?.id ?? '';
+                                            setWorkspaceDefaultModelIdDraft(nextModelId);
+                                        }}>
+                                        {providers.map((provider) => (
+                                            <option key={provider.id} value={provider.id}>
+                                                {provider.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </label>
+
+                                <label className='space-y-2'>
+                                    <span className='text-sm font-medium'>Model</span>
+                                    <ModelPicker
+                                        providerId={workspaceDefaultProviderIdDraft}
+                                        selectedModelId={createSelectedModelId}
+                                        models={createModelOptions}
+                                        ariaLabel='Workspace default model'
+                                        placeholder='Select a model'
+                                        onSelectModel={setWorkspaceDefaultModelIdDraft}
+                                        onSelectOption={(option) => {
+                                            if (option.providerId && option.providerId !== workspaceDefaultProviderIdDraft) {
+                                                setWorkspaceDefaultProviderIdDraft(option.providerId as RuntimeProviderId);
+                                            }
+                                            setWorkspaceDefaultModelIdDraft(option.id);
+                                        }}
+                                    />
+                                    {createSelectedModelOption?.compatibilityReason ? (
+                                        <p className='text-muted-foreground text-xs'>{createSelectedModelOption.compatibilityReason}</p>
+                                    ) : null}
+                                </label>
+                            </div>
+                        </div>
                     </div>
 
                     <div className='mt-5 flex items-center justify-end gap-2 border-t border-border/70 pt-4'>
@@ -491,17 +875,18 @@ export function WorkspacesSurface({
                             className='rounded-full border border-primary/40 bg-primary/10 px-4 py-2 text-sm font-medium text-primary disabled:cursor-not-allowed disabled:opacity-60'
                             disabled={
                                 registerWorkspaceRootMutation.isPending ||
+                                setWorkspacePreferenceMutation.isPending ||
                                 workspacePathDraft.trim().length === 0 ||
-                                workspaceLabelDraft.trim().length === 0
+                                workspaceLabelDraft.trim().length === 0 ||
+                                !workspaceDefaultProviderIdDraft ||
+                                createSelectedModelId.length === 0
                             }
                             onClick={() => {
-                                void registerWorkspaceRootMutation.mutateAsync({
-                                    profileId,
-                                    absolutePath: workspacePathDraft,
-                                    label: workspaceLabelDraft,
-                                });
+                                void handleCreateWorkspace();
                             }}>
-                            {registerWorkspaceRootMutation.isPending ? 'Saving…' : 'Save workspace'}
+                            {registerWorkspaceRootMutation.isPending || setWorkspacePreferenceMutation.isPending
+                                ? 'Saving…'
+                                : 'Save workspace'}
                         </button>
                     </div>
                 </div>

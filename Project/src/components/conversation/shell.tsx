@@ -27,16 +27,18 @@ import {
 } from '@/web/components/conversation/shell/workspace/helpers';
 import { useConversationRunTarget } from '@/web/components/conversation/shell/workspace/useConversationRunTarget';
 import { useConversationWorkspaceActions } from '@/web/components/conversation/shell/workspace/useConversationWorkspaceActions';
+import { resolveTabSwitchNotice } from '@/web/components/conversation/shell/workspace/tabSwitch';
 import { ConversationSidebarPane } from '@/web/components/conversation/sidebar/conversationSidebarPane';
 import { buildModelPickerOption } from '@/web/components/modelSelection/modelCapabilities';
 import type { ConversationShellBootChromeReadiness } from '@/web/components/runtime/bootReadiness';
+import { WorkspaceThreadCreationSurface } from '@/web/components/conversation/sessions/workspace/workspaceThreadCreationSurface';
 import { PROGRESSIVE_QUERY_OPTIONS } from '@/web/lib/query/progressiveQueryOptions';
 import { useRuntimeEventStreamStore } from '@/web/lib/runtime/eventStream';
 import { trpc } from '@/web/trpc/client';
 
 import type { RunRecord, SessionSummaryRecord, ThreadListRecord } from '@/app/backend/persistence/types';
 
-import type { PlanRecordView, RuntimeReasoningEffort, TopLevelTab } from '@/shared/contracts';
+import type { PlanRecordView, RuntimeProviderId, RuntimeReasoningEffort, TopLevelTab } from '@/shared/contracts';
 import {
     DEFAULT_COMPOSER_IMAGE_COMPRESSION_CONCURRENCY,
     DEFAULT_COMPOSER_MAX_IMAGE_ATTACHMENTS_PER_MESSAGE,
@@ -46,11 +48,14 @@ interface ConversationShellProps {
     profileId: string;
     topLevelTab: TopLevelTab;
     selectedWorkspaceFingerprint?: string;
+    requestedThreadCreationWorkspaceFingerprint?: string;
     modeKey: string;
     modes: Array<{ id: string; modeKey: string; label: string }>;
     onModeChange: (modeKey: string) => void;
     onTopLevelTabChange: (nextTab: TopLevelTab) => void;
     onSelectedWorkspaceFingerprintChange?: (workspaceFingerprint: string | undefined) => void;
+    onThreadCreationRequestHandled?: () => void;
+    onOpenWorkspaces?: () => void;
     onBootChromeReadyChange?: (readiness: ConversationShellBootChromeReadiness) => void;
 }
 
@@ -58,17 +63,29 @@ export function ConversationShell({
     profileId,
     topLevelTab,
     selectedWorkspaceFingerprint,
+    requestedThreadCreationWorkspaceFingerprint,
     modeKey,
     modes,
     onModeChange,
     onTopLevelTabChange,
     onSelectedWorkspaceFingerprintChange,
+    onThreadCreationRequestHandled,
+    onOpenWorkspaces,
     onBootChromeReadyChange,
 }: ConversationShellProps) {
     const [tabSwitchNotice, setTabSwitchNotice] = useState<string | undefined>(undefined);
+    const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
     const [focusComposerRequestKey, setFocusComposerRequestKey] = useState(0);
     const [requestedReasoningEffort, setRequestedReasoningEffort] =
         useState<RuntimeReasoningEffort>(DEFAULT_REASONING_EFFORT);
+    const [isThreadCreationActive, setIsThreadCreationActive] = useState(false);
+    const [threadCreationWorkspaceFingerprint, setThreadCreationWorkspaceFingerprint] = useState<string | undefined>(
+        selectedWorkspaceFingerprint
+    );
+    const [threadCreationTopLevelTab, setThreadCreationTopLevelTab] = useState<TopLevelTab>(topLevelTab);
+    const [threadCreationTitle, setThreadCreationTitle] = useState('');
+    const [threadCreationProviderId, setThreadCreationProviderId] = useState<RuntimeProviderId | undefined>(undefined);
+    const [threadCreationModelId, setThreadCreationModelId] = useState('');
     const isPlanningComposerMode = modeKey === 'plan' && (topLevelTab === 'agent' || topLevelTab === 'orchestrator');
     const imageAttachmentsAllowed = topLevelTab !== 'orchestrator' && !isPlanningComposerMode;
     const uiState = useConversationUiState(profileId);
@@ -177,10 +194,18 @@ export function ConversationShell({
             uiState.setSelectedThreadId(threadId);
         },
     });
+    const preferredWorkspacePreference = (
+        queries.shellBootstrapQuery.data?.workspacePreferences ?? []
+    ).find((workspacePreference) => {
+        return selectedWorkspaceFingerprint
+            ? workspacePreference.workspaceFingerprint === selectedWorkspaceFingerprint
+            : false;
+    });
     const initialRunTargetState = useConversationRunTarget({
         providers: queries.shellBootstrapQuery.data?.providers ?? [],
         providerModels: queries.shellBootstrapQuery.data?.providerModels ?? [],
         defaults: queries.shellBootstrapQuery.data?.defaults,
+        ...(preferredWorkspacePreference ? { workspacePreference: preferredWorkspacePreference } : {}),
         runs: [],
         requiresTools: modeRequiresNativeTools({ topLevelTab, modeKey }),
         modeKey,
@@ -196,10 +221,20 @@ export function ConversationShell({
         sidebarState,
         runTargetState: initialRunTargetState,
     });
+    const selectedWorkspacePreference = (
+        queries.shellBootstrapQuery.data?.workspacePreferences ?? []
+    ).find((workspacePreference) => {
+        const preferredWorkspaceFingerprint =
+            shellViewModel.selectedThread?.workspaceFingerprint ?? selectedWorkspaceFingerprint;
+        return preferredWorkspaceFingerprint
+            ? workspacePreference.workspaceFingerprint === preferredWorkspaceFingerprint
+            : false;
+    });
     const runTargetState = useConversationRunTarget({
         providers: queries.shellBootstrapQuery.data?.providers ?? [],
         providerModels: queries.shellBootstrapQuery.data?.providerModels ?? [],
         defaults: queries.shellBootstrapQuery.data?.defaults,
+        ...(selectedWorkspacePreference ? { workspacePreference: selectedWorkspacePreference } : {}),
         runs: shellViewModel.sessionRunSelection.runs,
         requiresTools: modeRequiresNativeTools({ topLevelTab, modeKey }),
         modeKey,
@@ -331,11 +366,47 @@ export function ConversationShell({
                 })
             )
         ) ?? [];
+    const workspaceRoots = queries.shellBootstrapQuery.data?.workspaceRoots ?? [];
+    const workspacePreferences = queries.shellBootstrapQuery.data?.workspacePreferences ?? [];
+    const resolveWorkspaceDefaultSelection = (workspaceFingerprint: string | undefined, requestedTab: TopLevelTab) => {
+        const preferredWorkspaceDefault = workspaceFingerprint
+            ? workspacePreferences.find((workspacePreference) => workspacePreference.workspaceFingerprint === workspaceFingerprint)
+            : undefined;
+        const nextProviderId = preferredWorkspaceDefault?.defaultProviderId ?? runTargetState.selectedProviderIdForComposer;
+        const providerModels = nextProviderId ? runTargetState.modelsByProvider.get(nextProviderId) ?? [] : [];
+        const nextModelId =
+            preferredWorkspaceDefault?.defaultModelId && providerModels.some((model) => model.id === preferredWorkspaceDefault.defaultModelId)
+                ? preferredWorkspaceDefault.defaultModelId
+                : providerModels[0]?.id ??
+                  composerModelOptions.find((option) => option.compatibilityState === 'compatible')?.id ??
+                  '';
+        const nextTopLevelTab = preferredWorkspaceDefault?.defaultTopLevelTab ?? requestedTab;
+
+        return {
+            topLevelTab: nextTopLevelTab,
+            providerId: nextProviderId,
+            modelId: nextModelId,
+        };
+    };
+    const startThreadCreation = (workspaceFingerprint: string | undefined) => {
+        const nextWorkspaceFingerprint = workspaceFingerprint ?? selectedWorkspaceFingerprint ?? workspaceRoots[0]?.fingerprint;
+        const defaults = resolveWorkspaceDefaultSelection(nextWorkspaceFingerprint, topLevelTab);
+        setThreadCreationWorkspaceFingerprint(nextWorkspaceFingerprint);
+        setThreadCreationTopLevelTab(defaults.topLevelTab);
+        setThreadCreationProviderId(defaults.providerId);
+        setThreadCreationModelId(defaults.modelId);
+        setThreadCreationTitle('');
+        setIsThreadCreationActive(true);
+        if (nextWorkspaceFingerprint) {
+            onSelectedWorkspaceFingerprintChange?.(nextWorkspaceFingerprint);
+        }
+        onThreadCreationRequestHandled?.();
+    };
     const selectedComposerModelOption =
         runTargetState.selectedProviderIdForComposer && runTargetState.selectedModelIdForComposer
             ? composerModelOptions.find(
-                  (option) =>
-                      option.providerId === runTargetState.selectedProviderIdForComposer &&
+                (option) =>
+                    option.providerId === runTargetState.selectedProviderIdForComposer &&
                       option.id === runTargetState.selectedModelIdForComposer
               )
             : undefined;
@@ -418,6 +489,22 @@ export function ConversationShell({
             uiState.setWorkspaceFilter(undefined);
         }
     });
+
+    useEffect(() => {
+        if (!requestedThreadCreationWorkspaceFingerprint) {
+            return;
+        }
+
+        startThreadCreation(requestedThreadCreationWorkspaceFingerprint);
+    }, [requestedThreadCreationWorkspaceFingerprint, startThreadCreation]);
+
+    useEffect(() => {
+        if (isThreadCreationActive) {
+            return;
+        }
+
+        setThreadCreationWorkspaceFingerprint(selectedWorkspaceFingerprint);
+    }, [isThreadCreationActive, selectedWorkspaceFingerprint]);
 
     useEffect(() => {
         reconcileConversationSelection();
@@ -637,6 +724,174 @@ export function ConversationShell({
         mutations,
         onResolvePermission: composer.clearRunSubmitError,
     });
+    const handleCreateThread = async (): Promise<void> => {
+        const workspaceRoot = threadCreationWorkspaceFingerprint
+            ? workspaceRoots.find((workspace) => workspace.fingerprint === threadCreationWorkspaceFingerprint)
+            : undefined;
+
+        if (!workspaceRoot) {
+            return;
+        }
+
+        const generatedTitle =
+            threadCreationTitle.trim().length > 0
+                ? threadCreationTitle.trim()
+                : `New ${threadCreationTopLevelTab.toLowerCase()} thread`;
+        const switchState = resolveTabSwitchNotice(topLevelTab, threadCreationTopLevelTab);
+        if (switchState.shouldSwitch) {
+            onTopLevelTabChange(threadCreationTopLevelTab);
+            setTabSwitchNotice(switchState.notice);
+            window.setTimeout(() => {
+                setTabSwitchNotice(undefined);
+            }, 2200);
+        } else {
+            setTabSwitchNotice(undefined);
+        }
+
+        const result = await mutations.createThreadMutation.mutateAsync({
+            profileId,
+            topLevelTab: threadCreationTopLevelTab,
+            scope: 'workspace',
+            workspacePath: workspaceRoot.absolutePath,
+            title: generatedTitle,
+            ...(threadCreationProviderId && threadCreationModelId
+                ? { providerId: threadCreationProviderId, modelId: threadCreationModelId }
+                : {}),
+        });
+        const createdThread = {
+            ...result.thread,
+            scope: 'workspace' as const,
+            workspaceFingerprint: workspaceRoot.fingerprint,
+            anchorKind: 'workspace' as const,
+            anchorId: workspaceRoot.fingerprint,
+            sessionCount: 0,
+        };
+
+        utils.conversation.listBuckets.setData({ profileId }, (current) =>
+            current
+                ? {
+                      buckets: [
+                          result.bucket,
+                          ...current.buckets.filter((bucket) => bucket.id !== result.bucket.id),
+                      ],
+                  }
+                : current
+        );
+        utils.conversation.listThreads.setData(queries.listThreadsInput, (current) =>
+            current
+                ? {
+                      ...current,
+                      threads: [createdThread, ...current.threads.filter((thread) => thread.id !== createdThread.id)],
+                  }
+                : current
+        );
+
+        if (!isEntityId(result.thread.id, 'thr')) {
+            uiState.setSelectedThreadId(result.thread.id);
+            uiState.setSelectedSessionId(undefined);
+            uiState.setSelectedRunId(undefined);
+            setIsThreadCreationActive(false);
+            return;
+        }
+
+        uiState.setSelectedThreadId(result.thread.id);
+        uiState.setSelectedRunId(undefined);
+        const starterSession = await mutations.createSessionMutation.mutateAsync({
+            profileId,
+            threadId: result.thread.id,
+            kind: 'local',
+        });
+        if (!starterSession.created) {
+            uiState.setSelectedSessionId(undefined);
+            setIsThreadCreationActive(false);
+            composer.setRunSubmitError('The starter session could not be created automatically.');
+            return;
+        }
+
+        utils.session.listRuns.setData(
+            {
+                profileId,
+                sessionId: starterSession.session.id,
+            },
+            {
+                runs: [],
+            }
+        );
+        applySessionWorkspaceUpdate({
+            session: starterSession.session,
+            thread: createdThread,
+        });
+        if (threadCreationProviderId && threadCreationModelId) {
+            sessionActions.setSessionTarget(starterSession.session.id, threadCreationProviderId, threadCreationModelId);
+        }
+        uiState.setSelectedSessionId(starterSession.session.id);
+        setIsThreadCreationActive(false);
+        setThreadCreationTitle('');
+    };
+    const threadCreationModelOptions = (queries.shellBootstrapQuery.data?.providers ?? []).flatMap((provider) =>
+        (queries.shellBootstrapQuery.data?.providerModels ?? [])
+            .filter((model) => model.providerId === provider.id)
+            .map((model) =>
+                buildModelPickerOption({
+                    model,
+                    provider,
+                    compatibilityContext: {
+                        surface: 'conversation',
+                        requiresTools: modeRequiresNativeTools({
+                            topLevelTab: threadCreationTopLevelTab,
+                            modeKey:
+                                threadCreationTopLevelTab === 'chat'
+                                    ? 'chat'
+                                    : threadCreationTopLevelTab === 'agent'
+                                      ? 'code'
+                                      : 'plan',
+                        }),
+                        modeKey:
+                            threadCreationTopLevelTab === 'chat'
+                                ? 'chat'
+                                : threadCreationTopLevelTab === 'agent'
+                                  ? 'code'
+                                  : 'plan',
+                        hasPendingImageAttachments: false,
+                        imageAttachmentsAllowed: threadCreationTopLevelTab !== 'orchestrator',
+                    },
+                })
+            )
+    );
+    const threadCreationSurface =
+        isThreadCreationActive || !uiState.selectedThreadId ? (
+            <WorkspaceThreadCreationSurface
+                workspaceRoots={workspaceRoots.map((workspaceRoot) => ({
+                    fingerprint: workspaceRoot.fingerprint,
+                    label: workspaceRoot.label,
+                }))}
+                workspaceFingerprint={threadCreationWorkspaceFingerprint}
+                topLevelTab={threadCreationTopLevelTab}
+                title={threadCreationTitle}
+                providerId={threadCreationProviderId}
+                modelId={threadCreationModelId}
+                modelOptions={threadCreationModelOptions}
+                isCreatingThread={mutations.createThreadMutation.isPending || mutations.createSessionMutation.isPending}
+                onWorkspaceChange={setThreadCreationWorkspaceFingerprint}
+                onTopLevelTabChange={setThreadCreationTopLevelTab}
+                onProviderChange={(providerId) => {
+                    setThreadCreationProviderId(providerId);
+                    const nextModelId = threadCreationModelOptions.find((option) => option.providerId === providerId)?.id ?? '';
+                    setThreadCreationModelId(nextModelId);
+                }}
+                onModelChange={setThreadCreationModelId}
+                onTitleChange={setThreadCreationTitle}
+                onCreateThread={() => {
+                    void handleCreateThread();
+                }}
+                onCancel={() => {
+                    setIsThreadCreationActive(false);
+                }}
+                onNavigateToWorkspaces={() => {
+                    onOpenWorkspaces?.();
+                }}
+            />
+        ) : undefined;
     const workspaceSectionState = buildConversationWorkspaceSectionState({
         topLevelTab,
         modeKey,
@@ -664,6 +919,7 @@ export function ConversationShell({
             lastSequence: queries.shellBootstrapQuery.data?.lastSequence ?? 0,
             tabSwitchNotice,
             topLevelTab,
+            isSidebarCollapsed,
         },
         panel: {
             profileId,
@@ -784,6 +1040,7 @@ export function ConversationShell({
             onEditMessage: editFlow.onEditMessage,
             onBranchFromMessage: editFlow.onBranchFromMessage,
             modePanel: workspacePanels.modePanel,
+            threadCreationSurface,
             executionEnvironmentPanel: workspacePanels.executionEnvironmentPanel,
             attachedSkillsPanel: workspacePanels.attachedSkillsPanel,
             diffCheckpointPanel: workspacePanels.diffCheckpointPanel,
@@ -796,6 +1053,10 @@ export function ConversationShell({
             <ConversationSidebarPane
                 profileId={profileId}
                 topLevelTab={topLevelTab}
+                isCollapsed={isSidebarCollapsed}
+                onToggleCollapsed={() => {
+                    setIsSidebarCollapsed((current) => !current);
+                }}
                 workspaceRoots={queries.shellBootstrapQuery.data?.workspaceRoots ?? []}
                 {...(selectedWorkspaceFingerprint ? { preferredWorkspaceFingerprint: selectedWorkspaceFingerprint } : {})}
                 buckets={queries.listBucketsQuery.data?.buckets ?? []}
@@ -811,7 +1072,6 @@ export function ConversationShell({
                 sort={uiState.sort ?? 'latest'}
                 showAllModes={uiState.showAllModes}
                 groupView={uiState.groupView}
-                isCreatingThread={mutations.createThreadMutation.isPending || mutations.createSessionMutation.isPending}
                 isAddingTag={mutations.upsertTagMutation.isPending || mutations.setThreadTagsMutation.isPending}
                 isDeletingWorkspaceThreads={mutations.deleteWorkspaceThreadsMutation.isPending}
                 {...(sidebarStatusMessage
@@ -831,8 +1091,19 @@ export function ConversationShell({
                 onSortChange={uiState.setSort}
                 onShowAllModesChange={uiState.setShowAllModes}
                 onGroupViewChange={uiState.setGroupView}
-                createThread={mutations.createThreadMutation.mutateAsync}
-                createSession={mutations.createSessionMutation.mutateAsync}
+                onRequestNewThread={(workspaceFingerprint) => {
+                    startThreadCreation(workspaceFingerprint);
+                }}
+                onSelectWorkspaceFingerprint={(workspaceFingerprint) => {
+                    onSelectedWorkspaceFingerprintChange?.(workspaceFingerprint);
+                    uiState.setSelectedThreadId(undefined);
+                    uiState.setSelectedSessionId(undefined);
+                    uiState.setSelectedRunId(undefined);
+                    setIsThreadCreationActive(false);
+                }}
+                onNavigateToWorkspaces={() => {
+                    onOpenWorkspaces?.();
+                }}
                 upsertTag={mutations.upsertTagMutation.mutateAsync}
                 setThreadTags={mutations.setThreadTagsMutation.mutateAsync}
                 setThreadFavorite={mutations.setThreadFavoriteMutation.mutateAsync}
@@ -841,6 +1112,9 @@ export function ConversationShell({
 
             <ConversationWorkspaceSection
                 {...workspaceSectionProps}
+                onToggleSidebar={() => {
+                    setIsSidebarCollapsed((current) => !current);
+                }}
                 onTopLevelTabChange={onTopLevelTabChange}
             />
 

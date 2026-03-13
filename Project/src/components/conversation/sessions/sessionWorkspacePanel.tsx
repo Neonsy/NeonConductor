@@ -55,6 +55,7 @@ export function SessionWorkspacePanel({
     executionEnvironmentPanel,
     attachedSkillsPanel,
     diffCheckpointPanel,
+    threadCreationSurface,
     promptResetKey,
     focusComposerRequestKey,
     onSelectSession,
@@ -208,6 +209,7 @@ export function SessionWorkspacePanel({
                 canCompactContext={canCompactContext}
                 isCompactingContext={isCompactingContext}
                 modePanel={modePanel}
+                threadCreationSurface={threadCreationSurface}
                 promptResetKey={promptResetKey}
                 focusComposerRequestKey={focusComposerRequestKey}
                 onProviderChange={onProviderChange}

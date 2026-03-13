@@ -59,7 +59,11 @@ export class SettingsStore {
         await this.setJson(profileId, key, value);
     }
 
-    async setJson(profileId: string, key: string, value: string | number | boolean | Record<string, unknown>): Promise<void> {
+    async setJson(
+        profileId: string,
+        key: string,
+        value: string | number | boolean | Record<string, unknown> | unknown[]
+    ): Promise<void> {
         const { db } = getPersistence();
 
         await db

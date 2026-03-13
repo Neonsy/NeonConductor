@@ -6,7 +6,6 @@ import {
     getWorkspaceBootDiagnostics,
     isWorkspaceBootReady,
 } from '@/web/components/runtime/bootReadiness';
-import { WorkspaceAppRail } from '@/web/components/runtime/workspaceAppRail';
 import { WorkspaceCommandPalette } from '@/web/components/runtime/workspaceCommandPalette';
 import { useRendererBootReadySignal } from '@/web/components/runtime/useRendererBootReadySignal';
 import { useRendererBootStatusReporter } from '@/web/components/runtime/useRendererBootStatusReporter';
@@ -109,6 +108,7 @@ export function WorkspaceSurface() {
             {showBootDiagnostics ? <WorkspaceBootDiagnosticsPanel status={bootDiagnostics.status} /> : null}
             <WorkspaceSurfaceHeader
                 appSection={controller.appSection}
+                primarySection={controller.primarySection}
                 profiles={controller.profiles}
                 resolvedProfileId={controller.resolvedProfileId}
                 isSwitchingProfile={controller.profileSetActiveMutation.isPending}
@@ -121,14 +121,15 @@ export function WorkspaceSurface() {
                     void controller.selectProfile(profileId);
                 }}
                 onWorkspaceChange={controller.setCurrentWorkspaceFingerprint}
+                onPrimarySectionChange={controller.setAppSection}
+                onOpenSettings={controller.openSettings}
+                onReturnToPrimarySection={controller.returnToPrimarySection}
                 onOpenCommandPalette={() => {
                     openCommandPalette();
                 }}
             />
 
             <div className='bg-background flex min-h-0 min-w-0 flex-1 overflow-hidden'>
-                <WorkspaceAppRail appSection={controller.appSection} onSectionChange={controller.setAppSection} />
-
                 <div className='min-h-0 min-w-0 flex-1 overflow-hidden'>
                     {controller.resolvedProfileId ? (
                         <>
@@ -140,6 +141,12 @@ export function WorkspaceSurface() {
                                     {...(controller.currentWorkspaceFingerprint
                                         ? { selectedWorkspaceFingerprint: controller.currentWorkspaceFingerprint }
                                         : {})}
+                                    {...(controller.pendingThreadCreationWorkspaceFingerprint
+                                        ? {
+                                              requestedThreadCreationWorkspaceFingerprint:
+                                                  controller.pendingThreadCreationWorkspaceFingerprint,
+                                          }
+                                        : {})}
                                     modeKey={controller.activeModeKey}
                                     modes={controller.modes}
                                     onModeChange={(modeKey) => {
@@ -147,6 +154,12 @@ export function WorkspaceSurface() {
                                     }}
                                     onTopLevelTabChange={controller.setTopLevelTab}
                                     onSelectedWorkspaceFingerprintChange={controller.setCurrentWorkspaceFingerprint}
+                                    onThreadCreationRequestHandled={
+                                        controller.clearPendingThreadCreationWorkspaceFingerprint
+                                    }
+                                    onOpenWorkspaces={() => {
+                                        controller.setAppSection('workspaces');
+                                    }}
                                     onBootChromeReadyChange={setConversationShellBootReadiness}
                                 />
                             ) : null}
@@ -160,6 +173,7 @@ export function WorkspaceSurface() {
                                     onOpenSessions={() => {
                                         controller.setAppSection('sessions');
                                     }}
+                                    onCreateThreadForWorkspace={controller.requestThreadCreationForWorkspace}
                                 />
                             ) : null}
 

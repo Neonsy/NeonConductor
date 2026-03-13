@@ -121,6 +121,7 @@ export interface SessionWorkspacePanelProps {
     executionEnvironmentPanel?: ReactNode;
     attachedSkillsPanel?: ReactNode;
     diffCheckpointPanel?: ReactNode;
+    threadCreationSurface?: ReactNode;
     promptResetKey?: number;
     focusComposerRequestKey?: number;
     onSelectSession: (sessionId: string) => void;

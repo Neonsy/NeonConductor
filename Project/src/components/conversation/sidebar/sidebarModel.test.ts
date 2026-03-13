@@ -73,12 +73,24 @@ const tags: TagRecord[] = [
     },
 ];
 
+const workspaceRoots = [
+    {
+        fingerprint: 'ws_a',
+        label: 'Workspace A',
+    },
+    {
+        fingerprint: 'ws_b',
+        label: 'Workspace B',
+    },
+];
+
 describe('buildConversationSidebarModel', () => {
     it('builds sorted workspace options and selected thread lookup', () => {
         const model = buildConversationSidebarModel({
             buckets,
             threads,
             tags,
+            workspaceRoots,
             selectedThreadId: 'thr_child',
             groupView: 'workspace',
         });
@@ -86,10 +98,11 @@ describe('buildConversationSidebarModel', () => {
         expect(model.workspaceOptions).toEqual(['ws_a', 'ws_b']);
         expect(model.selectedThread?.id).toBe('thr_child');
         expect(model.tagLabelById.get('tag_1')).toBe('Pinned');
-        expect(model.groupedThreadRows).toHaveLength(1);
-        expect(model.groupedThreadRows[0]?.workspaceFingerprint).toBe('ws_b');
-        expect(model.groupedThreadRows[0]?.favoriteCount).toBe(1);
-        expect(model.groupedThreadRows[0]?.rows.map((row) => row.thread.id)).toEqual(['thr_root', 'thr_child']);
+        expect(model.workspaceGroups).toHaveLength(1);
+        expect(model.workspaceGroups[0]?.label).toBe('Workspace B');
+        expect(model.workspaceGroups[0]?.workspaceFingerprint).toBe('ws_b');
+        expect(model.workspaceGroups[0]?.favoriteCount).toBe(1);
+        expect(model.workspaceGroups[0]?.rows.map((row) => row.thread.id)).toEqual(['thr_root', 'thr_child']);
     });
 
     it('builds branch rows when branch view is selected', () => {
@@ -97,9 +110,10 @@ describe('buildConversationSidebarModel', () => {
             buckets,
             threads,
             tags,
+            workspaceRoots,
             groupView: 'branch',
         });
 
-        expect(model.groupedThreadRows[0]?.rows.map((row) => row.depth)).toEqual([0, 1]);
+        expect(model.workspaceGroups[0]?.rows.map((row) => row.depth)).toEqual([0, 1]);
     });
 });

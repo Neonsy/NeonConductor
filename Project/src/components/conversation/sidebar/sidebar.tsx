@@ -1,23 +1,25 @@
+import { FolderPlus, PanelLeftOpen } from 'lucide-react';
 import { useState } from 'react';
 
 import { SidebarRailHeader } from '@/web/components/conversation/sidebar/sections/sidebarRailHeader';
 import { SidebarThreadBrowser } from '@/web/components/conversation/sidebar/sections/sidebarThreadBrowser';
-import { SidebarThreadComposer } from '@/web/components/conversation/sidebar/sections/sidebarThreadComposer';
 import { WorkspaceDeleteDialog } from '@/web/components/conversation/sidebar/sections/workspaceDeleteDialog';
+import { Button } from '@/web/components/ui/button';
 import { SECONDARY_QUERY_OPTIONS } from '@/web/lib/query/secondaryQueryOptions';
 import { trpc } from '@/web/trpc/client';
 
 import type { ConversationRecord, TagRecord, ThreadListRecord } from '@/app/backend/persistence/types';
-
-import type { TopLevelTab } from '@/shared/contracts';
+import type { SessionSummaryRecord } from '@/app/backend/persistence/types';
 
 interface ConversationSidebarProps {
     profileId: string;
+    isCollapsed: boolean;
+    onToggleCollapsed: () => void;
     buckets: ConversationRecord[];
     threads: ThreadListRecord[];
+    sessions: SessionSummaryRecord[];
     tags: TagRecord[];
     threadTagIdsByThread: Map<string, string[]>;
-    topLevelTab: TopLevelTab;
     workspaceRoots: Array<{
         fingerprint: string;
         label: string;
@@ -31,7 +33,6 @@ interface ConversationSidebarProps {
     sort: 'latest' | 'alphabetical';
     showAllModes: boolean;
     groupView: 'workspace' | 'branch';
-    isCreatingThread: boolean;
     isAddingTag: boolean;
     isDeletingWorkspaceThreads: boolean;
     statusMessage?: string;
@@ -45,30 +46,25 @@ interface ConversationSidebarProps {
     onSortChange: (sort: 'latest' | 'alphabetical') => void;
     onShowAllModesChange: (showAllModes: boolean) => void;
     onGroupViewChange: (groupView: 'workspace' | 'branch') => void;
-    onCreateThread: (input: {
-        scope: 'detached' | 'workspace';
-        workspacePath?: string;
-        title: string;
-    }) => Promise<
-        | void
-        | {
-              feedbackMessage?: string;
-          }
-    >;
+    onRequestNewThread: (workspaceFingerprint?: string) => void;
+    onSelectWorkspaceFingerprint: (workspaceFingerprint: string | undefined) => void;
     onAddTagToThread: (threadId: string, label: string) => Promise<void>;
     onDeleteWorkspaceThreads: (input: {
         workspaceFingerprint: string;
         includeFavoriteThreads: boolean;
     }) => Promise<void>;
+    onNavigateToWorkspaces: () => void;
 }
 
 export function ConversationSidebar({
     profileId,
+    isCollapsed,
+    onToggleCollapsed,
     buckets,
     threads,
+    sessions,
     tags,
     threadTagIdsByThread,
-    topLevelTab,
     workspaceRoots,
     preferredWorkspaceFingerprint,
     selectedThreadId,
@@ -78,7 +74,6 @@ export function ConversationSidebar({
     sort,
     showAllModes,
     groupView,
-    isCreatingThread,
     isAddingTag,
     isDeletingWorkspaceThreads,
     statusMessage,
@@ -92,9 +87,11 @@ export function ConversationSidebar({
     onSortChange,
     onShowAllModesChange,
     onGroupViewChange,
-    onCreateThread,
+    onRequestNewThread,
+    onSelectWorkspaceFingerprint,
     onAddTagToThread,
     onDeleteWorkspaceThreads,
+    onNavigateToWorkspaces,
 }: ConversationSidebarProps) {
     const [feedbackMessage, setFeedbackMessage] = useState<string | undefined>(undefined);
     const [workspaceDeleteTarget, setWorkspaceDeleteTarget] = useState<
@@ -119,82 +116,123 @@ export function ConversationSidebar({
 
     return (
         <>
-            <aside className='border-border/70 bg-card/40 flex min-h-0 w-[272px] flex-col border-r xl:w-[288px]'>
+            <aside
+                className={`border-border/70 bg-card/40 flex min-h-0 shrink-0 flex-col border-r transition-[width] duration-200 ${
+                    isCollapsed ? 'w-[76px]' : 'w-[272px] xl:w-[288px]'
+                }`}>
                 <SidebarRailHeader
+                    compact={isCollapsed}
                     {...(feedbackMessage ? { feedbackMessage } : {})}
                     {...(statusMessage ? { statusMessage, statusTone } : {})}
-                    threadComposerAction={
-                        <SidebarThreadComposer
-                            topLevelTab={topLevelTab}
-                            workspaceRoots={workspaceRoots}
-                            {...(preferredWorkspaceFingerprint
-                                ? { preferredWorkspaceFingerprint }
-                                : {})}
-                            isCreatingThread={isCreatingThread}
-                            onCreateThread={async (input) => {
-                                setFeedbackMessage(undefined);
-                                const result = await onCreateThread(input);
-                                if (result?.feedbackMessage) {
-                                    setFeedbackMessage(result.feedbackMessage);
-                                }
-                            }}
-                        />
+                    onToggleCollapsed={onToggleCollapsed}
+                    primaryAction={
+                        isCollapsed ? (
+                            <Button
+                                type='button'
+                                size='icon'
+                                variant='outline'
+                                className='h-10 w-10 rounded-2xl'
+                                aria-label='Add workspace'
+                                title='Add workspace'
+                                onClick={() => {
+                                    onNavigateToWorkspaces();
+                                }}>
+                                <FolderPlus className='h-4 w-4' />
+                            </Button>
+                        ) : (
+                            <Button
+                                type='button'
+                                size='sm'
+                                variant='secondary'
+                                className='h-9 w-full rounded-xl whitespace-nowrap'
+                                onClick={() => {
+                                    onNavigateToWorkspaces();
+                                }}>
+                                Add workspace
+                            </Button>
+                        )
                     }
                 />
 
-                <SidebarThreadBrowser
-                    buckets={buckets}
-                    threads={threads}
-                    tags={tags}
-                    threadTagIdsByThread={threadTagIdsByThread}
-                    {...(selectedThreadId ? { selectedThreadId } : {})}
-                    selectedTagIds={selectedTagIds}
-                    scopeFilter={scopeFilter}
-                    {...(workspaceFilter ? { workspaceFilter } : {})}
-                    sort={sort}
-                    showAllModes={showAllModes}
-                    groupView={groupView}
-                    isAddingTag={isAddingTag}
-                    {...(statusMessage ? { statusMessage, statusTone } : {})}
-                    onSelectThread={onSelectThread}
-                    {...(onPreviewThread ? { onPreviewThread } : {})}
-                    onToggleTagFilter={onToggleTagFilter}
-                    onToggleThreadFavorite={async (threadId, nextFavorite) => {
-                        setFeedbackMessage(undefined);
-                        try {
-                            await onToggleThreadFavorite(threadId, nextFavorite);
-                        } catch (error) {
-                            const message =
-                                error instanceof Error ? error.message : 'Favorite status could not be updated.';
-                            setFeedbackMessage(message);
-                            throw error;
-                        }
-                    }}
-                    onRequestWorkspaceDelete={(workspaceFingerprint, workspaceLabel) => {
-                        setFeedbackMessage(undefined);
-                        setIncludeFavoriteThreads(false);
-                        setWorkspaceDeleteTarget({
-                            workspaceFingerprint,
-                            workspaceLabel,
-                        });
-                    }}
-                    onScopeFilterChange={onScopeFilterChange}
-                    onWorkspaceFilterChange={onWorkspaceFilterChange}
-                    onSortChange={onSortChange}
-                    onShowAllModesChange={onShowAllModesChange}
-                    onGroupViewChange={onGroupViewChange}
-                    onAddTagToThread={async (threadId, label) => {
-                        setFeedbackMessage(undefined);
-                        try {
-                            await onAddTagToThread(threadId, label);
-                        } catch (error) {
-                            const message =
-                                error instanceof Error ? error.message : 'Thread tags could not be updated.';
-                            setFeedbackMessage(message);
-                            throw error;
-                        }
-                    }}
-                />
+                {isCollapsed ? (
+                    <div className='flex flex-1 flex-col items-center gap-3 px-3 py-4'>
+                        <Button
+                            type='button'
+                            size='icon'
+                            variant='outline'
+                            className='h-10 w-10 rounded-2xl'
+                            aria-label='Expand threads sidebar'
+                            title='Expand threads sidebar'
+                            onClick={onToggleCollapsed}>
+                            <PanelLeftOpen className='h-4 w-4' />
+                        </Button>
+                    </div>
+                ) : (
+                    <>
+                        <SidebarThreadBrowser
+                            buckets={buckets}
+                            threads={threads}
+                            sessions={sessions}
+                            tags={tags}
+                            workspaceRoots={workspaceRoots}
+                            threadTagIdsByThread={threadTagIdsByThread}
+                            {...(selectedThreadId ? { selectedThreadId } : {})}
+                            {...(preferredWorkspaceFingerprint
+                                ? { selectedWorkspaceFingerprint: preferredWorkspaceFingerprint }
+                                : {})}
+                            selectedTagIds={selectedTagIds}
+                            scopeFilter={scopeFilter}
+                            {...(workspaceFilter ? { workspaceFilter } : {})}
+                            sort={sort}
+                            showAllModes={showAllModes}
+                            groupView={groupView}
+                            isAddingTag={isAddingTag}
+                            {...(statusMessage ? { statusMessage, statusTone } : {})}
+                            onSelectThread={onSelectThread}
+                            {...(onPreviewThread ? { onPreviewThread } : {})}
+                            onToggleTagFilter={onToggleTagFilter}
+                            onToggleThreadFavorite={async (threadId, nextFavorite) => {
+                                setFeedbackMessage(undefined);
+                                try {
+                                    await onToggleThreadFavorite(threadId, nextFavorite);
+                                } catch (error) {
+                                    const message =
+                                        error instanceof Error ? error.message : 'Favorite status could not be updated.';
+                                    setFeedbackMessage(message);
+                                    throw error;
+                                }
+                            }}
+                            onRequestWorkspaceDelete={(workspaceFingerprint, workspaceLabel) => {
+                                setFeedbackMessage(undefined);
+                                setIncludeFavoriteThreads(false);
+                                setWorkspaceDeleteTarget({
+                                    workspaceFingerprint,
+                                    workspaceLabel,
+                                });
+                            }}
+                            onRequestNewThread={(workspaceFingerprint) => {
+                                onRequestNewThread(workspaceFingerprint ?? preferredWorkspaceFingerprint);
+                            }}
+                            onSelectWorkspaceFingerprint={onSelectWorkspaceFingerprint}
+                            onScopeFilterChange={onScopeFilterChange}
+                            onWorkspaceFilterChange={onWorkspaceFilterChange}
+                            onSortChange={onSortChange}
+                            onShowAllModesChange={onShowAllModesChange}
+                            onGroupViewChange={onGroupViewChange}
+                            onAddTagToThread={async (threadId, label) => {
+                                setFeedbackMessage(undefined);
+                                try {
+                                    await onAddTagToThread(threadId, label);
+                                } catch (error) {
+                                    const message =
+                                        error instanceof Error ? error.message : 'Thread tags could not be updated.';
+                                    setFeedbackMessage(message);
+                                    throw error;
+                                }
+                            }}
+                        />
+                    </>
+                )}
             </aside>
 
             <WorkspaceDeleteDialog

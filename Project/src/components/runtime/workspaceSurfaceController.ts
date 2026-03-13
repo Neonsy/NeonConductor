@@ -11,8 +11,12 @@ import type { WorkspaceAppSection } from '@/web/components/runtime/workspaceSurf
 export function useWorkspaceSurfaceController() {
     const [topLevelTab, setTopLevelTab] = useState<TopLevelTab>('chat');
     const [appSection, setAppSection] = useState<WorkspaceAppSection>('sessions');
+    const [primarySection, setPrimarySection] = useState<Exclude<WorkspaceAppSection, 'settings'>>('sessions');
     const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
     const [currentWorkspaceFingerprint, setCurrentWorkspaceFingerprint] = useState<string | undefined>(undefined);
+    const [pendingThreadCreationWorkspaceFingerprint, setPendingThreadCreationWorkspaceFingerprint] = useState<
+        string | undefined
+    >(undefined);
 
     const profileState = useWorkspaceProfileState({
         setTopLevelTab,
@@ -38,6 +42,13 @@ export function useWorkspaceSurfaceController() {
         ? workspaceRoots.find((workspaceRoot) => workspaceRoot.fingerprint === resolvedWorkspaceFingerprint)
         : undefined;
 
+    const selectAppSection = (section: WorkspaceAppSection) => {
+        setAppSection(section);
+        if (section !== 'settings') {
+            setPrimarySection(section);
+        }
+    };
+
     return {
         profiles: profileState.profiles,
         resolvedProfileId: profileState.resolvedProfileId,
@@ -45,13 +56,29 @@ export function useWorkspaceSurfaceController() {
         profileErrorMessage: profileState.profileErrorMessage,
         hasProfiles: profileState.hasProfiles,
         appSection,
-        setAppSection,
+        primarySection,
+        setAppSection: selectAppSection,
+        openSettings: () => {
+            setAppSection('settings');
+        },
+        returnToPrimarySection: () => {
+            setAppSection(primarySection);
+        },
         isCommandPaletteOpen,
         setIsCommandPaletteOpen,
         topLevelTab,
         setTopLevelTab,
         currentWorkspaceFingerprint: resolvedWorkspaceFingerprint,
         setCurrentWorkspaceFingerprint,
+        pendingThreadCreationWorkspaceFingerprint,
+        requestThreadCreationForWorkspace: (workspaceFingerprint: string) => {
+            setCurrentWorkspaceFingerprint(workspaceFingerprint);
+            setPendingThreadCreationWorkspaceFingerprint(workspaceFingerprint);
+            setAppSection('sessions');
+        },
+        clearPendingThreadCreationWorkspaceFingerprint: () => {
+            setPendingThreadCreationWorkspaceFingerprint(undefined);
+        },
         workspaceRoots,
         selectedWorkspaceRoot,
         modes: modeState.modes,

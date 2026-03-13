@@ -12,17 +12,20 @@ interface ConversationWorkspaceSectionHeaderState {
     lastSequence: number;
     tabSwitchNotice: string | undefined;
     topLevelTab: TopLevelTab;
+    isSidebarCollapsed: boolean;
 }
 
 interface ConversationWorkspaceSectionProps {
     header: ConversationWorkspaceSectionHeaderState;
     panel: SessionWorkspacePanelProps;
+    onToggleSidebar: () => void;
     onTopLevelTabChange: (topLevelTab: TopLevelTab) => void;
 }
 
 export function ConversationWorkspaceSection({
     header,
     panel,
+    onToggleSidebar,
     onTopLevelTabChange,
 }: ConversationWorkspaceSectionProps) {
     return (
@@ -34,6 +37,8 @@ export function ConversationWorkspaceSection({
                 lastSequence={header.lastSequence}
                 {...(header.tabSwitchNotice ? { tabSwitchNotice: header.tabSwitchNotice } : {})}
                 topLevelTab={header.topLevelTab}
+                isSidebarCollapsed={header.isSidebarCollapsed}
+                onToggleSidebar={onToggleSidebar}
                 onTopLevelTabChange={onTopLevelTabChange}
             />
             <SessionWorkspacePanel {...panel} />

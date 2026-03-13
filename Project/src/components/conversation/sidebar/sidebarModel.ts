@@ -6,18 +6,23 @@ export interface ConversationSidebarModel {
     workspaceOptions: string[];
     tagLabelById: Map<string, string>;
     selectedThread: ThreadListRecord | undefined;
-    groupedThreadRows: Array<{
+    workspaceGroups: Array<{
         label: string;
-        workspaceFingerprint?: string;
+        workspaceFingerprint: string;
+        absolutePath?: string;
         favoriteCount: number;
+        threadCount: number;
         rows: ThreadRenderRow[];
     }>;
+    playgroundRows: ThreadRenderRow[];
 }
 
 interface GroupedThreadRowsSection {
     label: string;
-    workspaceFingerprint?: string;
+    workspaceFingerprint: string;
+    absolutePath?: string;
     favoriteCount: number;
+    threadCount: number;
     rows: ThreadRenderRow[];
 }
 
@@ -25,9 +30,20 @@ export function buildConversationSidebarModel(input: {
     buckets: ConversationRecord[];
     threads: ThreadListRecord[];
     tags: TagRecord[];
+    workspaceRoots: Array<{
+        fingerprint: string;
+        label: string;
+        absolutePath?: string;
+    }>;
     selectedThreadId?: string;
     groupView: 'workspace' | 'branch';
 }): ConversationSidebarModel {
+    const workspaceLabelByFingerprint = new Map(
+        input.workspaceRoots.map((workspaceRoot) => [workspaceRoot.fingerprint, workspaceRoot.label] as const)
+    );
+    const workspacePathByFingerprint = new Map(
+        input.workspaceRoots.map((workspaceRoot) => [workspaceRoot.fingerprint, workspaceRoot.absolutePath] as const)
+    );
     const workspaceOptions = [
         ...new Set(
             input.buckets
@@ -44,34 +60,46 @@ export function buildConversationSidebarModel(input: {
         : undefined;
 
     const grouped = new Map<string, GroupedThreadRowsSection>();
+    const playgroundThreads = input.threads.filter((thread) => thread.anchorKind !== 'workspace');
     for (const thread of input.threads) {
-        const anchorKey = thread.anchorKind === 'workspace' ? `ws:${thread.anchorId ?? ''}` : 'playground';
+        if (thread.anchorKind !== 'workspace' || !thread.anchorId) {
+            continue;
+        }
+
+        const anchorKey = `ws:${thread.anchorId}`;
         if (!grouped.has(anchorKey)) {
+            const absolutePath = workspacePathByFingerprint.get(thread.anchorId);
             grouped.set(anchorKey, {
-                label: thread.anchorKind === 'workspace' ? `Workspace: ${thread.anchorId ?? 'Unknown'}` : 'Playground',
-                ...(thread.anchorKind === 'workspace' && thread.anchorId ? { workspaceFingerprint: thread.anchorId } : {}),
+                label: workspaceLabelByFingerprint.get(thread.anchorId) ?? thread.anchorId,
+                workspaceFingerprint: thread.anchorId,
+                ...(absolutePath ? { absolutePath } : {}),
                 favoriteCount: 0,
+                threadCount: 0,
                 rows: [],
             });
         }
     }
 
     for (const [anchorKey, group] of grouped.entries()) {
-        const anchorThreads = input.threads.filter((thread) => {
-            const key = thread.anchorKind === 'workspace' ? `ws:${thread.anchorId ?? ''}` : 'playground';
-            return key === anchorKey;
-        });
+        const anchorThreads = input.threads.filter(
+            (thread) => thread.anchorKind === 'workspace' && `ws:${thread.anchorId ?? ''}` === anchorKey
+        );
         group.rows =
             input.groupView === 'branch'
                 ? buildBranchRows(anchorThreads)
                 : anchorThreads.map((thread) => ({ thread, depth: 0 }));
         group.favoriteCount = anchorThreads.filter((thread) => thread.isFavorite).length;
+        group.threadCount = anchorThreads.length;
     }
 
     return {
         workspaceOptions,
         tagLabelById,
         selectedThread,
-        groupedThreadRows: Array.from(grouped.values()),
+        workspaceGroups: Array.from(grouped.values()),
+        playgroundRows:
+            input.groupView === 'branch'
+                ? buildBranchRows(playgroundThreads)
+                : playgroundThreads.map((thread) => ({ thread, depth: 0 })),
     };
 }

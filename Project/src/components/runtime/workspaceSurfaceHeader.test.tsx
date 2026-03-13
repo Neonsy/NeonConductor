@@ -8,6 +8,7 @@ describe('workspace surface header', () => {
         const html = renderToStaticMarkup(
             <WorkspaceSurfaceHeader
                 appSection='sessions'
+                primarySection='sessions'
                 profiles={[{ id: 'profile_default', name: 'Local Default' }]}
                 resolvedProfileId='profile_default'
                 isSwitchingProfile={false}
@@ -15,14 +16,19 @@ describe('workspace surface header', () => {
                 selectedWorkspaceFingerprint='ws_alpha'
                 onProfileChange={vi.fn()}
                 onWorkspaceChange={vi.fn()}
+                onPrimarySectionChange={vi.fn()}
+                onOpenSettings={vi.fn()}
+                onReturnToPrimarySection={vi.fn()}
                 onOpenCommandPalette={vi.fn()}
             />
         );
 
         expect(html).toContain('Sessions');
+        expect(html).toContain('Workspaces');
         expect(html).toContain('Workspace Alpha');
         expect(html).toContain('Local Default');
         expect(html).toContain('Search');
+        expect(html).toContain('App');
         expect(html).not.toContain('Orchestrator');
         expect(html).not.toContain('Agent');
         expect(html).not.toContain('Chat');

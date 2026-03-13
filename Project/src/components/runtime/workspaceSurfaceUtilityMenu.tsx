@@ -1,0 +1,119 @@
+import { Command, Settings2 } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+
+import type { WorkspaceAppSection } from '@/web/components/runtime/workspaceSurfaceModel';
+
+interface WorkspaceSurfaceUtilityMenuProps {
+    appSection: WorkspaceAppSection;
+    primarySection: Exclude<WorkspaceAppSection, 'settings'>;
+    onOpenSettings: () => void;
+    onReturnToPrimarySection: () => void;
+    onOpenCommandPalette: () => void;
+}
+
+export function WorkspaceSurfaceUtilityMenu({
+    appSection,
+    primarySection,
+    onOpenSettings,
+    onReturnToPrimarySection,
+    onOpenCommandPalette,
+}: WorkspaceSurfaceUtilityMenuProps) {
+    const [open, setOpen] = useState(false);
+    const containerRef = useRef<HTMLDivElement | null>(null);
+
+    useEffect(() => {
+        if (!open) {
+            return;
+        }
+
+        const handlePointerDown = (event: MouseEvent) => {
+            if (!containerRef.current?.contains(event.target as Node)) {
+                setOpen(false);
+            }
+        };
+
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                setOpen(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handlePointerDown);
+        document.addEventListener('keydown', handleKeyDown);
+
+        return () => {
+            document.removeEventListener('mousedown', handlePointerDown);
+            document.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [open]);
+
+    const returnLabel = primarySection === 'workspaces' ? 'Return to Workspaces' : 'Return to Sessions';
+
+    return (
+        <div ref={containerRef} className='relative shrink-0'>
+            <button
+                type='button'
+                aria-haspopup='menu'
+                aria-expanded={open}
+                className={`border-border rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${
+                    appSection === 'settings'
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'bg-card hover:bg-accent text-foreground'
+                }`}
+                onClick={() => {
+                    setOpen((current) => !current);
+                }}>
+                App
+            </button>
+
+            {open ? (
+                <div
+                    role='menu'
+                    aria-label='App utilities'
+                    className='border-border bg-background absolute top-[calc(100%+0.5rem)] right-0 z-20 min-w-[220px] rounded-3xl border p-2 shadow-xl'>
+                    <button
+                        type='button'
+                        role='menuitem'
+                        className='hover:bg-accent flex w-full items-start gap-3 rounded-2xl px-3 py-3 text-left transition-colors'
+                        onClick={() => {
+                            if (appSection === 'settings') {
+                                onReturnToPrimarySection();
+                            } else {
+                                onOpenSettings();
+                            }
+                            setOpen(false);
+                        }}>
+                        <Settings2 className='mt-0.5 size-4 shrink-0' />
+                        <span className='space-y-1'>
+                            <span className='block text-sm font-medium'>
+                                {appSection === 'settings' ? returnLabel : 'Open Settings'}
+                            </span>
+                            <span className='text-muted-foreground block text-xs leading-5'>
+                                {appSection === 'settings'
+                                    ? 'Return to the last primary workspace area.'
+                                    : 'Open provider, profile, context, registry, and app controls.'}
+                            </span>
+                        </span>
+                    </button>
+
+                    <button
+                        type='button'
+                        role='menuitem'
+                        className='hover:bg-accent flex w-full items-start gap-3 rounded-2xl px-3 py-3 text-left transition-colors'
+                        onClick={() => {
+                            onOpenCommandPalette();
+                            setOpen(false);
+                        }}>
+                        <Command className='mt-0.5 size-4 shrink-0' />
+                        <span className='space-y-1'>
+                            <span className='block text-sm font-medium'>Open Command Palette</span>
+                            <span className='text-muted-foreground block text-xs leading-5'>
+                                Jump between workspaces, profiles, and surfaces with the keyboard.
+                            </span>
+                        </span>
+                    </button>
+                </div>
+            ) : null}
+        </div>
+    );
+}

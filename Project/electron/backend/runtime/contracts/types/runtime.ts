@@ -10,6 +10,7 @@ import type {
 import type { EntityId } from '@/app/backend/runtime/contracts/ids';
 import type { ProfileInput } from '@/app/backend/runtime/contracts/types/common';
 import type { WorktreeRecord } from '@/app/backend/runtime/contracts/types/worktree';
+import type { RuntimeProviderId, TopLevelTab } from '@/shared/contracts';
 
 export interface StreamEventEnvelope {
     id: EntityId<'evt'>;
@@ -58,6 +59,7 @@ export interface RuntimeShellBootstrap {
     threadTags: ThreadTagRecord[];
     executionPreset: ExecutionPreset;
     workspaceRoots: WorkspaceRootRecord[];
+    workspacePreferences: WorkspacePreferenceRecord[];
     worktrees: WorktreeRecord[];
     defaults: {
         providerId: string;
@@ -150,4 +152,24 @@ export interface RuntimeRegisterWorkspaceRootResult {
 
 export interface ContextBudgetInput {
     contextBudget: ContextBudget;
+}
+
+export interface WorkspacePreferenceRecord {
+    profileId: string;
+    workspaceFingerprint: string;
+    defaultTopLevelTab?: TopLevelTab;
+    defaultProviderId?: RuntimeProviderId;
+    defaultModelId?: string;
+    updatedAt: string;
+}
+
+export interface RuntimeSetWorkspacePreferenceInput extends ProfileInput {
+    workspaceFingerprint: string;
+    defaultTopLevelTab?: TopLevelTab;
+    defaultProviderId?: RuntimeProviderId;
+    defaultModelId?: string;
+}
+
+export interface RuntimeSetWorkspacePreferenceResult {
+    workspacePreference: WorkspacePreferenceRecord;
 }

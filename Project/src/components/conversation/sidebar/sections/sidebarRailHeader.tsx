@@ -1,29 +1,50 @@
+import { PanelLeftClose } from 'lucide-react';
+
 import type { ReactNode } from 'react';
 
 interface SidebarRailHeaderProps {
+    compact?: boolean;
     feedbackMessage?: string;
     statusMessage?: string;
     statusTone?: 'info' | 'error';
-    threadComposerAction: ReactNode;
+    primaryAction: ReactNode;
+    onToggleCollapsed: () => void;
 }
 
 export function SidebarRailHeader({
+    compact = false,
     feedbackMessage,
     statusMessage,
     statusTone = 'info',
-    threadComposerAction,
+    primaryAction,
+    onToggleCollapsed,
 }: SidebarRailHeaderProps) {
-    return (
-        <div className='border-border/70 space-y-4 border-b p-4'>
-            <div className='flex items-start justify-between gap-3'>
-                <div className='min-w-0'>
-                    <p className='text-sm font-semibold'>Threads</p>
-                    <p className='text-muted-foreground text-xs'>
-                        Search and filter here. Session mode now stays in the main workspace header.
-                    </p>
-                </div>
-                {threadComposerAction}
+    if (compact) {
+        return (
+            <div className='border-border/70 flex items-center justify-center border-b px-3 py-3'>
+                {primaryAction}
             </div>
+        );
+    }
+
+    return (
+        <div className='border-border/70 space-y-3 border-b p-4'>
+            <div className='flex items-start justify-between gap-3'>
+                <div className='min-w-0 space-y-1'>
+                    <p className='text-sm font-semibold'>Sessions</p>
+                    <p className='text-muted-foreground text-xs leading-5'>Workspace tree.</p>
+                </div>
+                <button
+                    type='button'
+                    className='border-border bg-card hover:bg-accent inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border transition-colors'
+                    aria-label='Collapse threads sidebar'
+                    title='Collapse threads sidebar'
+                    onClick={onToggleCollapsed}>
+                    <PanelLeftClose className='h-4 w-4' />
+                </button>
+            </div>
+
+            <div>{primaryAction}</div>
 
             {feedbackMessage ? (
                 <div

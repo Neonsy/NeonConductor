@@ -1,12 +1,16 @@
-import { Star, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, GitBranch, Play, Plus, Star, Trash2 } from 'lucide-react';
+import { useState } from 'react';
 
-import type { ThreadListRecord } from '@/app/backend/persistence/types';
+import type { SessionSummaryRecord, ThreadListRecord } from '@/app/backend/persistence/types';
 
 import type { TopLevelTab } from '@/shared/contracts';
 
-interface SidebarThreadGroup {
+interface WorkspaceGroupRow {
     label: string;
-    workspaceFingerprint?: string;
+    workspaceFingerprint: string;
+    absolutePath?: string;
+    favoriteCount: number;
+    threadCount: number;
     rows: Array<{
         thread: ThreadListRecord;
         depth: number;
@@ -14,7 +18,13 @@ interface SidebarThreadGroup {
 }
 
 interface SidebarThreadListProps {
-    groupedThreadRows: SidebarThreadGroup[];
+    workspaceGroups: WorkspaceGroupRow[];
+    playgroundRows: Array<{
+        thread: ThreadListRecord;
+        depth: number;
+    }>;
+    sessions: SessionSummaryRecord[];
+    selectedWorkspaceFingerprint?: string;
     threadTagIdsByThread: Map<string, string[]>;
     tagLabelById: Map<string, string>;
     selectedThreadId?: string;
@@ -25,8 +35,10 @@ interface SidebarThreadListProps {
     deferredSearchValue: string;
     onPreviewThread?: (threadId: string) => void;
     onSelectThread: (threadId: string) => void;
+    onSelectWorkspaceFingerprint: (workspaceFingerprint: string | undefined) => void;
     onToggleThreadFavorite: (threadId: string, nextFavorite: boolean) => Promise<void>;
     onRequestWorkspaceDelete: (workspaceFingerprint: string, workspaceLabel: string) => void;
+    onRequestNewThread: (workspaceFingerprint?: string) => void;
 }
 
 function modeBadgeClass(topLevelTab: TopLevelTab): string {
@@ -49,8 +61,191 @@ function modeLabel(topLevelTab: TopLevelTab): string {
     return 'Orchestrator';
 }
 
+function summarizeThreadRuns(threadId: string, sessions: SessionSummaryRecord[]): string | undefined {
+    const threadSessions = sessions.filter((session) => session.threadId === threadId);
+    if (threadSessions.length === 0) {
+        return undefined;
+    }
+
+    if (threadSessions.some((session) => session.runStatus === 'running')) {
+        return 'Running';
+    }
+    if (threadSessions.some((session) => session.runStatus === 'error')) {
+        return 'Needs attention';
+    }
+    if (threadSessions.some((session) => session.runStatus === 'completed')) {
+        return 'Recent runs ready';
+    }
+
+    return 'Idle';
+}
+
+function getRunStatusTone(runStatus: SessionSummaryRecord['runStatus']): string {
+    if (runStatus === 'running') {
+        return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700';
+    }
+
+    if (runStatus === 'error') {
+        return 'border-destructive/30 bg-destructive/10 text-destructive';
+    }
+
+    if (runStatus === 'completed') {
+        return 'border-sky-500/30 bg-sky-500/10 text-sky-700';
+    }
+
+    return 'border-border/70 bg-background/80 text-muted-foreground';
+}
+
+function getRunStatusLabel(runStatus: SessionSummaryRecord['runStatus']): string {
+    if (runStatus === 'running') {
+        return 'Running';
+    }
+
+    if (runStatus === 'error') {
+        return 'Needs attention';
+    }
+
+    if (runStatus === 'completed') {
+        return 'Completed';
+    }
+
+    return 'Idle';
+}
+
+function ThreadRow({
+    thread,
+    depth,
+    sessions,
+    threadTagIdsByThread,
+    tagLabelById,
+    selectedThreadId,
+    showAllModes,
+    groupView,
+    onPreviewThread,
+    onSelectThread,
+    onToggleThreadFavorite,
+}: {
+    thread: ThreadListRecord;
+    depth: number;
+    sessions: SessionSummaryRecord[];
+    threadTagIdsByThread: Map<string, string[]>;
+    tagLabelById: Map<string, string>;
+    selectedThreadId?: string;
+    showAllModes: boolean;
+    groupView: 'workspace' | 'branch';
+    onPreviewThread?: (threadId: string) => void;
+    onSelectThread: (threadId: string) => void;
+    onToggleThreadFavorite: (threadId: string, nextFavorite: boolean) => Promise<void>;
+}) {
+    const tagIds = threadTagIdsByThread.get(thread.id) ?? [];
+    const runSummary = summarizeThreadRuns(thread.id, sessions);
+    const threadSessions = sessions
+        .filter((session) => session.threadId === thread.id)
+        .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+        .slice(0, 3);
+
+    return (
+        <div className='relative'>
+            {groupView === 'branch' && depth > 0 ? (
+                <span
+                    aria-hidden
+                    className='bg-border absolute top-2 bottom-2 w-px'
+                    style={{ left: `${String(depth * 14 - 7)}px` }}
+                />
+            ) : null}
+            <div
+                className={`border-border bg-background hover:bg-accent/80 flex items-start gap-2 rounded-3xl border p-3 transition-colors ${
+                    selectedThreadId === thread.id ? 'border-primary bg-primary/8 shadow-sm' : ''
+                }`}
+                style={{ marginLeft: `${String(depth * 14)}px` }}>
+                <button
+                    type='button'
+                    className='focus-visible:ring-ring min-w-0 flex-1 rounded-md text-left focus-visible:ring-2'
+                    onMouseEnter={() => {
+                        onPreviewThread?.(thread.id);
+                    }}
+                    onFocus={() => {
+                        onPreviewThread?.(thread.id);
+                    }}
+                    onClick={() => {
+                        onSelectThread(thread.id);
+                    }}>
+                    <div className='flex items-center justify-between gap-2'>
+                        <p className='truncate text-sm font-medium'>{thread.title}</p>
+                        {showAllModes ? (
+                            <span
+                                className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold ${modeBadgeClass(
+                                    thread.topLevelTab
+                                )}`}>
+                                {modeLabel(thread.topLevelTab)}
+                            </span>
+                        ) : null}
+                    </div>
+                    <div className='text-muted-foreground mt-2 flex flex-wrap items-center gap-1.5 text-[11px]'>
+                        <span className='rounded-full border border-border/70 px-2 py-0.5'>
+                            {thread.sessionCount === 1 ? '1 session' : `${String(thread.sessionCount)} sessions`}
+                        </span>
+                        {runSummary ? (
+                            <span className='inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-emerald-700'>
+                                <Play className='h-3 w-3' />
+                                {runSummary}
+                            </span>
+                        ) : null}
+                        {thread.worktreeId ? (
+                            <span className='inline-flex items-center gap-1 rounded-full border border-border/70 px-2 py-0.5'>
+                                <GitBranch className='h-3 w-3' />
+                                Branch-linked
+                            </span>
+                        ) : null}
+                    </div>
+                    {tagIds.length > 0 ? (
+                        <div className='mt-2 flex flex-wrap gap-1'>
+                            {tagIds.map((tagId) => (
+                                <span
+                                    key={tagId}
+                                    className='bg-secondary text-secondary-foreground rounded px-1.5 py-0.5 text-[10px]'>
+                                    {tagLabelById.get(tagId) ?? tagId}
+                                </span>
+                            ))}
+                        </div>
+                    ) : null}
+                    {threadSessions.length > 0 ? (
+                        <div className='mt-2 flex flex-wrap gap-1.5'>
+                            {threadSessions.map((session) => (
+                                <span
+                                    key={session.id}
+                                    className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${getRunStatusTone(
+                                        session.runStatus
+                                    )}`}>
+                                    {getRunStatusLabel(session.runStatus)}
+                                </span>
+                            ))}
+                        </div>
+                    ) : null}
+                </button>
+                <button
+                    type='button'
+                    className={`focus-visible:ring-ring mt-0.5 rounded-md p-1 transition-colors focus-visible:ring-2 ${
+                        thread.isFavorite ? 'text-amber-400 hover:text-amber-300' : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                    aria-label={
+                        thread.isFavorite ? `Remove ${thread.title} from favorites` : `Add ${thread.title} to favorites`
+                    }
+                    onClick={() => {
+                        void onToggleThreadFavorite(thread.id, !thread.isFavorite);
+                    }}>
+                    <Star className={`h-4 w-4 ${thread.isFavorite ? 'fill-current' : ''}`} />
+                </button>
+            </div>
+        </div>
+    );
+}
+
 export function SidebarThreadList({
-    groupedThreadRows,
+    workspaceGroups,
+    playgroundRows,
+    sessions,
+    selectedWorkspaceFingerprint,
     threadTagIdsByThread,
     tagLabelById,
     selectedThreadId,
@@ -61,131 +256,182 @@ export function SidebarThreadList({
     deferredSearchValue,
     onPreviewThread,
     onSelectThread,
+    onSelectWorkspaceFingerprint,
     onToggleThreadFavorite,
     onRequestWorkspaceDelete,
+    onRequestNewThread,
 }: SidebarThreadListProps) {
+    const [collapsedWorkspaceFingerprints, setCollapsedWorkspaceFingerprints] = useState<string[]>([]);
+
+    const toggleWorkspaceCollapsed = (workspaceFingerprint: string) => {
+        setCollapsedWorkspaceFingerprints((current) =>
+            current.includes(workspaceFingerprint)
+                ? current.filter((value) => value !== workspaceFingerprint)
+                : [...current, workspaceFingerprint]
+        );
+    };
+
+    const hasAnyThreads = workspaceGroups.some((group) => group.rows.length > 0) || playgroundRows.length > 0;
+
     return (
         <div className='min-h-0 flex-1 overflow-y-auto p-3'>
-            {groupedThreadRows.length === 0 ? (
+            {!hasAnyThreads ? (
                 <div className='text-muted-foreground flex h-full min-h-48 items-center justify-center rounded-3xl border border-dashed border-border/70 bg-background/30 px-6 text-center text-sm'>
                     {statusMessage && statusTone !== 'error'
-                        ? 'The rail is still loading. The center workspace is ready to use.'
+                        ? 'The sessions tree is still loading. The center workspace is ready to use.'
                         : statusTone === 'error'
-                          ? 'Conversation lists could not be loaded yet. Keep working in the current shell.'
+                          ? 'Session navigation could not be loaded yet. Keep working in the current shell.'
                           : deferredSearchValue.length > 0
                             ? 'No threads match that search yet.'
-                            : 'No conversations are available yet.'}
+                            : 'No workspaces or threads are available yet.'}
                 </div>
             ) : null}
-            {groupedThreadRows.map((group) => {
-                const workspaceFingerprint = group.workspaceFingerprint;
 
+            {workspaceGroups.map((group) => {
+                const isCollapsed = collapsedWorkspaceFingerprints.includes(group.workspaceFingerprint);
+                const isSelectedWorkspace = selectedWorkspaceFingerprint === group.workspaceFingerprint;
                 return (
-                    <section key={group.label} className='mb-4'>
-                        <div className='text-muted-foreground flex items-center justify-between gap-2 px-1 pb-1'>
-                            <p className='min-w-0 truncate text-[11px] font-semibold tracking-wide uppercase'>
-                                {group.label}
-                            </p>
-                            {workspaceFingerprint ? (
-                                <button
-                                    type='button'
-                                    className='hover:bg-destructive/10 hover:text-destructive focus-visible:ring-ring rounded-md p-1 transition-colors focus-visible:ring-2'
-                                    aria-label={`Clear threads for ${group.label}`}
-                                    onClick={() => {
-                                        onRequestWorkspaceDelete(workspaceFingerprint, group.label);
-                                    }}>
-                                    <Trash2 className='h-3.5 w-3.5' />
-                                </button>
-                            ) : null}
-                        </div>
-                        <div className='space-y-2'>
-                            {group.rows.map(({ thread, depth }) => {
-                                const tagIds = threadTagIdsByThread.get(thread.id) ?? [];
-                                return (
-                                    <div key={thread.id} className='relative'>
-                                        {groupView === 'branch' && depth > 0 ? (
-                                            <span
-                                                aria-hidden
-                                                className='bg-border absolute top-2 bottom-2 w-px'
-                                                style={{ left: `${String(depth * 14 - 7)}px` }}
-                                            />
-                                        ) : null}
-                                        <div
-                                            className={`border-border bg-background hover:bg-accent/80 flex items-start gap-2 rounded-3xl border p-3 transition-colors ${
-                                                selectedThreadId === thread.id ? 'border-primary bg-primary/8 shadow-sm' : ''
-                                            }`}
-                                            style={{ paddingLeft: `${String(depth * 14 + 10)}px` }}>
-                                            <button
-                                                type='button'
-                                                className='focus-visible:ring-ring min-w-0 flex-1 rounded-md text-left focus-visible:ring-2'
-                                                onMouseEnter={() => {
-                                                    onPreviewThread?.(thread.id);
-                                                }}
-                                                onFocus={() => {
-                                                    onPreviewThread?.(thread.id);
-                                                }}
-                                                onClick={() => {
-                                                    onSelectThread(thread.id);
-                                                }}>
-                                                <div className='flex items-center justify-between gap-2'>
-                                                    <p className='truncate text-sm font-medium'>{thread.title}</p>
-                                                    {showAllModes ? (
-                                                        <span
-                                                            className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold ${modeBadgeClass(
-                                                                thread.topLevelTab
-                                                            )}`}>
-                                                            {modeLabel(thread.topLevelTab)}
-                                                        </span>
-                                                    ) : null}
-                                                </div>
-                                                <p className='text-muted-foreground mt-1 text-xs leading-5'>
-                                                    {thread.anchorKind === 'workspace'
-                                                        ? thread.topLevelTab === 'chat'
-                                                            ? 'Workspace conversation'
-                                                            : thread.worktreeId
-                                                              ? 'Managed worktree execution'
-                                                              : thread.executionEnvironmentMode === 'new_worktree'
-                                                                ? 'Queued worktree execution'
-                                                                : 'Local workspace execution'
-                                                        : 'Playground conversation'}
-                                                </p>
-                                                {tagIds.length > 0 ? (
-                                                    <div className='mt-2 flex flex-wrap gap-1'>
-                                                        {tagIds.map((tagId) => (
-                                                            <span
-                                                                key={tagId}
-                                                                className='bg-secondary text-secondary-foreground rounded px-1.5 py-0.5 text-[10px]'>
-                                                                {tagLabelById.get(tagId) ?? tagId}
-                                                            </span>
-                                                        ))}
-                                                    </div>
+                    <section key={group.workspaceFingerprint} className='mb-4 space-y-2'>
+                        <div
+                            className={`rounded-[26px] border p-3 ${
+                                isSelectedWorkspace
+                                    ? 'border-primary/40 bg-primary/6'
+                                    : 'border-border bg-card/60'
+                            }`}>
+                            <div className='flex items-start justify-between gap-3'>
+                                <div className='min-w-0 flex-1'>
+                                    <div className='flex items-start gap-2'>
+                                        <button
+                                            type='button'
+                                            className='border-border bg-background/70 hover:bg-accent inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border'
+                                            aria-label={isCollapsed ? `Expand ${group.label}` : `Collapse ${group.label}`}
+                                            onClick={() => {
+                                                toggleWorkspaceCollapsed(group.workspaceFingerprint);
+                                            }}>
+                                            {isCollapsed ? <ChevronRight className='h-4 w-4' /> : <ChevronDown className='h-4 w-4' />}
+                                        </button>
+                                        <button
+                                            type='button'
+                                            className='min-w-0 flex-1 rounded-xl px-1 py-0.5 text-left transition-colors hover:bg-background/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+                                            onClick={() => {
+                                                onSelectWorkspaceFingerprint(group.workspaceFingerprint);
+                                            }}>
+                                            <div className='min-w-0'>
+                                                <p className='truncate text-sm font-semibold'>{group.label}</p>
+                                                {group.absolutePath ? (
+                                                    <p className='text-muted-foreground truncate text-xs'>{group.absolutePath}</p>
                                                 ) : null}
-                                            </button>
-                                            <button
-                                                type='button'
-                                                className={`focus-visible:ring-ring mt-0.5 rounded-md p-1 transition-colors focus-visible:ring-2 ${
-                                                    thread.isFavorite
-                                                        ? 'text-amber-400 hover:text-amber-300'
-                                                        : 'text-muted-foreground hover:text-foreground'
-                                                }`}
-                                                aria-label={
-                                                    thread.isFavorite
-                                                        ? `Remove ${thread.title} from favorites`
-                                                        : `Add ${thread.title} to favorites`
-                                                }
-                                                onClick={() => {
-                                                    void onToggleThreadFavorite(thread.id, !thread.isFavorite);
-                                                }}>
-                                                <Star className={`h-4 w-4 ${thread.isFavorite ? 'fill-current' : ''}`} />
-                                            </button>
-                                        </div>
+                                            </div>
+                                        </button>
                                     </div>
-                                );
-                            })}
+                                </div>
+
+                                <div className='flex items-center gap-1'>
+                                    <button
+                                        type='button'
+                                        className='hover:bg-accent focus-visible:ring-ring rounded-md px-2 py-1 text-[11px] font-semibold transition-colors focus-visible:ring-2'
+                                        aria-label={`Create a thread in ${group.label}`}
+                                        onClick={() => {
+                                            onRequestNewThread(group.workspaceFingerprint);
+                                        }}>
+                                        <span className='inline-flex items-center gap-1'>
+                                            <Plus className='h-3.5 w-3.5' />
+                                            New thread
+                                        </span>
+                                    </button>
+                                    <button
+                                        type='button'
+                                        className='hover:bg-destructive/10 hover:text-destructive focus-visible:ring-ring rounded-md p-1 transition-colors focus-visible:ring-2'
+                                        aria-label={`Clear threads for ${group.label}`}
+                                        onClick={() => {
+                                            onRequestWorkspaceDelete(group.workspaceFingerprint, group.label);
+                                        }}>
+                                        <Trash2 className='h-3.5 w-3.5' />
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className='text-muted-foreground mt-3 flex flex-wrap gap-1.5 text-[11px]'>
+                                <span className='rounded-full border border-border/70 px-2 py-0.5'>
+                                    Workspace parent
+                                </span>
+                                <span className='rounded-full border border-border/70 px-2 py-0.5'>
+                                    {group.threadCount === 1 ? '1 thread' : `${String(group.threadCount)} threads`}
+                                </span>
+                                {group.favoriteCount > 0 ? (
+                                    <span className='rounded-full border border-border/70 px-2 py-0.5'>
+                                        {group.favoriteCount === 1 ? '1 favorite' : `${String(group.favoriteCount)} favorites`}
+                                    </span>
+                                ) : null}
+                            </div>
                         </div>
+
+                        {!isCollapsed ? (
+                            <div className='space-y-2 pl-3'>
+                                {group.rows.map(({ thread, depth }) => (
+                                    <ThreadRow
+                                        key={thread.id}
+                                        thread={thread}
+                                        depth={depth}
+                                        sessions={sessions}
+                                        threadTagIdsByThread={threadTagIdsByThread}
+                                        tagLabelById={tagLabelById}
+                                        {...(selectedThreadId ? { selectedThreadId } : {})}
+                                        showAllModes={showAllModes}
+                                        groupView={groupView}
+                                        {...(onPreviewThread ? { onPreviewThread } : {})}
+                                        onSelectThread={onSelectThread}
+                                        onToggleThreadFavorite={onToggleThreadFavorite}
+                                    />
+                                ))}
+                            </div>
+                        ) : null}
                     </section>
                 );
             })}
+
+            {playgroundRows.length > 0 ? (
+                <section className='mb-4 space-y-2'>
+                    <div className='border-border bg-card/60 rounded-[26px] border p-3'>
+                        <div className='flex items-center justify-between gap-3'>
+                            <div>
+                                <p className='text-sm font-semibold'>Playground</p>
+                                <p className='text-muted-foreground text-xs'>Detached threads that are not tied to a workspace.</p>
+                            </div>
+                            <button
+                                type='button'
+                                className='hover:bg-accent focus-visible:ring-ring rounded-md px-2 py-1 text-[11px] font-semibold transition-colors focus-visible:ring-2'
+                                onClick={() => {
+                                    onRequestNewThread(undefined);
+                                }}>
+                                <span className='inline-flex items-center gap-1'>
+                                    <Plus className='h-3.5 w-3.5' />
+                                    New thread
+                                </span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className='space-y-2 pl-3'>
+                        {playgroundRows.map(({ thread, depth }) => (
+                            <ThreadRow
+                                key={thread.id}
+                                thread={thread}
+                                depth={depth}
+                                sessions={sessions}
+                                threadTagIdsByThread={threadTagIdsByThread}
+                                tagLabelById={tagLabelById}
+                                {...(selectedThreadId ? { selectedThreadId } : {})}
+                                showAllModes={showAllModes}
+                                groupView={groupView}
+                                {...(onPreviewThread ? { onPreviewThread } : {})}
+                                onSelectThread={onSelectThread}
+                                onToggleThreadFavorite={onToggleThreadFavorite}
+                            />
+                        ))}
+                    </div>
+                </section>
+            ) : null}
         </div>
     );
 }

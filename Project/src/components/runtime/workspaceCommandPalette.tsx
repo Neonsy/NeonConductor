@@ -22,7 +22,7 @@ type CommandAction =
 const APP_ACTIONS: Array<{ id: WorkspaceAppSection; label: string }> = [
     { id: 'sessions', label: 'Go to Sessions' },
     { id: 'workspaces', label: 'Go to Workspaces' },
-    { id: 'settings', label: 'Go to Settings' },
+    { id: 'settings', label: 'Open Settings' },
 ];
 
 export function WorkspaceCommandPalette({

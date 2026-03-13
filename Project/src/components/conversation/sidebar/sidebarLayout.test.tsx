@@ -52,6 +52,8 @@ describe('conversation sidebar layout', () => {
         const html = renderToStaticMarkup(
             <ConversationSidebar
                 profileId='profile_default'
+                isCollapsed={false}
+                onToggleCollapsed={vi.fn()}
                 buckets={buckets}
                 threads={threads}
                 tags={tags}
@@ -65,12 +67,26 @@ describe('conversation sidebar layout', () => {
                     },
                 ]}
                 preferredWorkspaceFingerprint='ws_alpha'
+                preferredProviderId='kilo'
+                preferredModelId='kilo-auto/frontier'
+                modelOptions={[
+                    {
+                        id: 'kilo-auto/frontier',
+                        label: 'Kilo Auto Frontier',
+                        providerId: 'kilo',
+                        providerLabel: 'Kilo',
+                        supportsTools: true,
+                        supportsVision: true,
+                        supportsReasoning: true,
+                        capabilityBadges: [],
+                        compatibilityState: 'compatible',
+                    },
+                ]}
                 selectedTagIds={[]}
                 scopeFilter='all'
                 sort='latest'
                 showAllModes={false}
                 groupView='workspace'
-                isCreatingThread={false}
                 isAddingTag={false}
                 isDeletingWorkspaceThreads={false}
                 onSelectThread={vi.fn()}
@@ -84,12 +100,16 @@ describe('conversation sidebar layout', () => {
                 onCreateThread={vi.fn(async () => {})}
                 onAddTagToThread={vi.fn(async () => {})}
                 onDeleteWorkspaceThreads={vi.fn(async () => {})}
+                onNavigateToWorkspaces={vi.fn()}
             />
         );
 
+        expect(html).toContain('Sessions');
         expect(html).toContain('Search threads, workspaces, or tabs');
         expect(html).toContain('Filters');
-        expect(html).toContain('New');
+        expect(html).toContain('Add workspace');
+        expect(html).toContain('New thread');
+        expect(html).toContain('Workspace parent');
         expect(html).not.toContain('Optional thread title');
     });
 });
