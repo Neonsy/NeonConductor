@@ -1,8 +1,6 @@
-import { buildMessageCopyPayloads } from '@/web/components/conversation/messages/messageCopy';
 import { isEntityId } from '@/web/components/conversation/shell/workspace/helpers';
 
-import type { MessagePartRecord, MessageRecord } from '@/app/backend/persistence/types';
-import { readImageMimeType } from '@/app/shared/imageMimeType';
+import type { ConversationTanstackMessage } from '@/web/components/conversation/messages/tanstackMessageBridge';
 
 import type { EntityId } from '@/shared/contracts';
 
@@ -34,8 +32,8 @@ export type MessageTimelineBodyEntry =
 
 export interface MessageTimelineEntry {
     id: string;
-    runId: MessageRecord['runId'];
-    role: MessageRecord['role'];
+    runId: ConversationTanstackMessage['runId'];
+    role: ConversationTanstackMessage['role'];
     createdAt: string;
     body: MessageTimelineBodyEntry[];
     plainCopyText?: string;
@@ -52,16 +50,7 @@ export interface BottomThresholdInput {
 
 const DEFAULT_BOTTOM_THRESHOLD_PX = 96;
 
-function readTextPayload(part: MessagePartRecord): string | null {
-    const text = part.payload['text'];
-    if (typeof text !== 'string') {
-        return null;
-    }
-
-    return text.trim().length > 0 ? text : null;
-}
-
-function mapImageEntryType(role: MessageRecord['role']): MessageTimelineImageEntryType | null {
+function mapImageEntryType(role: ConversationTanstackMessage['role']): MessageTimelineImageEntryType | null {
     if (role === 'assistant') {
         return 'assistant_image';
     }
@@ -76,7 +65,7 @@ function mapImageEntryType(role: MessageRecord['role']): MessageTimelineImageEnt
 }
 
 function mapTextEntryType(
-    role: MessageRecord['role']
+    role: ConversationTanstackMessage['role']
 ): Exclude<MessageTimelineTextEntryType, 'assistant_reasoning'> | null {
     if (role === 'assistant') {
         return 'assistant_text';
@@ -91,101 +80,74 @@ function mapTextEntryType(
     return null;
 }
 
-function buildBodyEntries(message: MessageRecord, parts: MessagePartRecord[]): MessageTimelineBodyEntry[] {
+function buildBodyEntries(message: ConversationTanstackMessage): MessageTimelineBodyEntry[] {
     const projected: MessageTimelineBodyEntry[] = [];
 
-    for (const part of parts) {
-        if (part.partType === 'reasoning_encrypted') {
-            continue;
-        }
-
-        if (part.partType === 'image') {
-            const rawMediaId = part.payload['mediaId'];
-            const mimeType = part.payload['mimeType'];
-            const width = part.payload['width'];
-            const height = part.payload['height'];
+    for (const part of message.renderParts) {
+        if (part.kind === 'image') {
             const imageEntryType = mapImageEntryType(message.role);
-            const mediaId = typeof rawMediaId === 'string' ? rawMediaId : undefined;
-            const normalizedMimeType = readImageMimeType(mimeType);
 
             if (
                 imageEntryType &&
-                isEntityId(mediaId, 'media') &&
-                normalizedMimeType &&
-                typeof width === 'number' &&
-                typeof height === 'number'
+                isEntityId(part.mediaId, 'media') &&
+                typeof part.width === 'number' &&
+                typeof part.height === 'number'
             ) {
                 projected.push({
-                    id: part.id,
+                    id: part.key,
                     type: imageEntryType,
-                    mediaId,
-                    mimeType: normalizedMimeType,
-                    width,
-                    height,
+                    mediaId: part.mediaId,
+                    mimeType: part.mimeType,
+                    width: part.width,
+                    height: part.height,
                 });
             }
             continue;
         }
 
-        if (part.partType === 'reasoning') {
-            const text = readTextPayload(part);
-            if (!text) {
+        if (part.kind === 'reasoning') {
+            const text = part.text.trim();
+            if (text.length === 0) {
                 continue;
             }
 
             projected.push({
-                id: part.id,
+                id: part.key,
                 type: 'assistant_reasoning',
                 text,
-                providerLimitedReasoning: false,
+                providerLimitedReasoning: part.providerLimitedReasoning,
             });
             continue;
         }
 
-        if (part.partType === 'reasoning_summary') {
-            const text = readTextPayload(part);
-            if (!text) {
-                continue;
-            }
-
+        if (part.kind === 'tool_call' && message.role === 'assistant') {
             projected.push({
-                id: part.id,
-                type: 'assistant_reasoning',
-                text,
-                providerLimitedReasoning: true,
-            });
-            continue;
-        }
-
-        if (part.partType === 'tool_call' && message.role === 'assistant') {
-            const toolName = typeof part.payload['toolName'] === 'string' ? part.payload['toolName'] : 'tool';
-            const argumentsText =
-                typeof part.payload['argumentsText'] === 'string' ? part.payload['argumentsText'].trim() : '';
-            projected.push({
-                id: part.id,
+                id: part.key,
                 type: 'assistant_tool_call',
-                text: argumentsText.length > 0 ? `\`\`\`json\n${argumentsText}\n\`\`\`` : '',
+                text: part.argumentsText.trim().length > 0 ? `\`\`\`json\n${part.argumentsText}\n\`\`\`` : '',
                 providerLimitedReasoning: false,
-                displayLabel: `Tool Call: ${toolName}`,
+                displayLabel: `Tool Call: ${part.toolName}`,
             });
             continue;
         }
 
-        if (part.partType === 'tool_result' && message.role === 'tool') {
-            const outputText =
-                typeof part.payload['outputText'] === 'string' ? part.payload['outputText'] : '';
+        if (part.kind === 'tool_result' && message.role === 'tool') {
             projected.push({
-                id: part.id,
+                id: part.key,
                 type: 'tool_result',
-                text: outputText,
+                text: part.outputText,
                 providerLimitedReasoning: false,
                 displayLabel: 'Tool Result',
             });
             continue;
         }
 
-        const text = readTextPayload(part);
-        if (!text) {
+        if (part.kind !== 'text') {
+            continue;
+        }
+
+        const text = part.text.trim();
+        if (text.length === 0) {
             continue;
         }
 
@@ -195,9 +157,9 @@ function buildBodyEntries(message: MessageRecord, parts: MessagePartRecord[]): M
         }
 
         projected.push({
-            id: part.id,
+            id: part.key,
             type: textEntryType,
-            text,
+            text: part.text,
             providerLimitedReasoning: false,
         });
     }
@@ -205,27 +167,9 @@ function buildBodyEntries(message: MessageRecord, parts: MessagePartRecord[]): M
     return projected;
 }
 
-export function buildTimelineEntries(
-    messages: MessageRecord[],
-    partsByMessageId: Map<string, MessagePartRecord[]>
-): MessageTimelineEntry[] {
+export function buildTimelineEntries(messages: ConversationTanstackMessage[]): MessageTimelineEntry[] {
     return messages.map((message) => {
-        const parts = partsByMessageId.get(message.id) ?? [];
-        const body = buildBodyEntries(message, parts);
-        const editableText =
-            message.role === 'user'
-                ? body
-                      .filter(
-                          (item): item is MessageTimelineBodyEntry & { type: 'user_text'; text: string } =>
-                              item.type === 'user_text' && 'text' in item
-                      )
-                      .map((item) => item.text)
-                      .join('\n\n')
-                : undefined;
-
-        const copyPayloads = buildMessageCopyPayloads({
-            body,
-        });
+        const body = buildBodyEntries(message);
 
         return {
             id: message.id,
@@ -233,9 +177,9 @@ export function buildTimelineEntries(
             role: message.role,
             createdAt: message.createdAt,
             body,
-            ...(copyPayloads.plainText ? { plainCopyText: copyPayloads.plainText } : {}),
-            ...(copyPayloads.rawText ? { rawCopyText: copyPayloads.rawText } : {}),
-            ...(editableText && editableText.trim().length > 0 ? { editableText } : {}),
+            ...(message.plainCopyText ? { plainCopyText: message.plainCopyText } : {}),
+            ...(message.rawCopyText ? { rawCopyText: message.rawCopyText } : {}),
+            ...(message.editableText ? { editableText: message.editableText } : {}),
         };
     });
 }

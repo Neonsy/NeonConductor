@@ -6,6 +6,7 @@ import {
     isWithinBottomThreshold,
     type MessageFlowMessage,
 } from '@/web/components/conversation/messages/messageFlowModel';
+import { useConversationTanstackMessages } from '@/web/components/conversation/messages/useConversationTanstackMessages';
 import { Button } from '@/web/components/ui/button';
 
 import type { MessagePartRecord, MessageRecord, RunRecord } from '@/app/backend/persistence/types';
@@ -27,7 +28,11 @@ export function MessageFlowPanel({
     onEditMessage,
     onBranchFromMessage,
 }: MessageFlowPanelProps) {
-    const turns = buildMessageFlowTurns(messages, partsByMessageId);
+    const tanstackMessages = useConversationTanstackMessages({
+        messages,
+        partsByMessageId,
+    });
+    const turns = buildMessageFlowTurns(tanstackMessages);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const [isAutoStickEnabled, setIsAutoStickEnabled] = useState(true);
     const [isNearBottom, setIsNearBottom] = useState(true);

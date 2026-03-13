@@ -4,6 +4,7 @@ import {
     buildMessageFlowTurns,
     isWithinBottomThreshold,
 } from '@/web/components/conversation/messages/messageFlowModel';
+import { projectConversationTanstackMessages } from '@/web/components/conversation/messages/tanstackMessageBridge';
 
 import type { MessagePartRecord, MessageRecord } from '@/app/backend/persistence/types';
 
@@ -65,49 +66,51 @@ describe('message flow model', () => {
         });
 
         const turns = buildMessageFlowTurns(
-            [firstUser, firstAssistant, secondUser],
-            new Map([
-                [
-                    firstUser.id,
+            projectConversationTanstackMessages(
+                [firstUser, firstAssistant, secondUser],
+                new Map([
                     [
-                        createPart({
-                            id: 'part_user_1',
-                            messageId: firstUser.id,
-                            partType: 'text',
-                            text: 'First prompt',
-                        }),
+                        firstUser.id,
+                        [
+                            createPart({
+                                id: 'part_user_1',
+                                messageId: firstUser.id,
+                                partType: 'text',
+                                text: 'First prompt',
+                            }),
+                        ],
                     ],
-                ],
-                [
-                    firstAssistant.id,
                     [
-                        createPart({
-                            id: 'part_assistant_1',
-                            messageId: firstAssistant.id,
-                            partType: 'text',
-                            text: 'First answer',
-                        }),
-                        createPart({
-                            id: 'part_reasoning_1',
-                            messageId: firstAssistant.id,
-                            partType: 'reasoning_summary',
-                            text: 'Reasoning summary',
-                            sequence: 1,
-                        }),
+                        firstAssistant.id,
+                        [
+                            createPart({
+                                id: 'part_assistant_1',
+                                messageId: firstAssistant.id,
+                                partType: 'text',
+                                text: 'First answer',
+                            }),
+                            createPart({
+                                id: 'part_reasoning_1',
+                                messageId: firstAssistant.id,
+                                partType: 'reasoning_summary',
+                                text: 'Reasoning summary',
+                                sequence: 1,
+                            }),
+                        ],
                     ],
-                ],
-                [
-                    secondUser.id,
                     [
-                        createPart({
-                            id: 'part_user_2',
-                            messageId: secondUser.id,
-                            partType: 'text',
-                            text: 'Second prompt',
-                        }),
+                        secondUser.id,
+                        [
+                            createPart({
+                                id: 'part_user_2',
+                                messageId: secondUser.id,
+                                partType: 'text',
+                                text: 'Second prompt',
+                            }),
+                        ],
                     ],
-                ],
-            ])
+                ])
+            )
         );
 
         expect(turns).toHaveLength(2);
@@ -135,5 +138,45 @@ describe('message flow model', () => {
                 clientHeight: 900,
             })
         ).toBe(false);
+    });
+
+    it('keeps tool-result messages renderable after TanStack projection', () => {
+        const toolMessage = createMessage({
+            id: 'msg_tool_1',
+            runId: 'run_1',
+            role: 'tool',
+        });
+
+        const turns = buildMessageFlowTurns(
+            projectConversationTanstackMessages(
+                [toolMessage],
+                new Map([
+                    [
+                        toolMessage.id,
+                        [
+                            createPart({
+                                id: 'part_tool_result_1',
+                                messageId: toolMessage.id,
+                                partType: 'tool_result',
+                                payload: {
+                                    callId: 'call_1',
+                                    toolName: 'search_workspace',
+                                    outputText: '{"ok":true}',
+                                    isError: false,
+                                },
+                            }),
+                        ],
+                    ],
+                ])
+            )
+        );
+
+        expect(turns[0]?.messages[0]).toMatchObject({
+            role: 'tool',
+        });
+        expect(turns[0]?.messages[0]?.body[0]).toMatchObject({
+            type: 'tool_result',
+            text: '{"ok":true}',
+        });
     });
 });

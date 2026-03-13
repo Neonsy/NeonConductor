@@ -39,7 +39,6 @@
     "dependencies": {
         "@radix-ui/react-slot": "^1.2.4",
         "@tanstack/ai": "^0.6.3",
-        "@tanstack/ai-openai": "^0.6.0",
         "@tanstack/ai-react": "^0.6.4",
         "@tanstack/react-form": "^1.28.5",
         "@tanstack/react-query": "^5.90.21",

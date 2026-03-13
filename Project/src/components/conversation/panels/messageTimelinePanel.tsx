@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { MessageTimelineEmptyState, MessageTimelineItem } from '@/web/components/conversation/messages/messageTimeline';
 import { buildTimelineEntries, isWithinBottomThreshold } from '@/web/components/conversation/messages/messageTimelineModel';
 import type { MessageTimelineEntry } from '@/web/components/conversation/messages/messageTimelineModel';
+import { useConversationTanstackMessages } from '@/web/components/conversation/messages/useConversationTanstackMessages';
 import { Button } from '@/web/components/ui/button';
 
 import type { MessagePartRecord, MessageRecord, RunRecord } from '@/app/backend/persistence/types';
@@ -25,7 +26,11 @@ export function MessageTimelinePanel({
     onEditMessage,
     onBranchFromMessage,
 }: MessageTimelinePanelProps) {
-    const entries = buildTimelineEntries(messages, partsByMessageId);
+    const tanstackMessages = useConversationTanstackMessages({
+        messages,
+        partsByMessageId,
+    });
+    const entries = buildTimelineEntries(tanstackMessages);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const [isAutoStickEnabled, setIsAutoStickEnabled] = useState(true);
     const [isNearBottom, setIsNearBottom] = useState(true);

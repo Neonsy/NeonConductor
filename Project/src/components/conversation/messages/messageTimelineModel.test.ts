@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { buildTimelineEntries, isWithinBottomThreshold } from '@/web/components/conversation/messages/messageTimelineModel';
+import { projectConversationTanstackMessages } from '@/web/components/conversation/messages/tanstackMessageBridge';
 
 import type { MessagePartRecord, MessageRecord } from '@/app/backend/persistence/types';
 
@@ -59,7 +60,7 @@ describe('message timeline model', () => {
             }),
         ];
 
-        const entries = buildTimelineEntries([message], new Map([[message.id, parts]]));
+        const entries = buildTimelineEntries(projectConversationTanstackMessages([message], new Map([[message.id, parts]])));
         expect(entries).toHaveLength(1);
         expect(entries[0]?.body.map((item) => item.id)).toEqual(['part_text', 'part_reasoning', 'part_summary']);
         expect(entries[0]?.body[2]).toMatchObject({
@@ -78,7 +79,7 @@ describe('message timeline model', () => {
             createPart({ id: 'part_no_text', messageId: message.id, partType: 'text', payload: { notText: true } }),
         ];
 
-        const entries = buildTimelineEntries([message], new Map([[message.id, parts]]));
+        const entries = buildTimelineEntries(projectConversationTanstackMessages([message], new Map([[message.id, parts]])));
         expect(entries).toHaveLength(1);
         expect(entries[0]?.body).toHaveLength(1);
         expect(entries[0]?.body[0]).toMatchObject({
@@ -103,5 +104,38 @@ describe('message timeline model', () => {
             clientHeight: 900,
         });
         expect(farFromBottom).toBe(false);
+    });
+
+    it('keeps tool-result timeline entries after TanStack projection', () => {
+        const message = createMessage({ id: 'msg_tool', role: 'tool' });
+        const entries = buildTimelineEntries(
+            projectConversationTanstackMessages(
+                [message],
+                new Map([
+                    [
+                        message.id,
+                        [
+                            createPart({
+                                id: 'part_tool_result',
+                                messageId: message.id,
+                                partType: 'tool_result',
+                                payload: {
+                                    callId: 'call_1',
+                                    toolName: 'search_workspace',
+                                    outputText: '{"ok":true}',
+                                    isError: false,
+                                },
+                            }),
+                        ],
+                    ],
+                ])
+            )
+        );
+
+        expect(entries[0]?.role).toBe('tool');
+        expect(entries[0]?.body[0]).toMatchObject({
+            type: 'tool_result',
+            text: '{"ok":true}',
+        });
     });
 });
