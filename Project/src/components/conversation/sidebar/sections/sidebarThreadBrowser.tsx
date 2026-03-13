@@ -4,7 +4,9 @@ import { buildConversationSidebarModel } from '@/web/components/conversation/sid
 import { SidebarThreadList } from '@/web/components/conversation/sidebar/sections/sidebarThreadList';
 import { Button } from '@/web/components/ui/button';
 
-import type { ConversationRecord, SessionSummaryRecord, TagRecord, ThreadListRecord } from '@/app/backend/persistence/types';
+import type { ConversationRecord, ProviderModelRecord, SessionSummaryRecord, TagRecord, ThreadListRecord } from '@/app/backend/persistence/types';
+import type { ProviderListItem } from '@/app/backend/providers/service/types';
+import type { RuntimeProviderId, TopLevelTab } from '@/shared/contracts';
 
 interface SidebarThreadBrowserProps {
     buckets: ConversationRecord[];
@@ -41,6 +43,22 @@ interface SidebarThreadBrowserProps {
     onShowAllModesChange: (showAllModes: boolean) => void;
     onGroupViewChange: (groupView: 'workspace' | 'branch') => void;
     onAddTagToThread: (threadId: string, label: string) => Promise<void>;
+    inlineThreadDraft?: {
+        workspaceFingerprint: string;
+        title: string;
+        topLevelTab: TopLevelTab;
+        providerId: RuntimeProviderId | undefined;
+        modelId: string;
+    };
+    providers: ProviderListItem[];
+    providerModels: ProviderModelRecord[];
+    isCreatingThread: boolean;
+    onInlineThreadTitleChange: (title: string) => void;
+    onInlineThreadTopLevelTabChange: (topLevelTab: TopLevelTab) => void;
+    onInlineThreadProviderChange: (providerId: RuntimeProviderId | undefined) => void;
+    onInlineThreadModelChange: (modelId: string) => void;
+    onCancelInlineThread: () => void;
+    onSubmitInlineThread: () => void;
 }
 
 function matchesThreadSearch(thread: ThreadListRecord, searchValue: string): boolean {
@@ -86,6 +104,16 @@ export function SidebarThreadBrowser({
     onShowAllModesChange,
     onGroupViewChange,
     onAddTagToThread,
+    inlineThreadDraft,
+    providers,
+    providerModels,
+    isCreatingThread,
+    onInlineThreadTitleChange,
+    onInlineThreadTopLevelTabChange,
+    onInlineThreadProviderChange,
+    onInlineThreadModelChange,
+    onCancelInlineThread,
+    onSubmitInlineThread,
 }: SidebarThreadBrowserProps) {
     const [searchValue, setSearchValue] = useState('');
     const [newTagLabel, setNewTagLabel] = useState('');
@@ -296,6 +324,16 @@ export function SidebarThreadBrowser({
                 onToggleThreadFavorite={onToggleThreadFavorite}
                 onRequestWorkspaceDelete={onRequestWorkspaceDelete}
                 onRequestNewThread={onRequestNewThread}
+                {...(inlineThreadDraft ? { inlineThreadDraft } : {})}
+                providers={providers}
+                providerModels={providerModels}
+                isCreatingThread={isCreatingThread}
+                onInlineThreadTitleChange={onInlineThreadTitleChange}
+                onInlineThreadTopLevelTabChange={onInlineThreadTopLevelTabChange}
+                onInlineThreadProviderChange={onInlineThreadProviderChange}
+                onInlineThreadModelChange={onInlineThreadModelChange}
+                onCancelInlineThread={onCancelInlineThread}
+                onSubmitInlineThread={onSubmitInlineThread}
                 onSelectWorkspaceFingerprint={onSelectWorkspaceFingerprint}
             />
         </>

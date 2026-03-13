@@ -1,5 +1,6 @@
 import { Check, ChevronDown, Search } from 'lucide-react';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import type { ModelCapabilityBadge, ModelPickerOption } from '@/web/components/modelSelection/modelCapabilities';
 import { Button } from '@/web/components/ui/button';
@@ -30,6 +31,13 @@ interface ModelGroup {
     key: string;
     label: string;
     options: ModelPickerOption[];
+}
+
+interface PopoverLayout {
+    top: number;
+    left: number;
+    width: number;
+    maxHeight: number;
 }
 
 export type ModelLabelCollisionIndex = ReadonlyMap<string, number>;
@@ -153,13 +161,13 @@ function sortGroupedOptions(options: ModelPickerOption[]): ModelGroup[] {
         })
         .map((group) => ({
             ...group,
-                options: [...group.options].sort((left, right) => {
-                    const preferredOrder = new Map<string, number>([
-                        [kiloFrontierModelId, 0],
-                        [kiloBalancedModelId, 1],
-                        [kiloFreeModelId, 2],
-                        [kiloSmallModelId, 3],
-                    ]);
+            options: [...group.options].sort((left, right) => {
+                const preferredOrder = new Map<string, number>([
+                    [kiloFrontierModelId, 0],
+                    [kiloBalancedModelId, 1],
+                    [kiloFreeModelId, 2],
+                    [kiloSmallModelId, 3],
+                ]);
                 const leftOrder = preferredOrder.get(left.id) ?? Number.MAX_SAFE_INTEGER;
                 const rightOrder = preferredOrder.get(right.id) ?? Number.MAX_SAFE_INTEGER;
                 if (leftOrder !== rightOrder) {
@@ -206,12 +214,37 @@ function formatCapabilityBadge(badge: ModelCapabilityBadge): string {
     return badge.label;
 }
 
+function resolvePopoverLayout(triggerRect: DOMRect): PopoverLayout {
+    const viewportPadding = 16;
+    const minimumWidth = Math.min(420, window.innerWidth - viewportPadding * 2);
+    const availableWidth = window.innerWidth - viewportPadding * 2;
+    const width = Math.min(Math.max(triggerRect.width, minimumWidth), availableWidth);
+    const maxLeft = window.innerWidth - viewportPadding - width;
+    const left = Math.max(viewportPadding, Math.min(triggerRect.left, maxLeft));
+    const availableBelow = window.innerHeight - triggerRect.bottom - viewportPadding;
+    const availableAbove = triggerRect.top - viewportPadding;
+    const shouldOpenAbove = availableBelow < 280 && availableAbove > availableBelow;
+    const maxHeight = Math.max(220, Math.min(420, shouldOpenAbove ? availableAbove - 12 : availableBelow - 12));
+    const top = shouldOpenAbove
+        ? Math.max(viewportPadding, triggerRect.top - maxHeight - 8)
+        : Math.min(triggerRect.bottom + 8, window.innerHeight - viewportPadding - maxHeight);
+
+    return {
+        top,
+        left,
+        width,
+        maxHeight,
+    };
+}
+
 function PopoverModelPicker(props: ModelPickerProps) {
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState('');
     const containerRef = useRef<HTMLDivElement | null>(null);
+    const panelRef = useRef<HTMLDivElement | null>(null);
     const searchInputRef = useRef<HTMLInputElement | null>(null);
     const listboxId = useId();
+    const [popoverLayout, setPopoverLayout] = useState<PopoverLayout | null>(null);
 
     const selectedOption = props.models.find((option) => option.id === props.selectedModelId);
     const labelCollisionIndex = useMemo(() => getModelLabelCollisionIndex(props.models), [props.models]);
@@ -239,15 +272,27 @@ function PopoverModelPicker(props: ModelPickerProps) {
     useEffect(() => {
         if (!open) {
             setQuery('');
+            setPopoverLayout(null);
             return;
         }
 
+        const updateLayout = () => {
+            const triggerElement = containerRef.current;
+            if (!triggerElement) {
+                return;
+            }
+
+            setPopoverLayout(resolvePopoverLayout(triggerElement.getBoundingClientRect()));
+        };
+
+        updateLayout();
         requestAnimationFrame(() => {
             searchInputRef.current?.focus();
         });
 
         const handlePointerDown = (event: MouseEvent) => {
-            if (!containerRef.current?.contains(event.target as Node)) {
+            const targetNode = event.target as Node;
+            if (!containerRef.current?.contains(targetNode) && !panelRef.current?.contains(targetNode)) {
                 setOpen(false);
             }
         };
@@ -260,14 +305,19 @@ function PopoverModelPicker(props: ModelPickerProps) {
 
         document.addEventListener('mousedown', handlePointerDown);
         document.addEventListener('keydown', handleKeyDown);
+        window.addEventListener('resize', updateLayout);
+        window.addEventListener('scroll', updateLayout, true);
         return () => {
             document.removeEventListener('mousedown', handlePointerDown);
             document.removeEventListener('keydown', handleKeyDown);
+            window.removeEventListener('resize', updateLayout);
+            window.removeEventListener('scroll', updateLayout, true);
         };
     }, [open]);
 
     return (
         <div ref={containerRef} className='relative min-w-0'>
+            {props.name ? <input type='hidden' name={props.name} value={props.selectedModelId} /> : null}
             <Button
                 {...(props.id ? { id: props.id } : {})}
                 type='button'
@@ -291,136 +341,151 @@ function PopoverModelPicker(props: ModelPickerProps) {
                 <ChevronDown className='h-4 w-4 shrink-0 opacity-70' />
             </Button>
 
-            {open ? (
-                <div className='border-border bg-popover text-popover-foreground absolute inset-x-0 top-full z-30 mt-2 overflow-hidden rounded-2xl border shadow-xl'>
-                    <div className='border-border bg-background/90 border-b px-3 py-3'>
-                        <label className='sr-only' htmlFor={`${listboxId}-search`}>
-                            Search models
-                        </label>
-                        <div className='border-border bg-background flex items-center gap-2 rounded-xl border px-3'>
-                            <Search className='text-muted-foreground h-4 w-4 shrink-0' />
-                            <input
-                                ref={searchInputRef}
-                                id={`${listboxId}-search`}
-                                type='text'
-                                value={query}
-                                onChange={(event) => {
-                                    setQuery(event.target.value);
-                                }}
-                                className='h-10 w-full bg-transparent text-sm outline-none'
-                                placeholder='Search models'
-                            />
-                        </div>
-                    </div>
+            {open && popoverLayout && typeof document !== 'undefined'
+                ? createPortal(
+                      <div
+                          ref={panelRef}
+                          className='border-border bg-popover text-popover-foreground fixed z-[80] overflow-hidden rounded-2xl border shadow-xl'
+                          style={{
+                              top: `${popoverLayout.top}px`,
+                              left: `${popoverLayout.left}px`,
+                              width: `${popoverLayout.width}px`,
+                          }}>
+                          <div className='border-border bg-background/90 border-b px-3 py-3'>
+                              <label className='sr-only' htmlFor={`${listboxId}-search`}>
+                                  Search models
+                              </label>
+                              <div className='border-border bg-background flex items-center gap-2 rounded-xl border px-3'>
+                                  <Search className='text-muted-foreground h-4 w-4 shrink-0' />
+                                  <input
+                                      ref={searchInputRef}
+                                      id={`${listboxId}-search`}
+                                      type='text'
+                                      value={query}
+                                      onChange={(event) => {
+                                          setQuery(event.target.value);
+                                      }}
+                                      className='h-10 w-full bg-transparent text-sm outline-none'
+                                      placeholder='Search models'
+                                  />
+                              </div>
+                          </div>
 
-                    <div id={listboxId} role='listbox' className='max-h-96 overflow-y-auto p-2'>
-                        {groups.length === 0 ? (
-                            <div className='text-muted-foreground px-3 py-6 text-sm'>
-                                No models matched that search.
-                            </div>
-                        ) : (
-                            groups.map((group) => (
-                                <div key={group.key} className='mb-2 last:mb-0'>
-                                    <div className='text-muted-foreground px-2 py-1 text-[11px] font-semibold tracking-[0.12em] uppercase'>
-                                        {group.label}
-                                    </div>
-                                    <div className='space-y-1'>
-                                        {group.options.map((option) => {
-                                            const metricBadges = [
-                                                formatMetric(option.price)
-                                                    ? `Price ${formatMetric(option.price)}`
-                                                    : undefined,
-                                                formatMetric(option.latency)
-                                                    ? `Latency ${formatMetric(option.latency)}`
-                                                    : undefined,
-                                                formatMetric(option.tps)
-                                                    ? `TPS ${formatMetric(option.tps)}`
-                                                    : undefined,
-                                            ].filter((badge): badge is string => Boolean(badge));
-                                            const selected = option.id === props.selectedModelId;
+                          <div
+                              id={listboxId}
+                              role='listbox'
+                              className='overflow-y-auto p-2'
+                              style={{ maxHeight: `${popoverLayout.maxHeight}px` }}>
+                              {groups.length === 0 ? (
+                                  <div className='text-muted-foreground px-3 py-6 text-sm'>
+                                      No models matched that search.
+                                  </div>
+                              ) : (
+                                  groups.map((group) => (
+                                      <div key={group.key} className='mb-2 last:mb-0'>
+                                          <div className='text-muted-foreground px-2 py-1 text-[11px] font-semibold tracking-[0.12em] uppercase'>
+                                              {group.label}
+                                          </div>
+                                          <div className='space-y-1'>
+                                              {group.options.map((option) => {
+                                                  const metricBadges = [
+                                                      formatMetric(option.price)
+                                                          ? `Price ${formatMetric(option.price)}`
+                                                          : undefined,
+                                                      formatMetric(option.latency)
+                                                          ? `Latency ${formatMetric(option.latency)}`
+                                                          : undefined,
+                                                      formatMetric(option.tps)
+                                                          ? `TPS ${formatMetric(option.tps)}`
+                                                          : undefined,
+                                                  ].filter((badge): badge is string => Boolean(badge));
+                                                  const selected = option.id === props.selectedModelId;
 
-                                            return (
-                                                <button
-                                                    key={`${option.providerId ?? 'unknown'}:${option.id}`}
-                                                    type='button'
-                                                    role='option'
-                                                    aria-selected={selected}
-                                                    className={cn(
-                                                        'focus-visible:ring-ring w-full rounded-xl border px-3 py-3 text-left transition focus-visible:ring-2 focus-visible:outline-none',
-                                                        selected
-                                                            ? 'border-primary bg-primary/10 shadow-sm'
-                                                            : option.compatibilityState === 'incompatible'
-                                                              ? 'border-destructive/30 bg-destructive/5 hover:bg-destructive/10'
-                                                              : option.compatibilityState === 'warning'
-                                                                ? 'border-border bg-amber-500/5 hover:bg-amber-500/10'
-                                                                : 'hover:bg-accent border-transparent bg-transparent'
-                                                    )}
-                                                    onClick={() => {
-                                                        props.onSelectOption?.(option);
-                                                        props.onSelectModel(option.id);
-                                                        setOpen(false);
-                                                    }}>
-                                                    <div className='flex items-start justify-between gap-3'>
-                                                        <div className='min-w-0'>
-                                                            <p className='truncate text-sm font-medium'>
-                                                                {getOptionDisplayText(option, labelCollisionIndex)}
-                                                            </p>
-                                                            <p className='text-muted-foreground mt-1 text-xs leading-5'>
-                                                                {getModelDescription(option)}
-                                                            </p>
-                                                            {option.compatibilityReason ? (
-                                                                <p
-                                                                    className={cn(
-                                                                        'mt-1 text-xs leading-5',
-                                                                        option.compatibilityState === 'incompatible'
-                                                                            ? 'text-destructive'
-                                                                            : option.compatibilityState === 'warning'
-                                                                              ? 'text-amber-700 dark:text-amber-300'
-                                                                              : 'text-muted-foreground'
-                                                                    )}>
-                                                                    {option.compatibilityReason}
-                                                                </p>
-                                                            ) : null}
-                                                        </div>
-                                                        {selected ? (
-                                                            <Check className='text-primary mt-0.5 h-4 w-4 shrink-0' />
-                                                        ) : null}
-                                                    </div>
-                                                    {metricBadges.length > 0 ||
-                                                    option.sourceProvider ||
-                                                    option.capabilityBadges.length > 0 ? (
-                                                        <div className='mt-2 flex flex-wrap gap-2'>
-                                                            {option.sourceProvider ? (
-                                                                <span className='border-border bg-background rounded-full border px-2 py-0.5 text-[11px]'>
-                                                                    {option.sourceProvider}
-                                                                </span>
-                                                            ) : null}
-                                                            {option.capabilityBadges.map((badge) => (
-                                                                <span
-                                                                    key={`${option.id}:${badge.key}`}
-                                                                    className='border-border bg-background rounded-full border px-2 py-0.5 text-[11px]'>
-                                                                    {formatCapabilityBadge(badge)}
-                                                                </span>
-                                                            ))}
-                                                            {metricBadges.map((badge) => (
-                                                                <span
-                                                                    key={`${option.id}:${badge}`}
-                                                                    className='border-border bg-background rounded-full border px-2 py-0.5 text-[11px]'>
-                                                                    {badge}
-                                                                </span>
-                                                            ))}
-                                                        </div>
-                                                    ) : null}
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            ))
-                        )}
-                    </div>
-                </div>
-            ) : null}
+                                                  return (
+                                                      <button
+                                                          key={`${option.providerId ?? 'unknown'}:${option.id}`}
+                                                          type='button'
+                                                          role='option'
+                                                          aria-selected={selected}
+                                                          className={cn(
+                                                              'focus-visible:ring-ring w-full rounded-xl border px-3 py-3 text-left transition focus-visible:ring-2 focus-visible:outline-none',
+                                                              selected
+                                                                  ? 'border-primary bg-primary/10 shadow-sm'
+                                                                  : option.compatibilityState === 'incompatible'
+                                                                    ? 'border-destructive/30 bg-destructive/5 hover:bg-destructive/10'
+                                                                    : option.compatibilityState === 'warning'
+                                                                      ? 'border-border bg-amber-500/5 hover:bg-amber-500/10'
+                                                                      : 'hover:bg-accent border-transparent bg-transparent'
+                                                          )}
+                                                          onClick={() => {
+                                                              props.onSelectOption?.(option);
+                                                              props.onSelectModel(option.id);
+                                                              setOpen(false);
+                                                          }}>
+                                                          <div className='flex items-start justify-between gap-3'>
+                                                              <div className='min-w-0'>
+                                                                  <p className='truncate text-sm font-medium'>
+                                                                      {getOptionDisplayText(option, labelCollisionIndex)}
+                                                                  </p>
+                                                                  <p className='text-muted-foreground mt-1 text-xs leading-5'>
+                                                                      {getModelDescription(option)}
+                                                                  </p>
+                                                                  {option.compatibilityReason &&
+                                                                  option.compatibilityScope !== 'provider' ? (
+                                                                      <p
+                                                                          className={cn(
+                                                                              'mt-1 text-xs leading-5',
+                                                                              option.compatibilityState === 'incompatible'
+                                                                                  ? 'text-destructive'
+                                                                                  : option.compatibilityState === 'warning'
+                                                                                    ? 'text-amber-700 dark:text-amber-300'
+                                                                                    : 'text-muted-foreground'
+                                                                          )}>
+                                                                          {option.compatibilityReason}
+                                                                      </p>
+                                                                  ) : null}
+                                                              </div>
+                                                              {selected ? (
+                                                                  <Check className='text-primary mt-0.5 h-4 w-4 shrink-0' />
+                                                              ) : null}
+                                                          </div>
+                                                          {metricBadges.length > 0 ||
+                                                          option.sourceProvider ||
+                                                          option.capabilityBadges.length > 0 ? (
+                                                              <div className='mt-2 flex flex-wrap gap-2'>
+                                                                  {option.sourceProvider ? (
+                                                                      <span className='border-border bg-background rounded-full border px-2 py-0.5 text-[11px]'>
+                                                                          {option.sourceProvider}
+                                                                      </span>
+                                                                  ) : null}
+                                                                  {option.capabilityBadges.map((badge) => (
+                                                                      <span
+                                                                          key={`${option.id}:${badge.key}`}
+                                                                          className='border-border bg-background rounded-full border px-2 py-0.5 text-[11px]'>
+                                                                          {formatCapabilityBadge(badge)}
+                                                                      </span>
+                                                                  ))}
+                                                                  {metricBadges.map((badge) => (
+                                                                      <span
+                                                                          key={`${option.id}:${badge}`}
+                                                                          className='border-border bg-background rounded-full border px-2 py-0.5 text-[11px]'>
+                                                                          {badge}
+                                                                      </span>
+                                                                  ))}
+                                                              </div>
+                                                          ) : null}
+                                                      </button>
+                                                  );
+                                              })}
+                                          </div>
+                                      </div>
+                                  ))
+                              )}
+                          </div>
+                      </div>,
+                      document.body
+                  )
+                : null}
         </div>
     );
 }

@@ -1,9 +1,13 @@
 import { ChevronDown, ChevronRight, GitBranch, Play, Plus, Star, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
-import type { SessionSummaryRecord, ThreadListRecord } from '@/app/backend/persistence/types';
+import { SidebarInlineThreadDraft } from '@/web/components/conversation/sidebar/sections/sidebarInlineThreadDraft';
 
-import type { TopLevelTab } from '@/shared/contracts';
+import type { SessionSummaryRecord, ThreadListRecord } from '@/app/backend/persistence/types';
+import type { ProviderModelRecord } from '@/app/backend/persistence/types';
+import type { ProviderListItem } from '@/app/backend/providers/service/types';
+
+import type { RuntimeProviderId, TopLevelTab } from '@/shared/contracts';
 
 interface WorkspaceGroupRow {
     label: string;
@@ -39,6 +43,22 @@ interface SidebarThreadListProps {
     onToggleThreadFavorite: (threadId: string, nextFavorite: boolean) => Promise<void>;
     onRequestWorkspaceDelete: (workspaceFingerprint: string, workspaceLabel: string) => void;
     onRequestNewThread: (workspaceFingerprint?: string) => void;
+    inlineThreadDraft?: {
+        workspaceFingerprint: string;
+        title: string;
+        topLevelTab: TopLevelTab;
+        providerId: RuntimeProviderId | undefined;
+        modelId: string;
+    };
+    providers: ProviderListItem[];
+    providerModels: ProviderModelRecord[];
+    isCreatingThread: boolean;
+    onInlineThreadTitleChange: (title: string) => void;
+    onInlineThreadTopLevelTabChange: (topLevelTab: TopLevelTab) => void;
+    onInlineThreadProviderChange: (providerId: RuntimeProviderId | undefined) => void;
+    onInlineThreadModelChange: (modelId: string) => void;
+    onCancelInlineThread: () => void;
+    onSubmitInlineThread: () => void;
 }
 
 function modeBadgeClass(topLevelTab: TopLevelTab): string {
@@ -260,6 +280,16 @@ export function SidebarThreadList({
     onToggleThreadFavorite,
     onRequestWorkspaceDelete,
     onRequestNewThread,
+    inlineThreadDraft,
+    providers,
+    providerModels,
+    isCreatingThread,
+    onInlineThreadTitleChange,
+    onInlineThreadTopLevelTabChange,
+    onInlineThreadProviderChange,
+    onInlineThreadModelChange,
+    onCancelInlineThread,
+    onSubmitInlineThread,
 }: SidebarThreadListProps) {
     const [collapsedWorkspaceFingerprints, setCollapsedWorkspaceFingerprints] = useState<string[]>([]);
 
@@ -353,9 +383,6 @@ export function SidebarThreadList({
 
                             <div className='text-muted-foreground mt-3 flex flex-wrap gap-1.5 text-[11px]'>
                                 <span className='rounded-full border border-border/70 px-2 py-0.5'>
-                                    Workspace parent
-                                </span>
-                                <span className='rounded-full border border-border/70 px-2 py-0.5'>
                                     {group.threadCount === 1 ? '1 thread' : `${String(group.threadCount)} threads`}
                                 </span>
                                 {group.favoriteCount > 0 ? (
@@ -368,6 +395,24 @@ export function SidebarThreadList({
 
                         {!isCollapsed ? (
                             <div className='space-y-2 pl-3'>
+                                {inlineThreadDraft?.workspaceFingerprint === group.workspaceFingerprint ? (
+                                    <SidebarInlineThreadDraft
+                                        workspaceLabel={group.label}
+                                        title={inlineThreadDraft.title}
+                                        topLevelTab={inlineThreadDraft.topLevelTab}
+                                        providerId={inlineThreadDraft.providerId}
+                                        modelId={inlineThreadDraft.modelId}
+                                        providers={providers}
+                                        providerModels={providerModels}
+                                        busy={isCreatingThread}
+                                        onTitleChange={onInlineThreadTitleChange}
+                                        onTopLevelTabChange={onInlineThreadTopLevelTabChange}
+                                        onProviderChange={onInlineThreadProviderChange}
+                                        onModelChange={onInlineThreadModelChange}
+                                        onCancel={onCancelInlineThread}
+                                        onSubmit={onSubmitInlineThread}
+                                    />
+                                ) : null}
                                 {group.rows.map(({ thread, depth }) => (
                                     <ThreadRow
                                         key={thread.id}
@@ -393,22 +438,9 @@ export function SidebarThreadList({
             {playgroundRows.length > 0 ? (
                 <section className='mb-4 space-y-2'>
                     <div className='border-border bg-card/60 rounded-[26px] border p-3'>
-                        <div className='flex items-center justify-between gap-3'>
-                            <div>
-                                <p className='text-sm font-semibold'>Playground</p>
-                                <p className='text-muted-foreground text-xs'>Detached threads that are not tied to a workspace.</p>
-                            </div>
-                            <button
-                                type='button'
-                                className='hover:bg-accent focus-visible:ring-ring rounded-md px-2 py-1 text-[11px] font-semibold transition-colors focus-visible:ring-2'
-                                onClick={() => {
-                                    onRequestNewThread(undefined);
-                                }}>
-                                <span className='inline-flex items-center gap-1'>
-                                    <Plus className='h-3.5 w-3.5' />
-                                    New thread
-                                </span>
-                            </button>
+                        <div>
+                            <p className='text-sm font-semibold'>Playground</p>
+                            <p className='text-muted-foreground text-xs'>Detached threads that are not tied to a workspace.</p>
                         </div>
                     </div>
 

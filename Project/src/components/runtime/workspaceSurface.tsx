@@ -14,7 +14,6 @@ import { WorkspaceBootDiagnosticsPanel } from '@/web/components/runtime/workspac
 import { useWorkspaceSurfaceController } from '@/web/components/runtime/workspaceSurfaceController';
 import { WorkspaceSurfaceHeader } from '@/web/components/runtime/workspaceSurfaceHeader';
 import { SettingsWorkspace } from '@/web/components/settings/settingsWorkspace';
-import { WorkspacesSurface } from '@/web/components/workspaces/workspacesSurface';
 import { trpc } from '@/web/trpc/client';
 
 import { BOOT_FORCE_SHOW_MS } from '@/app/shared/splashContract';
@@ -108,22 +107,13 @@ export function WorkspaceSurface() {
             {showBootDiagnostics ? <WorkspaceBootDiagnosticsPanel status={bootDiagnostics.status} /> : null}
             <WorkspaceSurfaceHeader
                 appSection={controller.appSection}
-                primarySection={controller.primarySection}
                 profiles={controller.profiles}
                 resolvedProfileId={controller.resolvedProfileId}
                 isSwitchingProfile={controller.profileSetActiveMutation.isPending}
-                workspaceOptions={controller.workspaceRoots.map((workspaceRoot) => ({
-                    fingerprint: workspaceRoot.fingerprint,
-                    label: workspaceRoot.label,
-                }))}
-                selectedWorkspaceFingerprint={controller.currentWorkspaceFingerprint}
                 onProfileChange={(profileId) => {
                     void controller.selectProfile(profileId);
                 }}
-                onWorkspaceChange={controller.setCurrentWorkspaceFingerprint}
-                onPrimarySectionChange={controller.setAppSection}
                 onOpenSettings={controller.openSettings}
-                onReturnToPrimarySection={controller.returnToPrimarySection}
                 onOpenCommandPalette={() => {
                     openCommandPalette();
                 }}
@@ -143,12 +133,6 @@ export function WorkspaceSurface() {
                                     {...(controller.currentWorkspaceFingerprint
                                         ? { selectedWorkspaceFingerprint: controller.currentWorkspaceFingerprint }
                                         : {})}
-                                    {...(controller.pendingThreadCreationWorkspaceFingerprint
-                                        ? {
-                                              requestedThreadCreationWorkspaceFingerprint:
-                                                  controller.pendingThreadCreationWorkspaceFingerprint,
-                                          }
-                                        : {})}
                                     modeKey={controller.activeModeKey}
                                     modes={controller.modes}
                                     onModeChange={(modeKey) => {
@@ -156,29 +140,10 @@ export function WorkspaceSurface() {
                                     }}
                                     onTopLevelTabChange={controller.setTopLevelTab}
                                     onSelectedWorkspaceFingerprintChange={controller.setCurrentWorkspaceFingerprint}
-                                    onThreadCreationRequestHandled={
-                                        controller.clearPendingThreadCreationWorkspaceFingerprint
-                                    }
-                                    onOpenWorkspaces={() => {
-                                        controller.setAppSection('workspaces');
-                                    }}
                                     onProfileChange={(profileId) => {
                                         void controller.selectProfile(profileId);
                                     }}
                                     onBootChromeReadyChange={setConversationShellBootReadiness}
-                                />
-                            ) : null}
-
-                            {controller.appSection === 'workspaces' ? (
-                                <WorkspacesSurface
-                                    profileId={controller.resolvedProfileId}
-                                    workspaceRoots={controller.workspaceRoots}
-                                    selectedWorkspaceFingerprint={controller.currentWorkspaceFingerprint}
-                                    onSelectedWorkspaceFingerprintChange={controller.setCurrentWorkspaceFingerprint}
-                                    onOpenSessions={() => {
-                                        controller.setAppSection('sessions');
-                                    }}
-                                    onCreateThreadForWorkspace={controller.requestThreadCreationForWorkspace}
                                 />
                             ) : null}
 
@@ -188,6 +153,7 @@ export function WorkspaceSurface() {
                                     onProfileActivated={(profileId) => {
                                         controller.setResolvedProfile(profileId);
                                     }}
+                                    onReturnToSessions={controller.returnToPrimarySection}
                                 />
                             ) : null}
                         </>

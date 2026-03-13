@@ -45,11 +45,12 @@ export function buildConversationSidebarModel(input: {
         input.workspaceRoots.map((workspaceRoot) => [workspaceRoot.fingerprint, workspaceRoot.absolutePath] as const)
     );
     const workspaceOptions = [
-        ...new Set(
-            input.buckets
+        ...new Set([
+            ...input.workspaceRoots.map((workspaceRoot) => workspaceRoot.fingerprint),
+            ...input.buckets
                 .filter((bucket) => bucket.scope === 'workspace')
-                .map((bucket) => bucket.workspaceFingerprint)
-        ),
+                .map((bucket) => bucket.workspaceFingerprint),
+        ]),
     ]
         .filter((fingerprint): fingerprint is string => Boolean(fingerprint))
         .sort((left, right) => left.localeCompare(right));
@@ -60,6 +61,17 @@ export function buildConversationSidebarModel(input: {
         : undefined;
 
     const grouped = new Map<string, GroupedThreadRowsSection>();
+    for (const workspaceRoot of input.workspaceRoots) {
+        grouped.set(`ws:${workspaceRoot.fingerprint}`, {
+            label: workspaceRoot.label,
+            workspaceFingerprint: workspaceRoot.fingerprint,
+            ...(workspaceRoot.absolutePath ? { absolutePath: workspaceRoot.absolutePath } : {}),
+            favoriteCount: 0,
+            threadCount: 0,
+            rows: [],
+        });
+    }
+
     const playgroundThreads = input.threads.filter((thread) => thread.anchorKind !== 'workspace');
     for (const thread of input.threads) {
         if (thread.anchorKind !== 'workspace' || !thread.anchorId) {

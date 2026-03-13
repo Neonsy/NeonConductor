@@ -4,33 +4,30 @@ import { describe, expect, it, vi } from 'vitest';
 import { WorkspaceSurfaceHeader } from '@/web/components/runtime/workspaceSurfaceHeader';
 
 describe('workspace surface header', () => {
-    it('keeps the header focused on global workspace context instead of duplicating active run controls', () => {
+    it('keeps settings in the public header without exposing a sessions back button', () => {
         const html = renderToStaticMarkup(
             <WorkspaceSurfaceHeader
                 appSection='sessions'
-                primarySection='sessions'
                 profiles={[{ id: 'profile_default', name: 'Local Default' }]}
                 resolvedProfileId='profile_default'
                 isSwitchingProfile={false}
-                workspaceOptions={[{ fingerprint: 'ws_alpha', label: 'Workspace Alpha' }]}
-                selectedWorkspaceFingerprint='ws_alpha'
                 onProfileChange={vi.fn()}
-                onWorkspaceChange={vi.fn()}
-                onPrimarySectionChange={vi.fn()}
                 onOpenSettings={vi.fn()}
-                onReturnToPrimarySection={vi.fn()}
                 onOpenCommandPalette={vi.fn()}
             />
         );
 
-        expect(html).toContain('Sessions');
-        expect(html).toContain('Workspaces');
-        expect(html).toContain('Workspace Alpha');
+        expect(html).toContain('NeonConductor');
+        expect(html).toContain('Local Default');
         expect(html).toContain('Search');
-        expect(html).toContain('App');
-        expect(html).not.toContain('Orchestrator');
-        expect(html).not.toContain('Agent');
+        expect(html).toContain('Open settings');
+        expect(html).not.toContain('Return to sessions');
+        expect(html).not.toContain('Sessions');
+        expect(html).not.toContain('All workspaces');
+        expect(html).not.toContain('Workspaces');
+        expect(html).not.toContain('App');
         expect(html).not.toContain('Chat');
-        expect(html).not.toContain('Local Default');
+        expect(html).not.toContain('Agent');
+        expect(html).not.toContain('Orchestrator');
     });
 });

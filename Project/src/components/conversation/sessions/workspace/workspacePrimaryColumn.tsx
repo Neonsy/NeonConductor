@@ -32,8 +32,6 @@ interface WorkspacePrimaryColumnProps {
     contextState: SessionWorkspacePanelProps['contextState'];
     canCompactContext: SessionWorkspacePanelProps['canCompactContext'];
     isCompactingContext: SessionWorkspacePanelProps['isCompactingContext'];
-    modePanel: SessionWorkspacePanelProps['modePanel'];
-    threadCreationSurface: SessionWorkspacePanelProps['threadCreationSurface'];
     promptResetKey: SessionWorkspacePanelProps['promptResetKey'];
     focusComposerRequestKey: SessionWorkspacePanelProps['focusComposerRequestKey'];
     controlsDisabled: SessionWorkspacePanelProps['controlsDisabled'];
@@ -82,8 +80,6 @@ export function WorkspacePrimaryColumn({
     contextState,
     canCompactContext,
     isCompactingContext,
-    modePanel,
-    threadCreationSurface,
     promptResetKey,
     focusComposerRequestKey,
     controlsDisabled,
@@ -105,14 +101,6 @@ export function WorkspacePrimaryColumn({
     return (
         <div className='flex min-h-0 min-w-0 flex-col overflow-hidden'>
             <div className='flex min-h-0 flex-1 flex-col gap-4 overflow-hidden px-4 py-4'>
-                {modePanel ? <div className='border-border/70 bg-card/35 shrink-0 rounded-[28px] border p-4'>{modePanel}</div> : null}
-
-                {threadCreationSurface ? (
-                    <div className='border-border/70 bg-card/35 shrink-0 rounded-[28px] border p-4'>
-                        {threadCreationSurface}
-                    </div>
-                ) : null}
-
                 <div className='border-border/70 bg-card/20 flex min-h-[320px] min-w-0 flex-1 flex-col overflow-hidden rounded-[32px] border px-3 py-5 md:px-5'>
                     <MessageFlowPanel
                         profileId={profileId}

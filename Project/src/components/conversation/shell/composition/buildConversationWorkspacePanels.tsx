@@ -2,7 +2,6 @@ import { useConversationShellViewModel } from '@/web/components/conversation/hoo
 import { AttachedSkillsPanel } from '@/web/components/conversation/panels/attachedSkillsPanel';
 import { DiffCheckpointPanel } from '@/web/components/conversation/panels/diffCheckpointPanel';
 import { ExecutionEnvironmentPanel } from '@/web/components/conversation/panels/executionEnvironmentPanel';
-import { ModeExecutionPanel } from '@/web/components/conversation/panels/modeExecutionPanel';
 import { useConversationMutations } from '@/web/components/conversation/shell/actions/useConversationMutations';
 import { buildConversationPlanOrchestrator } from '@/web/components/conversation/shell/composition/buildConversationPlanOrchestrator';
 import { useConversationQueries } from '@/web/components/conversation/shell/queries/useConversationQueries';
@@ -26,24 +25,6 @@ interface BuildConversationWorkspacePanelsInput {
 
 export function buildConversationWorkspacePanels(input: BuildConversationWorkspacePanelsInput) {
     return {
-        modePanel: (
-            <ModeExecutionPanel
-                topLevelTab={input.topLevelTab}
-                modeKey={input.modeKey}
-                isLoadingPlan={input.queries.activePlanQuery.isLoading}
-                isPlanMutating={input.planOrchestrator.isPlanMutating}
-                isOrchestratorMutating={input.planOrchestrator.isOrchestratorMutating}
-                onAnswerQuestion={input.planOrchestrator.onAnswerQuestion}
-                onRevisePlan={input.planOrchestrator.onRevisePlan}
-                onApprovePlan={input.planOrchestrator.onApprovePlan}
-                onImplementPlan={input.planOrchestrator.onImplementPlan}
-                onAbortOrchestrator={input.planOrchestrator.onAbortOrchestrator}
-                {...(input.planOrchestrator.activePlan ? { activePlan: input.planOrchestrator.activePlan } : {})}
-                {...(input.planOrchestrator.orchestratorView
-                    ? { orchestratorView: input.planOrchestrator.orchestratorView }
-                    : {})}
-            />
-        ),
         executionEnvironmentPanel: (
             <ExecutionEnvironmentPanel
                 topLevelTab={input.topLevelTab}

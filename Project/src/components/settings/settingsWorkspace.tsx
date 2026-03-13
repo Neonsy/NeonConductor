@@ -1,3 +1,4 @@
+import { ArrowLeft } from 'lucide-react';
 import { startTransition, useState } from 'react';
 
 import { AppSettingsView } from '@/web/components/settings/appSettings/view';
@@ -30,9 +31,10 @@ const SECTION_DESCRIPTIONS: Record<SettingsWorkspaceSection, string> = {
 interface SettingsWorkspaceProps {
     profileId: string;
     onProfileActivated: (profileId: string) => void;
+    onReturnToSessions: () => void;
 }
 
-export function SettingsWorkspace({ profileId, onProfileActivated }: SettingsWorkspaceProps) {
+export function SettingsWorkspace({ profileId, onProfileActivated, onReturnToSessions }: SettingsWorkspaceProps) {
     const [activeSection, setActiveSection] = useState<SettingsWorkspaceSection>('providers');
     const privacyMode = usePrivacyMode();
 
@@ -73,14 +75,27 @@ export function SettingsWorkspace({ profileId, onProfileActivated }: SettingsWor
 
             <div className='flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden'>
                 <header className='border-border/80 bg-background/40 flex items-start justify-between gap-4 border-b px-5 py-4 md:px-6'>
-                    <div className='space-y-1'>
-                        <h3 className='text-lg font-semibold text-balance'>{SECTION_LABELS[activeSection]}</h3>
-                        <p className='text-muted-foreground text-sm'>{SECTION_DESCRIPTIONS[activeSection]}</p>
-                        {privacyMode.enabled ? (
-                            <p className='text-primary text-[11px] font-semibold tracking-[0.12em] uppercase'>
-                                Privacy mode active
+                    <div className='flex items-start gap-3'>
+                        <button
+                            type='button'
+                            className='border-border bg-card hover:bg-accent inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition-colors'
+                            aria-label='Back to sessions'
+                            title='Back to sessions'
+                            onClick={onReturnToSessions}>
+                            <ArrowLeft className='h-4 w-4' />
+                        </button>
+                        <div className='space-y-1'>
+                            <p className='text-muted-foreground text-[11px] font-semibold tracking-[0.12em] uppercase'>
+                                Settings
                             </p>
-                        ) : null}
+                            <h3 className='text-lg font-semibold text-balance'>{SECTION_LABELS[activeSection]}</h3>
+                            <p className='text-muted-foreground text-sm'>{SECTION_DESCRIPTIONS[activeSection]}</p>
+                            {privacyMode.enabled ? (
+                                <p className='text-primary text-[11px] font-semibold tracking-[0.12em] uppercase'>
+                                    Privacy mode active
+                                </p>
+                            ) : null}
+                        </div>
                     </div>
                 </header>
 

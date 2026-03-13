@@ -186,4 +186,52 @@ describe('useConversationRunTarget', () => {
             modelId: kiloFrontierModelId,
         });
     });
+
+    it('prefers the main-view draft over workspace and profile defaults when no session override exists', () => {
+        const state = useConversationRunTarget({
+            providers: [
+                createProvider({ id: 'openai', label: 'OpenAI', authMethod: 'api_key', authState: 'configured' }),
+                createProvider({ id: 'moonshot', label: 'Moonshot', authMethod: 'api_key', authState: 'configured' }),
+            ],
+            providerModels: [
+                createModel({
+                    id: 'openai/gpt-5',
+                    providerId: 'openai',
+                    label: 'GPT-5',
+                    supportsTools: true,
+                }),
+                createModel({
+                    id: 'moonshot/kimi-k2.5',
+                    providerId: 'moonshot',
+                    label: 'Kimi K2.5',
+                    supportsTools: true,
+                }),
+            ],
+            defaults: {
+                providerId: 'openai',
+                modelId: 'openai/gpt-5',
+            },
+            workspacePreference: {
+                profileId: 'profile_test',
+                workspaceFingerprint: 'workspace_test',
+                defaultTopLevelTab: 'chat',
+                defaultProviderId: 'openai',
+                defaultModelId: 'openai/gpt-5',
+                updatedAt: '2026-03-12T12:00:00.000Z',
+            },
+            mainViewDraft: {
+                providerId: 'moonshot',
+                modelId: 'moonshot/kimi-k2.5',
+            },
+            runs: [],
+            requiresTools: false,
+        });
+
+        expect(state.resolvedRunTarget).toEqual({
+            providerId: 'moonshot',
+            modelId: 'moonshot/kimi-k2.5',
+        });
+        expect(state.selectedProviderIdForComposer).toBe('moonshot');
+        expect(state.selectedModelIdForComposer).toBe('moonshot/kimi-k2.5');
+    });
 });

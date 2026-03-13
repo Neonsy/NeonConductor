@@ -98,11 +98,15 @@ describe('buildConversationSidebarModel', () => {
         expect(model.workspaceOptions).toEqual(['ws_a', 'ws_b']);
         expect(model.selectedThread?.id).toBe('thr_child');
         expect(model.tagLabelById.get('tag_1')).toBe('Pinned');
-        expect(model.workspaceGroups).toHaveLength(1);
-        expect(model.workspaceGroups[0]?.label).toBe('Workspace B');
-        expect(model.workspaceGroups[0]?.workspaceFingerprint).toBe('ws_b');
-        expect(model.workspaceGroups[0]?.favoriteCount).toBe(1);
-        expect(model.workspaceGroups[0]?.rows.map((row) => row.thread.id)).toEqual(['thr_root', 'thr_child']);
+        expect(model.workspaceGroups).toHaveLength(2);
+        expect(model.workspaceGroups[0]?.label).toBe('Workspace A');
+        expect(model.workspaceGroups[0]?.workspaceFingerprint).toBe('ws_a');
+        expect(model.workspaceGroups[0]?.threadCount).toBe(0);
+        expect(model.workspaceGroups[0]?.rows).toEqual([]);
+        expect(model.workspaceGroups[1]?.label).toBe('Workspace B');
+        expect(model.workspaceGroups[1]?.workspaceFingerprint).toBe('ws_b');
+        expect(model.workspaceGroups[1]?.favoriteCount).toBe(1);
+        expect(model.workspaceGroups[1]?.rows.map((row) => row.thread.id)).toEqual(['thr_root', 'thr_child']);
     });
 
     it('builds branch rows when branch view is selected', () => {
@@ -114,6 +118,7 @@ describe('buildConversationSidebarModel', () => {
             groupView: 'branch',
         });
 
-        expect(model.workspaceGroups[0]?.rows.map((row) => row.depth)).toEqual([0, 1]);
+        const populatedGroup = model.workspaceGroups.find((group) => group.workspaceFingerprint === 'ws_b');
+        expect(populatedGroup?.rows.map((row) => row.depth)).toEqual([0, 1]);
     });
 });

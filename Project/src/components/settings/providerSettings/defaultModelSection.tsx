@@ -89,7 +89,7 @@ export function ProviderDefaultModelSection({
                             ? 'Selecting a different model updates the saved default immediately.'
                             : 'Select a model to save it as the default.'}
                 </p>
-                {selectedModel?.compatibilityReason ? (
+                {selectedModel?.compatibilityReason && selectedModel.compatibilityScope !== 'provider' ? (
                     <p
                         className={`text-[11px] leading-5 ${
                             selectedModel.compatibilityState === 'warning'

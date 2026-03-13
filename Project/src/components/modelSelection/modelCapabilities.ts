@@ -36,6 +36,7 @@ export interface ModelPickerOption {
     toolProtocol?: ProviderToolProtocol;
     capabilityBadges: ModelCapabilityBadge[];
     compatibilityState: ModelCompatibilityState;
+    compatibilityScope?: 'provider' | 'model' | 'runtime';
     compatibilityIssue?: ModelCompatibilityIssue;
     compatibilityReason?: string;
 }
@@ -114,11 +115,13 @@ export function resolveModelCompatibility(
     context: ModelCompatibilityContext
 ): {
     state: ModelCompatibilityState;
+    scope?: 'provider' | 'model' | 'runtime';
     issue?: ModelCompatibilityIssue;
 } {
     if (context.provider && !isProviderRunnable(context.provider.authState, context.provider.authMethod)) {
         return {
             state: context.surface === 'settings' ? 'warning' : 'incompatible',
+            scope: 'provider',
             issue: {
                 code: 'provider_not_runnable',
                 ...(context.provider?.id ? { providerId: context.provider.id } : {}),
@@ -130,6 +133,7 @@ export function resolveModelCompatibility(
         if (context.imageAttachmentsAllowed === false) {
             return {
                 state: 'incompatible',
+                scope: 'runtime',
                 issue: {
                     code: 'runtime_options_invalid',
                     detail: 'attachments_not_allowed',
@@ -140,6 +144,7 @@ export function resolveModelCompatibility(
         if (!model.supportsVision) {
             return {
                 state: 'incompatible',
+                scope: 'model',
                 issue: {
                     code: 'model_vision_required',
                 },
@@ -150,6 +155,7 @@ export function resolveModelCompatibility(
     if (context.requiresTools && !model.supportsTools) {
         return {
             state: 'incompatible',
+            scope: 'model',
             issue: {
                 code: 'model_tools_required',
                 modeKey: context.modeKey ?? 'chat',
@@ -196,6 +202,7 @@ export function buildModelPickerOption(input: {
         ...(input.model.toolProtocol ? { toolProtocol: input.model.toolProtocol } : {}),
         capabilityBadges: getModelCapabilityBadges(input.model),
         compatibilityState: compatibility.state,
+        ...(compatibility.scope ? { compatibilityScope: compatibility.scope } : {}),
         ...(compatibility.issue ? { compatibilityIssue: compatibility.issue } : {}),
         ...(compatibility.issue
             ? {

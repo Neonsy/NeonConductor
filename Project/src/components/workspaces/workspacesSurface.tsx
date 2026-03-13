@@ -226,7 +226,8 @@ function WorkspaceDefaultsSection({
                             setModelId(option.id);
                         }}
                     />
-                    {selectedModelOption?.compatibilityReason ? (
+                    {selectedModelOption?.compatibilityReason &&
+                    selectedModelOption.compatibilityScope !== 'provider' ? (
                         <p className='text-muted-foreground text-xs'>{selectedModelOption.compatibilityReason}</p>
                     ) : null}
                 </label>
@@ -766,7 +767,7 @@ export function WorkspacesSurface({
                                     }}
                                     className='border-border bg-card h-10 w-full rounded-2xl border px-3 text-sm'
                                     autoComplete='off'
-                                    placeholder='M:\\Projects\\MyWorkspace'
+                                    placeholder=''
                                 />
                                 <button
                                     type='button'
@@ -853,7 +854,8 @@ export function WorkspacesSurface({
                                             setWorkspaceDefaultModelIdDraft(option.id);
                                         }}
                                     />
-                                    {createSelectedModelOption?.compatibilityReason ? (
+                                    {createSelectedModelOption?.compatibilityReason &&
+                                    createSelectedModelOption.compatibilityScope !== 'provider' ? (
                                         <p className='text-muted-foreground text-xs'>{createSelectedModelOption.compatibilityReason}</p>
                                     ) : null}
                                 </label>

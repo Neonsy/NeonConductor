@@ -21,6 +21,7 @@ import type {
 import type { SessionSummaryRecord } from '@/app/backend/persistence/types';
 
 import type { EntityId, TopLevelTab } from '@/shared/contracts';
+import type { RuntimeProviderId } from '@/shared/contracts';
 
 interface ConversationSidebarPaneProps {
     profileId: string;
@@ -48,6 +49,7 @@ interface ConversationSidebarPaneProps {
     groupView: 'workspace' | 'branch';
     isAddingTag: boolean;
     isDeletingWorkspaceThreads: boolean;
+    isCreatingThread: boolean;
     statusMessage?: string;
     statusTone?: 'info' | 'error';
     onTopLevelTabChange: (nextTab: TopLevelTab) => void;
@@ -61,9 +63,15 @@ interface ConversationSidebarPaneProps {
     onSortChange: (sort: 'latest' | 'alphabetical') => void;
     onShowAllModesChange: (showAllModes: boolean) => void;
     onGroupViewChange: (groupView: 'workspace' | 'branch') => void;
-    onRequestNewThread: (workspaceFingerprint?: string) => void;
     onSelectWorkspaceFingerprint: (workspaceFingerprint: string | undefined) => void;
-    onNavigateToWorkspaces: () => void;
+    onCreateThread: (input: {
+        workspaceFingerprint: string;
+        workspaceAbsolutePath: string;
+        title: string;
+        topLevelTab: TopLevelTab;
+        providerId?: RuntimeProviderId;
+        modelId?: string;
+    }) => Promise<void>;
     upsertTag: (input: { profileId: string; label: string }) => Promise<{ tag: TagRecord }>;
     setThreadTags: (input: {
         profileId: string;
@@ -109,6 +117,7 @@ export function ConversationSidebarPane({
     groupView,
     isAddingTag,
     isDeletingWorkspaceThreads,
+    isCreatingThread,
     statusMessage,
     statusTone,
     onTopLevelTabChange,
@@ -122,9 +131,8 @@ export function ConversationSidebarPane({
     onSortChange,
     onShowAllModesChange,
     onGroupViewChange,
-    onRequestNewThread,
     onSelectWorkspaceFingerprint,
-    onNavigateToWorkspaces,
+    onCreateThread,
     upsertTag,
     setThreadTags,
     setThreadFavorite,
@@ -163,9 +171,9 @@ export function ConversationSidebarPane({
             groupView={groupView}
             isAddingTag={isAddingTag}
             isDeletingWorkspaceThreads={isDeletingWorkspaceThreads}
+            isCreatingThread={isCreatingThread}
             {...(statusMessage ? { statusMessage, statusTone } : {})}
             onSelectWorkspaceFingerprint={onSelectWorkspaceFingerprint}
-            onNavigateToWorkspaces={onNavigateToWorkspaces}
             onSelectThread={(threadId) => {
                 startSelectionTransition(() => {
                     const targetThread = threads.find((thread) => thread.id === threadId);
@@ -289,7 +297,7 @@ export function ConversationSidebarPane({
                         onGroupViewChange(nextGroupView);
                     });
                 }}
-            onRequestNewThread={onRequestNewThread}
+            onCreateThread={onCreateThread}
                 onAddTagToThread={async (threadId, label) => {
                     if (!isEntityId(threadId, 'thr')) {
                         throw new Error('Thread tags could not be updated.');

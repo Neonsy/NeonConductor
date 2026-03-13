@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { ConversationSidebar } from '@/web/components/conversation/sidebar/sidebar';
 
 import type { ConversationRecord, TagRecord, ThreadListRecord } from '@/app/backend/persistence/types';
+import type { SessionSummaryRecord } from '@/app/backend/persistence/types';
 
 const buckets: ConversationRecord[] = [
     {
@@ -47,8 +48,86 @@ const tags: TagRecord[] = [
     },
 ];
 
+const sessions: SessionSummaryRecord[] = [
+    {
+        id: 'sess_root',
+        profileId: 'profile_default',
+        conversationId: 'conv_workspace',
+        threadId: 'thr_root',
+        kind: 'local',
+        runStatus: 'completed',
+        turnCount: 1,
+        updatedAt: '2026-03-12T09:00:00.000Z',
+        createdAt: '2026-03-12T09:00:00.000Z',
+    },
+];
+
+vi.mock('@/web/trpc/client', () => ({
+    trpc: {
+        conversation: {
+            getWorkspaceThreadDeletePreview: {
+                useQuery: () => ({
+                    data: undefined,
+                    isLoading: false,
+                }),
+            },
+        },
+        runtime: {
+            getShellBootstrap: {
+                useQuery: () => ({
+                    data: {
+                        providers: [
+                            {
+                                id: 'kilo',
+                                label: 'Kilo',
+                                authState: 'authenticated',
+                                authMethod: 'oauth',
+                                isDefault: true,
+                            },
+                        ],
+                        providerModels: [
+                            {
+                                id: 'kilo-auto/frontier',
+                                providerId: 'kilo',
+                                label: 'Kilo Auto Frontier',
+                                supportsTools: true,
+                                supportsVision: false,
+                                supportsReasoning: true,
+                                toolProtocol: 'kilo_gateway',
+                            },
+                        ],
+                        workspacePreferences: [],
+                        defaults: {
+                            providerId: 'kilo',
+                            modelId: 'kilo-auto/frontier',
+                        },
+                    },
+                }),
+            },
+            registerWorkspaceRoot: {
+                useMutation: () => ({
+                    isPending: false,
+                    mutateAsync: vi.fn(),
+                }),
+            },
+            setWorkspacePreference: {
+                useMutation: () => ({
+                    isPending: false,
+                    mutateAsync: vi.fn(),
+                }),
+            },
+        },
+        useUtils: () => ({
+            runtime: {
+                listWorkspaceRoots: { setData: vi.fn() },
+                getShellBootstrap: { setData: vi.fn() },
+            },
+        }),
+    },
+}));
+
 describe('conversation sidebar layout', () => {
-    it('moves top-level tabs into the rail and keeps thread creation out of the default flow', () => {
+    it('keeps workspaces and threads together in one sidebar tree', () => {
         const html = renderToStaticMarkup(
             <ConversationSidebar
                 profileId='profile_default'
@@ -56,9 +135,9 @@ describe('conversation sidebar layout', () => {
                 onToggleCollapsed={vi.fn()}
                 buckets={buckets}
                 threads={threads}
+                sessions={sessions}
                 tags={tags}
                 threadTagIdsByThread={new Map([['thr_root', ['tag_ui']]])}
-                topLevelTab='chat'
                 workspaceRoots={[
                     {
                         fingerprint: 'ws_alpha',
@@ -67,21 +146,6 @@ describe('conversation sidebar layout', () => {
                     },
                 ]}
                 preferredWorkspaceFingerprint='ws_alpha'
-                preferredProviderId='kilo'
-                preferredModelId='kilo-auto/frontier'
-                modelOptions={[
-                    {
-                        id: 'kilo-auto/frontier',
-                        label: 'Kilo Auto Frontier',
-                        providerId: 'kilo',
-                        providerLabel: 'Kilo',
-                        supportsTools: true,
-                        supportsVision: true,
-                        supportsReasoning: true,
-                        capabilityBadges: [],
-                        compatibilityState: 'compatible',
-                    },
-                ]}
                 selectedTagIds={[]}
                 scopeFilter='all'
                 sort='latest'
@@ -89,6 +153,7 @@ describe('conversation sidebar layout', () => {
                 groupView='workspace'
                 isAddingTag={false}
                 isDeletingWorkspaceThreads={false}
+                isCreatingThread={false}
                 onSelectThread={vi.fn()}
                 onToggleTagFilter={vi.fn()}
                 onToggleThreadFavorite={vi.fn(async () => {})}
@@ -97,19 +162,18 @@ describe('conversation sidebar layout', () => {
                 onSortChange={vi.fn()}
                 onShowAllModesChange={vi.fn()}
                 onGroupViewChange={vi.fn()}
-                onCreateThread={vi.fn(async () => {})}
+                onSelectWorkspaceFingerprint={vi.fn()}
                 onAddTagToThread={vi.fn(async () => {})}
                 onDeleteWorkspaceThreads={vi.fn(async () => {})}
-                onNavigateToWorkspaces={vi.fn()}
+                onCreateThread={vi.fn(async () => {})}
             />
         );
 
         expect(html).toContain('Sessions');
-        expect(html).toContain('Search threads, workspaces, or tabs');
-        expect(html).toContain('Filters');
         expect(html).toContain('Add workspace');
+        expect(html).toContain('Workspace Alpha');
+        expect(html).toContain('Root Thread');
         expect(html).toContain('New thread');
-        expect(html).toContain('Workspace parent');
-        expect(html).not.toContain('Optional thread title');
+        expect(html).not.toContain('Workspace parent');
     });
 });

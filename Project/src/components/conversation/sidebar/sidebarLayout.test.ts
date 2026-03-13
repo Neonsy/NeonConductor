@@ -73,6 +73,57 @@ vi.mock('@/web/trpc/client', () => ({
                 }),
             },
         },
+        runtime: {
+            getShellBootstrap: {
+                useQuery: () => ({
+                    data: {
+                        providers: [
+                            {
+                                id: 'kilo',
+                                label: 'Kilo',
+                                authState: 'authenticated',
+                                authMethod: 'oauth',
+                                isDefault: true,
+                            },
+                        ],
+                        providerModels: [
+                            {
+                                id: 'kilo-auto/frontier',
+                                providerId: 'kilo',
+                                label: 'Kilo Auto Frontier',
+                                supportsTools: true,
+                                supportsVision: false,
+                                supportsReasoning: true,
+                                toolProtocol: 'kilo_gateway',
+                            },
+                        ],
+                        workspacePreferences: [],
+                        defaults: {
+                            providerId: 'kilo',
+                            modelId: 'kilo-auto/frontier',
+                        },
+                    },
+                }),
+            },
+            registerWorkspaceRoot: {
+                useMutation: () => ({
+                    isPending: false,
+                    mutateAsync: vi.fn(),
+                }),
+            },
+            setWorkspacePreference: {
+                useMutation: () => ({
+                    isPending: false,
+                    mutateAsync: vi.fn(),
+                }),
+            },
+        },
+        useUtils: () => ({
+            runtime: {
+                listWorkspaceRoots: { setData: vi.fn() },
+                getShellBootstrap: { setData: vi.fn() },
+            },
+        }),
     },
 }));
 
@@ -103,6 +154,7 @@ describe('conversation sidebar layout', () => {
                 groupView: 'workspace',
                 isAddingTag: false,
                 isDeletingWorkspaceThreads: false,
+                isCreatingThread: false,
                 onSelectThread: vi.fn(),
                 onToggleTagFilter: vi.fn(),
                 onToggleThreadFavorite: vi.fn(async () => {}),
@@ -111,11 +163,10 @@ describe('conversation sidebar layout', () => {
                 onSortChange: vi.fn(),
                 onShowAllModesChange: vi.fn(),
                 onGroupViewChange: vi.fn(),
-                onRequestNewThread: vi.fn(),
                 onSelectWorkspaceFingerprint: vi.fn(),
                 onAddTagToThread: vi.fn(async () => {}),
                 onDeleteWorkspaceThreads: vi.fn(async () => {}),
-                onNavigateToWorkspaces: vi.fn(),
+                onCreateThread: vi.fn(async () => {}),
             })
         );
 
@@ -124,7 +175,6 @@ describe('conversation sidebar layout', () => {
         expect(html).toContain('Filters');
         expect(html).toContain('Add workspace');
         expect(html).toContain('New thread');
-        expect(html).toContain('Workspace parent');
         expect(html).not.toContain('Optional thread title');
     });
 });

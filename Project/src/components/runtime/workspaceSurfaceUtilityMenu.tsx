@@ -5,7 +5,6 @@ import type { WorkspaceAppSection } from '@/web/components/runtime/workspaceSurf
 
 interface WorkspaceSurfaceUtilityMenuProps {
     appSection: WorkspaceAppSection;
-    primarySection: Exclude<WorkspaceAppSection, 'settings'>;
     onOpenSettings: () => void;
     onReturnToPrimarySection: () => void;
     onOpenCommandPalette: () => void;
@@ -13,7 +12,6 @@ interface WorkspaceSurfaceUtilityMenuProps {
 
 export function WorkspaceSurfaceUtilityMenu({
     appSection,
-    primarySection,
     onOpenSettings,
     onReturnToPrimarySection,
     onOpenCommandPalette,
@@ -46,8 +44,6 @@ export function WorkspaceSurfaceUtilityMenu({
             document.removeEventListener('keydown', handleKeyDown);
         };
     }, [open]);
-
-    const returnLabel = primarySection === 'workspaces' ? 'Return to Workspaces' : 'Return to Sessions';
 
     return (
         <div ref={containerRef} className='relative shrink-0'>
@@ -86,7 +82,7 @@ export function WorkspaceSurfaceUtilityMenu({
                         <Settings2 className='mt-0.5 size-4 shrink-0' />
                         <span className='space-y-1'>
                             <span className='block text-sm font-medium'>
-                                {appSection === 'settings' ? returnLabel : 'Open Settings'}
+                                {appSection === 'settings' ? 'Return to Sessions' : 'Open Settings'}
                             </span>
                             <span className='text-muted-foreground block text-xs leading-5'>
                                 {appSection === 'settings'

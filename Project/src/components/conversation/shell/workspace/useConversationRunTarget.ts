@@ -24,6 +24,7 @@ interface UseConversationRunTargetInput {
         | undefined;
     workspacePreference?: WorkspacePreferenceRecord;
     sessionOverride?: { providerId?: RuntimeProviderId; modelId?: string };
+    mainViewDraft?: { providerId?: RuntimeProviderId; modelId?: string };
     runs: RunRecord[];
     requiresTools?: boolean;
     modeKey?: string;
@@ -94,6 +95,18 @@ export function useConversationRunTarget(input: UseConversationRunTargetInput) {
     }
 
     if (!resolvedRunTarget) {
+        if (input.mainViewDraft?.providerId && input.mainViewDraft.modelId) {
+            const modelId = canonicalizeProviderModelId(input.mainViewDraft.providerId, input.mainViewDraft.modelId);
+            if (canAutoResolve(getOption(input.mainViewDraft.providerId, modelId))) {
+                resolvedRunTarget = {
+                    providerId: input.mainViewDraft.providerId,
+                    modelId,
+                };
+            }
+        }
+    }
+
+    if (!resolvedRunTarget) {
         for (const run of input.runs) {
             if (!isProviderId(run.providerId) || typeof run.modelId !== 'string') {
                 continue;
@@ -159,12 +172,14 @@ export function useConversationRunTarget(input: UseConversationRunTargetInput) {
         }
     }
 
-    const selectedProviderIdForComposer = input.sessionOverride?.providerId ?? resolvedRunTarget?.providerId;
+    const selectedProviderIdForComposer =
+        input.sessionOverride?.providerId ?? input.mainViewDraft?.providerId ?? resolvedRunTarget?.providerId;
     const selectedModelIdForComposer =
-        selectedProviderIdForComposer && (input.sessionOverride?.modelId ?? resolvedRunTarget?.modelId)
+        selectedProviderIdForComposer &&
+        (input.sessionOverride?.modelId ?? input.mainViewDraft?.modelId ?? resolvedRunTarget?.modelId)
             ? canonicalizeProviderModelId(
                   selectedProviderIdForComposer,
-                  input.sessionOverride?.modelId ?? resolvedRunTarget?.modelId ?? ''
+                  input.sessionOverride?.modelId ?? input.mainViewDraft?.modelId ?? resolvedRunTarget?.modelId ?? ''
               )
             : undefined;
     const selectedModelForComposer =

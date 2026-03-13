@@ -119,11 +119,9 @@ export interface SessionWorkspacePanelProps {
     contextState?: ResolvedContextState;
     canCompactContext?: boolean;
     isCompactingContext?: boolean;
-    modePanel?: ReactNode;
     executionEnvironmentPanel?: ReactNode;
     attachedSkillsPanel?: ReactNode;
     diffCheckpointPanel?: ReactNode;
-    threadCreationSurface?: ReactNode;
     promptResetKey?: number;
     focusComposerRequestKey?: number;
     controlsDisabled?: boolean;
