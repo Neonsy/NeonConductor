@@ -819,6 +819,7 @@ export function ConversationShell({
             partsByMessageId: shellViewModel.sessionRunSelection.partsByMessageId,
             ...(selectedSessionId ? { selectedSessionId } : {}),
             ...(selectedRunId ? { selectedRunId } : {}),
+            ...(composer.optimisticUserMessage ? { optimisticUserMessage: composer.optimisticUserMessage } : {}),
             executionPreset: queries.shellBootstrapQuery.data?.executionPreset ?? 'standard',
             workspaceScope: shellViewModel.workspaceScope,
             pendingPermissions: shellViewModel.pendingPermissions,

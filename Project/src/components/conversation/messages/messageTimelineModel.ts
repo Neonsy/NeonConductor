@@ -12,6 +12,7 @@ export type MessageTimelineTextEntryType =
     | 'assistant_tool_call'
     | 'tool_result';
 export type MessageTimelineImageEntryType = 'assistant_image' | 'user_image' | 'system_image';
+export type MessageTimelineStatusEntryType = 'assistant_status';
 
 export type MessageTimelineBodyEntry =
     | {
@@ -28,6 +29,13 @@ export type MessageTimelineBodyEntry =
           mimeType: 'image/jpeg' | 'image/png' | 'image/webp';
           width: number;
           height: number;
+      }
+    | {
+          id: string;
+          type: MessageTimelineStatusEntryType;
+          code: 'received' | 'stalled' | 'failed_before_output';
+          label: string;
+          elapsedMs?: number;
       };
 
 export interface MessageTimelineEntry {
@@ -39,6 +47,8 @@ export interface MessageTimelineEntry {
     plainCopyText?: string;
     rawCopyText?: string;
     editableText?: string;
+    deliveryState?: 'sending';
+    isOptimistic?: boolean;
 }
 
 export interface BottomThresholdInput {
@@ -82,8 +92,20 @@ function mapTextEntryType(
 
 function buildBodyEntries(message: ConversationTanstackMessage): MessageTimelineBodyEntry[] {
     const projected: MessageTimelineBodyEntry[] = [];
+    const assistantStatusEntries: Extract<MessageTimelineBodyEntry, { type: 'assistant_status' }>[] = [];
 
     for (const part of message.renderParts) {
+        if (part.kind === 'status' && message.role === 'assistant') {
+            assistantStatusEntries.push({
+                id: part.key,
+                type: 'assistant_status',
+                code: part.code,
+                label: part.label,
+                ...(part.elapsedMs !== undefined ? { elapsedMs: part.elapsedMs } : {}),
+            });
+            continue;
+        }
+
         if (part.kind === 'image') {
             const imageEntryType = mapImageEntryType(message.role);
 
@@ -164,6 +186,10 @@ function buildBodyEntries(message: ConversationTanstackMessage): MessageTimeline
         });
     }
 
+    if (projected.length === 0 && assistantStatusEntries.length > 0) {
+        return [assistantStatusEntries[assistantStatusEntries.length - 1]!];
+    }
+
     return projected;
 }
 
@@ -180,6 +206,8 @@ export function buildTimelineEntries(messages: ConversationTanstackMessage[]): M
             ...(message.plainCopyText ? { plainCopyText: message.plainCopyText } : {}),
             ...(message.rawCopyText ? { rawCopyText: message.rawCopyText } : {}),
             ...(message.editableText ? { editableText: message.editableText } : {}),
+            ...(message.deliveryState ? { deliveryState: message.deliveryState } : {}),
+            ...(message.isOptimistic ? { isOptimistic: message.isOptimistic } : {}),
         };
     });
 }

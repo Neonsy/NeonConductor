@@ -179,4 +179,91 @@ describe('message flow model', () => {
             text: '{"ok":true}',
         });
     });
+
+    it('keeps only the latest assistant lifecycle status before first output and drops it once content exists', () => {
+        const assistantMessage = createMessage({
+            id: 'msg_assistant_status',
+            runId: 'run_status',
+            role: 'assistant',
+        });
+
+        const pendingTurns = buildMessageFlowTurns(
+            projectConversationTanstackMessages(
+                [assistantMessage],
+                new Map([
+                    [
+                        assistantMessage.id,
+                        [
+                            createPart({
+                                id: 'part_received',
+                                messageId: assistantMessage.id,
+                                partType: 'status',
+                                payload: {
+                                    code: 'received',
+                                    label: 'Agent received message',
+                                },
+                            }),
+                            createPart({
+                                id: 'part_stalled',
+                                messageId: assistantMessage.id,
+                                partType: 'status',
+                                payload: {
+                                    code: 'stalled',
+                                    label: 'Still waiting for the first response chunk...',
+                                },
+                                sequence: 1,
+                            }),
+                        ],
+                    ],
+                ])
+            )
+        );
+
+        expect(pendingTurns[0]?.messages[0]?.body).toEqual([
+            {
+                id: 'part_stalled',
+                type: 'assistant_status',
+                code: 'stalled',
+                label: 'Still waiting for the first response chunk...',
+            },
+        ]);
+
+        const streamedTurns = buildMessageFlowTurns(
+            projectConversationTanstackMessages(
+                [assistantMessage],
+                new Map([
+                    [
+                        assistantMessage.id,
+                        [
+                            createPart({
+                                id: 'part_received',
+                                messageId: assistantMessage.id,
+                                partType: 'status',
+                                payload: {
+                                    code: 'received',
+                                    label: 'Agent received message',
+                                },
+                            }),
+                            createPart({
+                                id: 'part_text',
+                                messageId: assistantMessage.id,
+                                partType: 'text',
+                                text: 'Streaming answer',
+                                sequence: 1,
+                            }),
+                        ],
+                    ],
+                ])
+            )
+        );
+
+        expect(streamedTurns[0]?.messages[0]?.body).toEqual([
+            {
+                id: 'part_text',
+                type: 'assistant_text',
+                text: 'Streaming answer',
+                providerLimitedReasoning: false,
+            },
+        ]);
+    });
 });

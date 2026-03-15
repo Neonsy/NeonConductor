@@ -18,7 +18,9 @@ export function MessageFlowBody({ profileId, message, run }: MessageFlowBodyProp
         (item): item is { id: string; type: 'assistant_reasoning'; text: string; providerLimitedReasoning: boolean } =>
             'text' in item && item.type === 'assistant_reasoning'
     );
-    const contentEntries = message.body.filter((item) => !('text' in item && item.type === 'assistant_reasoning'));
+    const contentEntries = message.body.filter(
+        (item) => !('text' in item && item.type === 'assistant_reasoning')
+    );
 
     if (contentEntries.length === 0 && reasoningEntries.length === 0 && message.role === 'assistant') {
         return (
@@ -29,7 +31,11 @@ export function MessageFlowBody({ profileId, message, run }: MessageFlowBodyProp
     }
 
     if (contentEntries.length === 0 && reasoningEntries.length === 0) {
-        return <p className='text-muted-foreground text-sm'>No renderable message payload.</p>;
+        return message.deliveryState === 'sending' ? (
+            <MessageDeliveryRow label='Sending...' />
+        ) : (
+            <p className='text-muted-foreground text-sm'>No renderable message payload.</p>
+        );
     }
 
     return (
@@ -54,13 +60,16 @@ export function MessageFlowBody({ profileId, message, run }: MessageFlowBodyProp
             ) : null}
             {contentEntries.map((item) => (
                 <div key={item.id} className='space-y-2'>
-                    {'text' in item ? (
+                    {'label' in item ? (
+                        <AssistantStatusRow item={item} />
+                    ) : 'text' in item ? (
                         <FlowMessageTextBlock item={item} />
                     ) : (
                         <MessageMediaPreview profileId={profileId} item={item} />
                     )}
                 </div>
             ))}
+            {message.deliveryState === 'sending' ? <MessageDeliveryRow label='Sending...' /> : null}
         </div>
     );
 }
@@ -76,4 +85,24 @@ function FlowMessageTextBlock({ item }: { item: Extract<MessageFlowBodyEntry, { 
             <MarkdownContent markdown={item.text} />
         </>
     );
+}
+
+function AssistantStatusRow({ item }: { item: Extract<MessageFlowBodyEntry, { type: 'assistant_status' }> }) {
+    const className =
+        item.code === 'failed_before_output'
+            ? 'border-destructive/30 bg-destructive/5 text-destructive'
+            : 'border-border/70 bg-background/60 text-muted-foreground';
+
+    return (
+        <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium ${className}`}>
+            <span
+                className={`h-1.5 w-1.5 rounded-full ${item.code === 'failed_before_output' ? 'bg-current' : 'animate-pulse bg-current'}`}
+            />
+            <span>{item.label}</span>
+        </div>
+    );
+}
+
+function MessageDeliveryRow({ label }: { label: string }) {
+    return <p className='text-muted-foreground text-xs font-medium'>{label}</p>;
 }

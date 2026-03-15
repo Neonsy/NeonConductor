@@ -8,6 +8,7 @@ import {
     summarizeReadyImageBytes,
     type ComposerPendingImage,
 } from '@/web/components/conversation/hooks/composerImageAttachments';
+import type { OptimisticConversationUserMessage } from '@/web/components/conversation/messages/optimisticUserMessage';
 import { submitPrompt as submitPromptFromComposer } from '@/web/components/conversation/shell/actions/promptSubmit';
 
 import type {
@@ -64,6 +65,9 @@ export function useConversationShellComposer<
     TRunStartRejectedResult extends { accepted: false; message?: string },
 >(input: UseConversationShellComposerInput<TPlanStartResult, TRunStartAcceptedResult, TRunStartRejectedResult>) {
     const [pendingImages, setPendingImages] = useState<ComposerPendingImage[]>([]);
+    const [optimisticUserMessage, setOptimisticUserMessage] = useState<OptimisticConversationUserMessage | undefined>(
+        undefined
+    );
     const [runSubmitError, setRunSubmitError] = useState<string | undefined>(undefined);
     const [promptResetKey, setPromptResetKey] = useState(0);
     const pendingImagesRef = useRef<ComposerPendingImage[]>([]);
@@ -258,8 +262,23 @@ export function useConversationShellComposer<
     );
     const hasBlockingPendingImages = pendingImages.some((image) => image.status !== 'ready');
 
+    function createOptimisticUserMessage(
+        sessionId: OptimisticConversationUserMessage['sessionId'],
+        prompt: string
+    ): OptimisticConversationUserMessage {
+        const seed = `${Date.now()}_${Math.round(Math.random() * 1000)}`;
+        return {
+            id: `optimistic_msg_${seed}`,
+            runId: `optimistic_run_${seed}`,
+            sessionId,
+            createdAt: new Date().toISOString(),
+            prompt,
+        };
+    }
+
     return {
         pendingImages,
+        optimisticUserMessage,
         promptResetKey,
         hasBlockingPendingImages,
         runSubmitError,
@@ -328,9 +347,17 @@ export function useConversationShellComposer<
                     input.onPlanStarted(result);
                 },
                 onRunStarted: (result) => {
+                    setOptimisticUserMessage(undefined);
                     input.onRunStarted(result);
                 },
+                onRunStartRequested: ({ sessionId, prompt }) => {
+                    setOptimisticUserMessage(createOptimisticUserMessage(sessionId, prompt));
+                },
+                onRunStartFinished: () => {
+                    setOptimisticUserMessage(undefined);
+                },
                 onError: (message) => {
+                    setOptimisticUserMessage(undefined);
                     setRunSubmitError(message);
                 },
             });

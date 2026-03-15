@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { MessageTimelineEmptyState, MessageTimelineItem } from '@/web/components/conversation/messages/messageTimeline';
 import { buildTimelineEntries, isWithinBottomThreshold } from '@/web/components/conversation/messages/messageTimelineModel';
 import type { MessageTimelineEntry } from '@/web/components/conversation/messages/messageTimelineModel';
+import type { OptimisticConversationUserMessage } from '@/web/components/conversation/messages/optimisticUserMessage';
 import { useConversationTanstackMessages } from '@/web/components/conversation/messages/useConversationTanstackMessages';
 import { Button } from '@/web/components/ui/button';
 
@@ -11,24 +12,30 @@ import type { MessagePartRecord, MessageRecord, RunRecord } from '@/app/backend/
 
 interface MessageTimelinePanelProps {
     profileId: string;
+    selectedSessionId?: string;
     messages: MessageRecord[];
     partsByMessageId: Map<string, MessagePartRecord[]>;
     run?: RunRecord;
+    optimisticUserMessage?: OptimisticConversationUserMessage;
     onEditMessage?: (entry: MessageTimelineEntry) => void;
     onBranchFromMessage?: (entry: MessageTimelineEntry) => void;
 }
 
 export function MessageTimelinePanel({
     profileId,
+    selectedSessionId,
     messages,
     partsByMessageId,
     run,
+    optimisticUserMessage,
     onEditMessage,
     onBranchFromMessage,
 }: MessageTimelinePanelProps) {
     const tanstackMessages = useConversationTanstackMessages({
         messages,
         partsByMessageId,
+        ...(selectedSessionId ? { sessionId: selectedSessionId } : {}),
+        ...(optimisticUserMessage ? { optimisticUserMessage } : {}),
     });
     const entries = buildTimelineEntries(tanstackMessages);
     const scrollContainerRef = useRef<HTMLDivElement>(null);

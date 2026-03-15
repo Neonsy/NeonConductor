@@ -25,6 +25,7 @@ const TRPC_CODE_BY_OPERATIONAL_ERROR_CODE = new Map<OperationalErrorCode, TRPCEr
     ['provider_not_authenticated', 'UNAUTHORIZED'],
     ['provider_not_registered', 'NOT_FOUND'],
     ['provider_not_supported', 'BAD_REQUEST'],
+    ['provider_first_output_timeout', 'TIMEOUT'],
     ['provider_request_failed', 'INTERNAL_SERVER_ERROR'],
     ['provider_request_unavailable', 'TIMEOUT'],
     ['provider_secret_missing', 'UNAUTHORIZED'],

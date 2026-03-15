@@ -1,4 +1,5 @@
 import type { MessageFlowMessage } from '@/web/components/conversation/messages/messageFlowModel';
+import type { OptimisticConversationUserMessage } from '@/web/components/conversation/messages/optimisticUserMessage';
 import type { ModelCompatibilityState, ModelPickerOption } from '@/web/components/modelSelection/modelCapabilities';
 
 import type {
@@ -79,6 +80,7 @@ export interface SessionWorkspacePanelProps {
     partsByMessageId: Map<string, MessagePartRecord[]>;
     selectedSessionId?: string;
     selectedRunId?: string;
+    optimisticUserMessage?: OptimisticConversationUserMessage;
     executionPreset: 'privacy' | 'standard' | 'yolo';
     workspaceScope: WorkspaceScope;
     pendingPermissions: PermissionRecord[];

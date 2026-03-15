@@ -15,6 +15,7 @@ import type {
     SessionStartRunInput,
     TopLevelTab,
 } from '@/shared/contracts';
+import type { OptimisticConversationUserMessage } from '@/web/components/conversation/messages/optimisticUserMessage';
 
 interface ProviderAuthView {
     label: string;
@@ -56,6 +57,8 @@ interface SubmitPromptInput<
     onPromptCleared: () => void;
     onPlanStarted: (result: TPlanStartResult) => void;
     onRunStarted: (result: TRunStartAcceptedResult) => void;
+    onRunStartRequested?: (input: Pick<OptimisticConversationUserMessage, 'sessionId' | 'prompt'>) => void;
+    onRunStartFinished?: () => void;
     onError: (message: string) => void;
 }
 
@@ -123,6 +126,10 @@ export async function submitPrompt<
     }
 
     try {
+        input.onRunStartRequested?.({
+            sessionId: input.selectedSessionId,
+            prompt: trimmedPrompt,
+        });
         const result = await input.startRun({
             profileId: input.profileId,
             sessionId: input.selectedSessionId,
@@ -137,6 +144,7 @@ export async function submitPrompt<
             runtimeOptions: input.runtimeOptions,
         });
         if (!isAcceptedRunResult(result)) {
+            input.onRunStartFinished?.();
             input.onError(
                 formatRunStartRejection({
                     rejection: result,
@@ -148,6 +156,7 @@ export async function submitPrompt<
         input.onPromptCleared();
         input.onRunStarted(result);
     } catch (error: unknown) {
+        input.onRunStartFinished?.();
         const message = error instanceof Error ? error.message : String(error);
         input.onError(`Run failed: ${message}`);
     }

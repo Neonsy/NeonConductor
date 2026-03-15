@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { projectConversationTanstackMessages } from '@/web/components/conversation/messages/tanstackMessageBridge';
+import {
+    projectConversationTanstackMessages,
+    projectOptimisticConversationUserMessage,
+} from '@/web/components/conversation/messages/tanstackMessageBridge';
 
 import type { MessagePartRecord, MessageRecord } from '@/app/backend/persistence/types';
 
@@ -104,5 +107,54 @@ describe('tanstack message bridge', () => {
             content: '{"ok":true}',
             state: 'complete',
         });
+    });
+
+    it('parses assistant lifecycle status parts for transcript rendering', () => {
+        const assistantMessage = createMessage({ id: 'msg_assistant_status', role: 'assistant' });
+
+        const projected = projectConversationTanstackMessages(
+            [assistantMessage],
+            new Map([
+                [
+                    assistantMessage.id,
+                    [
+                        createPart({
+                            id: 'part_status',
+                            messageId: assistantMessage.id,
+                            partType: 'status',
+                            payload: {
+                                code: 'received',
+                                label: 'Agent received message',
+                            },
+                        }),
+                    ],
+                ],
+            ])
+        );
+
+        expect(projected[0]?.renderParts).toEqual([
+            {
+                key: 'part_status',
+                kind: 'status',
+                code: 'received',
+                label: 'Agent received message',
+            },
+        ]);
+        expect(projected[0]?.uiMessage.parts).toEqual([]);
+    });
+
+    it('projects optimistic user messages with a sending delivery state', () => {
+        const projected = projectOptimisticConversationUserMessage({
+            id: 'optimistic_msg_1',
+            runId: 'optimistic_run_1',
+            sessionId: 'sess_test',
+            createdAt: '2026-03-12T09:00:00.000Z',
+            prompt: 'Ship it',
+        });
+
+        expect(projected.role).toBe('user');
+        expect(projected.deliveryState).toBe('sending');
+        expect(projected.isOptimistic).toBe(true);
+        expect(projected.uiMessage.parts).toEqual([{ type: 'text', content: 'Ship it' }]);
     });
 });

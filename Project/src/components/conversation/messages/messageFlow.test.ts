@@ -74,8 +74,15 @@ describe('message flow rendering', () => {
                             runId: 'run_pending',
                             role: 'assistant',
                             createdAt: '2026-03-12T09:05:01.000Z',
-                            body: [],
-                        },
+                            body: [
+                                {
+                                    id: 'part_status_pending',
+                                    type: 'assistant_status',
+                                    code: 'received',
+                                    label: 'Agent received message',
+                                },
+                            ],
+                            },
                     ],
                 },
                 run: {
@@ -95,8 +102,46 @@ describe('message flow rendering', () => {
         expect(populatedAssistantHtml).toContain('Branch');
         expect(populatedAssistantHtml).not.toContain('Regenerate');
         expect(populatedAssistantHtml.indexOf('Reasoning')).toBeLessThan(populatedAssistantHtml.indexOf('Answer body'));
-        expect(pendingAssistantHtml).toContain('Assistant is responding');
+        expect(pendingAssistantHtml).toContain('Agent received message');
         expect(pendingAssistantHtml).not.toContain('Branch');
+    });
+
+    it('renders a sending affordance for optimistic user messages', () => {
+        const html = renderToStaticMarkup(
+            createElement(MessageFlowTurnView, {
+                profileId: 'profile_default',
+                turn: {
+                    id: 'optimistic_run',
+                    runId: 'optimistic_run',
+                    createdAt: '2026-03-12T09:10:00.000Z',
+                    messages: [
+                        {
+                            id: 'optimistic_msg',
+                            runId: 'optimistic_run',
+                            role: 'user',
+                            createdAt: '2026-03-12T09:10:00.000Z',
+                            body: [
+                                {
+                                    id: 'part_user',
+                                    type: 'user_text',
+                                    text: 'Ship it',
+                                    providerLimitedReasoning: false,
+                                },
+                            ],
+                            plainCopyText: 'Ship it',
+                            rawCopyText: 'Ship it',
+                            editableText: 'Ship it',
+                            deliveryState: 'sending',
+                            isOptimistic: true,
+                        },
+                    ],
+                },
+                run: undefined,
+            })
+        );
+
+        expect(html).toContain('Ship it');
+        expect(html).toContain('Sending...');
     });
 
     it('keeps user controls in bounds instead of positioning them below the message card', () => {

@@ -217,6 +217,54 @@ describe('submitPrompt', () => {
         expect(onRunStarted).toHaveBeenCalledOnce();
     });
 
+    it('notifies optimistic run lifecycle callbacks around run submission', async () => {
+        const onRunStartRequested = vi.fn();
+        const onRunStartFinished = vi.fn();
+
+        await submitPrompt({
+            prompt: 'Ship it',
+            isStartingRun: false,
+            selectedSessionId: 'sess_test',
+            isPlanningMode: false,
+            profileId: 'profile_default',
+            topLevelTab: 'chat',
+            modeKey: 'chat',
+            workspaceFingerprint: undefined,
+            resolvedRunTarget: {
+                providerId: 'openai',
+                modelId: 'openai/gpt-5',
+            },
+            runtimeOptions: DEFAULT_RUN_OPTIONS,
+            providerById: new Map([
+                [
+                    'openai',
+                    {
+                        label: 'OpenAI',
+                        authState: 'configured',
+                        authMethod: 'api_key',
+                    },
+                ],
+            ]),
+            startPlan: vi.fn(),
+            startRun: vi.fn().mockResolvedValue({
+                accepted: false,
+                message: 'Nope',
+            }),
+            onPromptCleared: vi.fn(),
+            onPlanStarted: vi.fn(),
+            onRunStarted: vi.fn(),
+            onRunStartRequested,
+            onRunStartFinished,
+            onError: vi.fn(),
+        });
+
+        expect(onRunStartRequested).toHaveBeenCalledWith({
+            sessionId: 'sess_test',
+            prompt: 'Ship it',
+        });
+        expect(onRunStartFinished).toHaveBeenCalledOnce();
+    });
+
     it('formats typed rejected run-start actions without parsing backend messages', async () => {
         const onError = vi.fn();
 

@@ -3,7 +3,9 @@ import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 
 import {
     type ConversationTanstackMessage,
+    projectOptimisticConversationUserMessage,
 } from '@/web/components/conversation/messages/tanstackMessageBridge';
+import type { OptimisticConversationUserMessage } from '@/web/components/conversation/messages/optimisticUserMessage';
 import {
     applyRuntimeEventToTanstackTranscriptState,
     hydrateTanstackTranscriptState,
@@ -27,8 +29,10 @@ function deriveChatSessionId(messages: MessageRecord[]): string {
 }
 
 export function useConversationTanstackMessages(input: {
+    sessionId?: string;
     messages: MessageRecord[];
     partsByMessageId: Map<string, MessagePartRecord[]>;
+    optimisticUserMessage?: OptimisticConversationUserMessage;
 }): ConversationTanstackMessage[] {
     const runtimeEvents = useRuntimeEventStreamStore((state) => state.events);
     const baselineState = useMemo(
@@ -37,7 +41,7 @@ export function useConversationTanstackMessages(input: {
     );
     const baselineMessages = useMemo(() => projectTanstackTranscriptState(baselineState), [baselineState]);
     const chat = useChat({
-        id: deriveChatSessionId(input.messages),
+        id: input.sessionId ?? deriveChatSessionId(input.messages),
         connection: noOpConnection,
         initialMessages: baselineMessages.map((message) => message.uiMessage),
     });
@@ -116,11 +120,18 @@ export function useConversationTanstackMessages(input: {
     return useMemo(
         () => {
             const uiMessagesById = new Map(chatMessages.map((message) => [message.id, message]));
-            return projectTanstackTranscriptState(transcriptState).map((message) => {
+            const projectedMessages = projectTanstackTranscriptState(transcriptState).map((message) => {
                 const uiMessage = uiMessagesById.get(message.id);
                 return uiMessage ? { ...message, uiMessage } : message;
             });
+
+            const resolvedSessionId = transcriptState.sessionId ?? input.sessionId ?? null;
+            if (!input.optimisticUserMessage || resolvedSessionId !== input.optimisticUserMessage.sessionId) {
+                return projectedMessages;
+            }
+
+            return [...projectedMessages, projectOptimisticConversationUserMessage(input.optimisticUserMessage)];
         },
-        [chatMessages, transcriptState]
+        [chatMessages, input.optimisticUserMessage, input.sessionId, transcriptState]
     );
 }

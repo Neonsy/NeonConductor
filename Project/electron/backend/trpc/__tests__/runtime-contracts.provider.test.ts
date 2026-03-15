@@ -1745,6 +1745,14 @@ describe('runtime contracts: provider and account flows', () => {
         if (!started.accepted) {
             throw new Error('Expected Kilo-routed Gemini run to start.');
         }
+        expect(
+            started.initialMessages.messageParts.some(
+                (part) =>
+                    part.partType === 'status' &&
+                    part.payload['code'] === 'received' &&
+                    part.payload['label'] === 'Agent received message'
+            )
+        ).toBe(true);
 
         await waitForRunStatus(caller, profileId, created.session.id, 'completed');
         const runs = await caller.session.listRuns({
@@ -1770,6 +1778,11 @@ describe('runtime contracts: provider and account flows', () => {
             payloadJson: string;
         }>;
 
+        expect(assistantParts[0]?.partType).toBe('status');
+        expect(JSON.parse(assistantParts[0]?.payloadJson ?? '{}')).toMatchObject({
+            code: 'received',
+            label: 'Agent received message',
+        });
         expect(assistantParts.some((part) => part.partType === 'reasoning_summary')).toBe(true);
         const reasoningSummaryPart = assistantParts.find((part) => part.partType === 'reasoning_summary');
         expect(reasoningSummaryPart).toBeDefined();
@@ -1783,6 +1796,125 @@ describe('runtime contracts: provider and account flows', () => {
             detailFormat: 'google-gemini-v1',
             detailIndex: 0,
         });
+    });
+
+    it('fails runs that never stream a first output chunk and persists stalled lifecycle status parts', async () => {
+        const caller = createCaller();
+        vi.useFakeTimers();
+
+        try {
+            vi.stubGlobal(
+                'fetch',
+                vi.fn((_input: unknown, init?: RequestInit) => {
+                    return new Promise<Response>((_resolve, reject) => {
+                        const signal = init?.signal;
+                        if (!signal) {
+                            return;
+                        }
+
+                        if (signal.aborted) {
+                            reject(new DOMException('Aborted', 'AbortError'));
+                            return;
+                        }
+
+                        signal.addEventListener(
+                            'abort',
+                            () => {
+                                reject(new DOMException('Aborted', 'AbortError'));
+                            },
+                            { once: true }
+                        );
+                    });
+                })
+            );
+
+            const configured = await caller.provider.setApiKey({
+                profileId,
+                providerId: 'openai',
+                apiKey: 'openai-no-output-timeout-key',
+            });
+            expect(configured.success).toBe(true);
+
+            const created = await createSessionInScope(caller, profileId, {
+                scope: 'detached',
+                title: 'No output timeout thread',
+                kind: 'local',
+            });
+
+            const started = await caller.session.startRun({
+                profileId,
+                sessionId: created.session.id,
+                prompt: 'Start but never respond',
+                topLevelTab: 'chat',
+                modeKey: 'chat',
+                runtimeOptions: defaultRuntimeOptions,
+                providerId: 'openai',
+                modelId: 'openai/gpt-5',
+            });
+            expect(started.accepted).toBe(true);
+            if (!started.accepted) {
+                throw new Error('Expected no-output run to be accepted before timing out.');
+            }
+
+            expect(
+                started.initialMessages.messageParts.some(
+                    (part) =>
+                        part.partType === 'status' &&
+                        part.payload['code'] === 'received' &&
+                        part.payload['label'] === 'Agent received message'
+                )
+            ).toBe(true);
+
+            await vi.advanceTimersByTimeAsync(10_000);
+
+            const stalledMessages = await caller.session.listMessages({
+                profileId,
+                sessionId: created.session.id,
+            });
+            expect(
+                stalledMessages.messageParts.some(
+                    (part) =>
+                        part.partType === 'status' &&
+                        part.payload['code'] === 'stalled' &&
+                        part.payload['label'] === 'Still waiting for the first response chunk...'
+                )
+            ).toBe(true);
+
+            await vi.advanceTimersByTimeAsync(20_000);
+
+            const runs = await caller.session.listRuns({
+                profileId,
+                sessionId: created.session.id,
+            });
+            expect(runs.runs[0]?.status).toBe('error');
+            expect(runs.runs[0]?.errorCode).toBe('provider_first_output_timeout');
+            expect(runs.runs[0]?.errorMessage).toContain('30 seconds');
+
+            const timedOutMessages = await caller.session.listMessages({
+                profileId,
+                sessionId: created.session.id,
+            });
+            expect(
+                timedOutMessages.messageParts.some(
+                    (part) =>
+                        part.partType === 'status' &&
+                        part.payload['code'] === 'failed_before_output' &&
+                        part.payload['label'] === 'Agent timed out before sending the first response chunk.'
+                )
+            ).toBe(true);
+
+            const status = await caller.session.status({
+                profileId,
+                sessionId: created.session.id,
+            });
+            expect(status.found).toBe(true);
+            if (!status.found) {
+                throw new Error('Expected session status to be available after timeout.');
+            }
+            expect(status.session.runStatus).toBe('error');
+        } finally {
+            vi.useRealTimers();
+        }
     });
 
     it('round-trips connection profile base URL overrides through provider settings contracts', async () => {

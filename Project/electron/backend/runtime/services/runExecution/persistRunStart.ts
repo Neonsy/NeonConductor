@@ -1,8 +1,14 @@
 import { messageMediaStore, messageStore, runStore, sessionStore } from '@/app/backend/persistence/stores';
+import { createAssistantStatusPartPayload } from '@/app/backend/runtime/contracts/types/messagePart';
 import { createEntityId } from '@/app/backend/runtime/identity/entityIds';
 import { eventMetadata } from '@/app/backend/runtime/services/common/logContext';
 import { decodeAttachmentBytes } from '@/app/backend/runtime/services/runExecution/contextParts';
-import { emitCacheResolutionEvent, emitTransportSelectionEvent } from '@/app/backend/runtime/services/runExecution/eventing';
+import {
+    emitCacheResolutionEvent,
+    emitMessageCreatedEvent,
+    emitMessagePartAppendedEvent,
+    emitTransportSelectionEvent,
+} from '@/app/backend/runtime/services/runExecution/eventing';
 import type { PreparedRunStart, StartRunInput } from '@/app/backend/runtime/services/runExecution/types';
 import { runtimeStatusEvent } from '@/app/backend/runtime/services/runtimeEventEnvelope';
 import { runtimeEventLogService } from '@/app/backend/runtime/services/runtimeEventLog';
@@ -42,13 +48,26 @@ export async function persistRunStart(input: {
         runId: run.id,
         role: 'user',
     });
+    await emitMessageCreatedEvent({
+        runId: run.id,
+        profileId: input.input.profileId,
+        sessionId: input.input.sessionId,
+        message: userMessage,
+    });
     if (input.input.prompt.trim().length > 0) {
-        await messageStore.appendPart({
+        const userTextPart = await messageStore.appendPart({
             messageId: userMessage.id,
             partType: 'text',
             payload: {
                 text: input.input.prompt,
             },
+        });
+        await emitMessagePartAppendedEvent({
+            runId: run.id,
+            profileId: input.input.profileId,
+            sessionId: input.input.sessionId,
+            messageId: userMessage.id,
+            part: userTextPart,
         });
     }
 
@@ -74,6 +93,13 @@ export async function persistRunStart(input: {
             sha256: attachment.sha256,
             bytes: decodeAttachmentBytes(attachment),
         });
+        await emitMessagePartAppendedEvent({
+            runId: run.id,
+            profileId: input.input.profileId,
+            sessionId: input.input.sessionId,
+            messageId: userMessage.id,
+            part: imagePart,
+        });
     }
 
     const assistantMessage = await messageStore.createMessage({
@@ -82,50 +108,71 @@ export async function persistRunStart(input: {
         runId: run.id,
         role: 'assistant',
     });
+    await emitMessageCreatedEvent({
+        runId: run.id,
+        profileId: input.input.profileId,
+        sessionId: input.input.sessionId,
+        message: assistantMessage,
+    });
+    const assistantReceivedStatusPart = await messageStore.appendPart({
+        messageId: assistantMessage.id,
+        partType: 'status',
+        payload: createAssistantStatusPartPayload({
+            code: 'received',
+            label: 'Agent received message',
+        }),
+    });
+    await emitMessagePartAppendedEvent({
+        runId: run.id,
+        profileId: input.input.profileId,
+        sessionId: input.input.sessionId,
+        messageId: assistantMessage.id,
+        part: assistantReceivedStatusPart,
+    });
 
     await runtimeEventLogService.append(
         runtimeStatusEvent({
-        entityType: 'run',
-        domain: 'run',
-        entityId: run.id,
-        eventType: 'run.mode.context',
-        payload: {
-            runId: run.id,
-            sessionId: input.input.sessionId,
-            profileId: input.input.profileId,
-            topLevelTab: input.input.topLevelTab,
-            modeKey: input.input.modeKey,
-            workspaceFingerprint: input.input.workspaceFingerprint ?? null,
-            mode: {
-                id: input.prepared.resolvedMode.mode.id,
-                label: input.prepared.resolvedMode.mode.label,
-                executionPolicy: input.prepared.resolvedMode.mode.executionPolicy,
+            entityType: 'run',
+            domain: 'run',
+            entityId: run.id,
+            eventType: 'run.mode.context',
+            payload: {
+                runId: run.id,
+                sessionId: input.input.sessionId,
+                profileId: input.input.profileId,
+                topLevelTab: input.input.topLevelTab,
+                modeKey: input.input.modeKey,
+                workspaceFingerprint: input.input.workspaceFingerprint ?? null,
+                mode: {
+                    id: input.prepared.resolvedMode.mode.id,
+                    label: input.prepared.resolvedMode.mode.label,
+                    executionPolicy: input.prepared.resolvedMode.mode.executionPolicy,
+                },
             },
-        },
-        ...eventMetadata({
-            requestId: input.input.requestId,
-            correlationId: input.input.correlationId,
-            origin: 'runtime.runExecution.startRun',
-        }),
+            ...eventMetadata({
+                requestId: input.input.requestId,
+                correlationId: input.input.correlationId,
+                origin: 'runtime.runExecution.startRun',
+            }),
         })
     );
 
     await runtimeEventLogService.append(
         runtimeStatusEvent({
-        entityType: 'run',
-        domain: 'run',
-        entityId: run.id,
-        eventType: 'run.started',
-        payload: {
-            run,
-            sessionId: input.input.sessionId,
-            profileId: input.input.profileId,
-        },
-        ...eventMetadata({
-            requestId: input.input.requestId,
-            correlationId: input.input.correlationId,
-            origin: 'runtime.runExecution.startRun',
-        }),
+            entityType: 'run',
+            domain: 'run',
+            entityId: run.id,
+            eventType: 'run.started',
+            payload: {
+                run,
+                sessionId: input.input.sessionId,
+                profileId: input.input.profileId,
+            },
+            ...eventMetadata({
+                requestId: input.input.requestId,
+                correlationId: input.input.correlationId,
+                origin: 'runtime.runExecution.startRun',
+            }),
         })
     );
 

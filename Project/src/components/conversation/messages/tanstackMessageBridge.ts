@@ -1,16 +1,18 @@
 import type { MessagePart, ToolCallPart, ToolResultPart, UIMessage } from '@tanstack/ai';
 
 import { buildMessageCopyPayloads } from '@/web/components/conversation/messages/messageCopy';
+import type { OptimisticConversationUserMessage } from '@/web/components/conversation/messages/optimisticUserMessage';
 import { isEntityId } from '@/web/components/conversation/shell/workspace/helpers';
 
 import type { MessagePartRecord, MessageRecord } from '@/app/backend/persistence/types';
+import { parseAssistantStatusPartPayload } from '@/shared/contracts/types/messagePart';
 import { readImageMimeType } from '@/app/shared/imageMimeType';
 
 import type { EntityId } from '@/shared/contracts';
 
 export interface ConversationTanstackMessage {
     id: string;
-    runId: MessageRecord['runId'];
+    runId: string;
     role: MessageRecord['role'];
     createdAt: string;
     uiMessage: UIMessage;
@@ -18,6 +20,8 @@ export interface ConversationTanstackMessage {
     plainCopyText?: string;
     rawCopyText?: string;
     editableText?: string;
+    deliveryState?: 'sending';
+    isOptimistic?: boolean;
 }
 
 export type ConversationTanstackRenderPart =
@@ -52,6 +56,13 @@ export type ConversationTanstackRenderPart =
           kind: 'tool_result';
           callId: string;
           outputText: string;
+      }
+    | {
+          key: string;
+          kind: 'status';
+          code: 'received' | 'stalled' | 'failed_before_output';
+          label: string;
+          elapsedMs?: number;
       };
 
 interface ConversationImageMetadata {
@@ -115,6 +126,22 @@ function buildProjectedParts(message: MessageRecord, parts: MessagePartRecord[])
                 kind: 'reasoning',
                 text,
                 providerLimitedReasoning: part.partType === 'reasoning_summary',
+            });
+            continue;
+        }
+
+        if (part.partType === 'status' && message.role === 'assistant') {
+            const statusPayload = parseAssistantStatusPartPayload(part.payload);
+            if (!statusPayload) {
+                continue;
+            }
+
+            projected.push({
+                key: part.id,
+                kind: 'status',
+                code: statusPayload.code,
+                label: statusPayload.label,
+                ...(statusPayload.elapsedMs !== undefined ? { elapsedMs: statusPayload.elapsedMs } : {}),
             });
             continue;
         }
@@ -215,6 +242,10 @@ function buildMessageParts(projectedParts: ConversationTanstackRenderPart[]): Me
             continue;
         }
 
+        if (part.kind !== 'text') {
+            continue;
+        }
+
         projected.push({
             type: 'text',
             content: part.text,
@@ -295,6 +326,56 @@ function buildCopyPayloadBody(
     }
 
     return body;
+}
+
+export function projectOptimisticConversationUserMessage(
+    input: OptimisticConversationUserMessage
+): ConversationTanstackMessage {
+    const prompt = input.prompt.trim();
+    const textPartKey = `${input.id}_text`;
+    const renderParts: ConversationTanstackRenderPart[] =
+        prompt.length > 0
+            ? [
+                  {
+                      key: textPartKey,
+                      kind: 'text',
+                      text: prompt,
+                  },
+              ]
+            : [];
+    const uiMessage: UIMessage = {
+        id: input.id,
+        role: 'user',
+        createdAt: new Date(input.createdAt),
+        parts: buildMessageParts(renderParts),
+    };
+    const copyPayloads = buildMessageCopyPayloads({
+        body:
+            prompt.length > 0
+                ? [
+                      {
+                          id: textPartKey,
+                          type: 'user_text',
+                          text: prompt,
+                          providerLimitedReasoning: false,
+                      },
+                  ]
+                : [],
+    });
+
+    return {
+        id: input.id,
+        runId: input.runId,
+        role: 'user',
+        createdAt: input.createdAt,
+        uiMessage,
+        renderParts,
+        ...(copyPayloads.plainText ? { plainCopyText: copyPayloads.plainText } : {}),
+        ...(copyPayloads.rawText ? { rawCopyText: copyPayloads.rawText } : {}),
+        ...(prompt.length > 0 ? { editableText: prompt } : {}),
+        deliveryState: 'sending',
+        isOptimistic: true,
+    };
 }
 
 export function projectConversationTanstackMessage(

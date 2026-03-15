@@ -7,9 +7,11 @@ interface WorkspacePrimaryColumnProps {
     profileId: SessionWorkspacePanelProps['profileId'];
     profiles: SessionWorkspacePanelProps['profiles'];
     selectedProfileId: SessionWorkspacePanelProps['selectedProfileId'];
+    selectedSessionId: SessionWorkspacePanelProps['selectedSessionId'];
     messages: SessionWorkspacePanelProps['messages'];
     partsByMessageId: SessionWorkspacePanelProps['partsByMessageId'];
     runs: SessionWorkspacePanelProps['runs'];
+    optimisticUserMessage: SessionWorkspacePanelProps['optimisticUserMessage'];
     pendingImages: SessionWorkspacePanelProps['pendingImages'];
     isStartingRun: SessionWorkspacePanelProps['isStartingRun'];
     selectedProviderId: SessionWorkspacePanelProps['selectedProviderId'];
@@ -55,9 +57,11 @@ export function WorkspacePrimaryColumn({
     profileId,
     profiles,
     selectedProfileId,
+    selectedSessionId,
     messages,
     partsByMessageId,
     runs,
+    optimisticUserMessage,
     pendingImages,
     isStartingRun,
     selectedProviderId,
@@ -107,6 +111,8 @@ export function WorkspacePrimaryColumn({
                         messages={messages}
                         partsByMessageId={partsByMessageId}
                         runs={runs}
+                        {...(selectedSessionId ? { selectedSessionId } : {})}
+                        {...(optimisticUserMessage ? { optimisticUserMessage } : {})}
                         {...(onEditMessage ? { onEditMessage } : {})}
                         {...(onBranchFromMessage ? { onBranchFromMessage } : {})}
                     />

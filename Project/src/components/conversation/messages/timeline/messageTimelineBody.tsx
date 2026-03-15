@@ -27,20 +27,27 @@ export function MessageTimelineBody({
     }
 
     if (entry.body.length === 0) {
-        return <p className='text-muted-foreground'>No renderable message payload.</p>;
+        return entry.deliveryState === 'sending' ? (
+            <MessageDeliveryRow label='Sending...' />
+        ) : (
+            <p className='text-muted-foreground'>No renderable message payload.</p>
+        );
     }
 
     return (
         <>
             {entry.body.map((item) => (
                 <div key={item.id} className='space-y-2'>
-                    {'text' in item ? (
+                    {'label' in item ? (
+                        <AssistantStatusRow item={item} />
+                    ) : 'text' in item ? (
                         <TimelineMessageTextBlock item={item} />
                     ) : (
                         <MessageMediaPreview profileId={profileId} item={item} />
                     )}
                 </div>
             ))}
+            {entry.deliveryState === 'sending' ? <MessageDeliveryRow label='Sending...' /> : null}
         </>
     );
 }
@@ -65,4 +72,24 @@ function TimelineMessageTextBlock({ item }: { item: Extract<MessageTimelineBodyE
             <MarkdownContent markdown={item.text} />
         </>
     );
+}
+
+function AssistantStatusRow({ item }: { item: Extract<MessageTimelineBodyEntry, { type: 'assistant_status' }> }) {
+    const className =
+        item.code === 'failed_before_output'
+            ? 'border-destructive/30 bg-destructive/5 text-destructive'
+            : 'border-border/70 bg-background/60 text-muted-foreground';
+
+    return (
+        <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium ${className}`}>
+            <span
+                className={`h-1.5 w-1.5 rounded-full ${item.code === 'failed_before_output' ? 'bg-current' : 'animate-pulse bg-current'}`}
+            />
+            <span>{item.label}</span>
+        </div>
+    );
+}
+
+function MessageDeliveryRow({ label }: { label: string }) {
+    return <p className='text-muted-foreground text-xs font-medium'>{label}</p>;
 }

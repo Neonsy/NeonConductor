@@ -12,6 +12,7 @@ export type MessageFlowTextEntryType =
     | 'assistant_tool_call'
     | 'tool_result';
 export type MessageFlowImageEntryType = 'assistant_image' | 'user_image' | 'system_image';
+export type MessageFlowStatusEntryType = 'assistant_status';
 
 export type MessageFlowBodyEntry =
     | {
@@ -28,6 +29,13 @@ export type MessageFlowBodyEntry =
           mimeType: 'image/jpeg' | 'image/png' | 'image/webp';
           width: number;
           height: number;
+      }
+    | {
+          id: string;
+          type: MessageFlowStatusEntryType;
+          code: 'received' | 'stalled' | 'failed_before_output';
+          label: string;
+          elapsedMs?: number;
       };
 
 export interface MessageFlowMessage {
@@ -39,6 +47,8 @@ export interface MessageFlowMessage {
     plainCopyText?: string;
     rawCopyText?: string;
     editableText?: string;
+    deliveryState?: 'sending';
+    isOptimistic?: boolean;
 }
 
 export interface MessageFlowTurn {
@@ -89,8 +99,20 @@ function mapTextEntryType(
 
 function buildBodyEntries(message: ConversationTanstackMessage): MessageFlowBodyEntry[] {
     const projected: MessageFlowBodyEntry[] = [];
+    const assistantStatusEntries: Extract<MessageFlowBodyEntry, { type: 'assistant_status' }>[] = [];
 
     for (const part of message.renderParts) {
+        if (part.kind === 'status' && message.role === 'assistant') {
+            assistantStatusEntries.push({
+                id: part.key,
+                type: 'assistant_status',
+                code: part.code,
+                label: part.label,
+                ...(part.elapsedMs !== undefined ? { elapsedMs: part.elapsedMs } : {}),
+            });
+            continue;
+        }
+
         if (part.kind === 'image') {
             const imageEntryType = mapImageEntryType(message.role);
 
@@ -171,6 +193,10 @@ function buildBodyEntries(message: ConversationTanstackMessage): MessageFlowBody
         });
     }
 
+    if (projected.length === 0 && assistantStatusEntries.length > 0) {
+        return [assistantStatusEntries[assistantStatusEntries.length - 1]!];
+    }
+
     return projected;
 }
 
@@ -185,6 +211,8 @@ function buildFlowMessage(message: ConversationTanstackMessage): MessageFlowMess
         ...(message.plainCopyText ? { plainCopyText: message.plainCopyText } : {}),
         ...(message.rawCopyText ? { rawCopyText: message.rawCopyText } : {}),
         ...(message.editableText ? { editableText: message.editableText } : {}),
+        ...(message.deliveryState ? { deliveryState: message.deliveryState } : {}),
+        ...(message.isOptimistic ? { isOptimistic: message.isOptimistic } : {}),
     };
 }
 

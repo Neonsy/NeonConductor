@@ -69,7 +69,7 @@ function readStreamingText(part: ProviderRuntimePart): string | null {
     return typeof text === 'string' && text.length > 0 ? text : null;
 }
 
-async function emitMessagePartAppendedEvent(input: {
+export async function emitMessagePartAppendedEvent(input: {
     runId: string;
     profileId: string;
     sessionId: string;
@@ -93,7 +93,7 @@ async function emitMessagePartAppendedEvent(input: {
     );
 }
 
-async function emitMessagePartUpdatedEvent(input: {
+export async function emitMessagePartUpdatedEvent(input: {
     runId: string;
     profileId: string;
     sessionId: string;

@@ -52,11 +52,19 @@ interface FlowMessageActionBarProps {
 }
 
 export function getFlowMessageCapabilities(message: MessageFlowMessage) {
+    const hasBranchableAssistantContent = message.body.some((item) => item.type !== 'assistant_status');
+
     return {
-        canCopy: typeof message.plainCopyText === 'string' && message.plainCopyText.length > 0,
-        canEdit: message.role === 'user' && typeof message.editableText === 'string' && message.editableText.length > 0,
+        canCopy:
+            !message.isOptimistic && typeof message.plainCopyText === 'string' && message.plainCopyText.length > 0,
+        canEdit:
+            !message.isOptimistic &&
+            message.role === 'user' &&
+            typeof message.editableText === 'string' &&
+            message.editableText.length > 0,
         canBranch:
-            message.role === 'user' || (message.role === 'assistant' && message.body.length > 0),
+            !message.isOptimistic &&
+            (message.role === 'user' || (message.role === 'assistant' && hasBranchableAssistantContent)),
     };
 }
 

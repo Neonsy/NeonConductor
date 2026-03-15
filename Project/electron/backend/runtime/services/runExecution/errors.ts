@@ -16,6 +16,7 @@ export type RunExecutionErrorCode =
     | 'provider_not_supported'
     | 'provider_model_not_available'
     | 'provider_model_missing'
+    | 'provider_first_output_timeout'
     | 'provider_request_failed'
     | 'provider_request_unavailable';
 

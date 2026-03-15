@@ -6,6 +6,7 @@ import {
     isWithinBottomThreshold,
     type MessageFlowMessage,
 } from '@/web/components/conversation/messages/messageFlowModel';
+import type { OptimisticConversationUserMessage } from '@/web/components/conversation/messages/optimisticUserMessage';
 import { useConversationTanstackMessages } from '@/web/components/conversation/messages/useConversationTanstackMessages';
 import { Button } from '@/web/components/ui/button';
 
@@ -13,30 +14,36 @@ import type { MessagePartRecord, MessageRecord, RunRecord } from '@/app/backend/
 
 interface MessageFlowPanelProps {
     profileId: string;
+    selectedSessionId?: string;
     messages: MessageRecord[];
     partsByMessageId: Map<string, MessagePartRecord[]>;
     runs: RunRecord[];
+    optimisticUserMessage?: OptimisticConversationUserMessage;
     onEditMessage?: (entry: MessageFlowMessage) => void;
     onBranchFromMessage?: (entry: MessageFlowMessage) => void;
 }
 
 export function MessageFlowPanel({
     profileId,
+    selectedSessionId,
     messages,
     partsByMessageId,
     runs,
+    optimisticUserMessage,
     onEditMessage,
     onBranchFromMessage,
 }: MessageFlowPanelProps) {
     const tanstackMessages = useConversationTanstackMessages({
         messages,
         partsByMessageId,
+        ...(selectedSessionId ? { sessionId: selectedSessionId } : {}),
+        ...(optimisticUserMessage ? { optimisticUserMessage } : {}),
     });
     const turns = buildMessageFlowTurns(tanstackMessages);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const [isAutoStickEnabled, setIsAutoStickEnabled] = useState(true);
     const [isNearBottom, setIsNearBottom] = useState(true);
-    const runsById = new Map(runs.map((run) => [run.id, run]));
+    const runsById = new Map<string, RunRecord>(runs.map((run) => [run.id, run]));
 
     useEffect(() => {
         if (turns.length === 0) {

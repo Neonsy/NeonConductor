@@ -19,6 +19,7 @@ export function SessionWorkspacePanel({
     partsByMessageId,
     selectedSessionId,
     selectedRunId,
+    optimisticUserMessage,
     executionPreset,
     workspaceScope,
     pendingPermissions,
@@ -187,9 +188,11 @@ export function SessionWorkspacePanel({
                 profileId={profileId}
                 profiles={profiles}
                 selectedProfileId={selectedProfileId}
+                selectedSessionId={selectedSessionId}
                 messages={messages}
                 partsByMessageId={partsByMessageId}
                 runs={runs}
+                optimisticUserMessage={optimisticUserMessage}
                 pendingImages={pendingImages}
                 isStartingRun={isStartingRun}
                 selectedProviderId={selectedProviderId}

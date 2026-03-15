@@ -39,8 +39,9 @@ export function MessageTimelineHeader({
     onEditMessage,
     onBranchFromMessage,
 }: MessageTimelineHeaderProps) {
-    const canEdit = entry.role === 'user' && typeof entry.editableText === 'string' && entry.editableText.length > 0;
-    const canCopy = typeof entry.plainCopyText === 'string' && entry.plainCopyText.length > 0;
+    const canEdit =
+        !entry.isOptimistic && entry.role === 'user' && typeof entry.editableText === 'string' && entry.editableText.length > 0;
+    const canCopy = !entry.isOptimistic && typeof entry.plainCopyText === 'string' && entry.plainCopyText.length > 0;
 
     return (
         <header className='mb-2 flex items-center justify-between gap-2'>

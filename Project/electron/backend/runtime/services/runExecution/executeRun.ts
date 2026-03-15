@@ -12,6 +12,7 @@ import type {
     ProviderRuntimeTransportSelection,
     ProviderRuntimeUsage,
 } from '@/app/backend/providers/types';
+import { createAssistantStatusPartPayload } from '@/app/backend/runtime/contracts/types/messagePart';
 import type { EntityId, KiloDynamicSort, ProviderAuthMethod, RuntimeProviderId } from '@/app/backend/runtime/contracts';
 import type { OpenAIExecutionMode } from '@/app/backend/runtime/contracts';
 import { InvariantError } from '@/app/backend/runtime/services/common/fatalErrors';
@@ -19,6 +20,7 @@ import {
     errRunExecution,
     okRunExecution,
     type RunExecutionResult,
+    type RunExecutionErrorCode,
 } from '@/app/backend/runtime/services/runExecution/errors';
 import {
     createMessagePartRecorder,
@@ -65,6 +67,8 @@ interface ToolResultContext {
 }
 
 const MAX_AGENT_TOOL_ROUNDS = 12;
+const FIRST_OUTPUT_STALLED_MS = 10_000;
+const FIRST_OUTPUT_TIMEOUT_MS = 30_000;
 type ProviderContextMessage = NonNullable<ProviderRuntimeInput['contextMessages']>[number];
 type ProviderContextPart = ProviderContextMessage['parts'][number];
 
@@ -87,6 +91,38 @@ function mapProviderAdapterError(input: {
     }
 
     return errRunExecution('provider_request_failed', input.message);
+}
+
+function mapAbortToExecutionErrorCode(signal: AbortSignal): RunExecutionErrorCode {
+    return signal.reason instanceof DOMException && signal.reason.name === 'AbortError'
+        ? 'provider_request_unavailable'
+        : 'provider_request_failed';
+}
+
+function isRenderableAssistantOutputPart(part: ProviderRuntimePart): boolean {
+    return (
+        part.partType === 'text' ||
+        part.partType === 'reasoning' ||
+        part.partType === 'reasoning_summary' ||
+        part.partType === 'image' ||
+        part.partType === 'tool_call'
+    );
+}
+
+async function appendAssistantLifecycleStatusPart(input: {
+    partRecorder: ReturnType<typeof createMessagePartRecorder>;
+    code: 'received' | 'stalled' | 'failed_before_output';
+    label: string;
+    elapsedMs?: number;
+}): Promise<void> {
+    await input.partRecorder.recordPart({
+        partType: 'status',
+        payload: createAssistantStatusPartPayload({
+            code: input.code,
+            label: input.label,
+            ...(input.elapsedMs !== undefined ? { elapsedMs: input.elapsedMs } : {}),
+        }),
+    });
 }
 
 export interface ExecuteRunInput {
@@ -383,6 +419,8 @@ export async function executeRun(input: ExecuteRunInput): Promise<RunExecutionRe
     let usage: UsageAccumulator = {};
     let transportSelection = input.transportSelection;
     let assistantMessageId = input.assistantMessageId;
+    let firstRenderableOutputReceived = false;
+    let firstOutputTimedOut = false;
     const conversationMessages: ProviderContextMessage[] =
         resolvedContextMessages && resolvedContextMessages.length > 0
             ? [...resolvedContextMessages]
@@ -405,6 +443,44 @@ export async function executeRun(input: ExecuteRunInput): Promise<RunExecutionRe
             sessionId: input.sessionId,
             messageId: assistantMessageId,
         });
+        const timeoutController = new AbortController();
+        const timeoutSignal = firstRenderableOutputReceived
+            ? input.signal
+            : AbortSignal.any([input.signal, timeoutController.signal]);
+        const stalledTimer: ReturnType<typeof setTimeout> | null =
+            firstRenderableOutputReceived || roundIndex > 0
+                ? null
+                : globalThis.setTimeout(() => {
+                      if (firstRenderableOutputReceived || firstOutputTimedOut || input.signal.aborted) {
+                          return;
+                      }
+
+                      void appendAssistantLifecycleStatusPart({
+                          partRecorder,
+                          code: 'stalled',
+                          label: 'Still waiting for the first response chunk...',
+                          elapsedMs: FIRST_OUTPUT_STALLED_MS,
+                      }).catch(() => undefined);
+                  }, FIRST_OUTPUT_STALLED_MS);
+        const timeoutTimer: ReturnType<typeof setTimeout> | null =
+            firstRenderableOutputReceived || roundIndex > 0
+                ? null
+                : globalThis.setTimeout(() => {
+                      if (firstRenderableOutputReceived || firstOutputTimedOut || input.signal.aborted) {
+                          return;
+                      }
+
+                      firstOutputTimedOut = true;
+                      timeoutController.abort();
+                  }, FIRST_OUTPUT_TIMEOUT_MS);
+        const disposeFirstOutputWatchdog = () => {
+            if (stalledTimer !== null) {
+                globalThis.clearTimeout(stalledTimer);
+            }
+            if (timeoutTimer !== null) {
+                globalThis.clearTimeout(timeoutTimer);
+            }
+        };
 
         const runtimeInput: ProviderRuntimeInput = {
             profileId: input.profileId,
@@ -430,13 +506,17 @@ export async function executeRun(input: ExecuteRunInput): Promise<RunExecutionRe
                     ...(input.openAIExecutionMode ? { openAIExecutionMode: input.openAIExecutionMode } : {}),
                 },
             },
-            signal: input.signal,
+            signal: timeoutSignal,
         };
 
         const streamResult = await adapter.streamCompletion(
             runtimeInput,
             {
                 onPart: async (part) => {
+                    if (!firstRenderableOutputReceived && isRenderableAssistantOutputPart(part)) {
+                        firstRenderableOutputReceived = true;
+                        disposeFirstOutputWatchdog();
+                    }
                     await partRecorder.recordPart(part);
                     assistantCollector.recordPart(part);
                 },
@@ -476,7 +556,29 @@ export async function executeRun(input: ExecuteRunInput): Promise<RunExecutionRe
                 },
             }
         );
+        disposeFirstOutputWatchdog();
         if (streamResult.isErr()) {
+            if (!firstRenderableOutputReceived && firstOutputTimedOut && !input.signal.aborted) {
+                await appendAssistantLifecycleStatusPart({
+                    partRecorder,
+                    code: 'failed_before_output',
+                    label: 'Agent timed out before sending the first response chunk.',
+                    elapsedMs: FIRST_OUTPUT_TIMEOUT_MS,
+                });
+
+                return errRunExecution(
+                    'provider_first_output_timeout',
+                    `Agent did not begin streaming a response within ${String(FIRST_OUTPUT_TIMEOUT_MS / 1000)} seconds.`
+                );
+            }
+
+            if (!firstRenderableOutputReceived && timeoutSignal.aborted && !input.signal.aborted) {
+                return errRunExecution(
+                    mapAbortToExecutionErrorCode(timeoutSignal),
+                    streamResult.error.message
+                );
+            }
+
             return mapProviderAdapterError({
                 code: streamResult.error.code,
                 message: streamResult.error.message,
@@ -612,6 +714,16 @@ export async function executeRun(input: ExecuteRunInput): Promise<RunExecutionRe
             sessionId: input.sessionId,
             runId: input.runId,
             role: 'assistant',
+        });
+        await appendAssistantLifecycleStatusPart({
+            partRecorder: createMessagePartRecorder({
+                runId: input.runId,
+                profileId: input.profileId,
+                sessionId: input.sessionId,
+                messageId: nextAssistantMessage.id,
+            }),
+            code: 'received',
+            label: 'Agent received message',
         });
         assistantMessageId = nextAssistantMessage.id;
     }

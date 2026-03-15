@@ -138,4 +138,76 @@ describe('message timeline model', () => {
             text: '{"ok":true}',
         });
     });
+
+    it('surfaces assistant lifecycle status rows until renderable output arrives', () => {
+        const message = createMessage({ id: 'msg_assistant_status', role: 'assistant' });
+
+        const pendingEntries = buildTimelineEntries(
+            projectConversationTanstackMessages(
+                [message],
+                new Map([
+                    [
+                        message.id,
+                        [
+                            createPart({
+                                id: 'part_received',
+                                messageId: message.id,
+                                partType: 'status',
+                                payload: {
+                                    code: 'received',
+                                    label: 'Agent received message',
+                                },
+                            }),
+                        ],
+                    ],
+                ])
+            )
+        );
+
+        expect(pendingEntries[0]?.body).toEqual([
+            {
+                id: 'part_received',
+                type: 'assistant_status',
+                code: 'received',
+                label: 'Agent received message',
+            },
+        ]);
+
+        const streamedEntries = buildTimelineEntries(
+            projectConversationTanstackMessages(
+                [message],
+                new Map([
+                    [
+                        message.id,
+                        [
+                            createPart({
+                                id: 'part_received',
+                                messageId: message.id,
+                                partType: 'status',
+                                payload: {
+                                    code: 'received',
+                                    label: 'Agent received message',
+                                },
+                            }),
+                            createPart({
+                                id: 'part_text',
+                                messageId: message.id,
+                                partType: 'text',
+                                text: 'Real output',
+                            }),
+                        ],
+                    ],
+                ])
+            )
+        );
+
+        expect(streamedEntries[0]?.body).toEqual([
+            {
+                id: 'part_text',
+                type: 'assistant_text',
+                text: 'Real output',
+                providerLimitedReasoning: false,
+            },
+        ]);
+    });
 });
