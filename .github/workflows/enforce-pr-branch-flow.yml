@@ -37,6 +37,7 @@ jobs:
             const namingMarker = "<!-- pr-branch-name-warning -->";
             const isChangesetReleasePr = head.startsWith("changeset-release/");
             const isChangesetSyncPr = head.startsWith("changeset-sync/");
+            const isLaneSyncPr = head.startsWith("lane-sync/");
             const isBotPr =
               (pr.user?.type || "").toLowerCase() === "bot" ||
               (pr.user?.login || "").includes("dependabot");
@@ -51,12 +52,18 @@ jobs:
               "build",
               "ci",
               "ui-ux",
+              "hotfix",
               "proto",
             ];
+            const isHotfixBranch = new RegExp(
+              "^[^/]+/hotfix/[a-z0-9]+(?:-[a-z0-9]+)*$"
+            ).test(head);
 
             let violation = null;
             if (isChangesetSyncPr && !isBotPr) {
               violation = "`changeset-sync/*` branches are reserved for automation PRs.";
+            } else if (isLaneSyncPr && !isBotPr) {
+              violation = "`lane-sync/*` branches are reserved for automation PRs.";
             } else if (isChangesetReleasePr && !isBotPr) {
               violation = "`changeset-release/*` branches are reserved for automation PRs.";
             } else if (head === "main") {
@@ -65,10 +72,24 @@ jobs:
               violation = "`dev` can only open PRs to `prev`.";
             } else if (head === "prev" && base !== "main") {
               violation = "`prev` can only open PRs to `main`.";
-            } else if (base === "prev" && head !== "dev" && !isChangesetSyncPr) {
-              violation = "Only `dev` (or `changeset-sync/*` for automation) can open PRs to `prev`.";
-            } else if (base === "main" && head !== "prev" && !isChangesetReleasePr) {
-              violation = "Only `prev` (or `changeset-release/*` for automation) can open PRs to `main`.";
+            } else if (
+              base === "prev" &&
+              head !== "dev" &&
+              !isHotfixBranch &&
+              !isChangesetSyncPr &&
+              !isLaneSyncPr
+            ) {
+              violation =
+                "Only `dev`, `username/hotfix/*`, `changeset-sync/*`, or `lane-sync/*` can open PRs to `prev`.";
+            } else if (
+              base === "main" &&
+              head !== "prev" &&
+              !isHotfixBranch &&
+              !isChangesetReleasePr &&
+              !isLaneSyncPr
+            ) {
+              violation =
+                "Only `prev`, `username/hotfix/*`, `changeset-release/*`, or `lane-sync/*` can open PRs to `main`.";
             }
 
             const comments = await github.paginate(github.rest.issues.listComments, {
@@ -88,7 +109,8 @@ jobs:
                 head === "prev" ||
                 head === "main" ||
                 isChangesetReleasePr ||
-                isChangesetSyncPr;
+                isChangesetSyncPr ||
+                isLaneSyncPr;
               if (isFlowBranch) {
                 return;
               }
@@ -147,7 +169,7 @@ jobs:
                   "This PR doesn't match the required branch flow.",
                   "",
                   `Violation: ${violation}`,
-                  "Allowed flows: `dev -> prev`, `prev -> main`, `changeset-release/* -> main`, `changeset-sync/* -> prev|dev` (automation only).",
+                  "Allowed flows: normal named branches -> `dev`, `username/hotfix/* -> dev|prev|main`, `dev -> prev`, `prev -> main`, `changeset-release/* -> main`, `changeset-sync/* -> prev|dev` (automation only), `lane-sync/* -> dev|prev|main` (automation only).",
                   `Current flow: \`${head} -> ${base}\``,
                 ].join("\n"),
               });

@@ -14,9 +14,20 @@
 - name: "automation: dependabot"
   color: "c5def5"
   description: "Automated PR opened by Dependabot"
+- name: "automation: lane-sync"
+  color: "bfd4f2"
+  description: "Automation PR carrying a hotfix into another release lane"
+- name: "automation: changeset-cleanup"
+  color: "d4c5f9"
+  description: "Automation PR removing hotfix changesets after stable consumption"
 - name: "ignore-for-release"
   color: "6a737d"
   description: "Exclude this PR from generated release notes"
+
+# Release Routing
+- name: "release: hotfix"
+  color: "b60205"
+  description: "Direct-lane hotfix PR intended for expedited release propagation"
 
 # Issue Types
 - name: "type: bug"

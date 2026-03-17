@@ -43,8 +43,10 @@ Expected promotion path: `dev` -> `prev` -> `main`.
 - `Changeset Check` validates non-doc changes. Docs-only changes in `Project` (for example markdown/docs paths) are skipped.
 - `Changeset Check` comment includes changeset file inventories for base vs PR snapshots, PR delta (`A/M/D/R`), and total bump math (`base`, `PR-only`, `post-merge`).
 - Changes in `Project/.changeset/**` always trigger changeset validation.
-- Merged PR to `main` from `prev` touching `Project/.changeset/**`: `Changeset Version` runs and creates/updates a version PR.
+- Merged same-repo PR to `main` touching `Project/.changeset/**` runs `Changeset Version`, unless the PR is a release wrapper or cleanup-sync wrapper.
 - Merged PR to `main` that changes both `Project/package.json` and `Project/CHANGELOG.md`: stable build workflow runs and publishes.
+- Merged same-repo `hotfix` PRs trigger adjacent-hop lane sync PRs so the fix can move through the remaining long-lived branches.
+- After stable consumes a hotfix changeset on `main`, selective cleanup PRs remove only that consumed hotfix changeset from `prev` and `dev` when the file identity still matches.
 - Push tag matching `v*-alpha.*` or `v*-beta.*`: prerelease build workflow runs and publishes.
 - Create prerelease tags only when a publicly updatable build is needed: alpha (`dev`) can be cut more frequently, while beta (`prev`) should be cut only when it meaningfully supports release validation.
 - Pre-release branch guard: alpha tag commit must be contained in `dev`, beta tag commit must be contained in `prev`.
@@ -72,9 +74,11 @@ Expected promotion path: `dev` -> `prev` -> `main`.
 If you are an invited contributor with direct repo access:
 
 - Open normal work PRs to `dev`.
-- Do not target `prev` or `main` directly unless a release maintainer asks for it.
 - Use branch names in this format: `username/type/short-description`.
 - Keep `short-description` lowercase kebab-case.
+- Use `username/hotfix/short-description` when the work must target `dev`, `prev`, or `main` directly as a release hotfix.
+- Direct `hotfix` targeting for `prev` or `main` is reserved for same-repo contributors with write access.
+- `hotfix` is a branch-routing type only. Keep PR titles on the existing semantic `type:` format.
 - Use `type=proto` for demo/testing/spike branches.
 - `proto` branches are usually not merged.
 
@@ -86,6 +90,7 @@ Allowed `type` values:
 - `docs`
 - `feat`
 - `fix`
+- `hotfix`
 - `perf`
 - `refactor`
 - `test`
@@ -96,6 +101,7 @@ Examples:
 
 - `neonsy/feat/onboarding-flow`
 - `neonsy/fix/window-crash-on-startup`
+- `neonsy/hotfix/windows-installer-regression`
 - `neonsy/chore/update-eslint-config`
 - `neonsy/docs/release-process`
 - `neonsy/proto/new-sidebar-concept`
@@ -148,6 +154,14 @@ Breaking marker behavior:
 - Docs-only changes in `Project/**` (markdown/docs paths) are exempt.
 - No stable release happens from `dev` PRs.
 
+Hotfix exception:
+
+- A same-repo contributor with write access may open `username/hotfix/short-description` directly to `dev`, `prev`, or `main`.
+- Any non-doc hotfix must include a changeset even when it targets `prev` or `main` directly.
+- The hotfix changeset is treated as stable-release material and must be consumed exactly once on `main`.
+- Automation opens adjacent-hop sync PRs so the hotfix can move across the other long-lived lanes.
+- After `main` consumes the hotfix changeset in the stable version flow, automation selectively cleans that consumed changeset from `prev` and `dev` without touching unrelated promotion-flow changesets.
+
 2. Publish alpha from `dev`.
 
 - Create and push an alpha tag: `vX.Y.Z-alpha.N`.
@@ -176,9 +190,10 @@ Breaking marker behavior:
 - Docs-only changes are skipped by the check.
 - `.changeset` and non-doc code/config changes are validated.
 
-6. Merge `prev` into `main` with pending `.changeset` files.
+6. Merge a same-repo PR into `main` with pending `.changeset` files.
 
 - `Changeset Version` workflow runs on merged PR close event targeting `main`.
+- This includes normal `prev -> main` promotions, direct `hotfix -> main` merges, and lane-sync PRs that carry a hotfix changeset into `main`.
 - It runs `changeset version` and opens or updates a version PR.
 
 7. Merge the version PR.
@@ -190,6 +205,7 @@ Versioning notes:
 
 - For stable releases, do not manually edit version in `Project/package.json`. It is owned by release automation (the `Changeset Version` workflow and version PRs).
 - For alpha/beta prereleases, the tag version is injected during publish via `--config.extraMetadata.version`.
+- A direct `hotfix -> main` merge only becomes a stable release when it includes a changeset and the generated stable version PR is merged.
 
 ## Release Notes Behavior
 
@@ -197,9 +213,10 @@ Versioning notes:
 - Release note categories are driven by `type:*` labels.
 - Each channel uses a single same-channel delta section:
   - alpha: `Changes since previous alpha`
-  - beta: `Changes since previous beta` (entries are sourced from merged PRs targeting `dev`, then filtered to only PR merge commits contained in the tagged beta commit ancestry)
+  - beta: `Changes since previous beta` (entries include merged PRs targeting `dev` and direct hotfix/sync entries targeting `prev`, filtered to PR merge commits contained in the tagged beta commit ancestry)
   - stable: `Changes since previous stable`
 - Promotion wrapper PRs (`dev -> prev`, `prev -> main`) are excluded from grouped release-note entries.
+- Lane-sync wrappers and hotfix cleanup wrappers are excluded from grouped release-note entries, but lane-sync wrappers can resolve back to the origin hotfix PR so the fix still appears once in release notes.
 - When no entries are resolved, release notes keep the custom no-entry line, generated fallback blocks (including `Full Changelog`) are not injected.
 - Custom channel header text is preserved for alpha, beta, and stable notes.
 
@@ -214,7 +231,15 @@ Versioning notes:
 | `ci: blocked` | CI cannot run due to missing secrets or env |
 | `ci: passing` | All required checks passing |
 | `automation: dependabot` | Automated PR opened by Dependabot |
+| `automation: lane-sync` | Automation PR carrying a hotfix into another release lane |
+| `automation: changeset-cleanup` | Automation PR removing hotfix changesets after stable consumption |
 | `ignore-for-release` | Exclude PR from generated release notes |
+
+### Release Routing
+
+| Label Title | When to use it |
+| --- | --- |
+| `release: hotfix` | Direct-lane hotfix PR intended for expedited release propagation |
 
 ### Issue Types
 

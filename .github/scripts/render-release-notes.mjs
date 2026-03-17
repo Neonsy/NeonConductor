@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import { execFileSync } from "node:child_process";
 import https from "node:https";
+import { parseHotfixSyncMetadataComment } from "./hotfix-sync-metadata.mjs";
 
 const RELEASE_CONFIG_PATH = ".github/release.yml";
 const GITHUB_API_BASE = new URL("https://api.github.com");
@@ -187,11 +188,16 @@ function isWrapperPullRequest(pr, excludeLabels) {
 
   if (headRef === "dev" && baseRef === "prev") return true;
   if (headRef === "prev" && baseRef === "main") return true;
+  if (headRef.startsWith("lane-sync/")) return true;
   if (headRef.startsWith("changeset-release/")) return true;
   if (headRef.startsWith("changeset-sync/")) return true;
   if (title.startsWith("chore(release): version")) return true;
   if (title.startsWith("release(stable): v")) return true;
   return false;
+}
+
+function isHotfixBranch(headRef) {
+  return /^[^/]+\/hotfix\/[a-z0-9]+(?:-[a-z0-9]+)*$/.test(headRef || "");
 }
 
 function normalizePrTitle(title) {
@@ -400,6 +406,14 @@ async function listClosedPullRequestsForBase(owner, repo, baseRef) {
   return collected;
 }
 
+async function getPullRequestByNumber(owner, repo, prNumber) {
+  const repoBasePath = buildGitHubRepoBasePath(owner, repo);
+  const response = await githubRequest(
+    `${repoBasePath}/pulls/${encodeURIComponent(String(prNumber))}`
+  );
+  return response && typeof response === "object" ? response : null;
+}
+
 async function collectPullRequestsFromRange(owner, repo, range) {
   const commits = revList(range);
   const pullRequestMap = new Map();
@@ -417,7 +431,7 @@ async function collectPullRequestsFromRange(owner, repo, range) {
   return [...pullRequestMap.values()];
 }
 
-async function collectBetaPullRequests(owner, repo, previousTag, currentTag) {
+async function collectLanePullRequestsForTagWindow(owner, repo, previousTag, currentTag, baseRefs) {
   const upperBoundIso = resolveCommitTimestamp(currentTag);
   const upperBound = parseTimestamp(upperBoundIso);
   if (upperBound === null) {
@@ -435,27 +449,72 @@ async function collectBetaPullRequests(owner, repo, previousTag, currentTag) {
     throw new Error(`Unable to resolve commit SHA for tag ${currentTag}.`);
   }
 
-  const closedDevPullRequests = await listClosedPullRequestsForBase(owner, repo, "dev");
   const pullRequestMap = new Map();
 
-  for (const pr of closedDevPullRequests) {
-    if (!pr?.number || !pr?.merged_at) continue;
+  for (const baseRef of baseRefs) {
+    const closedPullRequests = await listClosedPullRequestsForBase(owner, repo, baseRef);
 
-    const mergedAt = parseTimestamp(pr.merged_at);
-    if (mergedAt === null) continue;
-    if (lowerBound !== null && mergedAt <= lowerBound) continue;
-    if (mergedAt > upperBound) continue;
+    for (const pr of closedPullRequests) {
+      if (!pr?.number || !pr?.merged_at) continue;
 
-    const mergeCommitSha = normalizeSha(pr.merge_commit_sha || "");
-    if (!mergeCommitSha) continue;
-    if (!isCommitAncestor(mergeCommitSha, currentTagSha)) continue;
+      const mergedAt = parseTimestamp(pr.merged_at);
+      if (mergedAt === null) continue;
+      if (lowerBound !== null && mergedAt <= lowerBound) continue;
+      if (mergedAt > upperBound) continue;
 
-    if (!pullRequestMap.has(pr.number)) {
-      pullRequestMap.set(pr.number, pr);
+      const mergeCommitSha = normalizeSha(pr.merge_commit_sha || "");
+      if (!mergeCommitSha) continue;
+      if (!isCommitAncestor(mergeCommitSha, currentTagSha)) continue;
+
+      if (!pullRequestMap.has(pr.number)) {
+        pullRequestMap.set(pr.number, pr);
+      }
     }
   }
 
   return [...pullRequestMap.values()];
+}
+
+export async function resolveReleaseNotePullRequests({
+  owner,
+  repo,
+  pullRequests,
+  excludeLabels,
+  loadPullRequest,
+}) {
+  const resolvedPullRequests = new Map();
+  const seenKeys = new Set();
+
+  for (const pr of pullRequests) {
+    if (!pr?.number) continue;
+
+    let resolved = pr;
+    if (isWrapperPullRequest(pr, excludeLabels)) {
+      const metadata = parseHotfixSyncMetadataComment(pr.body || "");
+      const originPrNumber = metadata?.origin_pr || null;
+      if (!originPrNumber) {
+        continue;
+      }
+
+      resolved = await loadPullRequest(owner, repo, originPrNumber);
+      if (!resolved || isWrapperPullRequest(resolved, excludeLabels)) {
+        continue;
+      }
+    }
+
+    const mergeCommitSha = normalizeSha(resolved.merge_commit_sha || "");
+    const dedupeKey = mergeCommitSha
+      ? `sha:${mergeCommitSha}`
+      : resolved.number
+        ? `pr:${resolved.number}`
+        : "";
+    if (!dedupeKey || seenKeys.has(dedupeKey)) continue;
+
+    seenKeys.add(dedupeKey);
+    resolvedPullRequests.set(resolved.number, resolved);
+  }
+
+  return [...resolvedPullRequests.values()];
 }
 
 async function main() {
@@ -505,16 +564,33 @@ async function main() {
 
   const pullRequests =
     channel === "beta"
-      ? await collectBetaPullRequests(owner, repo, previousTag, tagName)
+      ? await collectLanePullRequestsForTagWindow(owner, repo, previousTag, tagName, [
+          "dev",
+          "prev",
+        ])
       : await collectPullRequestsFromRange(
           owner,
           repo,
           previousTag ? `${previousTag}..${rangeEndRef}` : rangeEndRef
         );
 
-  const filteredPullRequests = pullRequests.filter(
-    (pr) => !isWrapperPullRequest(pr, excludeLabels)
-  );
+  const resolvedPullRequests = await resolveReleaseNotePullRequests({
+    owner,
+    repo,
+    pullRequests,
+    excludeLabels,
+    loadPullRequest: getPullRequestByNumber,
+  });
+
+  const filteredPullRequests = resolvedPullRequests.filter((pr) => {
+    if (isWrapperPullRequest(pr, excludeLabels)) return false;
+    if (channel === "stable") return true;
+    if (channel === "beta") {
+      const baseRef = pr.base?.ref || "";
+      return baseRef === "dev" || baseRef === "prev" || isHotfixBranch(pr.head?.ref || "");
+    }
+    return true;
+  });
 
   filteredPullRequests.sort((a, b) => {
     const aDate = a.merged_at || a.updated_at || a.created_at || "";
@@ -587,7 +663,13 @@ async function main() {
   fs.writeFileSync("release-notes.md", `${lines.join("\n")}\n`, "utf8");
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+if (
+  (process.argv[1] || "")
+    .replaceAll("\\", "/")
+    .endsWith("/render-release-notes.mjs")
+) {
+  main().catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
+}

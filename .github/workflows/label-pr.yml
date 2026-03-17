@@ -24,17 +24,11 @@ jobs:
         with:
           script: |
             const pullRequest = context.payload.pull_request;
+            const headRef = pullRequest.head?.ref || "";
             const title = pullRequest.title || "";
             const match = title.match(
               /^(feat|fix|chore|docs|refactor|test|perf|build|ci|ui-ux|revert)(?:\(([a-z0-9][a-z0-9-]*)\))?(!)?:\s(.+)$/
             );
-
-            if (!match) {
-              core.info("PR title does not match semantic format, skipping label sync.");
-              return;
-            }
-
-            const [, type, scope, isBreaking] = match;
             const typeToLabel = {
               feat: "type: feature",
               fix: "type: bug",
@@ -63,11 +57,32 @@ jobs:
               "type: revert",
               "type: breaking",
               "type: dependencies",
+              "release: hotfix",
+              "automation: lane-sync",
+              "automation: changeset-cleanup",
             ];
+            const desiredLabels = new Set();
 
-            const desiredLabels = new Set([typeToLabel[type]]);
-            if (isBreaking) desiredLabels.add("type: breaking");
-            if (scope === "dependencies" || scope === "deps") desiredLabels.add("type: dependencies");
+            if (match) {
+              const [, type, scope, isBreaking] = match;
+              desiredLabels.add(typeToLabel[type]);
+              if (isBreaking) desiredLabels.add("type: breaking");
+              if (scope === "dependencies" || scope === "deps") {
+                desiredLabels.add("type: dependencies");
+              }
+            } else {
+              core.info("PR title does not match semantic format, skipping managed type labels.");
+            }
+
+            if (/^[^/]+\/hotfix\/[a-z0-9]+(?:-[a-z0-9]+)*$/.test(headRef)) {
+              desiredLabels.add("release: hotfix");
+            }
+            if (headRef.startsWith("lane-sync/")) {
+              desiredLabels.add("automation: lane-sync");
+            }
+            if (headRef.startsWith("changeset-sync/hotfix-cleanup/")) {
+              desiredLabels.add("automation: changeset-cleanup");
+            }
 
             const currentLabels = (pullRequest.labels || []).map((label) => label.name);
             const toRemove = managedTypeLabels.filter(
