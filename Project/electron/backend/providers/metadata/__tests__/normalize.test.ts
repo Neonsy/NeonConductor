@@ -171,7 +171,7 @@ describe('provider metadata normalization', () => {
         expect(result.droppedCount).toBe(1);
     });
 
-    it('drops Kilo gateway rows that are missing routed upstream family metadata', () => {
+    it('keeps Kilo gateway rows even when routed upstream family metadata is missing', () => {
         const result = normalizeCatalogMetadata('kilo', [
             createCatalogModel({
                 modelId: kiloFrontierModelId,
@@ -191,8 +191,15 @@ describe('provider metadata normalization', () => {
             }),
         ]);
 
-        expect(result.models).toHaveLength(0);
-        expect(result.droppedCount).toBe(1);
+        expect(result.models).toHaveLength(1);
+        expect(result.droppedCount).toBe(0);
+        expect(result.models[0]).toMatchObject({
+            providerId: 'kilo',
+            modelId: kiloFrontierModelId,
+            toolProtocol: 'kilo_gateway',
+            apiFamily: 'kilo_gateway',
+        });
+        expect(result.models[0]?.routedApiFamily).toBeUndefined();
     });
 
     it('keeps Kilo gateway rows when routed upstream family metadata is present', () => {

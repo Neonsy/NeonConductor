@@ -35,6 +35,8 @@ interface LogContext {
     correlationId?: string;
 }
 
+type ProviderMetadataRefreshReason = 'manual' | 'manual_force' | 'background' | 'startup';
+
 function withLogContext(context?: LogContext): Record<string, string> {
     if (!context) {
         return {};
@@ -70,6 +72,36 @@ export class ProviderMetadataOrchestrator {
     private readonly refreshInFlight = new Map<string, Promise<ProviderSyncResult>>();
     private readonly refreshContexts = new Map<string, ResolvedProviderCatalogContext>();
     private readonly scopeEpochs = new Map<string, number>();
+    private readonly startupRefreshedCatalogs = new Set<string>();
+
+    private shouldRefreshKiloOnStartup(fetchState: ResolvedProviderCatalogFetchState): boolean {
+        return (
+            fetchState.context.providerId === 'kilo' &&
+            fetchState.context.authMethod !== 'none' &&
+            fetchState.context.credentialFingerprint !== null
+        );
+    }
+
+    private async refreshKiloCatalogOnStartup(fetchState: ResolvedProviderCatalogFetchState): Promise<void> {
+        if (!this.shouldRefreshKiloOnStartup(fetchState)) {
+            return;
+        }
+
+        const startupRefreshKey = fetchState.context.cacheKey;
+        if (this.startupRefreshedCatalogs.has(startupRefreshKey)) {
+            return;
+        }
+
+        this.startupRefreshedCatalogs.add(startupRefreshKey);
+        await this.syncSupportedCatalog(
+            fetchState.context.profileId,
+            fetchState.context.providerId,
+            true,
+            'startup',
+            undefined,
+            fetchState
+        );
+    }
 
     async listModels(
         profileId: string,
@@ -90,6 +122,8 @@ export class ProviderMetadataOrchestrator {
         if (isStaticProviderId(supportedProviderId)) {
             await this.hydrateStaticCatalog(fetchState);
         }
+
+        await this.refreshKiloCatalogOnStartup(fetchState);
 
         const cacheKey = fetchState.context.cacheKey;
         const cached = this.cache.get(cacheKey);
@@ -133,6 +167,11 @@ export class ProviderMetadataOrchestrator {
                 await this.hydrateStaticCatalog(fetchStateResult.value);
             })
         );
+
+        const kiloFetchStateResult = await resolveProviderCatalogFetchState(profileId, 'kilo');
+        if (kiloFetchStateResult.isOk()) {
+            await this.refreshKiloCatalogOnStartup(kiloFetchStateResult.value);
+        }
 
         const models = await providerStore.listModelsByProfile(profileId);
         const byProvider = new Map<RuntimeProviderId, ProviderModelRecord[]>();
@@ -229,6 +268,14 @@ export class ProviderMetadataOrchestrator {
         await providerCatalogStore.clearModels(profileId, supportedProviderId);
     }
 
+    resetForTests(): void {
+        this.cache.clear();
+        this.refreshInFlight.clear();
+        this.refreshContexts.clear();
+        this.scopeEpochs.clear();
+        this.startupRefreshedCatalogs.clear();
+    }
+
     private scheduleBackgroundRefresh(profileId: string, providerId: RuntimeProviderId): void {
         void this.syncSupportedCatalog(profileId, providerId, false, 'background').catch((error: unknown) => {
             appLog.warn({
@@ -262,7 +309,11 @@ export class ProviderMetadataOrchestrator {
         );
     }
 
-    private setCachedModels(context: ResolvedProviderCatalogContext, models: ProviderModelRecord[], loadedAtMs: number): void {
+    private setCachedModels(
+        context: ResolvedProviderCatalogContext,
+        models: ProviderModelRecord[],
+        loadedAtMs: number
+    ): void {
         this.cache.set(context.cacheKey, {
             loadedAtMs,
             models,
@@ -282,7 +333,7 @@ export class ProviderMetadataOrchestrator {
         profileId: string,
         providerId: RuntimeProviderId,
         force: boolean,
-        reason: 'manual' | 'manual_force' | 'background',
+        reason: ProviderMetadataRefreshReason,
         context?: LogContext,
         resolvedFetchState?: ResolvedProviderCatalogFetchState
     ): Promise<ProviderSyncResult> {
@@ -327,7 +378,7 @@ export class ProviderMetadataOrchestrator {
     private async executeSync(
         fetchState: ResolvedProviderCatalogFetchState,
         force: boolean,
-        reason: 'manual' | 'manual_force' | 'background',
+        reason: ProviderMetadataRefreshReason,
         scopeEpochAtStart: number,
         context?: LogContext
     ): Promise<ProviderSyncResult> {

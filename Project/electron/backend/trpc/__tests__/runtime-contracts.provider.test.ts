@@ -17,10 +17,7 @@ import {
     getPersistence,
     waitForRunStatus,
 } from '@/app/backend/trpc/__tests__/runtime-contracts.shared';
-import {
-    kiloBalancedModelId,
-    kiloFrontierModelId,
-} from '@/shared/kiloModels';
+import { kiloBalancedModelId, kiloFrontierModelId } from '@/shared/kiloModels';
 
 registerRuntimeContractHooks();
 
@@ -826,9 +823,7 @@ describe('runtime contracts: provider and account flows', () => {
         expect(models.models.find((model) => model.id === 'moonshotai/kimi-k2.5')?.routedApiFamily).toBe(
             'openai_compatible'
         );
-        expect(models.models.find((model) => model.id === 'z-ai/glm-5')?.routedApiFamily).toBe(
-            'openai_compatible'
-        );
+        expect(models.models.find((model) => model.id === 'z-ai/glm-5')?.routedApiFamily).toBe('openai_compatible');
         expect(models.models.find((model) => model.id === 'google/gemini-3.1-pro-preview')?.routedApiFamily).toBe(
             'google_generativeai'
         );
@@ -1019,7 +1014,7 @@ describe('runtime contracts: provider and account flows', () => {
         expect(kimi?.routedApiFamily).toBe('openai_compatible');
     });
 
-    it('reports when a synced Kilo catalog produced zero usable models after normalization', async () => {
+    it('keeps synced Kilo catalog rows discoverable even when their routed family is unknown', async () => {
         const caller = createCaller();
         vi.stubGlobal(
             'fetch',
@@ -1032,9 +1027,9 @@ describe('runtime contracts: provider and account flows', () => {
                         json: () => ({
                             data: [
                                 {
-                                    id: 'mystery/model',
-                                    name: 'Mystery Model',
-                                    owned_by: 'mystery-provider',
+                                    id: 'minimax/minimax-m2.1:free',
+                                    name: 'MiniMax M2.1',
+                                    owned_by: 'minimax',
                                     context_length: 200000,
                                     supported_parameters: ['tools'],
                                     architecture: {
@@ -1080,12 +1075,29 @@ describe('runtime contracts: provider and account flows', () => {
             providerId: 'kilo',
         });
         expect(syncResult.ok).toBe(true);
-        expect(syncResult.modelCount).toBe(0);
-        expect(syncResult.reason).toBe('catalog_empty_after_normalization');
+        expect(syncResult.modelCount).toBe(1);
 
         const models = await caller.provider.listModels({ profileId, providerId: 'kilo' });
-        expect(models.models).toHaveLength(0);
-        expect(models.reason).toBe('catalog_empty_after_normalization');
+        const minimax = models.models.find((model) => model.id === 'minimax/minimax-m2.1:free');
+        expect(minimax).toBeDefined();
+        if (!minimax) {
+            throw new Error('Expected minimax/minimax-m2.1:free in the Kilo catalog.');
+        }
+
+        expect(minimax.apiFamily).toBe('kilo_gateway');
+        expect(minimax.toolProtocol).toBe('kilo_gateway');
+        expect(minimax.routedApiFamily).toBeUndefined();
+
+        const shellBootstrap = await caller.runtime.getShellBootstrap({ profileId });
+        const shellMiniMax = shellBootstrap.providerModels.find((model) => model.id === 'minimax/minimax-m2.1:free');
+        expect(shellMiniMax).toBeDefined();
+        if (!shellMiniMax) {
+            throw new Error('Expected minimax/minimax-m2.1:free in runtime shell bootstrap.');
+        }
+
+        expect(shellMiniMax.apiFamily).toBe('kilo_gateway');
+        expect(shellMiniMax.toolProtocol).toBe('kilo_gateway');
+        expect(shellMiniMax.routedApiFamily).toBeUndefined();
     });
 
     it('surfaces catalog sync failure details when the first kilo model sync produces no persisted catalog', async () => {
@@ -1397,6 +1409,153 @@ describe('runtime contracts: provider and account flows', () => {
         expect(accountContext.kiloAccountContext?.organizations.some((organization) => organization.isActive)).toBe(
             true
         );
+    });
+
+    it('accepts a Kilo MiniMax default from account sync when that model already exists in the catalog', async () => {
+        const caller = createCaller();
+
+        await providerCatalogStore.replaceModels(profileId, 'kilo', [
+            {
+                modelId: 'minimax/minimax-m2.1:free',
+                label: 'MiniMax M2.1',
+                upstreamProvider: 'minimax',
+                isFree: true,
+                supportsTools: true,
+                supportsReasoning: true,
+                supportsVision: false,
+                supportsAudioInput: false,
+                supportsAudioOutput: false,
+                toolProtocol: 'kilo_gateway',
+                apiFamily: 'kilo_gateway',
+                inputModalities: ['text'],
+                outputModalities: ['text'],
+                pricing: {},
+                raw: {},
+                source: 'test',
+            },
+        ]);
+        await providerMetadataOrchestrator.flushProviderScope(profileId, 'kilo');
+
+        vi.stubGlobal(
+            'fetch',
+            vi.fn((url: string) => {
+                if (url.endsWith('/api/device-auth/codes')) {
+                    return Promise.resolve({
+                        ok: true,
+                        status: 200,
+                        statusText: 'OK',
+                        json: () => ({
+                            result: {
+                                deviceAuth: {
+                                    deviceCode: 'kilo-device-code-defaults',
+                                    userCode: 'KILO-DEFAULTS',
+                                    verificationUrl: 'https://kilo.example/verify',
+                                    poll_interval_seconds: 5,
+                                    expiresIn: 900,
+                                },
+                            },
+                        }),
+                    });
+                }
+
+                if (url.endsWith('/api/device-auth/codes/kilo-device-code-defaults')) {
+                    return Promise.resolve({
+                        ok: true,
+                        status: 200,
+                        statusText: 'OK',
+                        json: () => ({
+                            data: {
+                                status: 'approved',
+                                accessToken: 'kilo-session-token-defaults',
+                                refreshToken: 'kilo-refresh-token-defaults',
+                                expiresAt: '2026-03-11T16:00:00.000Z',
+                                accountId: 'acct_defaults',
+                                organizationId: 'org_defaults',
+                            },
+                        }),
+                    });
+                }
+
+                if (url.endsWith('/api/profile')) {
+                    return Promise.resolve({
+                        ok: true,
+                        status: 200,
+                        statusText: 'OK',
+                        json: () => ({
+                            data: {
+                                accountId: 'acct_defaults',
+                                displayName: 'Defaults User',
+                                emailMasked: 'd***@example.com',
+                                organizations: [
+                                    {
+                                        organization_id: 'org_defaults',
+                                        name: 'Defaults Org',
+                                        is_active: true,
+                                        entitlement: {},
+                                    },
+                                ],
+                            },
+                        }),
+                    });
+                }
+
+                if (url.endsWith('/api/defaults') || url.endsWith('/api/organizations/org_defaults/defaults')) {
+                    return Promise.resolve({
+                        ok: true,
+                        status: 200,
+                        statusText: 'OK',
+                        json: () => ({
+                            data: {
+                                defaultModelId: 'minimax/minimax-m2.1:free',
+                            },
+                        }),
+                    });
+                }
+
+                if (url.endsWith('/api/profile/balance')) {
+                    return Promise.resolve({
+                        ok: true,
+                        status: 200,
+                        statusText: 'OK',
+                        json: () => ({
+                            data: {
+                                balance: 5.5,
+                                currency: 'USD',
+                            },
+                        }),
+                    });
+                }
+
+                return Promise.resolve({
+                    ok: false,
+                    status: 404,
+                    statusText: 'Not Found',
+                    json: () => ({}),
+                });
+            })
+        );
+
+        const started = await caller.provider.startAuth({
+            profileId,
+            providerId: 'kilo',
+            method: 'device_code',
+        });
+        expect(started.flow.flowType).toBe('device_code');
+        expect(started.userCode).toBe('KILO-DEFAULTS');
+
+        const polled = await caller.provider.pollAuth({
+            profileId,
+            providerId: 'kilo',
+            flowId: started.flow.id,
+        });
+        expect(polled.flow.status).toBe('completed');
+        expect(polled.state.authState).toBe('authenticated');
+
+        const defaults = await caller.provider.getDefaults({ profileId });
+        expect(defaults.defaults).toEqual({
+            providerId: 'kilo',
+            modelId: 'minimax/minimax-m2.1:free',
+        });
     });
 
     it('supports openai oauth device auth start and pending polling', async () => {
@@ -2247,6 +2406,91 @@ describe('runtime contracts: provider and account flows', () => {
         });
         expect(organizationResult.models.some((model) => model.id === 'kilo/org-b')).toBe(true);
         expect(organizationResult.models.some((model) => model.id === 'kilo/org-a')).toBe(false);
+    });
+
+    it('refreshes the Kilo catalog during shell bootstrap after app startup', async () => {
+        const caller = createCaller();
+
+        const configured = await caller.provider.setApiKey({
+            profileId,
+            providerId: 'kilo',
+            apiKey: 'kilo-startup-refresh-key',
+        });
+        expect(configured.success).toBe(true);
+
+        await providerCatalogStore.replaceModels(profileId, 'kilo', [
+            {
+                modelId: 'stale/startup-model',
+                label: 'Stale Startup Model',
+                upstreamProvider: 'openai',
+                isFree: false,
+                supportsTools: true,
+                supportsReasoning: true,
+                supportsVision: false,
+                supportsAudioInput: false,
+                supportsAudioOutput: false,
+                toolProtocol: 'kilo_gateway',
+                apiFamily: 'kilo_gateway',
+                routedApiFamily: 'openai_compatible',
+                inputModalities: ['text'],
+                outputModalities: ['text'],
+                pricing: {},
+                raw: {},
+                source: 'test',
+            },
+        ]);
+        await providerMetadataOrchestrator.flushProviderScope(profileId, 'kilo');
+
+        vi.stubGlobal(
+            'fetch',
+            vi.fn((url: string) => {
+                if (url.endsWith('/models')) {
+                    return Promise.resolve({
+                        ok: true,
+                        status: 200,
+                        statusText: 'OK',
+                        json: () => ({
+                            data: [
+                                {
+                                    id: 'minimax/minimax-m2.1:free',
+                                    name: 'MiniMax M2.1',
+                                    owned_by: 'minimax',
+                                    context_length: 200000,
+                                    supported_parameters: ['tools'],
+                                    architecture: {
+                                        input_modalities: ['text'],
+                                        output_modalities: ['text'],
+                                    },
+                                    pricing: {},
+                                },
+                            ],
+                        }),
+                    });
+                }
+
+                if (url.endsWith('/providers') || url.endsWith('/models-by-provider')) {
+                    return Promise.resolve({
+                        ok: true,
+                        status: 200,
+                        statusText: 'OK',
+                        json: () => ({
+                            data: [],
+                        }),
+                    });
+                }
+
+                return Promise.resolve({
+                    ok: false,
+                    status: 404,
+                    statusText: 'Not Found',
+                    json: () => ({}),
+                });
+            })
+        );
+
+        const shellBootstrap = await caller.runtime.getShellBootstrap({ profileId });
+        expect(shellBootstrap.providerModels.some((model) => model.id === 'minimax/minimax-m2.1:free')).toBe(true);
+        expect(shellBootstrap.providerModels.some((model) => model.id === 'stale/startup-model')).toBe(false);
     });
 
     it('persists the resolved native transport selected from model protocol metadata', async () => {
@@ -3195,7 +3439,9 @@ describe('runtime contracts: provider and account flows', () => {
             optionProfileId: 'default',
             baseUrlOverride: 'https://generativelanguage.googleapis.com/v1beta',
         });
-        expect(connectionProfileUpdated.connectionProfile.resolvedBaseUrl).toBe('https://generativelanguage.googleapis.com/v1beta');
+        expect(connectionProfileUpdated.connectionProfile.resolvedBaseUrl).toBe(
+            'https://generativelanguage.googleapis.com/v1beta'
+        );
 
         const { sqlite } = getPersistence();
         const now = new Date().toISOString();

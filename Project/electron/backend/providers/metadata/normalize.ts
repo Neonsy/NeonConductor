@@ -194,6 +194,10 @@ function hasRunnableProtocol(model: NormalizedModelMetadata): boolean {
     return typeof model.toolProtocol === 'string' && model.toolProtocol.length > 0;
 }
 
+function requiresCatalogRuntimeFamilyValidation(providerId: NormalizedModelMetadata['providerId']): boolean {
+    return providerId !== 'kilo';
+}
+
 function normalizeProviderCatalogModel(providerId: NormalizedModelMetadata['providerId'], model: ProviderCatalogModel) {
     return {
         providerId,
@@ -264,17 +268,18 @@ export function normalizeCatalogMetadata(
         }
 
         if (
+            requiresCatalogRuntimeFamilyValidation(providerId) &&
             !supportsCatalogRuntimeFamily({
-                    providerId,
-                    model: withHints.model,
-                    ...(context
-                        ? {
-                              context: {
-                                  providerId,
-                                  optionProfileId: context.optionProfileId,
-                                  resolvedBaseUrl: context.resolvedBaseUrl,
-                              },
-                          }
+                providerId,
+                model: withHints.model,
+                ...(context
+                    ? {
+                          context: {
+                              providerId,
+                              optionProfileId: context.optionProfileId,
+                              resolvedBaseUrl: context.resolvedBaseUrl,
+                          },
+                      }
                     : {}),
             })
         ) {
