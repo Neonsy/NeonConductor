@@ -47,12 +47,15 @@ jobs:
         run: |
           set -euo pipefail
           is_cleanup_pr="false"
+          is_lane_sync_pr="false"
           cleanup_valid="false"
           cleanup_has_out_of_scope="false"
           project_touched="false"
 
           if [[ "$HEAD_REF" == changeset-sync/* ]]; then
             is_cleanup_pr="true"
+          elif [[ "$HEAD_REF" == lane-sync/* ]]; then
+            is_lane_sync_pr="true"
           fi
 
           git fetch origin "$BASE_REF" --depth=1
@@ -117,11 +120,14 @@ jobs:
               cleanup_valid="true"
               requires_changeset="false"
             fi
+          elif [[ "$is_lane_sync_pr" == "true" ]]; then
+            requires_changeset="false"
           fi
 
           echo "requires_changeset=$requires_changeset" >> "$GITHUB_OUTPUT"
           echo "has_changeset_file=$has_changeset_file" >> "$GITHUB_OUTPUT"
           echo "is_cleanup_pr=$is_cleanup_pr" >> "$GITHUB_OUTPUT"
+          echo "is_lane_sync_pr=$is_lane_sync_pr" >> "$GITHUB_OUTPUT"
           echo "cleanup_valid=$cleanup_valid" >> "$GITHUB_OUTPUT"
           echo "cleanup_has_out_of_scope=$cleanup_has_out_of_scope" >> "$GITHUB_OUTPUT"
           echo "project_touched=$project_touched" >> "$GITHUB_OUTPUT"
@@ -145,16 +151,20 @@ jobs:
         run: pnpm -C Project install --frozen-lockfile
 
       - name: Skip docs-only changes
-        if: steps.scope.outputs.requires_changeset != 'true' && steps.scope.outputs.is_cleanup_pr != 'true' && steps.scope.outputs.project_touched == 'true'
+        if: steps.scope.outputs.requires_changeset != 'true' && steps.scope.outputs.is_cleanup_pr != 'true' && steps.scope.outputs.is_lane_sync_pr != 'true' && steps.scope.outputs.project_touched == 'true'
         run: echo "Docs-only changes detected in Project/. Skipping changeset validation."
 
       - name: Skip non-Project changes
-        if: steps.scope.outputs.requires_changeset != 'true' && steps.scope.outputs.is_cleanup_pr != 'true' && steps.scope.outputs.project_touched != 'true'
+        if: steps.scope.outputs.requires_changeset != 'true' && steps.scope.outputs.is_cleanup_pr != 'true' && steps.scope.outputs.is_lane_sync_pr != 'true' && steps.scope.outputs.project_touched != 'true'
         run: echo "No Project/ changes detected. Skipping changeset validation."
 
       - name: Validate cleanup-sync changeset scope
         if: steps.scope.outputs.is_cleanup_pr == 'true' && steps.scope.outputs.cleanup_valid == 'true'
         run: echo "Cleanup sync PR detected. Delete-only changeset scope is valid."
+
+      - name: Skip lane-sync changeset validation
+        if: steps.scope.outputs.is_lane_sync_pr == 'true'
+        run: echo "Lane sync PR detected. Changeset validation is delegated to the origin hotfix flow."
 
       - name: Verify changeset
         if: steps.scope.outputs.requires_changeset == 'true' && steps.scope.outputs.is_cleanup_pr != 'true'
@@ -522,6 +532,7 @@ jobs:
           REQUIRES_CHANGESET: ${{ steps.scope.outputs.requires_changeset }}
           HAS_CHANGESET_FILE: ${{ steps.scope.outputs.has_changeset_file }}
           IS_CLEANUP_PR: ${{ steps.scope.outputs.is_cleanup_pr }}
+          IS_LANE_SYNC_PR: ${{ steps.scope.outputs.is_lane_sync_pr }}
           CLEANUP_VALID: ${{ steps.scope.outputs.cleanup_valid }}
           CLEANUP_HAS_OUT_OF_SCOPE: ${{ steps.scope.outputs.cleanup_has_out_of_scope }}
           PROJECT_TOUCHED: ${{ steps.scope.outputs.project_touched }}
@@ -537,6 +548,7 @@ jobs:
             const requiresChangeset = process.env.REQUIRES_CHANGESET === "true";
             const hasChangesetFile = process.env.HAS_CHANGESET_FILE === "true";
             const isCleanupPr = process.env.IS_CLEANUP_PR === "true";
+            const isLaneSyncPr = process.env.IS_LANE_SYNC_PR === "true";
             const cleanupValid = process.env.CLEANUP_VALID === "true";
             const cleanupHasOutOfScope = process.env.CLEANUP_HAS_OUT_OF_SCOPE === "true";
             const projectTouched = process.env.PROJECT_TOUCHED === "true";
@@ -571,6 +583,7 @@ jobs:
               `- Requires changeset: ${requiresChangeset ? "yes" : "no"}`,
               `- Changeset detected: ${hasChangesetFile ? "yes" : "no"}`,
               `- Cleanup sync PR: ${isCleanupPr ? "yes" : "no"}`,
+              `- Lane sync PR: ${isLaneSyncPr ? "yes" : "no"}`,
               `- Project paths changed: ${projectTouched ? "yes" : "no"}`,
             ];
 
@@ -588,6 +601,18 @@ jobs:
                   : cleanupHasOutOfScope
                     ? "Cleanup sync PR contains out-of-scope changes. Only delete operations under `Project/.changeset/*.md` are allowed."
                     : "Cleanup sync validation did not pass.",
+                "",
+                changesetGuide,
+              ].join("\n");
+            } else if (isLaneSyncPr) {
+              body = [
+                ...summaryLines,
+                "",
+                inventoryReport,
+                "",
+                "- Result: skipped",
+                "",
+                "Lane sync PR detected. Changeset responsibility stays with the origin hotfix and stable cleanup flow.",
                 "",
                 changesetGuide,
               ].join("\n");
@@ -669,7 +694,7 @@ jobs:
             }
 
       - name: Fail when changeset check fails
-        if: steps.scope.outputs.requires_changeset == 'true' && steps.scope.outputs.is_cleanup_pr != 'true' && steps.verify.outputs.exit_code != '0'
+        if: steps.scope.outputs.requires_changeset == 'true' && steps.scope.outputs.is_cleanup_pr != 'true' && steps.scope.outputs.is_lane_sync_pr != 'true' && steps.verify.outputs.exit_code != '0'
         run: exit 1
 
       - name: Fail when cleanup sync scope is invalid

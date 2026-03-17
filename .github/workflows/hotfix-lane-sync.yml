@@ -1,0 +1,297 @@
+name: Hotfix Lane Sync
+
+on:
+  pull_request:
+    types:
+      - closed
+    branches:
+      - dev
+      - prev
+      - main
+
+concurrency:
+  group: hotfix-lane-sync-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    if: github.event.pull_request.merged == true && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Create GitHub App token
+        id: app_token
+        uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+
+      - name: Resolve lane sync route
+        id: route
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
+        with:
+          github-token: ${{ steps.app_token.outputs.token }}
+          script: |
+            const pr = context.payload.pull_request;
+            const head = pr.head.ref || "";
+            const base = pr.base.ref || "";
+            const mergeSha = (pr.merge_commit_sha || "").trim();
+            const isHotfixBranch = /^[^/]+\/hotfix\/[a-z0-9]+(?:-[a-z0-9]+)*$/.test(head);
+            const isLaneSyncBranch = head.startsWith("lane-sync/");
+
+            function parseMetadata(body) {
+              const match = String(body || "").match(
+                /<!--\s*hotfix-sync-metadata\s*\n([\s\S]*?)\n-->/m
+              );
+              if (!match) return null;
+              try {
+                return JSON.parse(match[1]);
+              } catch {
+                return null;
+              }
+            }
+
+            async function listChangesetFiles(pullNumber) {
+              const files = await github.paginate(github.rest.pulls.listFiles, {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: pullNumber,
+                per_page: 100,
+              });
+
+              return [...new Set(
+                files
+                  .map((file) => (file.filename || "").trim())
+                  .filter((filename) =>
+                    filename.startsWith("Project/.changeset/") &&
+                    filename.endsWith(".md") &&
+                    filename !== "Project/.changeset/README.md"
+                  )
+              )].sort((a, b) => a.localeCompare(b));
+            }
+
+            if (!mergeSha) {
+              core.setOutput("enabled", "false");
+              core.info("No merge commit SHA detected; skipping lane sync.");
+              return;
+            }
+
+            let metadata = null;
+            if (isHotfixBranch) {
+              metadata = {
+                origin_pr: pr.number,
+                origin_base: base,
+                origin_head: head,
+                origin_merge_sha: mergeSha,
+                changeset_files: await listChangesetFiles(pr.number),
+                changeset_consumed_by_main: false,
+              };
+            } else if (isLaneSyncBranch) {
+              metadata = parseMetadata(pr.body || "");
+            }
+
+            if (!metadata) {
+              core.setOutput("enabled", "false");
+              core.info("Merged PR is not a hotfix branch or lane-sync wrapper.");
+              return;
+            }
+
+            const laneMatch = head.match(/^lane-sync\/([^/]+)-to-([^/]+)\//);
+            const syncedFrom = laneMatch?.[1] || "";
+            const syncedTo = laneMatch?.[2] || "";
+            const targetPlans = [];
+
+            if (isHotfixBranch) {
+              if (base === "dev") {
+                targetPlans.push("dev,prev");
+              } else if (base === "prev") {
+                targetPlans.push("prev,main");
+                targetPlans.push("prev,dev");
+              } else if (base === "main") {
+                targetPlans.push("main,prev");
+              }
+            } else if (isLaneSyncBranch) {
+              if (syncedFrom === "dev" && syncedTo === "prev" && base === "prev") {
+                targetPlans.push("prev,main");
+              } else if (syncedFrom === "main" && syncedTo === "prev" && base === "prev") {
+                targetPlans.push("prev,dev");
+              }
+            }
+
+            core.setOutput("enabled", targetPlans.length > 0 ? "true" : "false");
+            core.setOutput("merge_sha", mergeSha);
+            core.setOutput("origin_pr", String(metadata.origin_pr || pr.number));
+            core.setOutput("metadata_json", JSON.stringify(metadata));
+            core.setOutput("target_plans", targetPlans.join("\n"));
+
+      - name: Skip when no lane sync is needed
+        if: steps.route.outputs.enabled != 'true'
+        run: echo "No downstream lane sync is required for this merge."
+
+      - name: Checkout repository
+        if: steps.route.outputs.enabled == 'true'
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0
+
+      - name: Create lane sync PRs
+        if: steps.route.outputs.enabled == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.app_token.outputs.token }}
+          REPO_OWNER: ${{ github.repository_owner }}
+          REPO_NAME: ${{ github.event.repository.name }}
+          MERGE_SHA: ${{ steps.route.outputs.merge_sha }}
+          ORIGIN_PR: ${{ steps.route.outputs.origin_pr }}
+          METADATA_JSON: ${{ steps.route.outputs.metadata_json }}
+          TARGET_PLANS: ${{ steps.route.outputs.target_plans }}
+        run: |
+          set -euo pipefail
+
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${REPO_OWNER}/${REPO_NAME}.git"
+          git config user.name "NeonConductor Release Bot"
+          git config user.email "118444485+Neonsy@users.noreply.github.com"
+
+          git fetch origin dev prev main --force
+
+          parent_count="$(git rev-list --parents -n 1 "$MERGE_SHA" | awk '{print NF-1}')"
+          short_sha="$(printf '%s' "$MERGE_SHA" | cut -c1-7)"
+
+          while IFS=, read -r source target; do
+            [ -z "${source:-}" ] && continue
+            [ -z "${target:-}" ] && continue
+
+            branch="lane-sync/${source}-to-${target}/${ORIGIN_PR}-${short_sha}"
+            git checkout -B "$branch" "origin/$target"
+
+            if [ "$parent_count" -gt 1 ]; then
+              git cherry-pick -m 1 -x "$MERGE_SHA"
+            else
+              git cherry-pick -x "$MERGE_SHA"
+            fi
+
+            consumed_on_main="$(
+              METADATA_JSON="$METADATA_JSON" node --input-type=module - <<'NODE'
+              import { execFileSync } from "node:child_process";
+              const metadata = JSON.parse(process.env.METADATA_JSON);
+              const files = Array.isArray(metadata.changeset_files) ? metadata.changeset_files : [];
+              if (files.length === 0) {
+                process.stdout.write("false");
+                process.exit(0);
+              }
+              process.stdout.write(
+                files.every((file) => {
+                  try {
+                    execFileSync("git", ["cat-file", "-e", `origin/main:${file}`], {
+                      stdio: ["ignore", "ignore", "ignore"],
+                    });
+                    return false;
+                  } catch {
+                    return true;
+                  }
+                })
+                  ? "true"
+                  : "false",
+              );
+              NODE
+            )"
+
+            if [ "$target" != "main" ] && [ "$consumed_on_main" = "true" ]; then
+              METADATA_JSON="$METADATA_JSON" node --input-type=module - <<'NODE' | while IFS= read -r file_path; do
+              const metadata = JSON.parse(process.env.METADATA_JSON);
+              const files = Array.isArray(metadata.changeset_files) ? metadata.changeset_files : [];
+              process.stdout.write(`${files.join("\n")}\n`);
+              NODE
+                [ -z "${file_path:-}" ] && continue
+                if git ls-files --error-unmatch "$file_path" >/dev/null 2>&1; then
+                  git rm --quiet -- "$file_path"
+                fi
+              done
+
+              if ! git diff --cached --quiet; then
+                git commit -m "chore(release): remove consumed hotfix changeset before syncing to ${target}"
+              fi
+            fi
+
+            metadata_for_target="$(
+              METADATA_JSON="$METADATA_JSON" CONSUMED_ON_MAIN="$consumed_on_main" node --input-type=module - <<'NODE'
+              const metadata = JSON.parse(process.env.METADATA_JSON);
+              metadata.changeset_consumed_by_main = process.env.CONSUMED_ON_MAIN === "true";
+              process.stdout.write(JSON.stringify(metadata));
+              NODE
+            )"
+
+            if [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/$target)" ]; then
+              echo "No sync changes remained for ${source} -> ${target}; skipping."
+              continue
+            fi
+
+            git push --force-with-lease origin "$branch"
+
+            comment="$(
+              METADATA_JSON="$metadata_for_target" node --input-type=module - <<'NODE'
+              import { buildHotfixSyncMetadataComment } from "./.github/scripts/hotfix-sync-metadata.mjs";
+              process.stdout.write(
+                buildHotfixSyncMetadataComment(JSON.parse(process.env.METADATA_JSON)),
+              );
+              NODE
+            )"
+
+            changeset_lines="$(
+              METADATA_JSON="$metadata_for_target" node --input-type=module - <<'NODE'
+              const metadata = JSON.parse(process.env.METADATA_JSON);
+              const files = Array.isArray(metadata.changeset_files) ? metadata.changeset_files : [];
+              process.stdout.write(
+                files.length > 0 ? files.map((file) => `- \`${file}\``).join("\n") : "- _none_",
+              );
+              NODE
+            )"
+
+            ORIGIN_PR="$ORIGIN_PR" SOURCE="$source" TARGET="$target" MERGE_SHA="$MERGE_SHA" CHANGESET_LINES="$changeset_lines" COMMENT="$comment" node --input-type=module - <<'NODE' > sync-pr-body.md
+            const lines = [
+              `Auto-generated lane sync after merging #${process.env.ORIGIN_PR}.`,
+              "",
+              `This PR cherry-picks \`${process.env.MERGE_SHA}\` from \`${process.env.SOURCE}\` into \`${process.env.TARGET}\` so the hotfix continues through the release lanes.`,
+              "",
+              `Origin hotfix PR: #${process.env.ORIGIN_PR}`,
+              "Changeset files carried:",
+              process.env.CHANGESET_LINES || "- _none_",
+              "",
+              process.env.COMMENT || "",
+            ];
+            process.stdout.write(`${lines.join("\n")}\n`);
+            NODE
+
+            existing_pr="$(
+              gh pr list \
+                --repo "${REPO_OWNER}/${REPO_NAME}" \
+                --head "$branch" \
+                --base "$target" \
+                --state open \
+                --json number \
+                --jq '.[0].number // ""'
+            )"
+
+            title="chore(release): sync hotfix #${ORIGIN_PR} from ${source} to ${target}"
+            if [ -n "$existing_pr" ]; then
+              gh pr edit "$existing_pr" \
+                --repo "${REPO_OWNER}/${REPO_NAME}" \
+                --title "$title" \
+                --body-file sync-pr-body.md
+            else
+              gh pr create \
+                --repo "${REPO_OWNER}/${REPO_NAME}" \
+                --base "$target" \
+                --head "$branch" \
+                --title "$title" \
+                --body-file sync-pr-body.md \
+                --label "automation: lane-sync" \
+                --label "ignore-for-release"
+            fi
+          done <<< "$TARGET_PLANS"
