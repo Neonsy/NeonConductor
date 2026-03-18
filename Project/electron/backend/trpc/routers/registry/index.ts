@@ -1,11 +1,13 @@
 import {
     registryListResolvedInputSchema,
     registryRefreshInputSchema,
+    registrySearchRulesInputSchema,
     registrySearchSkillsInputSchema,
 } from '@/app/backend/runtime/contracts';
 import {
     listResolvedRegistry,
     refreshRegistry,
+    searchResolvedRulesets,
     searchResolvedSkillfiles,
 } from '@/app/backend/runtime/services/registry/service';
 import { publicProcedure, router } from '@/app/backend/trpc/init';
@@ -20,6 +22,11 @@ export const registryRouter = router({
     searchSkills: publicProcedure.input(registrySearchSkillsInputSchema).query(async ({ input }) => {
         return {
             skillfiles: await searchResolvedSkillfiles(input),
+        };
+    }),
+    searchRules: publicProcedure.input(registrySearchRulesInputSchema).query(async ({ input }) => {
+        return {
+            rulesets: await searchResolvedRulesets(input),
         };
     }),
 });

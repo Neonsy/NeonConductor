@@ -1,3 +1,4 @@
+import type { TopLevelTab } from '@/app/backend/runtime/contracts/enums';
 import type {
     ModeDefinitionRecord,
     RulesetDefinitionRecord,
@@ -20,6 +21,16 @@ export interface RegistrySearchSkillsInput extends ProfileInput {
     query?: string;
     workspaceFingerprint?: string;
     worktreeId?: EntityId<'wt'>;
+    topLevelTab?: TopLevelTab;
+    modeKey?: string;
+}
+
+export interface RegistrySearchRulesInput extends ProfileInput {
+    query?: string;
+    workspaceFingerprint?: string;
+    worktreeId?: EntityId<'wt'>;
+    topLevelTab?: TopLevelTab;
+    modeKey?: string;
 }
 
 export interface RegistryPaths {

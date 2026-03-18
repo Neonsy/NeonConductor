@@ -192,6 +192,7 @@ export async function invalidateRuntimeResetQueries(utils: TrpcUtils): Promise<v
         utils.mode.list.invalidate(),
         utils.mode.getActive.invalidate(),
         utils.registry.listResolved.invalidate(),
+        utils.registry.searchRules.invalidate(),
         utils.registry.searchSkills.invalidate(),
         utils.permission.listPending.invalidate(),
         utils.tool.list.invalidate(),
@@ -201,10 +202,19 @@ export async function invalidateRuntimeResetQueries(utils: TrpcUtils): Promise<v
     invalidations.push(toVoidPromise(utils.profile.getExecutionPreset.invalidate()));
     invalidations.push(toVoidPromise(utils.runtime.listWorkspaceRoots.invalidate()));
     invalidations.push(toVoidPromise(utils.worktree.list.invalidate()));
+    invalidations.push(toVoidPromise(utils.session.getAttachedRules.invalidate()));
     invalidations.push(toVoidPromise(utils.session.getAttachedSkills.invalidate()));
     invalidations.push(toVoidPromise(utils.conversation.getEditPreference.invalidate()));
     invalidations.push(toVoidPromise(utils.conversation.getThreadTitlePreference.invalidate()));
 
     await Promise.all(invalidations);
+}
+
+export function invalidateSessionAttachedRules(utils: TrpcUtils): Promise<void> {
+    return toVoidPromise(utils.session.getAttachedRules.invalidate());
+}
+
+export function invalidateSessionAttachedSkills(utils: TrpcUtils): Promise<void> {
+    return toVoidPromise(utils.session.getAttachedSkills.invalidate());
 }
 

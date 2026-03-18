@@ -1,13 +1,19 @@
 import { modeStore, rulesetStore, settingsStore, skillfileStore } from '@/app/backend/persistence/stores';
 import type {
     ModeDefinitionRecord,
+    RulesetDefinitionRecord,
     SkillfileDefinitionRecord,
 } from '@/app/backend/persistence/types';
 import { InvariantError } from '@/app/backend/runtime/services/common/fatalErrors';
 import { pickActiveMode, toActiveModeKey } from '@/app/backend/runtime/services/mode/selection';
+import { getRegistryPresetKeysForMode } from '@/app/backend/runtime/contracts';
 import { buildDiscoveredAssets, replaceDiscoveredModes, replaceDiscoveredRulesets, replaceDiscoveredSkillfiles } from '@/app/backend/runtime/services/registry/discovery';
 import { resolveRegistryPaths } from '@/app/backend/runtime/services/registry/filesystem';
-import { resolveAssetDefinitions, resolveModeDefinitions } from '@/app/backend/runtime/services/registry/resolution';
+import {
+    resolveAssetDefinitions,
+    resolveContextualAssetDefinitions,
+    resolveModeDefinitions,
+} from '@/app/backend/runtime/services/registry/resolution';
 import type { RegistryListResolvedResult, RegistryRefreshResult } from '@/app/backend/runtime/services/registry/types';
 
 function buildDiscoveredRegistryView(input: {
@@ -113,14 +119,27 @@ export async function searchResolvedSkillfiles(input: {
     query?: string;
     workspaceFingerprint?: string;
     worktreeId?: `wt_${string}`;
+    topLevelTab?: 'chat' | 'agent' | 'orchestrator';
+    modeKey?: string;
 }): Promise<SkillfileDefinitionRecord[]> {
     const resolved = await listResolvedRegistry(input);
+    const skillfiles =
+        input.topLevelTab && input.modeKey
+            ? resolveContextualAssetDefinitions({
+                  items: resolved.resolved.skillfiles,
+                  ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
+                  activePresetKeys: getRegistryPresetKeysForMode({
+                      topLevelTab: input.topLevelTab,
+                      modeKey: input.modeKey,
+                  }),
+              })
+            : resolved.resolved.skillfiles;
     const query = input.query?.trim().toLowerCase();
     if (!query) {
-        return resolved.resolved.skillfiles;
+        return skillfiles;
     }
 
-    return resolved.resolved.skillfiles.filter((skillfile) => {
+    return skillfiles.filter((skillfile) => {
         const haystacks = [skillfile.name, skillfile.description ?? '', ...(skillfile.tags ?? [])].map((value) =>
             value.toLowerCase()
         );
@@ -128,41 +147,126 @@ export async function searchResolvedSkillfiles(input: {
     });
 }
 
-export async function resolveSkillfilesByAssetKeys(input: {
+export async function searchResolvedRulesets(input: {
     profileId: string;
-    assetKeys: string[];
+    query?: string;
     workspaceFingerprint?: string;
     worktreeId?: `wt_${string}`;
-}): Promise<{ skillfiles: SkillfileDefinitionRecord[]; missingAssetKeys: string[] }> {
+    topLevelTab?: 'chat' | 'agent' | 'orchestrator';
+    modeKey?: string;
+}): Promise<RulesetDefinitionRecord[]> {
+    const resolved = await listResolvedRegistry(input);
+    const rulesets =
+        input.topLevelTab && input.modeKey
+            ? resolveContextualAssetDefinitions({
+                  items: resolved.resolved.rulesets,
+                  ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
+                  activePresetKeys: getRegistryPresetKeysForMode({
+                      topLevelTab: input.topLevelTab,
+                      modeKey: input.modeKey,
+                  }),
+              })
+            : resolved.resolved.rulesets;
+    const query = input.query?.trim().toLowerCase();
+    if (!query) {
+        return rulesets;
+    }
+
+    return rulesets.filter((ruleset) => {
+        const haystacks = [ruleset.name, ruleset.description ?? '', ...(ruleset.tags ?? [])].map((value) =>
+            value.toLowerCase()
+        );
+        return haystacks.some((value) => value.includes(query));
+    });
+}
+
+function resolveContextualAssetKeys<T extends RulesetDefinitionRecord | SkillfileDefinitionRecord>(input: {
+    items: T[];
+    assetKeys: string[];
+    workspaceFingerprint?: string;
+    topLevelTab: 'chat' | 'agent' | 'orchestrator';
+    modeKey: string;
+}): { items: T[]; missingAssetKeys: string[] } {
     const uniqueAssetKeys = Array.from(
         new Set(input.assetKeys.map((assetKey) => assetKey.trim()).filter((assetKey) => assetKey.length > 0))
     );
     if (uniqueAssetKeys.length === 0) {
         return {
-            skillfiles: [],
+            items: [],
             missingAssetKeys: [],
         };
     }
 
-    const resolved = await listResolvedRegistry(input);
-    const skillfileByAssetKey = new Map(
-        resolved.resolved.skillfiles.map((skillfile) => [skillfile.assetKey, skillfile] as const)
-    );
+    const resolvedItems = resolveContextualAssetDefinitions({
+        items: input.items,
+        ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
+        activePresetKeys: getRegistryPresetKeysForMode({
+            topLevelTab: input.topLevelTab,
+            modeKey: input.modeKey,
+        }),
+    });
+    const itemByAssetKey = new Map(resolvedItems.map((item) => [item.assetKey, item] as const));
 
-    const skillfiles: SkillfileDefinitionRecord[] = [];
+    const items: T[] = [];
     const missingAssetKeys: string[] = [];
     for (const assetKey of uniqueAssetKeys) {
-        const skillfile = skillfileByAssetKey.get(assetKey);
-        if (!skillfile) {
+        const item = itemByAssetKey.get(assetKey);
+        if (!item) {
             missingAssetKeys.push(assetKey);
             continue;
         }
-        skillfiles.push(skillfile);
+        items.push(item);
     }
 
     return {
-        skillfiles,
+        items,
         missingAssetKeys,
+    };
+}
+
+export async function resolveSkillfilesByAssetKeys(input: {
+    profileId: string;
+    assetKeys: string[];
+    workspaceFingerprint?: string;
+    worktreeId?: `wt_${string}`;
+    topLevelTab: 'chat' | 'agent' | 'orchestrator';
+    modeKey: string;
+}): Promise<{ skillfiles: SkillfileDefinitionRecord[]; missingAssetKeys: string[] }> {
+    const resolved = await listResolvedRegistry(input);
+    const skillfiles = resolveContextualAssetKeys({
+        items: resolved.resolved.skillfiles,
+        assetKeys: input.assetKeys,
+        ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
+        topLevelTab: input.topLevelTab,
+        modeKey: input.modeKey,
+    });
+
+    return {
+        skillfiles: skillfiles.items,
+        missingAssetKeys: skillfiles.missingAssetKeys,
+    };
+}
+
+export async function resolveRulesetsByAssetKeys(input: {
+    profileId: string;
+    assetKeys: string[];
+    workspaceFingerprint?: string;
+    worktreeId?: `wt_${string}`;
+    topLevelTab: 'chat' | 'agent' | 'orchestrator';
+    modeKey: string;
+}): Promise<{ rulesets: RulesetDefinitionRecord[]; missingAssetKeys: string[] }> {
+    const resolved = await listResolvedRegistry(input);
+    const rulesets = resolveContextualAssetKeys({
+        items: resolved.resolved.rulesets,
+        assetKeys: input.assetKeys,
+        ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
+        topLevelTab: input.topLevelTab,
+        modeKey: input.modeKey,
+    });
+
+    return {
+        rulesets: rulesets.items,
+        missingAssetKeys: rulesets.missingAssetKeys,
     };
 }
 

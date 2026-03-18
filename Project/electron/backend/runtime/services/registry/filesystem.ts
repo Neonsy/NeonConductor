@@ -2,7 +2,7 @@ import { mkdir, readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { getPersistenceStoragePaths } from '@/app/backend/persistence/db';
-import type { RegistryScope, RegistrySourceKind } from '@/app/backend/runtime/contracts';
+import type { RegistryPresetKey, RegistryScope, RegistrySourceKind } from '@/app/backend/runtime/contracts';
 import type { RegistryPaths } from '@/app/backend/runtime/services/registry/types';
 import { workspaceContextService } from '@/app/backend/runtime/services/workspaceContext/service';
 
@@ -14,6 +14,8 @@ interface ParsedFrontmatter {
 export interface RegistryAssetFile {
     absolutePath: string;
     relativePath: string;
+    assetPath: string;
+    presetKey?: RegistryPresetKey;
     parsed: ParsedFrontmatter;
 }
 
@@ -145,6 +147,70 @@ async function collectMarkdownFiles(rootPath: string, relativePrefix = ''): Prom
     return results;
 }
 
+async function collectNamedMarkdownFiles(
+    rootPath: string,
+    fileName: string,
+    relativePrefix = ''
+): Promise<string[]> {
+    const dirents = await readdir(rootPath, { withFileTypes: true });
+    const results: string[] = [];
+
+    for (const dirent of dirents) {
+        const absolutePath = path.join(rootPath, dirent.name);
+        const relativePath = relativePrefix.length > 0 ? path.join(relativePrefix, dirent.name) : dirent.name;
+        if (dirent.isDirectory()) {
+            results.push(...(await collectNamedMarkdownFiles(absolutePath, fileName, relativePath)));
+            continue;
+        }
+
+        if (dirent.isFile() && dirent.name === fileName) {
+            results.push(relativePath);
+        }
+    }
+
+    return results;
+}
+
+function toSkillAssetPath(relativePath: string): string {
+    const normalizedPath = relativePath.replace(/\\/g, '/');
+    if (normalizedPath.toUpperCase() === 'SKILL.MD') {
+        return normalizedPath;
+    }
+
+    if (normalizedPath.toUpperCase().endsWith('/SKILL.MD')) {
+        return normalizedPath.slice(0, -'/SKILL.md'.length);
+    }
+
+    return normalizedPath;
+}
+
+async function collectSkillEntryFiles(rootPath: string): Promise<Array<{ relativePath: string; assetPath: string }>> {
+    const [topLevelEntries, nestedSkillEntries] = await Promise.all([
+        readdir(rootPath, { withFileTypes: true }),
+        collectNamedMarkdownFiles(rootPath, 'SKILL.md'),
+    ]);
+    const relativePathToAssetPath = new Map<string, string>();
+
+    for (const dirent of topLevelEntries) {
+        if (!dirent.isFile() || path.extname(dirent.name).toLowerCase() !== '.md') {
+            continue;
+        }
+
+        relativePathToAssetPath.set(dirent.name, dirent.name.replace(/\\/g, '/'));
+    }
+
+    for (const relativePath of nestedSkillEntries) {
+        relativePathToAssetPath.set(relativePath, toSkillAssetPath(relativePath));
+    }
+
+    return Array.from(relativePathToAssetPath.entries())
+        .sort(([leftPath], [rightPath]) => leftPath.localeCompare(rightPath))
+        .map(([relativePath, assetPath]) => ({
+            relativePath,
+            assetPath,
+        }));
+}
+
 async function ensureDirectory(pathToEnsure: string): Promise<void> {
     await mkdir(pathToEnsure, { recursive: true });
 }
@@ -179,24 +245,39 @@ export async function resolveRegistryPaths(input: {
 
 export async function loadRegistryAssetFiles(input: {
     rootPath: string;
-    directory: 'modes' | 'rules' | 'skills';
+    relativeDirectory: string;
+    assetKind: 'modes' | 'rules' | 'skills';
+    presetKey?: RegistryPresetKey;
 }): Promise<RegistryAssetFile[]> {
-    const scopedRoot = path.join(input.rootPath, input.directory);
+    const scopedRoot = path.join(input.rootPath, input.relativeDirectory);
     await ensureDirectory(scopedRoot);
-    const relativePaths = await collectMarkdownFiles(scopedRoot);
+    const entries =
+        input.assetKind === 'skills'
+            ? await collectSkillEntryFiles(scopedRoot)
+            : (await collectMarkdownFiles(scopedRoot)).map((relativePath) => ({
+                  relativePath,
+                  assetPath: relativePath.replace(/\\/g, '/'),
+              }));
     const files = await Promise.all(
-        relativePaths.map(async (relativePath) => {
+        entries.map(async ({ relativePath, assetPath }) => {
             const absolutePath = path.join(scopedRoot, relativePath);
             const content = await readFile(absolutePath, 'utf8');
             return {
                 absolutePath,
                 relativePath: relativePath.replace(/\\/g, '/'),
+                assetPath: assetPath.replace(/\\/g, '/'),
+                ...(input.presetKey ? { presetKey: input.presetKey } : {}),
                 parsed: parseFrontmatter(content),
             };
         })
     );
 
     return files.sort((left, right) => left.relativePath.localeCompare(right.relativePath));
+}
+
+export async function readRegistryMarkdownBody(absolutePath: string): Promise<string> {
+    const content = await readFile(absolutePath, 'utf8');
+    return parseFrontmatter(content).bodyMarkdown;
 }
 
 export function slugifyAssetKey(value: string): string {

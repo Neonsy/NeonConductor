@@ -44,6 +44,13 @@ export interface SessionAttachedSkillsTable {
     created_at: string;
 }
 
+export interface SessionAttachedRulesTable {
+    session_id: string;
+    profile_id: string;
+    asset_key: string;
+    created_at: string;
+}
+
 export interface RunsTable {
     id: string;
     session_id: string;
@@ -349,6 +356,7 @@ export interface RulesetsTable {
     asset_key: string;
     scope: string;
     workspace_fingerprint: string | null;
+    preset_key: string | null;
     name: string;
     body_markdown: string;
     source: string;
@@ -356,6 +364,7 @@ export interface RulesetsTable {
     origin_path: string | null;
     description: string | null;
     tags_json: string;
+    activation_mode: string;
     enabled: 0 | 1;
     precedence: number;
     created_at: string;
@@ -368,6 +377,7 @@ export interface SkillfilesTable {
     asset_key: string;
     scope: string;
     workspace_fingerprint: string | null;
+    preset_key: string | null;
     name: string;
     body_markdown: string;
     source: string;
@@ -589,6 +599,7 @@ export interface DatabaseSchema {
     provider_models: ProviderModelsTable;
     sessions: SessionsTable;
     session_attached_skills: SessionAttachedSkillsTable;
+    session_attached_rules: SessionAttachedRulesTable;
     runs: RunsTable;
     messages: MessagesTable;
     message_parts: MessagePartsTable;

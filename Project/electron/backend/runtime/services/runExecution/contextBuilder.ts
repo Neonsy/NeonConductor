@@ -46,13 +46,10 @@ export async function buildRunContext(input: {
         mode: ModeDefinition;
     };
 }): Promise<RunExecutionResult<RunContext | undefined>> {
-    if (input.topLevelTab === 'orchestrator') {
-        return okRunExecution(undefined);
-    }
-
     const systemPreludeResult = await buildSessionSystemPrelude({
         profileId: input.profileId,
         sessionId: input.sessionId,
+        prompt: input.prompt,
         topLevelTab: input.topLevelTab,
         ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
         resolvedMode: input.resolvedMode,

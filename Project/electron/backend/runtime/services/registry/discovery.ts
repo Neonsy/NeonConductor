@@ -4,12 +4,17 @@ import { getPersistence } from '@/app/backend/persistence/db';
 import { nowIso } from '@/app/backend/persistence/stores/shared/utils';
 import type {
     ModeExecutionPolicy,
+    RegistryPresetKey,
     RegistryScope,
+    RuleActivationMode,
     RegistrySourceKind,
     ToolCapability,
     TopLevelTab,
 } from '@/app/backend/runtime/contracts';
-import { toolCapabilities as knownToolCapabilities } from '@/app/backend/runtime/contracts';
+import {
+    ruleActivationModes,
+    toolCapabilities as knownToolCapabilities,
+} from '@/app/backend/runtime/contracts';
 import {
     loadRegistryAssetFiles,
     slugifyAssetKey,
@@ -31,6 +36,12 @@ function readNumber(value: unknown): number | undefined {
 
 function readTopLevelTab(value: unknown): TopLevelTab | undefined {
     return value === 'chat' || value === 'agent' || value === 'orchestrator' ? value : undefined;
+}
+
+function readRuleActivationMode(value: unknown): RuleActivationMode | undefined {
+    return typeof value === 'string' && ruleActivationModes.includes(value as RuleActivationMode)
+        ? (value as RuleActivationMode)
+        : undefined;
 }
 
 function readTags(value: unknown): string[] | undefined {
@@ -88,6 +99,7 @@ interface DiscoveredModeDraft extends Omit<DiscoveredModeInput, 'workspaceFinger
 
 interface DiscoveredAssetInput {
     assetKey: string;
+    presetKey?: RegistryPresetKey;
     name: string;
     bodyMarkdown: string;
     source: Extract<RegistrySourceKind, 'global_file' | 'workspace_file'>;
@@ -105,6 +117,23 @@ interface DiscoveredAssetDraft extends Omit<DiscoveredAssetInput, 'workspaceFing
     workspaceFingerprint?: string | undefined;
     description?: string | undefined;
     tags?: string[] | undefined;
+}
+
+interface DiscoveredRulesetInput extends DiscoveredAssetInput {
+    activationMode: RuleActivationMode;
+}
+
+interface DiscoveredRulesetDraft
+    extends Omit<DiscoveredRulesetInput, 'workspaceFingerprint' | 'description' | 'tags' | 'presetKey'> {
+    workspaceFingerprint?: string | undefined;
+    description?: string | undefined;
+    tags?: string[] | undefined;
+    presetKey?: RegistryPresetKey | undefined;
+}
+
+interface RegistryDirectoryInput {
+    relativeDirectory: string;
+    presetKey?: RegistryPresetKey;
 }
 
 function buildModeExecutionPolicy(input: {
@@ -148,6 +177,7 @@ function buildDiscoveredMode(input: DiscoveredModeDraft): DiscoveredModeInput {
 function buildDiscoveredAsset(input: DiscoveredAssetDraft): DiscoveredAssetInput {
     return {
         assetKey: input.assetKey,
+        ...(input.presetKey ? { presetKey: input.presetKey } : {}),
         name: input.name,
         bodyMarkdown: input.bodyMarkdown,
         source: input.source,
@@ -160,6 +190,26 @@ function buildDiscoveredAsset(input: DiscoveredAssetDraft): DiscoveredAssetInput
         enabled: input.enabled,
         precedence: input.precedence,
     };
+}
+
+function buildDiscoveredRuleset(input: DiscoveredRulesetDraft): DiscoveredRulesetInput {
+    const asset = buildDiscoveredAsset({
+        assetKey: input.assetKey,
+        ...(input.presetKey ? { presetKey: input.presetKey } : {}),
+        name: input.name,
+        bodyMarkdown: input.bodyMarkdown,
+        source: input.source,
+        sourceKind: input.sourceKind,
+        scope: input.scope,
+        ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
+        originPath: input.originPath,
+        ...(input.description ? { description: input.description } : {}),
+        ...(input.tags ? { tags: input.tags } : {}),
+        enabled: input.enabled,
+        precedence: input.precedence,
+    });
+
+    return { ...asset, activationMode: input.activationMode };
 }
 
 export async function replaceDiscoveredModes(input: {
@@ -219,7 +269,7 @@ export async function replaceDiscoveredRulesets(input: {
     profileId: string;
     scope: Extract<RegistryScope, 'global' | 'workspace'>;
     workspaceFingerprint?: string;
-    rulesets: DiscoveredAssetInput[];
+    rulesets: DiscoveredRulesetInput[];
 }): Promise<void> {
     const { db } = getPersistence();
     const now = nowIso();
@@ -249,6 +299,7 @@ export async function replaceDiscoveredRulesets(input: {
                 asset_key: ruleset.assetKey,
                 scope: ruleset.scope,
                 workspace_fingerprint: ruleset.workspaceFingerprint ?? null,
+                preset_key: ruleset.presetKey ?? null,
                 name: ruleset.name,
                 body_markdown: ruleset.bodyMarkdown,
                 source: ruleset.source,
@@ -256,6 +307,7 @@ export async function replaceDiscoveredRulesets(input: {
                 origin_path: ruleset.originPath,
                 description: ruleset.description ?? null,
                 tags_json: JSON.stringify(ruleset.tags ?? []),
+                activation_mode: ruleset.activationMode,
                 enabled: ruleset.enabled ? 1 : 0,
                 precedence: ruleset.precedence,
                 created_at: now,
@@ -299,6 +351,7 @@ export async function replaceDiscoveredSkillfiles(input: {
                 asset_key: skillfile.assetKey,
                 scope: skillfile.scope,
                 workspace_fingerprint: skillfile.workspaceFingerprint ?? null,
+                preset_key: skillfile.presetKey ?? null,
                 name: skillfile.name,
                 body_markdown: skillfile.bodyMarkdown,
                 source: skillfile.source,
@@ -321,15 +374,50 @@ export async function buildDiscoveredAssets(input: {
     workspaceFingerprint?: string;
 }): Promise<{
     modes: DiscoveredModeInput[];
-    rulesets: DiscoveredAssetInput[];
+    rulesets: DiscoveredRulesetInput[];
     skillfiles: DiscoveredAssetInput[];
 }> {
     const sourceKind = toSourceKind(input.scope);
-    const [modeFiles, rulesetFiles, skillFiles] = await Promise.all([
-        loadRegistryAssetFiles({ rootPath: input.rootPath, directory: 'modes' }),
-        loadRegistryAssetFiles({ rootPath: input.rootPath, directory: 'rules' }),
-        loadRegistryAssetFiles({ rootPath: input.rootPath, directory: 'skills' }),
+    const rulesetDirectories: RegistryDirectoryInput[] = [
+        { relativeDirectory: 'rules' },
+        { relativeDirectory: 'rules-ask', presetKey: 'ask' },
+        { relativeDirectory: 'rules-code', presetKey: 'code' },
+        { relativeDirectory: 'rules-debug', presetKey: 'debug' },
+        { relativeDirectory: 'rules-orchestrator', presetKey: 'orchestrator' },
+    ];
+    const skillDirectories: RegistryDirectoryInput[] = [
+        { relativeDirectory: 'skills' },
+        { relativeDirectory: 'skills-ask', presetKey: 'ask' },
+        { relativeDirectory: 'skills-code', presetKey: 'code' },
+        { relativeDirectory: 'skills-debug', presetKey: 'debug' },
+        { relativeDirectory: 'skills-orchestrator', presetKey: 'orchestrator' },
+    ];
+
+    const [modeFiles, rulesetFileGroups, skillFileGroups] = await Promise.all([
+        loadRegistryAssetFiles({ rootPath: input.rootPath, relativeDirectory: 'modes', assetKind: 'modes' }),
+        Promise.all(
+            rulesetDirectories.map((directory) =>
+                loadRegistryAssetFiles({
+                    rootPath: input.rootPath,
+                    relativeDirectory: directory.relativeDirectory,
+                    assetKind: 'rules',
+                    ...(directory.presetKey ? { presetKey: directory.presetKey } : {}),
+                })
+            )
+        ),
+        Promise.all(
+            skillDirectories.map((directory) =>
+                loadRegistryAssetFiles({
+                    rootPath: input.rootPath,
+                    relativeDirectory: directory.relativeDirectory,
+                    assetKind: 'skills',
+                    ...(directory.presetKey ? { presetKey: directory.presetKey } : {}),
+                })
+            )
+        ),
     ]);
+    const rulesetFiles = rulesetFileGroups.flat();
+    const skillFiles = skillFileGroups.flat();
 
     const modes = modeFiles.flatMap<DiscoveredModeInput>((file) => {
         const topLevelTab = readTopLevelTab(file.parsed.attributes['topLevelTab']) ?? 'agent';
@@ -356,7 +444,7 @@ export async function buildDiscoveredAssets(input: {
                 assetKey: slugifyAssetKey(
                     readString(file.parsed.attributes['assetKey']) ??
                         readString(file.parsed.attributes['key']) ??
-                        file.relativePath
+                        file.assetPath
                 ),
                 prompt: mapModePrompt(file.parsed.bodyMarkdown),
                 executionPolicy: buildModeExecutionPolicy({
@@ -380,14 +468,16 @@ export async function buildDiscoveredAssets(input: {
     });
 
     const rulesets = rulesetFiles.map((file) =>
-        buildDiscoveredAsset({
+        buildDiscoveredRuleset({
             assetKey: slugifyAssetKey(
                 readString(file.parsed.attributes['assetKey']) ??
                     readString(file.parsed.attributes['key']) ??
-                    file.relativePath
+                    file.assetPath
             ),
-            name: readString(file.parsed.attributes['name']) ?? titleCaseFromKey(file.relativePath),
+            ...(file.presetKey ? { presetKey: file.presetKey } : {}),
+            name: readString(file.parsed.attributes['name']) ?? titleCaseFromKey(file.assetPath),
             bodyMarkdown: file.parsed.bodyMarkdown,
+            activationMode: readRuleActivationMode(file.parsed.attributes['activationMode']) ?? 'always',
             source: sourceKind,
             sourceKind,
             scope: input.scope,
@@ -407,9 +497,10 @@ export async function buildDiscoveredAssets(input: {
             assetKey: slugifyAssetKey(
                 readString(file.parsed.attributes['assetKey']) ??
                     readString(file.parsed.attributes['key']) ??
-                    file.relativePath
+                    file.assetPath
             ),
-            name: readString(file.parsed.attributes['name']) ?? titleCaseFromKey(file.relativePath),
+            ...(file.presetKey ? { presetKey: file.presetKey } : {}),
+            name: readString(file.parsed.attributes['name']) ?? titleCaseFromKey(file.assetPath),
             bodyMarkdown: file.parsed.bodyMarkdown,
             source: sourceKind,
             sourceKind,

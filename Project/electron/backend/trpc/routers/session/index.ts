@@ -5,13 +5,17 @@ import {
     sessionByIdInputSchema,
     sessionCreateInputSchema,
     sessionEditInputSchema,
+    sessionGetAttachedRulesInputSchema,
     sessionGetAttachedSkillsInputSchema,
     sessionGetMessageMediaInputSchema,
     sessionListMessagesInputSchema,
     sessionListRunsInputSchema,
     sessionRevertInputSchema,
+    sessionSetAttachedRulesInputSchema,
     sessionSetAttachedSkillsInputSchema,
     sessionStartRunInputSchema,
+    type SessionAttachedRulesResult,
+    type SessionAttachedSkillsResult,
 } from '@/app/backend/runtime/contracts';
 import { eventMetadata } from '@/app/backend/runtime/services/common/logContext';
 import { runExecutionService } from '@/app/backend/runtime/services/runExecution/service';
@@ -20,6 +24,7 @@ import { runtimeEventLogService } from '@/app/backend/runtime/services/runtimeEv
 import { sessionBranchService } from '@/app/backend/runtime/services/sessionBranch/service';
 import { sessionEditService } from '@/app/backend/runtime/services/sessionEdit/service';
 import { sessionHistoryService } from '@/app/backend/runtime/services/sessionHistory/service';
+import { getAttachedRules, setAttachedRules } from '@/app/backend/runtime/services/sessionRules/service';
 import { getAttachedSkills, setAttachedSkills } from '@/app/backend/runtime/services/sessionSkills/service';
 import { publicProcedure, router } from '@/app/backend/trpc/init';
 import { raiseMappedTrpcError, toTrpcError, unwrapResultOrThrow } from '@/app/backend/trpc/trpcErrorMap';
@@ -64,14 +69,46 @@ export const sessionRouter = router({
     status: publicProcedure.input(sessionByIdInputSchema).query(async ({ input }) => {
         return sessionStore.status(input.profileId, input.sessionId);
     }),
+    getAttachedRules: publicProcedure.input(sessionGetAttachedRulesInputSchema).query(async ({ input }) => {
+        const result = await getAttachedRules(input);
+        return unwrapResultOrThrow(result, toTrpcError);
+    }),
     getAttachedSkills: publicProcedure.input(sessionGetAttachedSkillsInputSchema).query(async ({ input }) => {
         const result = await getAttachedSkills(input);
         return unwrapResultOrThrow(result, toTrpcError);
     }),
+    setAttachedRules: publicProcedure.input(sessionSetAttachedRulesInputSchema).mutation(async ({ input, ctx }) => {
+        const attachedRules = (await setAttachedRules(input)).match(
+            (value: SessionAttachedRulesResult) => value,
+            (error: Parameters<typeof raiseMappedTrpcError>[0]) => raiseMappedTrpcError(error, toTrpcError)
+        );
+        await runtimeEventLogService.append(
+            runtimeUpsertEvent({
+                entityType: 'session',
+                domain: 'session',
+                entityId: input.sessionId,
+                eventType: 'session.attached_rules.updated',
+                payload: {
+                    profileId: input.profileId,
+                    sessionId: input.sessionId,
+                    assetKeys: attachedRules.rulesets.map((ruleset) => ruleset.assetKey),
+                    presetKeys: attachedRules.presetKeys,
+                    ...(attachedRules.missingAssetKeys ? { missingAssetKeys: attachedRules.missingAssetKeys } : {}),
+                },
+                ...eventMetadata({
+                    requestId: ctx.requestId,
+                    correlationId: ctx.correlationId,
+                    origin: 'trpc.session.setAttachedRules',
+                }),
+            })
+        );
+
+        return attachedRules;
+    }),
     setAttachedSkills: publicProcedure.input(sessionSetAttachedSkillsInputSchema).mutation(async ({ input, ctx }) => {
         const attachedSkills = (await setAttachedSkills(input)).match(
-            (value) => value,
-            (error) => raiseMappedTrpcError(error, toTrpcError)
+            (value: SessionAttachedSkillsResult) => value,
+            (error: Parameters<typeof raiseMappedTrpcError>[0]) => raiseMappedTrpcError(error, toTrpcError)
         );
         await runtimeEventLogService.append(
             runtimeUpsertEvent({
@@ -82,7 +119,7 @@ export const sessionRouter = router({
                 payload: {
                     profileId: input.profileId,
                     sessionId: input.sessionId,
-                    assetKeys: attachedSkills.skillfiles.map((skillfile) => skillfile.assetKey),
+                    assetKeys: attachedSkills.skillfiles.map((skillfile: { assetKey: string }) => skillfile.assetKey),
                     ...(attachedSkills.missingAssetKeys ? { missingAssetKeys: attachedSkills.missingAssetKeys } : {}),
                 },
                 ...eventMetadata({

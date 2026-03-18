@@ -386,6 +386,7 @@ class SessionContextService {
         const systemPreludeResult = await buildSessionSystemPrelude({
             profileId: input.profileId,
             sessionId: input.sessionId,
+            prompt: '',
             topLevelTab: input.topLevelTab,
             resolvedMode: resolvedModeResult.value,
             ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),

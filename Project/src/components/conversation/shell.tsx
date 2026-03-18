@@ -97,6 +97,7 @@ export function ConversationShell({
         selectedSessionId: uiState.selectedSessionId,
         selectedRunId: uiState.selectedRunId,
         topLevelTab,
+        modeKey,
     });
     const mutations = useConversationMutations();
     type PlanStartResult = Awaited<ReturnType<typeof mutations.planStartMutation.mutateAsync>>;
@@ -961,7 +962,7 @@ export function ConversationShell({
             onEditMessage: editFlow.onEditMessage,
             onBranchFromMessage: editFlow.onBranchFromMessage,
             executionEnvironmentPanel: workspacePanels.executionEnvironmentPanel,
-            attachedSkillsPanel: workspacePanels.attachedSkillsPanel,
+            contextAssetsPanel: workspacePanels.contextAssetsPanel,
             diffCheckpointPanel: workspacePanels.diffCheckpointPanel,
             focusComposerRequestKey,
         },

@@ -43,6 +43,8 @@ describe('sessionSkills service', () => {
         const result = await getAttachedSkills({
             profileId,
             sessionId: 'sess_missing',
+            topLevelTab: 'agent',
+            modeKey: 'code',
         });
 
         expect(result.isErr()).toBe(true);
@@ -61,6 +63,8 @@ describe('sessionSkills service', () => {
         const result = await setAttachedSkills({
             profileId,
             sessionId,
+            topLevelTab: 'agent',
+            modeKey: 'code',
             assetKeys: ['skill.global.missing'],
         });
 

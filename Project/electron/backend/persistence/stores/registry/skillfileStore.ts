@@ -2,7 +2,7 @@ import { getPersistence } from '@/app/backend/persistence/db';
 import { parseEnumValue } from '@/app/backend/persistence/stores/shared/rowParsers';
 import { isJsonString, isJsonUnknownArray, parseJsonValue } from '@/app/backend/persistence/stores/shared/utils';
 import type { SkillfileDefinitionRecord } from '@/app/backend/persistence/types';
-import { registryScopes, registrySourceKinds } from '@/app/backend/runtime/contracts';
+import { registryPresetKeys, registryScopes, registrySourceKinds } from '@/app/backend/runtime/contracts';
 
 function parseTags(value: string): string[] | undefined {
     const parsed = parseJsonValue(value, [], isJsonUnknownArray).filter(isJsonString);
@@ -15,6 +15,7 @@ function mapSkillfileDefinition(row: {
     asset_key: string;
     scope: string;
     workspace_fingerprint: string | null;
+    preset_key: string | null;
     name: string;
     body_markdown: string;
     source: string;
@@ -34,6 +35,7 @@ function mapSkillfileDefinition(row: {
         assetKey: row.asset_key,
         scope: parseEnumValue(row.scope, 'skillfiles.scope', registryScopes),
         ...(row.workspace_fingerprint ? { workspaceFingerprint: row.workspace_fingerprint } : {}),
+        ...(row.preset_key ? { presetKey: parseEnumValue(row.preset_key, 'skillfiles.preset_key', registryPresetKeys) } : {}),
         name: row.name,
         bodyMarkdown: row.body_markdown,
         source: row.source,
@@ -59,6 +61,7 @@ export class SkillfileStore {
                 'asset_key',
                 'scope',
                 'workspace_fingerprint',
+                'preset_key',
                 'name',
                 'body_markdown',
                 'source',

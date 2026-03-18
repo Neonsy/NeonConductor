@@ -12,6 +12,7 @@ interface UseConversationQueriesInput {
     selectedSessionId: string | undefined;
     selectedRunId: string | undefined;
     topLevelTab: TopLevelTab;
+    modeKey: string;
 }
 
 export function useConversationQueries(input: UseConversationQueriesInput) {
@@ -63,13 +64,20 @@ export function useConversationQueries(input: UseConversationQueriesInput) {
         enabled: isEntityId(input.selectedSessionId, 'sess'),
         ...PROGRESSIVE_QUERY_OPTIONS,
     });
+    const attachedRegistryInput = {
+        profileId: input.profileId,
+        sessionId: selectedSessionIdForQueries,
+        topLevelTab: input.topLevelTab,
+        modeKey: input.modeKey,
+    };
+    const attachedRulesQuery = trpc.session.getAttachedRules.useQuery(attachedRegistryInput, {
+        enabled: isEntityId(input.selectedSessionId, 'sess') && input.topLevelTab !== 'chat',
+        ...PROGRESSIVE_QUERY_OPTIONS,
+    });
     const attachedSkillsQuery = trpc.session.getAttachedSkills.useQuery(
+        attachedRegistryInput,
         {
-            profileId: input.profileId,
-            sessionId: selectedSessionIdForQueries,
-        },
-        {
-            enabled: isEntityId(input.selectedSessionId, 'sess') && input.topLevelTab === 'agent',
+            enabled: isEntityId(input.selectedSessionId, 'sess') && input.topLevelTab !== 'chat',
             ...PROGRESSIVE_QUERY_OPTIONS,
         }
     );
@@ -136,6 +144,7 @@ export function useConversationQueries(input: UseConversationQueriesInput) {
         runsQuery,
         messagesInput,
         messagesQuery,
+        attachedRulesQuery,
         attachedSkillsQuery,
         usageSummaryQuery,
         runDiffsQuery,

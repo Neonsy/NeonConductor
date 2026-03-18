@@ -300,10 +300,18 @@ CREATE TABLE providers (
 CREATE TABLE rulesets (
     id TEXT PRIMARY KEY,
     profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    asset_key TEXT NOT NULL,
+    scope TEXT NOT NULL CHECK (scope IN ('global', 'workspace', 'session')),
     workspace_fingerprint TEXT NULL,
+    preset_key TEXT NULL CHECK (preset_key IN ('ask', 'code', 'debug', 'orchestrator')),
     name TEXT NOT NULL,
     body_markdown TEXT NOT NULL,
     source TEXT NOT NULL,
+    source_kind TEXT NOT NULL CHECK (source_kind IN ('system_seed', 'global_file', 'workspace_file', 'session_override')),
+    origin_path TEXT NULL,
+    description TEXT NULL,
+    tags_json TEXT NOT NULL DEFAULT '[]',
+    activation_mode TEXT NOT NULL CHECK (activation_mode IN ('always', 'auto', 'manual')),
     enabled INTEGER NOT NULL CHECK (enabled IN (0, 1)),
     precedence INTEGER NOT NULL,
     created_at TEXT NOT NULL,
@@ -398,10 +406,17 @@ CREATE TABLE "settings" (
 CREATE TABLE skillfiles (
     id TEXT PRIMARY KEY,
     profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    asset_key TEXT NOT NULL,
+    scope TEXT NOT NULL CHECK (scope IN ('global', 'workspace', 'session')),
     workspace_fingerprint TEXT NULL,
+    preset_key TEXT NULL CHECK (preset_key IN ('ask', 'code', 'debug', 'orchestrator')),
     name TEXT NOT NULL,
     body_markdown TEXT NOT NULL,
     source TEXT NOT NULL,
+    source_kind TEXT NOT NULL CHECK (source_kind IN ('system_seed', 'global_file', 'workspace_file', 'session_override')),
+    origin_path TEXT NULL,
+    description TEXT NULL,
+    tags_json TEXT NOT NULL DEFAULT '[]',
     enabled INTEGER NOT NULL CHECK (enabled IN (0, 1)),
     precedence INTEGER NOT NULL,
     created_at TEXT NOT NULL,
@@ -612,20 +627,6 @@ ALTER TABLE mode_definitions ADD COLUMN description TEXT NULL;
 ALTER TABLE mode_definitions ADD COLUMN tags_json TEXT NOT NULL DEFAULT '[]';
 ALTER TABLE mode_definitions ADD COLUMN precedence INTEGER NOT NULL DEFAULT 0;
 
-ALTER TABLE rulesets ADD COLUMN asset_key TEXT NOT NULL DEFAULT '';
-ALTER TABLE rulesets ADD COLUMN scope TEXT NOT NULL DEFAULT 'workspace';
-ALTER TABLE rulesets ADD COLUMN source_kind TEXT NOT NULL DEFAULT 'session_override';
-ALTER TABLE rulesets ADD COLUMN origin_path TEXT NULL;
-ALTER TABLE rulesets ADD COLUMN description TEXT NULL;
-ALTER TABLE rulesets ADD COLUMN tags_json TEXT NOT NULL DEFAULT '[]';
-
-ALTER TABLE skillfiles ADD COLUMN asset_key TEXT NOT NULL DEFAULT '';
-ALTER TABLE skillfiles ADD COLUMN scope TEXT NOT NULL DEFAULT 'workspace';
-ALTER TABLE skillfiles ADD COLUMN source_kind TEXT NOT NULL DEFAULT 'session_override';
-ALTER TABLE skillfiles ADD COLUMN origin_path TEXT NULL;
-ALTER TABLE skillfiles ADD COLUMN description TEXT NULL;
-ALTER TABLE skillfiles ADD COLUMN tags_json TEXT NOT NULL DEFAULT '[]';
-
 CREATE INDEX idx_mode_definitions_profile_tab_scope ON mode_definitions(profile_id, top_level_tab, scope, workspace_fingerprint);
 CREATE INDEX idx_rulesets_profile_scope ON rulesets(profile_id, scope, workspace_fingerprint);
 CREATE INDEX idx_skillfiles_profile_scope ON skillfiles(profile_id, scope, workspace_fingerprint);
@@ -653,6 +654,17 @@ CREATE TABLE session_attached_skills (
 
 CREATE INDEX idx_session_attached_skills_profile_session
     ON session_attached_skills(profile_id, session_id, created_at);
+
+CREATE TABLE session_attached_rules (
+    session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    asset_key TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (session_id, asset_key)
+);
+
+CREATE INDEX idx_session_attached_rules_profile_session
+    ON session_attached_rules(profile_id, session_id, created_at);
 
 ALTER TABLE permissions ADD COLUMN command_text TEXT NULL;
 ALTER TABLE permissions ADD COLUMN approval_candidates_json TEXT NOT NULL DEFAULT '[]';

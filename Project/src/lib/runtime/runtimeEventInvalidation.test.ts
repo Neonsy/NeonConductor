@@ -52,6 +52,7 @@ function createUtilsMock(calls: InvalidationCall[]) {
             listWorkspaceRoots: createInvalidateLeaf(calls, 'runtime.listWorkspaceRoots'),
         },
         session: {
+            getAttachedRules: createInvalidateLeaf(calls, 'session.getAttachedRules'),
             getAttachedSkills: createInvalidateLeaf(calls, 'session.getAttachedSkills'),
             list: createInvalidateLeaf(calls, 'session.list'),
             status: createInvalidateLeaf(calls, 'session.status'),
@@ -95,6 +96,7 @@ function createUtilsMock(calls: InvalidationCall[]) {
         },
         registry: {
             listResolved: createInvalidateLeaf(calls, 'registry.listResolved'),
+            searchRules: createInvalidateLeaf(calls, 'registry.searchRules'),
             searchSkills: createInvalidateLeaf(calls, 'registry.searchSkills'),
         },
         permission: {

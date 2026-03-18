@@ -9,11 +9,19 @@ function previewMarkdown(markdown: string): string {
     return lines.join('\n').trim();
 }
 
+function formatScopeLabel(asset: RegistryAsset): string {
+    const presetLabel = 'presetKey' in asset && asset.presetKey ? ` · ${asset.presetKey}` : '';
+    return `${asset.scope}${presetLabel}`;
+}
+
 export function AssetMeta({ asset }: { asset: RegistryAsset }) {
     return (
         <div className='mt-2 flex flex-wrap gap-2 text-[11px]'>
-            <span className='bg-background rounded-full px-2 py-1 font-medium'>{asset.scope}</span>
+            <span className='bg-background rounded-full px-2 py-1 font-medium'>{formatScopeLabel(asset)}</span>
             <span className='bg-background rounded-full px-2 py-1 font-medium'>{asset.sourceKind}</span>
+            {'activationMode' in asset ? (
+                <span className='bg-primary/10 text-primary rounded-full px-2 py-1 font-medium'>{asset.activationMode}</span>
+            ) : null}
             {asset.tags?.map((tag) => (
                 <span key={`${asset.id}:${tag}`} className='bg-primary/10 text-primary rounded-full px-2 py-1 font-medium'>
                     {tag}

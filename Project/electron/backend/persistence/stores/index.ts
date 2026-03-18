@@ -27,6 +27,7 @@ export { runUsageStore } from '@/app/backend/persistence/stores/conversation/run
 export { rulesetStore } from '@/app/backend/persistence/stores/registry/rulesetStore';
 export { runtimeEventStore } from '@/app/backend/persistence/stores/runtime/runtimeEventStore';
 export { sessionHistoryStore } from '@/app/backend/persistence/stores/conversation/sessions/sessionHistoryStore';
+export { sessionAttachedRuleStore } from '@/app/backend/persistence/stores/conversation/sessions/sessionAttachedRuleStore';
 export { sessionAttachedSkillStore } from '@/app/backend/persistence/stores/conversation/sessions/sessionAttachedSkillStore';
 export { sessionContextCompactionStore } from '@/app/backend/persistence/stores/conversation/sessions/sessionContextCompactionStore';
 export { sessionStore } from '@/app/backend/persistence/stores/conversation/sessions/sessionStore';

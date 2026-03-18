@@ -48,6 +48,7 @@ interface WorkspaceStatusPanelProps {
         | {
               modeLabel: string;
               rulesetCount: number;
+              attachedRuleCount: number;
               attachedSkillCount: number;
           }
         | undefined;
@@ -141,7 +142,7 @@ export function WorkspaceStatusPanel({
                 <StatusCard
                     label='Agent Context'
                     value={agentContextSummary.modeLabel}
-                    detail={`${formatInteger(agentContextSummary.rulesetCount)} rules · ${formatInteger(agentContextSummary.attachedSkillCount)} attached skills`}
+                    detail={`${formatInteger(agentContextSummary.rulesetCount)} rules · ${formatInteger(agentContextSummary.attachedRuleCount)} manual rules · ${formatInteger(agentContextSummary.attachedSkillCount)} attached skills`}
                 />
             ) : null}
             {registrySummary ? (

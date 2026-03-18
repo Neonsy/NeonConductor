@@ -55,7 +55,7 @@ export function SessionWorkspacePanel({
     canCompactContext,
     isCompactingContext,
     executionEnvironmentPanel,
-    attachedSkillsPanel,
+    contextAssetsPanel,
     diffCheckpointPanel,
     promptResetKey,
     focusComposerRequestKey,
@@ -141,13 +141,13 @@ export function SessionWorkspacePanel({
                 />
             ),
         },
-        ...(attachedSkillsPanel
+        ...(contextAssetsPanel
             ? [
                   {
-                      id: 'attached-skills',
-                      label: 'Attached skills',
-                      description: 'Agent-specific rules and attached skill context.',
-                      content: attachedSkillsPanel,
+                      id: 'context-assets',
+                      label: 'Context assets',
+                      description: 'Preset-aware manual rules and explicit skill context for this session.',
+                      content: contextAssetsPanel,
                   } satisfies WorkspaceInspectorSection,
               ]
             : []),

@@ -40,6 +40,7 @@ describe('buildSessionSystemPrelude', () => {
         const result = await buildSessionSystemPrelude({
             profileId,
             sessionId: session.session.id,
+            prompt: 'Inspect the workspace setup.',
             topLevelTab: 'agent',
             workspaceFingerprint: workspaceRoot.fingerprint,
             resolvedMode: {

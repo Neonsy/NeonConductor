@@ -2,7 +2,7 @@ import { getPersistence } from '@/app/backend/persistence/db';
 import { parseEnumValue } from '@/app/backend/persistence/stores/shared/rowParsers';
 import { isJsonString, isJsonUnknownArray, parseJsonValue } from '@/app/backend/persistence/stores/shared/utils';
 import type { RulesetDefinitionRecord } from '@/app/backend/persistence/types';
-import { registryScopes, registrySourceKinds } from '@/app/backend/runtime/contracts';
+import { registryPresetKeys, registryScopes, registrySourceKinds, ruleActivationModes } from '@/app/backend/runtime/contracts';
 
 function parseTags(value: string): string[] | undefined {
     const parsed = parseJsonValue(value, [], isJsonUnknownArray).filter(isJsonString);
@@ -15,6 +15,7 @@ function mapRulesetDefinition(row: {
     asset_key: string;
     scope: string;
     workspace_fingerprint: string | null;
+    preset_key: string | null;
     name: string;
     body_markdown: string;
     source: string;
@@ -22,6 +23,7 @@ function mapRulesetDefinition(row: {
     origin_path: string | null;
     description: string | null;
     tags_json: string;
+    activation_mode: string;
     enabled: 0 | 1;
     precedence: number;
     created_at: string;
@@ -34,8 +36,10 @@ function mapRulesetDefinition(row: {
         assetKey: row.asset_key,
         scope: parseEnumValue(row.scope, 'rulesets.scope', registryScopes),
         ...(row.workspace_fingerprint ? { workspaceFingerprint: row.workspace_fingerprint } : {}),
+        ...(row.preset_key ? { presetKey: parseEnumValue(row.preset_key, 'rulesets.preset_key', registryPresetKeys) } : {}),
         name: row.name,
         bodyMarkdown: row.body_markdown,
+        activationMode: parseEnumValue(row.activation_mode, 'rulesets.activation_mode', ruleActivationModes),
         source: row.source,
         sourceKind: parseEnumValue(row.source_kind, 'rulesets.source_kind', registrySourceKinds),
         ...(row.origin_path ? { originPath: row.origin_path } : {}),
@@ -59,6 +63,7 @@ export class RulesetStore {
                 'asset_key',
                 'scope',
                 'workspace_fingerprint',
+                'preset_key',
                 'name',
                 'body_markdown',
                 'source',
@@ -66,6 +71,7 @@ export class RulesetStore {
                 'origin_path',
                 'description',
                 'tags_json',
+                'activation_mode',
                 'enabled',
                 'precedence',
                 'created_at',

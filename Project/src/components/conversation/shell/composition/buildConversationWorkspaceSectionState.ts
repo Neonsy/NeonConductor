@@ -47,6 +47,7 @@ export function buildConversationWorkspaceSectionState(
                   agentContextSummary: {
                       modeLabel: input.shellViewModel.activeModeLabel,
                       rulesetCount: input.shellViewModel.registryResolvedQuery.data?.resolved.rulesets.length ?? 0,
+                      attachedRuleCount: input.shellViewModel.attachedRules.length,
                       attachedSkillCount: input.shellViewModel.attachedSkills.length,
                   },
               }

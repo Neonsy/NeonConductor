@@ -72,7 +72,7 @@ export function useConversationShellViewModel(input: {
             ...(selectedThread?.worktreeId ? { worktreeId: selectedThread.worktreeId } : {}),
         },
         {
-            enabled: input.topLevelTab === 'agent',
+            enabled: input.topLevelTab !== 'chat',
             ...PROGRESSIVE_QUERY_OPTIONS,
         }
     );
@@ -125,14 +125,14 @@ export function useConversationShellViewModel(input: {
     const selectedUsageSummary = input.queries.usageSummaryQuery.data?.summaries.find(
         (summary) => summary.providerId === input.runTargetState.selectedProviderIdForComposer
     );
+    const attachedRules = input.queries.attachedRulesQuery.data?.rulesets ?? [];
+    const missingAttachedRuleKeys = input.queries.attachedRulesQuery.data?.missingAssetKeys ?? [];
     const attachedSkills = input.queries.attachedSkillsQuery.data?.skillfiles ?? [];
     const missingAttachedSkillKeys = input.queries.attachedSkillsQuery.data?.missingAssetKeys ?? [];
     const activeModeLabel =
-        input.topLevelTab === 'agent'
-            ? registryResolvedQuery.data?.resolved.modes.find(
-                  (resolvedMode) => resolvedMode.topLevelTab === 'agent' && resolvedMode.modeKey === input.modeKey
-              )?.label ?? input.modeKey
-            : undefined;
+        registryResolvedQuery.data?.resolved.modes.find(
+            (resolvedMode) => resolvedMode.topLevelTab === input.topLevelTab && resolvedMode.modeKey === input.modeKey
+        )?.label ?? input.modeKey;
 
     return {
         selectedThread,
@@ -145,6 +145,8 @@ export function useConversationShellViewModel(input: {
         selectedProviderStatus,
         selectedModelLabel,
         selectedUsageSummary,
+        attachedRules,
+        missingAttachedRuleKeys,
         attachedSkills,
         missingAttachedSkillKeys,
         activeModeLabel,

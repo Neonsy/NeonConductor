@@ -478,15 +478,19 @@ name: Docs Lookup
         const attached = await caller.session.setAttachedSkills({
             profileId,
             sessionId: created.session.id,
+            topLevelTab: 'agent',
+            modeKey: 'review',
             assetKeys: ['repo_search'],
         });
-        expect(attached.skillfiles.map((skillfile) => skillfile.assetKey)).toEqual(['repo_search']);
+        expect(attached.skillfiles.map((skillfile: { assetKey: string }) => skillfile.assetKey)).toEqual(['repo_search']);
 
         const attachedSkills = await caller.session.getAttachedSkills({
             profileId,
             sessionId: created.session.id,
+            topLevelTab: 'agent',
+            modeKey: 'review',
         });
-        expect(attachedSkills.skillfiles.map((skillfile) => skillfile.name)).toEqual(['Workspace Search']);
+        expect(attachedSkills.skillfiles.map((skillfile: { name: string }) => skillfile.name)).toEqual(['Workspace Search']);
         expect(attachedSkills.missingAssetKeys).toBeUndefined();
 
         const started = await caller.session.startRun({
@@ -548,6 +552,8 @@ name: Docs Lookup
         const afterPrune = await caller.session.getAttachedSkills({
             profileId,
             sessionId: created.session.id,
+            topLevelTab: 'agent',
+            modeKey: 'review',
         });
         expect(afterPrune.skillfiles).toEqual([]);
         expect(afterPrune.missingAssetKeys).toEqual(['repo_search']);
@@ -579,6 +585,8 @@ name: Docs Lookup
             caller.session.setAttachedSkills({
                 profileId,
                 sessionId: detached.session.id,
+                topLevelTab: 'agent',
+                modeKey: 'review',
                 assetKeys: ['repo_search'],
             })
         ).rejects.toThrow('repo_search');

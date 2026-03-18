@@ -68,6 +68,7 @@ export interface RegistrySummary {
 export interface AgentContextSummary {
     modeLabel: string;
     rulesetCount: number;
+    attachedRuleCount: number;
     attachedSkillCount: number;
 }
 
@@ -123,7 +124,7 @@ export interface SessionWorkspacePanelProps {
     canCompactContext?: boolean;
     isCompactingContext?: boolean;
     executionEnvironmentPanel?: ReactNode;
-    attachedSkillsPanel?: ReactNode;
+    contextAssetsPanel?: ReactNode;
     diffCheckpointPanel?: ReactNode;
     promptResetKey?: number;
     focusComposerRequestKey?: number;

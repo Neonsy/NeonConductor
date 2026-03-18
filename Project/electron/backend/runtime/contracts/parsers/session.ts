@@ -18,11 +18,13 @@ import type {
     SessionByIdInput,
     SessionCreateInput,
     SessionEditInput,
+    SessionGetAttachedRulesInput,
     SessionGetMessageMediaInput,
     SessionGetAttachedSkillsInput,
     SessionListMessagesInput,
     SessionListRunsInput,
     SessionRevertInput,
+    SessionSetAttachedRulesInput,
     SessionSetAttachedSkillsInput,
     SessionStartRunInput,
 } from '@/app/backend/runtime/contracts/types';
@@ -136,8 +138,19 @@ export function parseSessionGetMessageMediaInput(input: unknown): SessionGetMess
     };
 }
 
+function parseSessionRegistryContextInput(input: unknown): SessionGetAttachedSkillsInput {
+    const source = readObject(input, 'input');
+
+    return {
+        profileId: readProfileId(source),
+        sessionId: readEntityId(source.sessionId, 'sessionId', 'sess'),
+        topLevelTab: readEnumValue(source.topLevelTab, 'topLevelTab', topLevelTabs),
+        modeKey: readString(source.modeKey, 'modeKey'),
+    };
+}
+
 export function parseSessionGetAttachedSkillsInput(input: unknown): SessionGetAttachedSkillsInput {
-    return parseSessionByIdInput(input);
+    return parseSessionRegistryContextInput(input);
 }
 
 export function parseSessionSetAttachedSkillsInput(input: unknown): SessionSetAttachedSkillsInput {
@@ -148,8 +161,24 @@ export function parseSessionSetAttachedSkillsInput(input: unknown): SessionSetAt
     }
 
     return {
-        profileId: readProfileId(source),
-        sessionId: readEntityId(source.sessionId, 'sessionId', 'sess'),
+        ...parseSessionRegistryContextInput(input),
+        assetKeys: rawAssetKeys.map((value, index) => readString(value, `assetKeys[${String(index)}]`)),
+    };
+}
+
+export function parseSessionGetAttachedRulesInput(input: unknown): SessionGetAttachedRulesInput {
+    return parseSessionRegistryContextInput(input);
+}
+
+export function parseSessionSetAttachedRulesInput(input: unknown): SessionSetAttachedRulesInput {
+    const source = readObject(input, 'input');
+    const rawAssetKeys = source.assetKeys;
+    if (!Array.isArray(rawAssetKeys)) {
+        throw new Error('Invalid "assetKeys": expected array.');
+    }
+
+    return {
+        ...parseSessionRegistryContextInput(input),
         assetKeys: rawAssetKeys.map((value, index) => readString(value, `assetKeys[${String(index)}]`)),
     };
 }
@@ -204,5 +233,7 @@ export const sessionListMessagesInputSchema = createParser(parseSessionListMessa
 export const sessionGetMessageMediaInputSchema = createParser(parseSessionGetMessageMediaInput);
 export const sessionGetAttachedSkillsInputSchema = createParser(parseSessionGetAttachedSkillsInput);
 export const sessionSetAttachedSkillsInputSchema = createParser(parseSessionSetAttachedSkillsInput);
+export const sessionGetAttachedRulesInputSchema = createParser(parseSessionGetAttachedRulesInput);
+export const sessionSetAttachedRulesInputSchema = createParser(parseSessionSetAttachedRulesInput);
 export const sessionEditInputSchema = createParser(parseSessionEditInput);
 export const sessionBranchFromMessageInputSchema = createParser(parseSessionBranchFromMessageInput);

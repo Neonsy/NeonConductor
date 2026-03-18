@@ -1,4 +1,5 @@
 import type {
+    RegistryPresetKey,
     RuntimeProviderId,
     SessionEditMode,
     RuntimeReasoningEffort,
@@ -10,7 +11,7 @@ import type {
 } from '@/app/backend/runtime/contracts/enums';
 import type { EntityId } from '@/app/backend/runtime/contracts/ids';
 import type { ProfileInput } from '@/app/backend/runtime/contracts/types/common';
-import type { SkillfileDefinition } from '@/app/backend/runtime/contracts/types/mode';
+import type { RulesetDefinition, SkillfileDefinition } from '@/app/backend/runtime/contracts/types/mode';
 
 export const composerImageAttachmentMimeTypes = ['image/jpeg', 'image/png', 'image/webp'] as const;
 export type ComposerImageAttachmentMimeType = (typeof composerImageAttachmentMimeTypes)[number];
@@ -116,14 +117,32 @@ export type SessionGetMessageMediaResult =
           found: true;
       } & SessionMessageMediaPayload);
 
-export type SessionGetAttachedSkillsInput = SessionByIdInput;
+export interface SessionRegistryContextInput extends SessionByIdInput {
+    topLevelTab: TopLevelTab;
+    modeKey: string;
+}
 
-export interface SessionSetAttachedSkillsInput extends SessionByIdInput {
+export type SessionGetAttachedSkillsInput = SessionRegistryContextInput;
+
+export interface SessionSetAttachedSkillsInput extends SessionRegistryContextInput {
     assetKeys: string[];
 }
 
 export interface SessionAttachedSkillsResult {
     sessionId: EntityId<'sess'>;
     skillfiles: SkillfileDefinition[];
+    missingAssetKeys?: string[];
+}
+
+export type SessionGetAttachedRulesInput = SessionRegistryContextInput;
+
+export interface SessionSetAttachedRulesInput extends SessionRegistryContextInput {
+    assetKeys: string[];
+}
+
+export interface SessionAttachedRulesResult {
+    sessionId: EntityId<'sess'>;
+    presetKeys: RegistryPresetKey[];
+    rulesets: RulesetDefinition[];
     missingAssetKeys?: string[];
 }

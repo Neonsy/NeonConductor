@@ -61,6 +61,13 @@ export interface SessionAttachedSkillRecord {
     createdAt: string;
 }
 
+export interface SessionAttachedRuleRecord {
+    sessionId: EntityId<'sess'>;
+    profileId: string;
+    assetKey: string;
+    createdAt: string;
+}
+
 export interface ProfileRecord {
     id: string;
     name: string;

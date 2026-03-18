@@ -16,6 +16,8 @@ export {
     invalidateProfileQueries,
     invalidateRuntimeResetQueries,
     invalidateSelectedMessages,
+    invalidateSessionAttachedRules,
+    invalidateSessionAttachedSkills,
     invalidateSessionCheckpoints,
     invalidateSessionList,
     invalidateSessionMessages,

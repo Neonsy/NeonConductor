@@ -1,5 +1,5 @@
 import { useConversationShellViewModel } from '@/web/components/conversation/hooks/useConversationShellViewModel';
-import { AttachedSkillsPanel } from '@/web/components/conversation/panels/attachedSkillsPanel';
+import { ContextAssetsPanel } from '@/web/components/conversation/panels/contextAssetsPanel';
 import { DiffCheckpointPanel } from '@/web/components/conversation/panels/diffCheckpointPanel';
 import { ExecutionEnvironmentPanel } from '@/web/components/conversation/panels/executionEnvironmentPanel';
 import { useConversationMutations } from '@/web/components/conversation/shell/actions/useConversationMutations';
@@ -94,19 +94,23 @@ export function buildConversationWorkspacePanels(input: BuildConversationWorkspa
                 }}
             />
         ),
-        attachedSkillsPanel:
-            input.topLevelTab === 'agent' && isEntityId(input.selectedSessionId, 'sess') ? (
-                <AttachedSkillsPanel
+        contextAssetsPanel:
+            input.topLevelTab !== 'chat' && isEntityId(input.selectedSessionId, 'sess') ? (
+                <ContextAssetsPanel
                     profileId={input.profileId}
                     sessionId={input.selectedSessionId}
+                    topLevelTab={input.topLevelTab}
+                    modeKey={input.modeKey}
                     {...(input.shellViewModel.selectedThread?.workspaceFingerprint
                         ? { workspaceFingerprint: input.shellViewModel.selectedThread.workspaceFingerprint }
                         : {})}
                     {...(input.shellViewModel.effectiveSelectedWorktreeId
                         ? { worktreeId: input.shellViewModel.effectiveSelectedWorktreeId }
                         : {})}
+                    attachedRules={input.shellViewModel.attachedRules}
+                    missingAttachedRuleKeys={input.shellViewModel.missingAttachedRuleKeys}
                     attachedSkills={input.shellViewModel.attachedSkills}
-                    missingAssetKeys={input.shellViewModel.missingAttachedSkillKeys}
+                    missingAttachedSkillKeys={input.shellViewModel.missingAttachedSkillKeys}
                 />
             ) : undefined,
         diffCheckpointPanel:

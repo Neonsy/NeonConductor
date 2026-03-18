@@ -1,4 +1,11 @@
-import type { RegistryScope, RegistrySourceKind, ToolCapability, TopLevelTab } from '@/app/backend/runtime/contracts/enums';
+import type {
+    RegistryScope,
+    RegistrySourceKind,
+    RuleActivationMode,
+    ToolCapability,
+    TopLevelTab,
+    RegistryPresetKey,
+} from '@/app/backend/runtime/contracts/enums';
 import type { ProfileInput } from '@/app/backend/runtime/contracts/types/common';
 
 export interface ModeExecutionPolicy {
@@ -32,10 +39,12 @@ export interface RulesetDefinition {
     id: string;
     profileId: string;
     assetKey: string;
+    presetKey?: RegistryPresetKey;
     scope: RegistryScope;
     workspaceFingerprint?: string;
     name: string;
     bodyMarkdown: string;
+    activationMode: RuleActivationMode;
     source: string;
     sourceKind: RegistrySourceKind;
     originPath?: string;
@@ -51,6 +60,7 @@ export interface SkillfileDefinition {
     id: string;
     profileId: string;
     assetKey: string;
+    presetKey?: RegistryPresetKey;
     scope: RegistryScope;
     workspaceFingerprint?: string;
     name: string;
