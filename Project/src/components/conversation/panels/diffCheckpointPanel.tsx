@@ -1,7 +1,7 @@
 import { startTransition, useState } from 'react';
 
 import { MarkdownContent } from '@/web/components/content/markdown/markdownContent';
-import { resolveSelectedDiffPath } from '@/web/components/conversation/panels/diffCheckpointPanelState';
+import { buildRollbackWarningLines, resolveSelectedDiffPath } from '@/web/components/conversation/panels/diffCheckpointPanelState';
 import { Button } from '@/web/components/ui/button';
 import { PROGRESSIVE_QUERY_OPTIONS } from '@/web/lib/query/progressiveQueryOptions';
 import { trpc } from '@/web/trpc/client';
@@ -60,6 +60,7 @@ export function DiffCheckpointPanel({
     const [confirmRollbackId, setConfirmRollbackId] = useState<CheckpointRecord['id'] | undefined>(undefined);
     const [rollbackTargetId, setRollbackTargetId] = useState<CheckpointRecord['id'] | undefined>(undefined);
     const [feedbackMessage, setFeedbackMessage] = useState<string | undefined>(undefined);
+    const selectedCheckpoint = checkpoints.find((checkpoint) => checkpoint.id === confirmRollbackId);
     const utils = trpc.useUtils();
     const patchQuery = trpc.diff.getFilePatch.useQuery(
         selectedDiff && resolvedSelectedPath
@@ -79,6 +80,21 @@ export function DiffCheckpointPanel({
         }
     );
     const openPathMutation = trpc.system.openPath.useMutation();
+    const rollbackPreviewQuery = trpc.checkpoint.previewRollback.useQuery(
+        confirmRollbackId
+            ? {
+                  profileId,
+                  checkpointId: confirmRollbackId,
+              }
+            : {
+                  profileId,
+                  checkpointId: 'ckpt_missing' as CheckpointRecord['id'],
+              },
+        {
+            enabled: Boolean(confirmRollbackId),
+            ...PROGRESSIVE_QUERY_OPTIONS,
+        }
+    );
     const rollbackMutation = trpc.checkpoint.rollback.useMutation({
         onSuccess: (result) => {
             if (!result.rolledBack) {
@@ -111,6 +127,10 @@ export function DiffCheckpointPanel({
 
     const patchMarkdown = patchQuery.data?.found && patchQuery.data.patch ? `\`\`\`diff\n${patchQuery.data.patch}\n\`\`\`` : '';
     const fileGroups = selectedDiff?.artifact.kind === 'git' ? groupFilesByDirectory(selectedDiff.artifact.files) : [];
+    const rollbackWarningState =
+        rollbackPreviewQuery.data?.found && rollbackPreviewQuery.data.preview.checkpointId === confirmRollbackId
+            ? buildRollbackWarningLines(rollbackPreviewQuery.data.preview)
+            : null;
 
     return (
         <section className='border-border bg-card/80 mt-3 rounded-2xl border p-4 shadow-sm'>
@@ -232,8 +252,35 @@ export function DiffCheckpointPanel({
                                                             Roll back this workspace to <span className='font-medium'>{checkpoint.id}</span>?
                                                         </p>
                                                         <p className='text-muted-foreground mt-1 text-xs'>
-                                                            This resets tracked and untracked files inside the active workspace.
+                                                            Restore the native snapshot for{' '}
+                                                            <span className='font-medium'>{checkpoint.executionTargetLabel}</span>.
                                                         </p>
+                                                        <div className='mt-2 space-y-1 text-xs'>
+                                                            <p className='text-muted-foreground'>
+                                                                Target: {checkpoint.executionTargetKind} · {checkpoint.executionTargetKey}
+                                                            </p>
+                                                            <p className='text-muted-foreground'>
+                                                                Snapshot: {String(checkpoint.snapshotFileCount)} files
+                                                            </p>
+                                                            {rollbackPreviewQuery.isPending && selectedCheckpoint?.id === checkpoint.id ? (
+                                                                <p className='text-muted-foreground'>Checking whether other chats share this target…</p>
+                                                            ) : null}
+                                                            {rollbackWarningState ? (
+                                                                <>
+                                                                    {rollbackWarningState.lines.map((line) => (
+                                                                        <p
+                                                                            key={line}
+                                                                            className={
+                                                                                rollbackWarningState.tone === 'warning'
+                                                                                    ? 'text-destructive'
+                                                                                    : 'text-emerald-700 dark:text-emerald-400'
+                                                                            }>
+                                                                            {line}
+                                                                        </p>
+                                                                    ))}
+                                                                </>
+                                                            ) : null}
+                                                        </div>
                                                         <div className='mt-3 flex flex-wrap gap-2'>
                                                             <Button
                                                                 type='button'

@@ -752,6 +752,9 @@ describe('runtime contracts: permissions and tooling', () => {
             throw new Error('Expected mutating agent run to start.');
         }
 
+        await vi.waitFor(() => {
+            expect(resolveFetch).toBeTypeOf('function');
+        });
         writeFileSync(path.join(workspacePath, 'README.md'), 'changed by checkpoint\n');
         resolveFetch?.();
         await waitForRunStatus(caller, profileId, created.session.id, 'completed');
@@ -803,6 +806,20 @@ describe('runtime contracts: permissions and tooling', () => {
         if (!checkpoint) {
             throw new Error('Expected auto-created checkpoint for mutating run.');
         }
+        expect(checkpoint.checkpointKind).toBe('auto');
+        expect(checkpoint.executionTargetKind).toBe('workspace');
+
+        const preview = await caller.checkpoint.previewRollback({
+            profileId,
+            checkpointId: checkpoint.id,
+        });
+        expect(preview.found).toBe(true);
+        if (!preview.found) {
+            throw new Error('Expected rollback preview for checkpoint.');
+        }
+        expect(preview.preview.isSharedTarget).toBe(false);
+        expect(preview.preview.hasLaterForeignChanges).toBe(false);
+        expect(preview.preview.affectedSessions).toHaveLength(1);
 
         writeFileSync(path.join(workspacePath, 'README.md'), 'drifted\n');
         const rollback = await caller.checkpoint.rollback({
@@ -811,9 +828,16 @@ describe('runtime contracts: permissions and tooling', () => {
             confirm: true,
         });
         expect(rollback.rolledBack).toBe(true);
+        expect(rollback.safetyCheckpoint?.id).toBeDefined();
         expect(readFileSync(path.join(workspacePath, 'README.md'), 'utf8').replace(/\r\n/g, '\n')).toBe(
-            'changed by checkpoint\n'
+            'base\n'
         );
+        const checkpointsAfterRollback = await caller.checkpoint.list({
+            profileId,
+            sessionId: created.session.id,
+        });
+        expect(checkpointsAfterRollback.checkpoints).toHaveLength(2);
+        expect(checkpointsAfterRollback.checkpoints.some((candidate) => candidate.checkpointKind === 'safety')).toBe(true);
 
         rmSync(workspacePath, { recursive: true, force: true });
     }, 15_000);
@@ -1520,7 +1544,7 @@ describe('runtime contracts: permissions and tooling', () => {
     }, 15_000);
 
 
-    it('records unsupported diff artifacts for non-git mutation runs and skips checkpoints', async () => {
+    it('records unsupported diff artifacts for non-git mutation runs and still supports native rollback', async () => {
         const caller = createCaller();
         const workspacePath = mkdtempSync(path.join(os.tmpdir(), 'neonconductor-diff-unsupported-'));
         let resolveFetch: (() => void) | undefined;
@@ -1609,6 +1633,9 @@ describe('runtime contracts: permissions and tooling', () => {
             throw new Error('Expected non-git mutating run to start.');
         }
 
+        await vi.waitFor(() => {
+            expect(resolveFetch).toBeTypeOf('function');
+        });
         writeFileSync(path.join(workspacePath, 'notes.txt'), 'new content\n');
         resolveFetch?.();
         await waitForRunStatus(caller, profileId, created.session.id, 'completed');
@@ -1633,9 +1660,173 @@ describe('runtime contracts: permissions and tooling', () => {
             profileId,
             sessionId: created.session.id,
         });
-        expect(checkpoints.checkpoints).toEqual([]);
+        expect(checkpoints.checkpoints).toHaveLength(1);
+        const checkpoint = checkpoints.checkpoints[0];
+        expect(checkpoint?.checkpointKind).toBe('auto');
+        expect(checkpoint?.snapshotFileCount).toBeGreaterThanOrEqual(0);
+        if (!checkpoint) {
+            throw new Error('Expected native checkpoint for non-git mutation run.');
+        }
+
+        const preview = await caller.checkpoint.previewRollback({
+            profileId,
+            checkpointId: checkpoint.id,
+        });
+        expect(preview.found).toBe(true);
+        if (!preview.found) {
+            throw new Error('Expected rollback preview for non-git checkpoint.');
+        }
+        expect(preview.preview.isSharedTarget).toBe(false);
+
+        writeFileSync(path.join(workspacePath, 'notes.txt'), 'drifted\n');
+        const rollback = await caller.checkpoint.rollback({
+            profileId,
+            checkpointId: checkpoint.id,
+            confirm: true,
+        });
+        expect(rollback.rolledBack).toBe(true);
+        expect(() => readFileSync(path.join(workspacePath, 'notes.txt'), 'utf8')).toThrow();
 
         rmSync(workspacePath, { recursive: true, force: true });
     });
+
+    it('surfaces shared-target rollback risk when two chats point at the same workspace path', async () => {
+        const caller = createCaller();
+        const workspacePath = mkdtempSync(path.join(os.tmpdir(), 'neonconductor-checkpoint-shared-target-'));
+
+        vi.stubGlobal(
+            'fetch',
+            vi.fn().mockResolvedValue({
+                ok: true,
+                status: 200,
+                statusText: 'OK',
+                json: () => ({
+                    choices: [
+                        {
+                            message: {
+                                content: 'mutation complete',
+                            },
+                        },
+                    ],
+                    usage: {
+                        prompt_tokens: 10,
+                        completion_tokens: 20,
+                        total_tokens: 30,
+                    },
+                }),
+            })
+        );
+
+        const configured = await caller.provider.setApiKey({
+            profileId,
+            providerId: 'openai',
+            apiKey: 'openai-shared-target-key',
+        });
+        expect(configured.success).toBe(true);
+
+        const firstThread = await caller.conversation.createThread({
+            profileId,
+            topLevelTab: 'agent',
+            scope: 'workspace',
+            workspacePath,
+            title: 'Shared Target A',
+        });
+        const secondThread = await caller.conversation.createThread({
+            profileId,
+            topLevelTab: 'agent',
+            scope: 'workspace',
+            workspacePath,
+            title: 'Shared Target B',
+        });
+        const listedThreads = await caller.conversation.listThreads({
+            profileId,
+            activeTab: 'agent',
+            showAllModes: true,
+            groupView: 'workspace',
+            scope: 'workspace',
+            sort: 'latest',
+        });
+        const firstWorkspaceThread = listedThreads.threads.find((item) => item.id === firstThread.thread.id);
+        const secondWorkspaceThread = listedThreads.threads.find((item) => item.id === secondThread.thread.id);
+        if (!firstWorkspaceThread?.workspaceFingerprint || !secondWorkspaceThread?.workspaceFingerprint) {
+            throw new Error('Expected shared workspace fingerprints for both threads.');
+        }
+
+        const firstSession = await caller.session.create({
+            profileId,
+            threadId: requireEntityId(firstThread.thread.id, 'thr', 'Expected first shared-target thread id.'),
+            kind: 'local',
+        });
+        const secondSession = await caller.session.create({
+            profileId,
+            threadId: requireEntityId(secondThread.thread.id, 'thr', 'Expected second shared-target thread id.'),
+            kind: 'local',
+        });
+        if (!firstSession.created || !secondSession.created) {
+            throw new Error('Expected both shared-target sessions to be created.');
+        }
+
+        const firstRun = await caller.session.startRun({
+            profileId,
+            sessionId: firstSession.session.id,
+            prompt: 'First shared checkpoint',
+            topLevelTab: 'agent',
+            modeKey: 'code',
+            workspaceFingerprint: firstWorkspaceThread.workspaceFingerprint,
+            runtimeOptions: defaultRuntimeOptions,
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
+        });
+        expect(firstRun.accepted).toBe(true);
+        if (!firstRun.accepted) {
+            throw new Error('Expected first shared-target run to start.');
+        }
+        await waitForRunStatus(caller, profileId, firstSession.session.id, 'completed');
+
+        const secondRun = await caller.session.startRun({
+            profileId,
+            sessionId: secondSession.session.id,
+            prompt: 'Second shared checkpoint',
+            topLevelTab: 'agent',
+            modeKey: 'code',
+            workspaceFingerprint: secondWorkspaceThread.workspaceFingerprint,
+            runtimeOptions: defaultRuntimeOptions,
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
+        });
+        expect(secondRun.accepted).toBe(true);
+        if (!secondRun.accepted) {
+            throw new Error('Expected second shared-target run to start.');
+        }
+        await waitForRunStatus(caller, profileId, secondSession.session.id, 'completed');
+
+        const firstCheckpoints = await caller.checkpoint.list({
+            profileId,
+            sessionId: firstSession.session.id,
+        });
+        const firstCheckpoint = firstCheckpoints.checkpoints[0];
+        if (!firstCheckpoint) {
+            throw new Error('Expected shared-target checkpoint for first session.');
+        }
+
+        const preview = await caller.checkpoint.previewRollback({
+            profileId,
+            checkpointId: firstCheckpoint.id,
+        });
+        expect(preview.found).toBe(true);
+        if (!preview.found) {
+            throw new Error('Expected shared-target rollback preview.');
+        }
+        expect(preview.preview.isSharedTarget).toBe(true);
+        expect(preview.preview.hasLaterForeignChanges).toBe(true);
+        expect(preview.preview.isHighRisk).toBe(true);
+        expect(preview.preview.affectedSessions).toHaveLength(2);
+        expect(preview.preview.affectedSessions.map((session) => session.threadTitle).sort()).toEqual([
+            'Shared Target A',
+            'Shared Target B',
+        ]);
+
+        rmSync(workspacePath, { recursive: true, force: true });
+    }, 15_000);
 
 });

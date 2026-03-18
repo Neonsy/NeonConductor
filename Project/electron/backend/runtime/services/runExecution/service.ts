@@ -1,6 +1,7 @@
 import { messageStore, runStore, sessionStore, threadStore } from '@/app/backend/persistence/stores';
 import type { ProviderRuntimeTransportSelection } from '@/app/backend/providers/types';
 import type { EntityId } from '@/app/backend/runtime/contracts';
+import { isEntityId } from '@/app/backend/runtime/contracts';
 import { InvariantError } from '@/app/backend/runtime/services/common/fatalErrors';
 import { withCorrelationContext } from '@/app/backend/runtime/services/common/logContext';
 import { sessionContextService } from '@/app/backend/runtime/services/context/sessionContextService';
@@ -142,6 +143,9 @@ export class RunExecutionService {
             input,
             prepared,
         });
+        if (!isEntityId(sessionThread.thread.id, 'thr')) {
+            throw new InvariantError('Session thread id is invalid for run execution.');
+        }
         const transportSelection = toTransportSelection({
             selected: prepared.initialTransport.selected,
             requested: prepared.initialTransport.requested,
@@ -155,6 +159,7 @@ export class RunExecutionService {
         const completion = runToTerminalState({
             profileId: input.profileId,
             sessionId: input.sessionId,
+            threadId: sessionThread.thread.id,
             runId: persisted.run.id,
             topLevelTab: input.topLevelTab,
             modeKey: input.modeKey,
@@ -179,6 +184,7 @@ export class RunExecutionService {
             ...(prepared.runContext ? { contextMessages: prepared.runContext.messages } : {}),
             ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
             ...(workspaceContext.kind === 'worktree' ? { worktreeId: workspaceContext.worktree.id } : {}),
+            workspaceContext,
             assistantMessageId: persisted.assistantMessageId,
             signal: controller.signal,
         })

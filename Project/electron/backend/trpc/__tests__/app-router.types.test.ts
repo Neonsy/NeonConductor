@@ -665,7 +665,18 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
     expectTypeOf<Outputs['checkpoint']['list']>().toExtend<{
         checkpoints: Array<{
             id: string;
-            diffId: string;
+            sessionId: string;
+            threadId: string;
+            topLevelTab: 'chat' | 'agent' | 'orchestrator';
+            modeKey: string;
+            summary: string;
+            executionTargetKey: string;
+            executionTargetKind: 'workspace' | 'worktree';
+            executionTargetLabel: string;
+            createdByKind: 'system' | 'user';
+            checkpointKind: 'auto' | 'safety' | 'named';
+            snapshotFileCount: number;
+            diffId?: string;
         }>;
     }>();
 

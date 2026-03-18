@@ -5,7 +5,12 @@ import {
     readObject,
     readProfileId,
 } from '@/app/backend/runtime/contracts/parsers/helpers';
-import type { CheckpointCreateInput, CheckpointListInput, CheckpointRollbackInput } from '@/app/backend/runtime/contracts/types';
+import type {
+    CheckpointCreateInput,
+    CheckpointListInput,
+    CheckpointRollbackInput,
+    CheckpointRollbackPreviewInput,
+} from '@/app/backend/runtime/contracts/types';
 
 export function parseCheckpointCreateInput(input: unknown): CheckpointCreateInput {
     const source = readObject(input, 'input');
@@ -35,6 +40,16 @@ export function parseCheckpointRollbackInput(input: unknown): CheckpointRollback
     };
 }
 
+export function parseCheckpointRollbackPreviewInput(input: unknown): CheckpointRollbackPreviewInput {
+    const source = readObject(input, 'input');
+
+    return {
+        profileId: readProfileId(source),
+        checkpointId: readEntityId(source.checkpointId, 'checkpointId', 'ckpt'),
+    };
+}
+
 export const checkpointCreateInputSchema = createParser(parseCheckpointCreateInput);
 export const checkpointListInputSchema = createParser(parseCheckpointListInput);
 export const checkpointRollbackInputSchema = createParser(parseCheckpointRollbackInput);
+export const checkpointRollbackPreviewInputSchema = createParser(parseCheckpointRollbackPreviewInput);

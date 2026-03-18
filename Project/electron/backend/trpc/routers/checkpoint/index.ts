@@ -1,5 +1,10 @@
-import { checkpointCreateInputSchema, checkpointListInputSchema, checkpointRollbackInputSchema } from '@/app/backend/runtime/contracts';
-import { createCheckpoint, listCheckpoints, rollbackCheckpoint } from '@/app/backend/runtime/services/checkpoint/service';
+import {
+    checkpointCreateInputSchema,
+    checkpointListInputSchema,
+    checkpointRollbackInputSchema,
+    checkpointRollbackPreviewInputSchema,
+} from '@/app/backend/runtime/contracts';
+import { createCheckpoint, getRollbackPreview, listCheckpoints, rollbackCheckpoint } from '@/app/backend/runtime/services/checkpoint/service';
 import { runtimeStatusEvent, runtimeUpsertEvent } from '@/app/backend/runtime/services/runtimeEventEnvelope';
 import { runtimeEventLogService } from '@/app/backend/runtime/services/runtimeEventLog';
 import { publicProcedure, router } from '@/app/backend/trpc/init';
@@ -31,6 +36,9 @@ export const checkpointRouter = router({
     list: publicProcedure.input(checkpointListInputSchema).query(async ({ input }) => {
         return listCheckpoints(input);
     }),
+    previewRollback: publicProcedure.input(checkpointRollbackPreviewInputSchema).query(async ({ input }) => {
+        return getRollbackPreview(input);
+    }),
     rollback: publicProcedure.input(checkpointRollbackInputSchema).mutation(async ({ input, ctx }) => {
         const result = await rollbackCheckpoint(input);
         if (result.rolledBack && result.checkpoint) {
@@ -40,14 +48,14 @@ export const checkpointRouter = router({
                     domain: 'checkpoint',
                     entityId: result.checkpoint.id,
                     eventType: 'checkpoint.rolled_back',
-                    payload: {
-                        profileId: input.profileId,
-                        checkpointId: result.checkpoint.id,
-                        sessionId: result.checkpoint.sessionId,
-                        runId: result.checkpoint.runId,
-                        topLevelTab: result.checkpoint.topLevelTab,
-                        modeKey: result.checkpoint.modeKey,
-                        requestId: ctx.requestId,
+                        payload: {
+                            profileId: input.profileId,
+                            checkpointId: result.checkpoint.id,
+                            sessionId: result.checkpoint.sessionId,
+                            runId: result.checkpoint.runId ?? null,
+                            topLevelTab: result.checkpoint.topLevelTab,
+                            modeKey: result.checkpoint.modeKey,
+                            requestId: ctx.requestId,
                         correlationId: ctx.correlationId,
                     },
                 })

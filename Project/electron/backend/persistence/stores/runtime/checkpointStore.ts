@@ -9,10 +9,17 @@ function mapCheckpointRecord(row: {
     id: string;
     profile_id: string;
     session_id: string;
-    run_id: string;
-    diff_id: string;
+    thread_id: string;
+    run_id: string | null;
+    diff_id: string | null;
     workspace_fingerprint: string;
     worktree_id: string | null;
+    execution_target_key: string;
+    execution_target_kind: string;
+    execution_target_label: string;
+    created_by_kind: string;
+    checkpoint_kind: string;
+    snapshot_file_count: number;
     top_level_tab: string;
     mode_key: string;
     summary: string;
@@ -23,10 +30,19 @@ function mapCheckpointRecord(row: {
         id: parseEntityId(row.id, 'checkpoints.id', 'ckpt'),
         profileId: row.profile_id,
         sessionId: parseEntityId(row.session_id, 'checkpoints.session_id', 'sess'),
-        runId: parseEntityId(row.run_id, 'checkpoints.run_id', 'run'),
-        diffId: row.diff_id,
+        threadId: parseEntityId(row.thread_id, 'checkpoints.thread_id', 'thr'),
+        ...(row.run_id ? { runId: parseEntityId(row.run_id, 'checkpoints.run_id', 'run') } : {}),
+        ...(row.diff_id ? { diffId: row.diff_id } : {}),
         workspaceFingerprint: row.workspace_fingerprint,
         ...(row.worktree_id ? { worktreeId: parseEntityId(row.worktree_id, 'checkpoints.worktree_id', 'wt') } : {}),
+        executionTargetKey: row.execution_target_key,
+        executionTargetKind:
+            row.execution_target_kind === 'worktree' ? 'worktree' : 'workspace',
+        executionTargetLabel: row.execution_target_label,
+        createdByKind: row.created_by_kind === 'user' ? 'user' : 'system',
+        checkpointKind:
+            row.checkpoint_kind === 'safety' ? 'safety' : row.checkpoint_kind === 'named' ? 'named' : 'auto',
+        snapshotFileCount: row.snapshot_file_count,
         topLevelTab: parseEnumValue(row.top_level_tab, 'checkpoints.top_level_tab', topLevelTabs),
         modeKey: row.mode_key,
         summary: row.summary,
@@ -39,10 +55,17 @@ const CHECKPOINT_COLUMNS = [
     'id',
     'profile_id',
     'session_id',
+    'thread_id',
     'run_id',
     'diff_id',
     'workspace_fingerprint',
     'worktree_id',
+    'execution_target_key',
+    'execution_target_kind',
+    'execution_target_label',
+    'created_by_kind',
+    'checkpoint_kind',
+    'snapshot_file_count',
     'top_level_tab',
     'mode_key',
     'summary',
@@ -50,21 +73,32 @@ const CHECKPOINT_COLUMNS = [
     'updated_at',
 ] as const;
 
+interface CheckpointInsertInput {
+    profileId: string;
+    sessionId: CheckpointRecord['sessionId'];
+    threadId: CheckpointRecord['threadId'];
+    runId?: CheckpointRecord['runId'];
+    diffId?: string;
+    workspaceFingerprint: string;
+    worktreeId?: CheckpointRecord['worktreeId'];
+    executionTargetKey: string;
+    executionTargetKind: CheckpointRecord['executionTargetKind'];
+    executionTargetLabel: string;
+    createdByKind: CheckpointRecord['createdByKind'];
+    checkpointKind: CheckpointRecord['checkpointKind'];
+    snapshotFileCount: number;
+    topLevelTab: CheckpointRecord['topLevelTab'];
+    modeKey: string;
+    summary: string;
+}
+
 export class CheckpointStore {
-    async create(input: {
-        profileId: string;
-        sessionId: CheckpointRecord['sessionId'];
-        runId: CheckpointRecord['runId'];
-        diffId: string;
-        workspaceFingerprint: string;
-        worktreeId?: CheckpointRecord['worktreeId'];
-        topLevelTab: CheckpointRecord['topLevelTab'];
-        modeKey: string;
-        summary: string;
-    }): Promise<CheckpointRecord> {
-        const existing = await this.getByRunId(input.profileId, input.runId);
-        if (existing) {
-            return existing;
+    async create(input: CheckpointInsertInput): Promise<CheckpointRecord> {
+        if (input.runId) {
+            const existing = await this.getByRunId(input.profileId, input.runId);
+            if (existing) {
+                return existing;
+            }
         }
 
         const { db } = getPersistence();
@@ -75,10 +109,17 @@ export class CheckpointStore {
                 id: createEntityId('ckpt'),
                 profile_id: input.profileId,
                 session_id: input.sessionId,
-                run_id: input.runId,
-                diff_id: input.diffId,
+                thread_id: input.threadId,
+                run_id: input.runId ?? null,
+                diff_id: input.diffId ?? null,
                 workspace_fingerprint: input.workspaceFingerprint,
                 worktree_id: input.worktreeId ?? null,
+                execution_target_key: input.executionTargetKey,
+                execution_target_kind: input.executionTargetKind,
+                execution_target_label: input.executionTargetLabel,
+                created_by_kind: input.createdByKind,
+                checkpoint_kind: input.checkpointKind,
+                snapshot_file_count: input.snapshotFileCount,
                 top_level_tab: input.topLevelTab,
                 mode_key: input.modeKey,
                 summary: input.summary,
@@ -91,6 +132,28 @@ export class CheckpointStore {
         return mapCheckpointRecord(inserted);
     }
 
+    async attachDiff(input: {
+        profileId: string;
+        checkpointId: CheckpointRecord['id'];
+        diffId: string;
+        summary: string;
+    }): Promise<CheckpointRecord | null> {
+        const { db } = getPersistence();
+        const updated = await db
+            .updateTable('checkpoints')
+            .set({
+                diff_id: input.diffId,
+                summary: input.summary,
+                updated_at: nowIso(),
+            })
+            .where('profile_id', '=', input.profileId)
+            .where('id', '=', input.checkpointId)
+            .returning(CHECKPOINT_COLUMNS)
+            .executeTakeFirst();
+
+        return updated ? mapCheckpointRecord(updated) : null;
+    }
+
     async listBySession(profileId: string, sessionId: CheckpointRecord['sessionId']): Promise<CheckpointRecord[]> {
         const { db } = getPersistence();
         const rows = await db
@@ -98,6 +161,19 @@ export class CheckpointStore {
             .select(CHECKPOINT_COLUMNS)
             .where('profile_id', '=', profileId)
             .where('session_id', '=', sessionId)
+            .orderBy('created_at', 'desc')
+            .execute();
+
+        return rows.map(mapCheckpointRecord);
+    }
+
+    async listByExecutionTargetKey(profileId: string, executionTargetKey: string): Promise<CheckpointRecord[]> {
+        const { db } = getPersistence();
+        const rows = await db
+            .selectFrom('checkpoints')
+            .select(CHECKPOINT_COLUMNS)
+            .where('profile_id', '=', profileId)
+            .where('execution_target_key', '=', executionTargetKey)
             .orderBy('created_at', 'desc')
             .execute();
 
@@ -117,6 +193,10 @@ export class CheckpointStore {
     }
 
     async getByRunId(profileId: string, runId: CheckpointRecord['runId']): Promise<CheckpointRecord | null> {
+        if (!runId) {
+            return null;
+        }
+
         const { db } = getPersistence();
         const row = await db
             .selectFrom('checkpoints')
@@ -139,7 +219,18 @@ export class CheckpointStore {
 
         return rows.map(mapCheckpointRecord);
     }
+
+    async deleteById(profileId: string, checkpointId: CheckpointRecord['id']): Promise<boolean> {
+        const { db } = getPersistence();
+        const deleted = await db
+            .deleteFrom('checkpoints')
+            .where('profile_id', '=', profileId)
+            .where('id', '=', checkpointId)
+            .returning('id')
+            .executeTakeFirst();
+
+        return Boolean(deleted);
+    }
 }
 
 export const checkpointStore = new CheckpointStore();
-

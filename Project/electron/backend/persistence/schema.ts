@@ -354,15 +354,37 @@ export interface CheckpointsTable {
     id: string;
     profile_id: string;
     session_id: string;
-    run_id: string;
-    diff_id: string;
+    thread_id: string;
+    run_id: string | null;
+    diff_id: string | null;
     workspace_fingerprint: string;
     worktree_id: string | null;
+    execution_target_key: string;
+    execution_target_kind: string;
+    execution_target_label: string;
+    created_by_kind: string;
+    checkpoint_kind: string;
+    snapshot_file_count: number;
     top_level_tab: string;
     mode_key: string;
     summary: string;
     created_at: string;
     updated_at: string;
+}
+
+export interface CheckpointSnapshotBlobsTable {
+    sha256: string;
+    byte_size: number;
+    bytes_blob: Uint8Array;
+    created_at: string;
+}
+
+export interface CheckpointSnapshotEntriesTable {
+    checkpoint_id: string;
+    relative_path: string;
+    blob_sha256: string;
+    byte_size: number;
+    created_at: string;
 }
 
 export interface WorktreesTable {
@@ -682,6 +704,8 @@ export interface DatabaseSchema {
     thread_tags: ThreadTagsTable;
     diffs: DiffsTable;
     checkpoints: CheckpointsTable;
+    checkpoint_snapshot_blobs: CheckpointSnapshotBlobsTable;
+    checkpoint_snapshot_entries: CheckpointSnapshotEntriesTable;
     worktrees: WorktreesTable;
     mode_definitions: ModeDefinitionsTable;
     rulesets: RulesetsTable;

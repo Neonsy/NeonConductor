@@ -279,9 +279,16 @@ function readCheckpointRecord(value: unknown): CheckpointRecord | undefined {
     const id = readString(value['id']);
     const profileId = readString(value['profileId']);
     const sessionId = readString(value['sessionId']);
-    const runId = readString(value['runId']);
-    const diffId = readString(value['diffId']);
+    const threadId = readString(value['threadId']);
+    const runId = value['runId'] === null ? null : readString(value['runId']);
+    const diffId = value['diffId'] === null ? null : readString(value['diffId']);
     const workspaceFingerprint = readString(value['workspaceFingerprint']);
+    const executionTargetKey = readString(value['executionTargetKey']);
+    const executionTargetKind = readLiteral(value['executionTargetKind'], ['workspace', 'worktree'] as const);
+    const executionTargetLabel = readString(value['executionTargetLabel']);
+    const createdByKind = readLiteral(value['createdByKind'], ['system', 'user'] as const);
+    const checkpointKind = readLiteral(value['checkpointKind'], ['auto', 'safety', 'named'] as const);
+    const snapshotFileCount = readNumber(value['snapshotFileCount']);
     const topLevelTab = readLiteral(value['topLevelTab'], topLevelTabs);
     const modeKey = readString(value['modeKey']);
     const summary = readString(value['summary']);
@@ -294,10 +301,15 @@ function readCheckpointRecord(value: unknown): CheckpointRecord | undefined {
         !profileId ||
         !sessionId ||
         !isEntityId(sessionId, 'sess') ||
-        !runId ||
-        !isEntityId(runId, 'run') ||
-        !diffId ||
+        !threadId ||
+        !isEntityId(threadId, 'thr') ||
         !workspaceFingerprint ||
+        !executionTargetKey ||
+        !executionTargetKind ||
+        !executionTargetLabel ||
+        !createdByKind ||
+        !checkpointKind ||
+        snapshotFileCount === undefined ||
         !topLevelTab ||
         !modeKey ||
         !summary ||
@@ -311,10 +323,17 @@ function readCheckpointRecord(value: unknown): CheckpointRecord | undefined {
         id,
         profileId,
         sessionId,
-        runId,
-        diffId,
+        threadId,
+        ...(runId && isEntityId(runId, 'run') ? { runId } : {}),
+        ...(diffId ? { diffId } : {}),
         workspaceFingerprint,
         ...(worktreeId && isEntityId(worktreeId, 'wt') ? { worktreeId } : {}),
+        executionTargetKey,
+        executionTargetKind,
+        executionTargetLabel,
+        createdByKind,
+        checkpointKind,
+        snapshotFileCount,
         topLevelTab,
         modeKey,
         summary,

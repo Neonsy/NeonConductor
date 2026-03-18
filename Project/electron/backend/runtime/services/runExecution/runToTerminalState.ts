@@ -7,16 +7,18 @@ import type {
 } from '@/app/backend/providers/types';
 import type { EntityId, ProviderAuthMethod, RuntimeProviderId } from '@/app/backend/runtime/contracts';
 import type { OpenAIExecutionMode } from '@/app/backend/runtime/contracts';
-import { ensureCheckpointForRun } from '@/app/backend/runtime/services/checkpoint/service';
+import { captureCheckpointDiffForRun, ensureCheckpointForRun } from '@/app/backend/runtime/services/checkpoint/service';
 import { executeRun, isAbortError } from '@/app/backend/runtime/services/runExecution/executeRun';
 import { moveRunToAbortedState, moveRunToFailedState } from '@/app/backend/runtime/services/runExecution/terminalState';
 import type { ResolvedKiloRouting, RunCacheResolution, RunContextMessage, StartRunInput } from '@/app/backend/runtime/services/runExecution/types';
 import { runtimeUpsertEvent } from '@/app/backend/runtime/services/runtimeEventEnvelope';
 import { runtimeEventLogService } from '@/app/backend/runtime/services/runtimeEventLog';
+import type { ResolvedWorkspaceContext } from '@/app/backend/runtime/contracts';
 
 export async function runToTerminalState(input: {
     profileId: string;
     sessionId: EntityId<'sess'>;
+    threadId: EntityId<'thr'>;
     runId: EntityId<'run'>;
     topLevelTab: StartRunInput['topLevelTab'];
     modeKey: StartRunInput['modeKey'];
@@ -39,21 +41,48 @@ export async function runToTerminalState(input: {
     contextMessages?: RunContextMessage[];
     workspaceFingerprint?: string;
     worktreeId?: EntityId<'wt'>;
+    workspaceContext: ResolvedWorkspaceContext;
     assistantMessageId: EntityId<'msg'>;
     signal: AbortSignal;
 }): Promise<void> {
     try {
+        const checkpoint = await ensureCheckpointForRun({
+            profileId: input.profileId,
+            runId: input.runId,
+            sessionId: input.sessionId,
+            threadId: input.threadId,
+            topLevelTab: input.topLevelTab,
+            modeKey: input.modeKey,
+            workspaceContext: input.workspaceContext,
+        });
+        if (checkpoint) {
+            await runtimeEventLogService.append(
+                runtimeUpsertEvent({
+                    entityType: 'checkpoint',
+                    domain: 'checkpoint',
+                    entityId: checkpoint.id,
+                    eventType: 'checkpoint.created',
+                    payload: {
+                        profileId: input.profileId,
+                        sessionId: input.sessionId,
+                        runId: input.runId,
+                        checkpoint,
+                        diff: null,
+                    },
+                })
+            );
+        }
+
         const executionResult = await executeRun({
             ...input,
             onBeforeFinalize: async () => {
-                const artifactResult = await ensureCheckpointForRun({
+                const artifactResult = await captureCheckpointDiffForRun({
                     profileId: input.profileId,
                     runId: input.runId,
                     sessionId: input.sessionId,
                     topLevelTab: input.topLevelTab,
                     modeKey: input.modeKey,
-                    ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
-                    ...(input.worktreeId ? { worktreeId: input.worktreeId } : {}),
+                    workspaceContext: input.workspaceContext,
                 });
                 if (!artifactResult) {
                     return;
@@ -86,6 +115,7 @@ export async function runToTerminalState(input: {
                                 sessionId: input.sessionId,
                                 runId: input.runId,
                                 checkpoint: artifactResult.checkpoint,
+                                diff: artifactResult.diff,
                             },
                         })
                     );

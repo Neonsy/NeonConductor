@@ -428,18 +428,42 @@ CREATE TABLE checkpoints (
     id TEXT PRIMARY KEY,
     profile_id TEXT NOT NULL,
     session_id TEXT NOT NULL,
-    run_id TEXT NOT NULL,
-    diff_id TEXT NOT NULL,
+    thread_id TEXT NOT NULL,
+    run_id TEXT NULL,
+    diff_id TEXT NULL,
     workspace_fingerprint TEXT NOT NULL,
     worktree_id TEXT NULL REFERENCES worktrees(id) ON DELETE SET NULL,
+    execution_target_key TEXT NOT NULL,
+    execution_target_kind TEXT NOT NULL CHECK (execution_target_kind IN ('workspace', 'worktree')),
+    execution_target_label TEXT NOT NULL,
+    created_by_kind TEXT NOT NULL CHECK (created_by_kind IN ('system', 'user')),
+    checkpoint_kind TEXT NOT NULL CHECK (checkpoint_kind IN ('auto', 'safety', 'named')),
+    snapshot_file_count INTEGER NOT NULL CHECK (snapshot_file_count >= 0),
     top_level_tab TEXT NOT NULL,
     mode_key TEXT NOT NULL,
     summary TEXT NOT NULL,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
+    FOREIGN KEY (thread_id) REFERENCES threads(id) ON DELETE CASCADE,
     FOREIGN KEY (run_id) REFERENCES runs(id) ON DELETE CASCADE,
-    FOREIGN KEY (diff_id) REFERENCES diffs(id) ON DELETE CASCADE
+    FOREIGN KEY (diff_id) REFERENCES diffs(id) ON DELETE SET NULL
+);
+
+CREATE TABLE checkpoint_snapshot_blobs (
+    sha256 TEXT PRIMARY KEY,
+    byte_size INTEGER NOT NULL CHECK (byte_size >= 0),
+    bytes_blob BLOB NOT NULL,
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE checkpoint_snapshot_entries (
+    checkpoint_id TEXT NOT NULL REFERENCES checkpoints(id) ON DELETE CASCADE,
+    relative_path TEXT NOT NULL,
+    blob_sha256 TEXT NOT NULL REFERENCES checkpoint_snapshot_blobs(sha256) ON DELETE RESTRICT,
+    byte_size INTEGER NOT NULL CHECK (byte_size >= 0),
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (checkpoint_id, relative_path)
 );
 
 -- Registry assets and session context attachments.
@@ -876,6 +900,15 @@ CREATE UNIQUE INDEX idx_checkpoints_profile_run
 
 CREATE INDEX idx_checkpoints_profile_session_created_at
     ON checkpoints(profile_id, session_id, created_at DESC);
+
+CREATE INDEX idx_checkpoints_profile_target_created_at
+    ON checkpoints(profile_id, execution_target_key, created_at DESC);
+
+CREATE INDEX idx_checkpoints_profile_thread_created_at
+    ON checkpoints(profile_id, thread_id, created_at DESC);
+
+CREATE INDEX idx_checkpoint_snapshot_entries_blob_sha256
+    ON checkpoint_snapshot_entries(blob_sha256);
 
 CREATE UNIQUE INDEX idx_mode_definitions_profile_registry_asset
     ON mode_definitions(profile_id, top_level_tab, scope, ifnull(workspace_fingerprint, ''), asset_key);
