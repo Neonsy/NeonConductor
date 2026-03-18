@@ -54,6 +54,13 @@ export interface DeleteWorkspaceThreadsResult extends WorkspaceThreadDeletePrevi
     sessionIds: EntityId<'sess'>[];
 }
 
+interface DeleteDelegatedChildLaneInput {
+    profileId: string;
+    threadId: EntityId<'thr'>;
+    sessionId?: EntityId<'sess'>;
+    orchestratorRunId: EntityId<'orch'>;
+}
+
 function createThreadId(): string {
     return `thr_${randomUUID()}`;
 }
@@ -237,6 +244,7 @@ export class ThreadStore {
                 'threads.top_level_tab as top_level_tab',
                 'threads.parent_thread_id as parent_thread_id',
                 'threads.root_thread_id as root_thread_id',
+                'threads.delegated_from_orchestrator_run_id as delegated_from_orchestrator_run_id',
                 'threads.is_favorite as is_favorite',
                 'threads.execution_environment_mode as execution_environment_mode',
                 'threads.execution_branch as execution_branch',
@@ -260,6 +268,7 @@ export class ThreadStore {
                 'threads.top_level_tab',
                 'threads.parent_thread_id',
                 'threads.root_thread_id',
+                'threads.delegated_from_orchestrator_run_id',
                 'threads.is_favorite',
                 'threads.execution_environment_mode',
                 'threads.execution_branch',
@@ -295,6 +304,7 @@ export class ThreadStore {
         topLevelTab: TopLevelTab;
         parentThreadId?: string;
         rootThreadId?: string;
+        delegatedFromOrchestratorRunId?: EntityId<'orch'>;
         executionEnvironmentMode?: ExecutionEnvironmentMode;
         executionBranch?: string;
         baseBranch?: string;
@@ -350,7 +360,12 @@ export class ThreadStore {
             if (parent.conversation_id !== input.conversationId) {
                 return errOp('thread_mode_mismatch', 'Parent thread must belong to the same conversation bucket.');
             }
-            if (parseEnumValue(parent.top_level_tab, 'threads.top_level_tab', topLevelTabs) !== input.topLevelTab) {
+            const parentTopLevelTab = parseEnumValue(parent.top_level_tab, 'threads.top_level_tab', topLevelTabs);
+            const parentAllowsDelegatedWorker =
+                input.delegatedFromOrchestratorRunId &&
+                input.topLevelTab === 'agent' &&
+                parentTopLevelTab === 'orchestrator';
+            if (parentTopLevelTab !== input.topLevelTab && !parentAllowsDelegatedWorker) {
                 return errOp('thread_mode_mismatch', 'Thread mode affinity mismatch with parent thread.');
             }
 
@@ -383,7 +398,12 @@ export class ThreadStore {
             if (root.conversation_id !== input.conversationId) {
                 return errOp('thread_mode_mismatch', 'Root thread must belong to the same conversation bucket.');
             }
-            if (parseEnumValue(root.top_level_tab, 'threads.top_level_tab', topLevelTabs) !== input.topLevelTab) {
+            const rootTopLevelTab = parseEnumValue(root.top_level_tab, 'threads.top_level_tab', topLevelTabs);
+            const rootAllowsDelegatedWorker =
+                input.delegatedFromOrchestratorRunId &&
+                input.topLevelTab === 'agent' &&
+                rootTopLevelTab === 'orchestrator';
+            if (rootTopLevelTab !== input.topLevelTab && !rootAllowsDelegatedWorker) {
                 return errOp('thread_mode_mismatch', 'Thread mode affinity mismatch with root thread.');
             }
             resolvedRootThreadId = root.id;
@@ -401,6 +421,7 @@ export class ThreadStore {
                 top_level_tab: input.topLevelTab,
                 parent_thread_id: resolvedParentThreadId ?? null,
                 root_thread_id: resolvedRootThreadId ?? threadId,
+                delegated_from_orchestrator_run_id: input.delegatedFromOrchestratorRunId ?? null,
                 is_favorite: 0,
                 execution_environment_mode: inheritedExecutionEnvironmentMode ?? 'local',
                 execution_branch: inheritedExecutionBranch ?? null,
@@ -555,6 +576,7 @@ export class ThreadStore {
                 'threads.top_level_tab as top_level_tab',
                 'threads.parent_thread_id as parent_thread_id',
                 'threads.root_thread_id as root_thread_id',
+                'threads.delegated_from_orchestrator_run_id as delegated_from_orchestrator_run_id',
                 'threads.is_favorite as is_favorite',
                 'threads.execution_environment_mode as execution_environment_mode',
                 'threads.execution_branch as execution_branch',
@@ -590,7 +612,16 @@ export class ThreadStore {
             ]);
 
         if (!input.showAllModes) {
-            query = query.where('threads.top_level_tab', '=', input.activeTab);
+            query = query.where((expressionBuilder) => {
+                if (input.activeTab === 'orchestrator') {
+                    return expressionBuilder.or([
+                        expressionBuilder('threads.top_level_tab', '=', input.activeTab),
+                        expressionBuilder('threads.delegated_from_orchestrator_run_id', 'is not', null),
+                    ]);
+                }
+
+                return expressionBuilder('threads.top_level_tab', '=', input.activeTab);
+            });
         }
         if (input.scope) {
             query = query.where('conversations.scope', '=', input.scope);
@@ -736,6 +767,47 @@ export class ThreadStore {
             deletedConversationIds: resolved.deletedConversationIds,
             sessionIds: resolved.sessionIds,
         };
+    }
+
+    async deleteDelegatedChildLane(input: DeleteDelegatedChildLaneInput): Promise<boolean> {
+        const { db } = getPersistence();
+
+        return db.transaction().execute(async (transaction) => {
+            const delegatedChildLane = input.sessionId
+                ? await transaction
+                      .selectFrom('threads')
+                      .innerJoin('sessions', 'sessions.thread_id', 'threads.id')
+                      .select(['threads.id as thread_id', 'sessions.id as session_id'])
+                      .where('threads.profile_id', '=', input.profileId)
+                      .where('sessions.profile_id', '=', input.profileId)
+                      .where('threads.id', '=', input.threadId)
+                      .where('sessions.id', '=', input.sessionId)
+                      .where('threads.delegated_from_orchestrator_run_id', '=', input.orchestratorRunId)
+                      .where('sessions.delegated_from_orchestrator_run_id', '=', input.orchestratorRunId)
+                      .executeTakeFirst()
+                : await transaction
+                      .selectFrom('threads')
+                      .select(['threads.id as thread_id'])
+                      .where('threads.profile_id', '=', input.profileId)
+                      .where('threads.id', '=', input.threadId)
+                      .where('threads.delegated_from_orchestrator_run_id', '=', input.orchestratorRunId)
+                      .executeTakeFirst();
+
+            if (!delegatedChildLane) {
+                return false;
+            }
+
+            const runtimeEventEntityIds = input.sessionId ? [input.threadId, input.sessionId] : [input.threadId];
+            await transaction.deleteFrom('runtime_events').where('entity_id', 'in', runtimeEventEntityIds).execute();
+
+            await transaction
+                .deleteFrom('threads')
+                .where('profile_id', '=', input.profileId)
+                .where('id', '=', input.threadId)
+                .execute();
+
+            return true;
+        });
     }
 
     async touchByThread(profileId: string, threadId: string): Promise<void> {

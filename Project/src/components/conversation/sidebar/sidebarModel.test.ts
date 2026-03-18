@@ -121,4 +121,35 @@ describe('buildConversationSidebarModel', () => {
         const populatedGroup = model.workspaceGroups.find((group) => group.workspaceFingerprint === 'ws_b');
         expect(populatedGroup?.rows.map((row) => row.depth)).toEqual([0, 1]);
     });
+
+    it('keeps delegated orchestrator child lanes nested in workspace view', () => {
+        const model = buildConversationSidebarModel({
+            buckets,
+            threads: [
+                {
+                    ...threads[0]!,
+                    id: 'thr_orchestrator_root',
+                    title: 'Root orchestrator thread',
+                    topLevelTab: 'orchestrator',
+                    rootThreadId: 'thr_orchestrator_root',
+                },
+                {
+                    ...threads[1]!,
+                    id: 'thr_worker_child',
+                    title: 'Delegated worker child',
+                    topLevelTab: 'agent',
+                    parentThreadId: 'thr_orchestrator_root',
+                    rootThreadId: 'thr_orchestrator_root',
+                    delegatedFromOrchestratorRunId: 'orch_runtime',
+                },
+            ],
+            tags,
+            workspaceRoots,
+            groupView: 'workspace',
+        });
+
+        const populatedGroup = model.workspaceGroups.find((group) => group.workspaceFingerprint === 'ws_b');
+        expect(populatedGroup?.rows.map((row) => row.thread.id)).toEqual(['thr_orchestrator_root', 'thr_worker_child']);
+        expect(populatedGroup?.rows.map((row) => row.depth)).toEqual([0, 1]);
+    });
 });

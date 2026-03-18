@@ -316,7 +316,6 @@ export function SidebarThreadBrowser({
                 tagLabelById={tagLabelById}
                 {...(selectedThreadId ? { selectedThreadId } : {})}
                 showAllModes={showAllModes}
-                groupView={groupView}
                 {...(statusMessage ? { statusMessage, statusTone } : {})}
                 deferredSearchValue={deferredSearchValue}
                 {...(onPreviewThread ? { onPreviewThread } : {})}

@@ -4,6 +4,7 @@ export interface ActiveOrchestratorRun {
     profileId: string;
     sessionId: EntityId<'sess'>;
     cancelled: boolean;
+    childSessionIds: Set<EntityId<'sess'>>;
 }
 
 export class ActiveOrchestratorRunRegistry {
@@ -13,6 +14,7 @@ export class ActiveOrchestratorRunRegistry {
         this.activeRuns.set(runId, {
             ...state,
             cancelled: false,
+            childSessionIds: new Set<EntityId<'sess'>>(),
         });
     }
 
@@ -28,6 +30,14 @@ export class ActiveOrchestratorRunRegistry {
 
         active.cancelled = true;
         return active;
+    }
+
+    registerChildSession(runId: EntityId<'orch'>, childSessionId: EntityId<'sess'>): void {
+        this.activeRuns.get(runId)?.childSessionIds.add(childSessionId);
+    }
+
+    unregisterChildSession(runId: EntityId<'orch'>, childSessionId: EntityId<'sess'>): void {
+        this.activeRuns.get(runId)?.childSessionIds.delete(childSessionId);
     }
 
     finish(runId: EntityId<'orch'>): void {

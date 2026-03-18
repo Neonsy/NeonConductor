@@ -125,6 +125,7 @@ function readThreadRecord(value: unknown): ThreadRecord | undefined {
     const title = readString(value['title']);
     const topLevelTab = readLiteral(value['topLevelTab'], topLevelTabs);
     const rootThreadId = readString(value['rootThreadId']);
+    const delegatedFromOrchestratorRunId = readString(value['delegatedFromOrchestratorRunId']);
     const isFavorite = readBoolean(value['isFavorite']);
     const executionEnvironmentMode = readLiteral(value['executionEnvironmentMode'], executionEnvironmentModes);
     const createdAt = readString(value['createdAt']);
@@ -158,12 +159,63 @@ function readThreadRecord(value: unknown): ThreadRecord | undefined {
         topLevelTab,
         ...(parentThreadId ? { parentThreadId } : {}),
         rootThreadId,
+        ...(delegatedFromOrchestratorRunId && isEntityId(delegatedFromOrchestratorRunId, 'orch')
+            ? { delegatedFromOrchestratorRunId }
+            : {}),
         isFavorite,
         executionEnvironmentMode,
         ...(executionBranch ? { executionBranch } : {}),
         ...(baseBranch ? { baseBranch } : {}),
         ...(worktreeId && isEntityId(worktreeId, 'wt') ? { worktreeId } : {}),
         ...(lastAssistantAt ? { lastAssistantAt } : {}),
+        createdAt,
+        updatedAt,
+    };
+}
+
+function readSessionSummaryRecord(value: unknown): SessionSummaryRecord | undefined {
+    if (!isRecord(value)) {
+        return undefined;
+    }
+
+    const id = readString(value['id']);
+    const profileId = readString(value['profileId']);
+    const conversationId = readString(value['conversationId']);
+    const threadId = readString(value['threadId']);
+    const kind = readLiteral(value['kind'], ['local', 'worktree', 'cloud'] as const);
+    const runStatus = readLiteral(value['runStatus'], runStatuses);
+    const turnCount = readNumber(value['turnCount']);
+    const createdAt = readString(value['createdAt']);
+    const updatedAt = readString(value['updatedAt']);
+    const worktreeId = readString(value['worktreeId']);
+    const delegatedFromOrchestratorRunId = readString(value['delegatedFromOrchestratorRunId']);
+    if (
+        !id ||
+        !isEntityId(id, 'sess') ||
+        !profileId ||
+        !conversationId ||
+        !threadId ||
+        !kind ||
+        !runStatus ||
+        turnCount === undefined ||
+        !createdAt ||
+        !updatedAt
+    ) {
+        return undefined;
+    }
+
+    return {
+        id,
+        profileId,
+        conversationId,
+        threadId,
+        kind,
+        ...(worktreeId && isEntityId(worktreeId, 'wt') ? { worktreeId } : {}),
+        ...(delegatedFromOrchestratorRunId && isEntityId(delegatedFromOrchestratorRunId, 'orch')
+            ? { delegatedFromOrchestratorRunId }
+            : {}),
+        runStatus,
+        turnCount,
         createdAt,
         updatedAt,
     };
@@ -1079,6 +1131,48 @@ export function applyRuntimeEventPatches(
             }
             return true;
         }
+    }
+
+    if (event.domain === 'session') {
+        const session = readSessionSummaryRecord(event.payload['session']);
+        if (!session) {
+            return false;
+        }
+
+        updateMatchingQueryData<{ sessions: SessionSummaryRecord[] }>(['session', 'list'], (current) =>
+            current
+                ? {
+                      sessions: [session, ...current.sessions.filter((candidate) => candidate.id !== session.id)].sort((left, right) =>
+                          right.updatedAt.localeCompare(left.updatedAt)
+                      ),
+                  }
+                : current
+        );
+        updateMatchingQueryData<{
+            sort: 'latest' | 'alphabetical';
+            showAllModes: boolean;
+            groupView: 'workspace' | 'branch';
+            threads: ReturnType<typeof toThreadListRecord>[];
+        }>(['conversation', 'listThreads'], (current) => {
+            if (!current) {
+                return current;
+            }
+
+            const existingThread = current.threads.find((candidate) => candidate.id === session.threadId);
+            return {
+                ...current,
+                threads: current.threads.map((threadRecord) =>
+                    threadRecord.id === session.threadId
+                        ? {
+                              ...threadRecord,
+                              sessionCount: Math.max(existingThread?.sessionCount ?? 0, 1),
+                              latestSessionUpdatedAt: session.updatedAt,
+                          }
+                        : threadRecord
+                ),
+            };
+        });
+        return true;
     }
 
     if (event.domain === 'messagePart') {

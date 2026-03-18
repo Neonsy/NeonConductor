@@ -26,6 +26,59 @@ interface GroupedThreadRowsSection {
     rows: ThreadRenderRow[];
 }
 
+function buildWorkspaceRows(threads: ThreadListRecord[]): ThreadRenderRow[] {
+    const byId = new Map(threads.map((thread) => [thread.id, thread] as const));
+    const delegatedChildrenByParent = new Map<string, ThreadListRecord[]>();
+    const rootRows: ThreadListRecord[] = [];
+
+    for (const thread of threads) {
+        const parentId = thread.parentThreadId;
+        const parentThread = parentId ? byId.get(parentId) : undefined;
+        const shouldNestUnderParent =
+            Boolean(thread.delegatedFromOrchestratorRunId) && Boolean(parentId) && Boolean(parentThread);
+        if (!shouldNestUnderParent || !parentId) {
+            rootRows.push(thread);
+            continue;
+        }
+
+        const existingChildren = delegatedChildrenByParent.get(parentId) ?? [];
+        existingChildren.push(thread);
+        delegatedChildrenByParent.set(parentId, existingChildren);
+    }
+
+    const rows: ThreadRenderRow[] = [];
+    const stack = rootRows
+        .slice()
+        .reverse()
+        .map((thread) => ({
+            thread,
+            depth: 0,
+        }));
+
+    while (stack.length > 0) {
+        const current = stack.pop();
+        if (!current) {
+            continue;
+        }
+
+        rows.push(current);
+        const delegatedChildren = delegatedChildrenByParent.get(current.thread.id) ?? [];
+        for (let index = delegatedChildren.length - 1; index >= 0; index -= 1) {
+            const childThread = delegatedChildren[index];
+            if (!childThread) {
+                continue;
+            }
+
+            stack.push({
+                thread: childThread,
+                depth: current.depth + 1,
+            });
+        }
+    }
+
+    return rows;
+}
+
 export function buildConversationSidebarModel(input: {
     buckets: ConversationRecord[];
     threads: ThreadListRecord[];
@@ -99,7 +152,7 @@ export function buildConversationSidebarModel(input: {
         group.rows =
             input.groupView === 'branch'
                 ? buildBranchRows(anchorThreads)
-                : anchorThreads.map((thread) => ({ thread, depth: 0 }));
+                : buildWorkspaceRows(anchorThreads);
         group.favoriteCount = anchorThreads.filter((thread) => thread.isFavorite).length;
         group.threadCount = anchorThreads.length;
     }
@@ -112,6 +165,6 @@ export function buildConversationSidebarModel(input: {
         playgroundRows:
             input.groupView === 'branch'
                 ? buildBranchRows(playgroundThreads)
-                : playgroundThreads.map((thread) => ({ thread, depth: 0 })),
+                : buildWorkspaceRows(playgroundThreads),
     };
 }

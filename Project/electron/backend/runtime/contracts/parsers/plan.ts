@@ -1,4 +1,4 @@
-import { topLevelTabs } from '@/app/backend/runtime/contracts/enums';
+import { orchestratorExecutionStrategies, topLevelTabs } from '@/app/backend/runtime/contracts/enums';
 import {
     createParser,
     parseRuntimeRunOptions,
@@ -93,11 +93,16 @@ export function parsePlanImplementInput(input: unknown): PlanImplementInput {
     const providerId = source.providerId !== undefined ? readProviderId(source.providerId, 'providerId') : undefined;
     const modelId = readOptionalString(source.modelId, 'modelId');
     const workspaceFingerprint = readOptionalString(source.workspaceFingerprint, 'workspaceFingerprint');
+    const executionStrategy =
+        source.executionStrategy !== undefined
+            ? readEnumValue(source.executionStrategy, 'executionStrategy', orchestratorExecutionStrategies)
+            : undefined;
 
     return {
         profileId: readProfileId(source),
         planId: readEntityId(source.planId, 'planId', 'plan'),
         runtimeOptions: parseRuntimeRunOptions(source.runtimeOptions),
+        ...(executionStrategy ? { executionStrategy } : {}),
         ...(providerId ? { providerId } : {}),
         ...(modelId ? { modelId } : {}),
         ...(workspaceFingerprint ? { workspaceFingerprint } : {}),

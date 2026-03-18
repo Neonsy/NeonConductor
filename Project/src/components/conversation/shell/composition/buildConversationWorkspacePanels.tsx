@@ -2,13 +2,14 @@ import { useConversationShellViewModel } from '@/web/components/conversation/hoo
 import { ContextAssetsPanel } from '@/web/components/conversation/panels/contextAssetsPanel';
 import { DiffCheckpointPanel } from '@/web/components/conversation/panels/diffCheckpointPanel';
 import { ExecutionEnvironmentPanel } from '@/web/components/conversation/panels/executionEnvironmentPanel';
+import { ModeExecutionPanel } from '@/web/components/conversation/panels/modeExecutionPanel';
 import { useConversationMutations } from '@/web/components/conversation/shell/actions/useConversationMutations';
 import { buildConversationPlanOrchestrator } from '@/web/components/conversation/shell/composition/buildConversationPlanOrchestrator';
 import { useConversationQueries } from '@/web/components/conversation/shell/queries/useConversationQueries';
 import { isEntityId } from '@/web/components/conversation/shell/workspace/helpers';
 import { useConversationWorkspaceActions } from '@/web/components/conversation/shell/workspace/useConversationWorkspaceActions';
 
-import type { TopLevelTab } from '@/shared/contracts';
+import type { EntityId, OrchestratorExecutionStrategy, TopLevelTab } from '@/shared/contracts';
 
 interface BuildConversationWorkspacePanelsInput {
     profileId: string;
@@ -21,9 +22,21 @@ interface BuildConversationWorkspacePanelsInput {
     mutations: ReturnType<typeof useConversationMutations>;
     planOrchestrator: ReturnType<typeof buildConversationPlanOrchestrator>;
     workspaceActions: ReturnType<typeof useConversationWorkspaceActions>;
+    onSelectThreadId: (threadId: string | undefined) => void;
+    onSelectSessionId: (sessionId: string | undefined) => void;
+    onSelectRunId: (runId: string | undefined) => void;
+    onTopLevelTabChange: (topLevelTab: TopLevelTab) => void;
+    executionStrategy: OrchestratorExecutionStrategy;
+    onExecutionStrategyChange: (executionStrategy: OrchestratorExecutionStrategy) => void;
 }
 
 export function buildConversationWorkspacePanels(input: BuildConversationWorkspacePanelsInput) {
+    const selectedThread = input.shellViewModel.selectedThread;
+    const canConfigureExecutionStrategy =
+        input.topLevelTab === 'orchestrator' &&
+        selectedThread?.topLevelTab === 'orchestrator' &&
+        !selectedThread.delegatedFromOrchestratorRunId &&
+        selectedThread.id === selectedThread.rootThreadId;
     return {
         executionEnvironmentPanel: (
             <ExecutionEnvironmentPanel
@@ -94,6 +107,34 @@ export function buildConversationWorkspacePanels(input: BuildConversationWorkspa
                 }}
             />
         ),
+        modeExecutionPanel:
+            input.topLevelTab === 'orchestrator' || input.modeKey === 'plan' ? (
+                <ModeExecutionPanel
+                    topLevelTab={input.topLevelTab}
+                    modeKey={input.modeKey}
+                    isLoadingPlan={input.queries.activePlanQuery.isPending}
+                    isPlanMutating={input.planOrchestrator.isPlanMutating}
+                    isOrchestratorMutating={input.planOrchestrator.isOrchestratorMutating}
+                    selectedExecutionStrategy={input.executionStrategy}
+                    canConfigureExecutionStrategy={canConfigureExecutionStrategy}
+                    {...(input.planOrchestrator.activePlan ? { activePlan: input.planOrchestrator.activePlan } : {})}
+                    {...(input.planOrchestrator.orchestratorView
+                        ? { orchestratorView: input.planOrchestrator.orchestratorView }
+                        : {})}
+                    onAnswerQuestion={input.planOrchestrator.onAnswerQuestion}
+                    onRevisePlan={input.planOrchestrator.onRevisePlan}
+                    onApprovePlan={input.planOrchestrator.onApprovePlan}
+                    onExecutionStrategyChange={input.onExecutionStrategyChange}
+                    onImplementPlan={input.planOrchestrator.onImplementPlan}
+                    onAbortOrchestrator={input.planOrchestrator.onAbortOrchestrator}
+                    onSelectChildThread={(threadId: EntityId<'thr'>) => {
+                        input.onTopLevelTabChange('agent');
+                        input.onSelectThreadId(threadId);
+                        input.onSelectSessionId(undefined);
+                        input.onSelectRunId(undefined);
+                    }}
+                />
+            ) : undefined,
         contextAssetsPanel:
             input.topLevelTab !== 'chat' && isEntityId(input.selectedSessionId, 'sess') ? (
                 <ContextAssetsPanel

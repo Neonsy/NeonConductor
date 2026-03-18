@@ -10,5 +10,11 @@ export function toOrchestratorTrpcError(error: OrchestratorExecutionError): TRPC
             return new TRPCError({ code: 'BAD_REQUEST', message: error.message, cause: error });
         case 'plan_not_approved':
             return new TRPCError({ code: 'CONFLICT', message: error.message, cause: error });
+        case 'delegation_not_allowed':
+            return new TRPCError({ code: 'FORBIDDEN', message: error.message, cause: error });
+        case 'session_not_found':
+            return new TRPCError({ code: 'NOT_FOUND', message: error.message, cause: error });
     }
+
+    return new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: error.message, cause: error });
 }

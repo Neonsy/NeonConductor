@@ -2,8 +2,8 @@ import { getPersistence } from '@/app/backend/persistence/db';
 import { parseEntityId, parseEnumValue } from '@/app/backend/persistence/stores/shared/rowParsers';
 import { nowIso } from '@/app/backend/persistence/stores/shared/utils';
 import type { OrchestratorRunRecord, OrchestratorStepRecord } from '@/app/backend/persistence/types';
-import { orchestratorRunStatuses, planItemStatuses } from '@/app/backend/runtime/contracts';
-import type { EntityId, OrchestratorRunStatus } from '@/app/backend/runtime/contracts';
+import { orchestratorExecutionStrategies, orchestratorRunStatuses, planItemStatuses } from '@/app/backend/runtime/contracts';
+import type { EntityId, OrchestratorExecutionStrategy, OrchestratorRunStatus } from '@/app/backend/runtime/contracts';
 import { createEntityId } from '@/app/backend/runtime/identity/entityIds';
 import { InvariantError } from '@/app/backend/runtime/services/common/fatalErrors';
 
@@ -13,6 +13,7 @@ function mapOrchestratorRunRecord(row: {
     session_id: string;
     plan_id: string;
     status: string;
+    execution_strategy: string;
     active_step_index: number | null;
     started_at: string;
     completed_at: string | null;
@@ -27,6 +28,11 @@ function mapOrchestratorRunRecord(row: {
         sessionId: parseEntityId(row.session_id, 'orchestrator_runs.session_id', 'sess'),
         planId: parseEntityId(row.plan_id, 'orchestrator_runs.plan_id', 'plan'),
         status: parseEnumValue(row.status, 'orchestrator_runs.status', orchestratorRunStatuses),
+        executionStrategy: parseEnumValue(
+            row.execution_strategy,
+            'orchestrator_runs.execution_strategy',
+            orchestratorExecutionStrategies
+        ),
         ...(row.active_step_index !== null ? { activeStepIndex: row.active_step_index } : {}),
         startedAt: row.started_at,
         ...(row.completed_at ? { completedAt: row.completed_at } : {}),
@@ -43,6 +49,9 @@ function mapOrchestratorStepRecord(row: {
     sequence: number;
     description: string;
     status: string;
+    child_thread_id: string | null;
+    child_session_id: string | null;
+    active_run_id: string | null;
     run_id: string | null;
     error_message: string | null;
     created_at: string;
@@ -54,6 +63,15 @@ function mapOrchestratorStepRecord(row: {
         sequence: row.sequence,
         description: row.description,
         status: parseEnumValue(row.status, 'orchestrator_steps.status', planItemStatuses),
+        ...(row.child_thread_id
+            ? { childThreadId: parseEntityId(row.child_thread_id, 'orchestrator_steps.child_thread_id', 'thr') }
+            : {}),
+        ...(row.child_session_id
+            ? { childSessionId: parseEntityId(row.child_session_id, 'orchestrator_steps.child_session_id', 'sess') }
+            : {}),
+        ...(row.active_run_id
+            ? { activeRunId: parseEntityId(row.active_run_id, 'orchestrator_steps.active_run_id', 'run') }
+            : {}),
         ...(row.run_id ? { runId: parseEntityId(row.run_id, 'orchestrator_steps.run_id', 'run') } : {}),
         ...(row.error_message ? { errorMessage: row.error_message } : {}),
         createdAt: row.created_at,
@@ -66,6 +84,7 @@ export class OrchestratorStore {
         profileId: string;
         sessionId: EntityId<'sess'>;
         planId: EntityId<'plan'>;
+        executionStrategy: OrchestratorExecutionStrategy;
         stepDescriptions: string[];
     }): Promise<{ run: OrchestratorRunRecord; steps: OrchestratorStepRecord[] }> {
         const { db } = getPersistence();
@@ -80,6 +99,7 @@ export class OrchestratorStore {
                 session_id: input.sessionId,
                 plan_id: input.planId,
                 status: 'running',
+                execution_strategy: input.executionStrategy,
                 active_step_index: null,
                 started_at: now,
                 completed_at: null,
@@ -100,6 +120,9 @@ export class OrchestratorStore {
                         sequence: index + 1,
                         description,
                         status: 'pending',
+                        child_thread_id: null,
+                        child_session_id: null,
+                        active_run_id: null,
                         run_id: null,
                         error_message: null,
                         created_at: now,
@@ -182,20 +205,28 @@ export class OrchestratorStore {
         return updated ? mapOrchestratorRunRecord(updated) : null;
     }
 
-    async setStepStatus(
+    async updateStep(
         stepId: EntityId<'step'>,
-        status: OrchestratorStepRecord['status'],
-        runId?: EntityId<'run'>,
-        errorMessage?: string
+        input: {
+            status?: OrchestratorStepRecord['status'];
+            childThreadId?: EntityId<'thr'> | null;
+            childSessionId?: EntityId<'sess'> | null;
+            activeRunId?: EntityId<'run'> | null;
+            runId?: EntityId<'run'> | null;
+            errorMessage?: string | null;
+        }
     ): Promise<OrchestratorStepRecord | null> {
         const { db } = getPersistence();
         const now = nowIso();
         const updated = await db
             .updateTable('orchestrator_steps')
             .set({
-                status,
-                run_id: runId ?? null,
-                error_message: errorMessage ?? null,
+                ...(input.status ? { status: input.status } : {}),
+                ...(input.childThreadId !== undefined ? { child_thread_id: input.childThreadId } : {}),
+                ...(input.childSessionId !== undefined ? { child_session_id: input.childSessionId } : {}),
+                ...(input.activeRunId !== undefined ? { active_run_id: input.activeRunId } : {}),
+                ...(input.runId !== undefined ? { run_id: input.runId } : {}),
+                ...(input.errorMessage !== undefined ? { error_message: input.errorMessage } : {}),
                 updated_at: now,
             })
             .where('id', '=', stepId)

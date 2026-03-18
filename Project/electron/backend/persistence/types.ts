@@ -48,6 +48,7 @@ export interface SessionSummaryRecord {
     threadId: string;
     kind: 'local' | 'worktree' | 'cloud';
     worktreeId?: EntityId<'wt'>;
+    delegatedFromOrchestratorRunId?: EntityId<'orch'>;
     runStatus: RunStatus;
     turnCount: number;
     createdAt: string;
@@ -338,6 +339,7 @@ export interface ThreadRecord {
     topLevelTab: 'chat' | 'agent' | 'orchestrator';
     parentThreadId?: string;
     rootThreadId: string;
+    delegatedFromOrchestratorRunId?: EntityId<'orch'>;
     isFavorite: boolean;
     executionEnvironmentMode: ExecutionEnvironmentMode;
     executionBranch?: string;
@@ -553,6 +555,7 @@ export interface OrchestratorRunRecord {
     sessionId: EntityId<'sess'>;
     planId: EntityId<'plan'>;
     status: 'running' | 'completed' | 'aborted' | 'failed';
+    executionStrategy: 'delegate' | 'parallel';
     activeStepIndex?: number;
     startedAt: string;
     completedAt?: string;
@@ -568,6 +571,9 @@ export interface OrchestratorStepRecord {
     sequence: number;
     description: string;
     status: 'pending' | 'running' | 'completed' | 'failed' | 'aborted';
+    childThreadId?: EntityId<'thr'>;
+    childSessionId?: EntityId<'sess'>;
+    activeRunId?: EntityId<'run'>;
     runId?: EntityId<'run'>;
     errorMessage?: string;
     createdAt: string;

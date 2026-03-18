@@ -37,9 +37,10 @@ export class OrchestratorExecutionService {
         this.activeRuns.begin(run.id, {
             profileId: input.profileId,
             sessionId: plan.sessionId,
+            childSessionIds: new Set(),
         });
 
-        void this.executeSequentially({
+        void this.execute({
             plan,
             planItems,
             orchestratorRunId: run.id,
@@ -93,7 +94,7 @@ export class OrchestratorExecutionService {
         };
     }
 
-    private async executeSequentially(input: {
+    private async execute(input: {
         plan: PlanRecord;
         planItems: PlanItemRecord[];
         orchestratorRunId: EntityId<'orch'>;
@@ -103,6 +104,7 @@ export class OrchestratorExecutionService {
         await executeOrchestratorSteps({
             ...input,
             activeRuns: this.activeRuns,
+            executionStrategy: input.startInput.executionStrategy ?? 'delegate',
         });
     }
 }

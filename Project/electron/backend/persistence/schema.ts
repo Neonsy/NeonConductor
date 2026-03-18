@@ -31,6 +31,7 @@ export interface SessionsTable {
     thread_id: string;
     kind: string;
     worktree_id: string | null;
+    delegated_from_orchestrator_run_id: string | null;
     run_status: string;
     pending_completion_run_id: string | null;
     created_at: string;
@@ -261,6 +262,7 @@ export interface ThreadsTable {
     top_level_tab: string;
     parent_thread_id: string | null;
     root_thread_id: string;
+    delegated_from_orchestrator_run_id: string | null;
     is_favorite: 0 | 1;
     execution_environment_mode: string;
     execution_branch: string | null;
@@ -563,6 +565,7 @@ export interface OrchestratorRunsTable {
     session_id: string;
     plan_id: string;
     status: string;
+    execution_strategy: string;
     active_step_index: number | null;
     started_at: string;
     completed_at: string | null;
@@ -578,6 +581,9 @@ export interface OrchestratorStepsTable {
     sequence: number;
     description: string;
     status: string;
+    child_thread_id: string | null;
+    child_session_id: string | null;
+    active_run_id: string | null;
     run_id: string | null;
     error_message: string | null;
     created_at: string;

@@ -1,5 +1,9 @@
-import type { PlanStatus, TopLevelTab } from '@/app/backend/runtime/contracts/enums';
-import type { RuntimeProviderId } from '@/app/backend/runtime/contracts/enums';
+import type {
+    OrchestratorExecutionStrategy,
+    PlanStatus,
+    RuntimeProviderId,
+    TopLevelTab,
+} from '@/app/backend/runtime/contracts/enums';
 import type { EntityId } from '@/app/backend/runtime/contracts/ids';
 import type { ProfileInput } from '@/app/backend/runtime/contracts/types/common';
 import type { RuntimeRunOptions } from '@/app/backend/runtime/contracts/types/session';
@@ -45,6 +49,7 @@ export type PlanApproveInput = PlanGetInput;
 
 export interface PlanImplementInput extends PlanGetInput {
     runtimeOptions: RuntimeRunOptions;
+    executionStrategy?: OrchestratorExecutionStrategy;
     providerId?: RuntimeProviderId;
     modelId?: string;
     workspaceFingerprint?: string;

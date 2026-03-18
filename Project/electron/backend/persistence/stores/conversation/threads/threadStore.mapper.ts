@@ -10,6 +10,7 @@ export interface ThreadRow {
     top_level_tab: string;
     parent_thread_id: string | null;
     root_thread_id: string;
+    delegated_from_orchestrator_run_id: string | null;
     is_favorite: 0 | 1;
     execution_environment_mode: string;
     execution_branch: string | null;
@@ -36,6 +37,15 @@ export function mapThreadRecord(row: ThreadRow): ThreadRecord {
         topLevelTab: parseEnumValue(row.top_level_tab, 'threads.top_level_tab', topLevelTabs),
         ...(row.parent_thread_id ? { parentThreadId: row.parent_thread_id } : {}),
         rootThreadId: row.root_thread_id,
+        ...(row.delegated_from_orchestrator_run_id
+            ? {
+                  delegatedFromOrchestratorRunId: parseEntityId(
+                      row.delegated_from_orchestrator_run_id,
+                      'threads.delegated_from_orchestrator_run_id',
+                      'orch'
+                  ),
+              }
+            : {}),
         isFavorite: row.is_favorite === 1,
         executionEnvironmentMode: parseEnumValue(
             row.execution_environment_mode,
@@ -60,6 +70,15 @@ export function mapThreadListRecord(row: ThreadListRow): ThreadListRecord {
         topLevelTab: parseEnumValue(row.top_level_tab, 'threads.top_level_tab', topLevelTabs),
         ...(row.parent_thread_id ? { parentThreadId: row.parent_thread_id } : {}),
         rootThreadId: row.root_thread_id,
+        ...(row.delegated_from_orchestrator_run_id
+            ? {
+                  delegatedFromOrchestratorRunId: parseEntityId(
+                      row.delegated_from_orchestrator_run_id,
+                      'threads.delegated_from_orchestrator_run_id',
+                      'orch'
+                  ),
+              }
+            : {}),
         isFavorite: row.is_favorite === 1,
         executionEnvironmentMode: parseEnumValue(
             row.execution_environment_mode,

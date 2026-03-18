@@ -55,6 +55,7 @@ export function SessionWorkspacePanel({
     canCompactContext,
     isCompactingContext,
     executionEnvironmentPanel,
+    modeExecutionPanel,
     contextAssetsPanel,
     diffCheckpointPanel,
     promptResetKey,
@@ -112,6 +113,16 @@ export function SessionWorkspacePanel({
                       label: 'Execution environment',
                       description: 'Workspace targeting and execution-scope details.',
                       content: executionEnvironmentPanel,
+                  } satisfies WorkspaceInspectorSection,
+              ]
+            : []),
+        ...(modeExecutionPanel
+            ? [
+                  {
+                      id: 'plan-and-orchestration',
+                      label: 'Plan and orchestration',
+                      description: 'Plan approval, root orchestration strategy, and delegated worker lane status.',
+                      content: modeExecutionPanel,
                   } satisfies WorkspaceInspectorSection,
               ]
             : []),

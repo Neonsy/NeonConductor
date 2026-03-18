@@ -1,4 +1,4 @@
-import { orchestratorStore, planStore } from '@/app/backend/persistence/stores';
+import { orchestratorStore, planStore, threadStore } from '@/app/backend/persistence/stores';
 import type { OrchestratorRunRecord, OrchestratorStepRecord, PlanItemRecord, PlanRecord } from '@/app/backend/persistence/types';
 import type { OrchestratorStartInput } from '@/app/backend/runtime/contracts';
 import {
@@ -28,6 +28,23 @@ export async function prepareOrchestratorStart(
     }
 
     const plan = validation.value;
+    const sessionThread = await threadStore.getBySessionId(input.profileId, plan.sessionId);
+    if (!sessionThread) {
+        return errOrchestrator('session_not_found', `Session "${plan.sessionId}" was not found for orchestration.`);
+    }
+    if (sessionThread.thread.delegatedFromOrchestratorRunId) {
+        return errOrchestrator(
+            'delegation_not_allowed',
+            'Delegated worker lanes cannot start orchestrator strategies.'
+        );
+    }
+    if (sessionThread.thread.id !== sessionThread.thread.rootThreadId) {
+        return errOrchestrator(
+            'delegation_not_allowed',
+            'Only the root orchestrator thread may start orchestrator strategies.'
+        );
+    }
+
     const planItems = await planStore.listItems(plan.id);
     const stepDescriptions =
         planItems.length > 0 ? planItems.map((item) => item.description) : [plan.summaryMarkdown || plan.sourcePrompt];
@@ -35,6 +52,7 @@ export async function prepareOrchestratorStart(
         profileId: input.profileId,
         sessionId: plan.sessionId,
         planId: plan.id,
+        executionStrategy: input.executionStrategy ?? 'delegate',
         stepDescriptions,
     });
 

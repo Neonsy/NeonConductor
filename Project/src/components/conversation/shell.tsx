@@ -15,6 +15,11 @@ import { buildConversationWorkspacePanels } from '@/web/components/conversation/
 import { buildConversationWorkspaceSectionState } from '@/web/components/conversation/shell/composition/buildConversationWorkspaceSectionState';
 import { ConversationWorkspaceSection } from '@/web/components/conversation/shell/composition/conversationWorkspaceSection';
 import { applyConversationSessionCacheUpdate } from '@/web/components/conversation/shell/conversationShellCache';
+import {
+    resolveOrchestratorExecutionStrategyDraft,
+    resolveOrchestratorStrategyRootThreadId,
+    updateOrchestratorExecutionStrategyDraft,
+} from '@/web/components/conversation/shell/orchestratorExecutionStrategyDrafts';
 import { setActivePlanCache, setOrchestratorLatestCache } from '@/web/components/conversation/shell/planCache';
 import { useConversationQueries } from '@/web/components/conversation/shell/queries/useConversationQueries';
 import { buildConversationUiSyncPatch } from '@/web/components/conversation/shell/queries/useConversationSync';
@@ -38,7 +43,13 @@ import { trpc } from '@/web/trpc/client';
 
 import type { RunRecord, SessionSummaryRecord, ThreadListRecord } from '@/app/backend/persistence/types';
 
-import type { PlanRecordView, RuntimeProviderId, RuntimeReasoningEffort, TopLevelTab } from '@/shared/contracts';
+import type {
+    OrchestratorExecutionStrategy,
+    PlanRecordView,
+    RuntimeProviderId,
+    RuntimeReasoningEffort,
+    TopLevelTab,
+} from '@/shared/contracts';
 import {
     DEFAULT_COMPOSER_IMAGE_COMPRESSION_CONCURRENCY,
     DEFAULT_COMPOSER_MAX_IMAGE_ATTACHMENTS_PER_MESSAGE,
@@ -78,6 +89,9 @@ export function ConversationShell({
     const [tabSwitchNotice, setTabSwitchNotice] = useState<string | undefined>(undefined);
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
     const [focusComposerRequestKey, setFocusComposerRequestKey] = useState(0);
+    const [executionStrategyDraftsByRootThreadId, setExecutionStrategyDraftsByRootThreadId] = useState<
+        Record<string, OrchestratorExecutionStrategy>
+    >({});
     const [requestedReasoningEffort, setRequestedReasoningEffort] =
         useState<RuntimeReasoningEffort>(DEFAULT_REASONING_EFFORT);
     const [mainViewDraftTarget, setMainViewDraftTarget] = useState<
@@ -228,6 +242,24 @@ export function ConversationShell({
         sidebarState,
         runTargetState: initialRunTargetState,
     });
+    const orchestratorStrategyRootThreadId = resolveOrchestratorStrategyRootThreadId({
+        topLevelTab,
+        selectedThread: shellViewModel.selectedThread,
+    });
+    const executionStrategy = resolveOrchestratorExecutionStrategyDraft({
+        topLevelTab,
+        selectedThread: shellViewModel.selectedThread,
+        draftsByRootThreadId: executionStrategyDraftsByRootThreadId,
+    });
+    const handleExecutionStrategyChange = (nextExecutionStrategy: OrchestratorExecutionStrategy): void => {
+        setExecutionStrategyDraftsByRootThreadId((currentDrafts) =>
+            updateOrchestratorExecutionStrategyDraft({
+                draftsByRootThreadId: currentDrafts,
+                rootThreadId: orchestratorStrategyRootThreadId,
+                executionStrategy: nextExecutionStrategy,
+            })
+        );
+    };
     const selectedWorkspacePreference = (
         queries.shellBootstrapQuery.data?.workspacePreferences ?? []
     ).find((workspacePreference) => {
@@ -680,6 +712,7 @@ export function ConversationShell({
         orchestratorView: queries.orchestratorLatestQuery.data?.found
             ? queries.orchestratorLatestQuery.data
             : undefined,
+        selectedExecutionStrategy: executionStrategy,
         planStartMutation: mutations.planStartMutation,
         planAnswerMutation: mutations.planAnswerMutation,
         planReviseMutation: mutations.planReviseMutation,
@@ -810,6 +843,12 @@ export function ConversationShell({
         mutations,
         planOrchestrator,
         workspaceActions,
+        onSelectThreadId: uiState.setSelectedThreadId,
+        onSelectSessionId: uiState.setSelectedSessionId,
+        onSelectRunId: uiState.setSelectedRunId,
+        onTopLevelTabChange,
+        executionStrategy,
+        onExecutionStrategyChange: handleExecutionStrategyChange,
     });
     const workspaceSectionProps = {
         header: {
@@ -962,6 +1001,7 @@ export function ConversationShell({
             onEditMessage: editFlow.onEditMessage,
             onBranchFromMessage: editFlow.onBranchFromMessage,
             executionEnvironmentPanel: workspacePanels.executionEnvironmentPanel,
+            modeExecutionPanel: workspacePanels.modeExecutionPanel,
             contextAssetsPanel: workspacePanels.contextAssetsPanel,
             diffCheckpointPanel: workspacePanels.diffCheckpointPanel,
             focusComposerRequestKey,

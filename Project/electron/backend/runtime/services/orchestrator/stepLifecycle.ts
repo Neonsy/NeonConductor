@@ -24,7 +24,9 @@ export async function markStepStarted(input: {
         status: 'running',
         activeStepIndex: input.step.sequence,
     });
-    await orchestratorStore.setStepStatus(input.step.id, 'running');
+    await orchestratorStore.updateStep(input.step.id, {
+        status: 'running',
+    });
 
     const linkedPlanItem = findLinkedPlanItem(input.planItems, input.step);
     if (linkedPlanItem) {
@@ -46,12 +48,27 @@ export async function markStepStarted(input: {
     });
 }
 
+export async function markStepChildLaneAttached(input: {
+    step: OrchestratorStepRecord;
+    childThreadId: EntityId<'thr'>;
+    childSessionId: EntityId<'sess'>;
+}): Promise<void> {
+    await orchestratorStore.updateStep(input.step.id, {
+        status: 'running',
+        childThreadId: input.childThreadId,
+        childSessionId: input.childSessionId,
+    });
+}
+
 export async function markStepRunAttached(input: {
     step: OrchestratorStepRecord;
     planItems: PlanItemRecord[];
     runId: EntityId<'run'>;
 }): Promise<void> {
-    await orchestratorStore.setStepStatus(input.step.id, 'running', input.runId);
+    await orchestratorStore.updateStep(input.step.id, {
+        status: 'running',
+        activeRunId: input.runId,
+    });
     const linkedPlanItem = findLinkedPlanItem(input.planItems, input.step);
     if (linkedPlanItem) {
         await planStore.setItemStatus(linkedPlanItem.id, 'running', input.runId);
@@ -64,7 +81,12 @@ export async function markStepCompleted(input: {
     planItems: PlanItemRecord[];
     runId: EntityId<'run'>;
 }): Promise<void> {
-    await orchestratorStore.setStepStatus(input.step.id, 'completed', input.runId);
+    await orchestratorStore.updateStep(input.step.id, {
+        status: 'completed',
+        activeRunId: null,
+        runId: input.runId,
+        errorMessage: null,
+    });
     const linkedPlanItem = findLinkedPlanItem(input.planItems, input.step);
     if (linkedPlanItem) {
         await planStore.setItemStatus(linkedPlanItem.id, 'completed', input.runId);
@@ -92,16 +114,23 @@ export async function markStepAborted(input: {
     step: OrchestratorStepRecord;
     planItems: PlanItemRecord[];
     runId: EntityId<'run'>;
+    updateOrchestratorRun?: boolean;
 }): Promise<void> {
-    await orchestratorStore.setStepStatus(input.step.id, 'aborted', input.runId);
+    await orchestratorStore.updateStep(input.step.id, {
+        status: 'aborted',
+        activeRunId: null,
+        runId: input.runId,
+    });
     const linkedPlanItem = findLinkedPlanItem(input.planItems, input.step);
     if (linkedPlanItem) {
         await planStore.setItemStatus(linkedPlanItem.id, 'aborted', input.runId);
     }
-    await orchestratorStore.setRunStatus(input.orchestratorRunId, {
-        status: 'aborted',
-        activeStepIndex: input.step.sequence,
-    });
+    if (input.updateOrchestratorRun ?? true) {
+        await orchestratorStore.setRunStatus(input.orchestratorRunId, {
+            status: 'aborted',
+            activeStepIndex: input.step.sequence,
+        });
+    }
 
     appLog.warn({
         tag: 'orchestrator',
@@ -120,18 +149,29 @@ export async function markStepFailed(input: {
     runId?: EntityId<'run'>;
     errorMessage: string;
     planId: PlanRecord['id'];
+    updateOrchestratorRun?: boolean;
+    markPlanFailed?: boolean;
 }): Promise<void> {
-    await orchestratorStore.setStepStatus(input.step.id, 'failed', input.runId, input.errorMessage);
+    await orchestratorStore.updateStep(input.step.id, {
+        status: 'failed',
+        activeRunId: null,
+        ...(input.runId ? { runId: input.runId } : {}),
+        errorMessage: input.errorMessage,
+    });
     const linkedPlanItem = findLinkedPlanItem(input.planItems, input.step);
     if (linkedPlanItem) {
         await planStore.setItemStatus(linkedPlanItem.id, 'failed', input.runId, input.errorMessage);
     }
-    await orchestratorStore.setRunStatus(input.orchestratorRunId, {
-        status: 'failed',
-        activeStepIndex: input.step.sequence,
-        errorMessage: input.errorMessage,
-    });
-    await planStore.markFailed(input.planId);
+    if (input.updateOrchestratorRun ?? true) {
+        await orchestratorStore.setRunStatus(input.orchestratorRunId, {
+            status: 'failed',
+            activeStepIndex: input.step.sequence,
+            errorMessage: input.errorMessage,
+        });
+    }
+    if (input.markPlanFailed ?? true) {
+        await planStore.markFailed(input.planId);
+    }
 
     appLog.warn({
         tag: 'orchestrator',

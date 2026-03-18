@@ -152,6 +152,9 @@ export type PlanItemStatus = (typeof planItemStatuses)[number];
 export const orchestratorRunStatuses = ['running', 'completed', 'aborted', 'failed'] as const;
 export type OrchestratorRunStatus = (typeof orchestratorRunStatuses)[number];
 
+export const orchestratorExecutionStrategies = ['delegate', 'parallel'] as const;
+export type OrchestratorExecutionStrategy = (typeof orchestratorExecutionStrategies)[number];
+
 export const registryScopes = ['system', 'global', 'workspace', 'session'] as const;
 export type RegistryScope = (typeof registryScopes)[number];
 

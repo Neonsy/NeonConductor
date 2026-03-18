@@ -33,7 +33,6 @@ interface SidebarThreadListProps {
     tagLabelById: Map<string, string>;
     selectedThreadId?: string;
     showAllModes: boolean;
-    groupView: 'workspace' | 'branch';
     statusMessage?: string;
     statusTone?: 'info' | 'error';
     deferredSearchValue: string;
@@ -140,7 +139,6 @@ function ThreadRow({
     tagLabelById,
     selectedThreadId,
     showAllModes,
-    groupView,
     onPreviewThread,
     onSelectThread,
     onToggleThreadFavorite,
@@ -152,7 +150,6 @@ function ThreadRow({
     tagLabelById: Map<string, string>;
     selectedThreadId?: string;
     showAllModes: boolean;
-    groupView: 'workspace' | 'branch';
     onPreviewThread?: (threadId: string) => void;
     onSelectThread: (threadId: string) => void;
     onToggleThreadFavorite: (threadId: string, nextFavorite: boolean) => Promise<void>;
@@ -166,7 +163,7 @@ function ThreadRow({
 
     return (
         <div className='relative'>
-            {groupView === 'branch' && depth > 0 ? (
+            {depth > 0 ? (
                 <span
                     aria-hidden
                     className='bg-border absolute top-2 bottom-2 w-px'
@@ -270,7 +267,6 @@ export function SidebarThreadList({
     tagLabelById,
     selectedThreadId,
     showAllModes,
-    groupView,
     statusMessage,
     statusTone = 'info',
     deferredSearchValue,
@@ -423,7 +419,6 @@ export function SidebarThreadList({
                                         tagLabelById={tagLabelById}
                                         {...(selectedThreadId ? { selectedThreadId } : {})}
                                         showAllModes={showAllModes}
-                                        groupView={groupView}
                                         {...(onPreviewThread ? { onPreviewThread } : {})}
                                         onSelectThread={onSelectThread}
                                         onToggleThreadFavorite={onToggleThreadFavorite}
@@ -455,7 +450,6 @@ export function SidebarThreadList({
                                 tagLabelById={tagLabelById}
                                 {...(selectedThreadId ? { selectedThreadId } : {})}
                                 showAllModes={showAllModes}
-                                groupView={groupView}
                                 {...(onPreviewThread ? { onPreviewThread } : {})}
                                 onSelectThread={onSelectThread}
                                 onToggleThreadFavorite={onToggleThreadFavorite}

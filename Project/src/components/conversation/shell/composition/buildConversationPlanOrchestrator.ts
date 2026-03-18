@@ -3,7 +3,13 @@ import type { RunTargetSelection } from '@/web/components/conversation/shell/wor
 
 import type { OrchestratorRunRecord, OrchestratorStepRecord } from '@/app/backend/persistence/types';
 
-import type { EntityId, PlanRecordView, RuntimeProviderId, RuntimeRunOptions } from '@/shared/contracts';
+import type {
+    EntityId,
+    OrchestratorExecutionStrategy,
+    PlanRecordView,
+    RuntimeProviderId,
+    RuntimeRunOptions,
+} from '@/shared/contracts';
 
 interface MutationLike<TInput, TResult> {
     isPending: boolean;
@@ -22,6 +28,7 @@ interface BuildConversationPlanOrchestratorInput {
     workspaceFingerprint: string | undefined;
     activePlan: ModeExecutionPanelProps['activePlan'];
     orchestratorView: ModeExecutionPanelProps['orchestratorView'];
+    selectedExecutionStrategy: OrchestratorExecutionStrategy;
     planStartMutation: MutationLike<
         {
             profileId: string;
@@ -66,6 +73,7 @@ interface BuildConversationPlanOrchestratorInput {
             providerId?: RuntimeProviderId;
             modelId?: string;
             workspaceFingerprint?: string;
+            executionStrategy?: OrchestratorExecutionStrategy;
         },
         | { found: false }
         | { found: true; plan: PlanRecordView }
@@ -90,6 +98,7 @@ export function buildConversationPlanOrchestrator(input: BuildConversationPlanOr
     isOrchestratorMutating: boolean;
     activePlan: ModeExecutionPanelProps['activePlan'];
     orchestratorView: ModeExecutionPanelProps['orchestratorView'];
+    selectedExecutionStrategy: ModeExecutionPanelProps['selectedExecutionStrategy'];
     onAnswerQuestion: ModeExecutionPanelProps['onAnswerQuestion'];
     onRevisePlan: ModeExecutionPanelProps['onRevisePlan'];
     onApprovePlan: ModeExecutionPanelProps['onApprovePlan'];
@@ -106,6 +115,7 @@ export function buildConversationPlanOrchestrator(input: BuildConversationPlanOr
         isOrchestratorMutating: input.orchestratorAbortMutation.isPending,
         activePlan: input.activePlan,
         orchestratorView: input.orchestratorView,
+        selectedExecutionStrategy: input.selectedExecutionStrategy,
         onAnswerQuestion: (planId, questionId, answer) => {
             void input.planAnswerMutation
                 .mutateAsync({
@@ -144,7 +154,7 @@ export function buildConversationPlanOrchestrator(input: BuildConversationPlanOr
                     input.onError(`Plan approval failed: ${message}`);
                 });
         },
-        onImplementPlan: (planId) => {
+        onImplementPlan: (planId, executionStrategy) => {
             void input.planImplementMutation
                 .mutateAsync({
                     profileId: input.profileId,
@@ -153,6 +163,7 @@ export function buildConversationPlanOrchestrator(input: BuildConversationPlanOr
                     ...(input.resolvedRunTarget ? { providerId: input.resolvedRunTarget.providerId } : {}),
                     ...(input.resolvedRunTarget ? { modelId: input.resolvedRunTarget.modelId } : {}),
                     ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
+                    ...(executionStrategy ? { executionStrategy } : {}),
                 })
                 .then((result) => {
                     input.applyPlanWorkspaceUpdate(

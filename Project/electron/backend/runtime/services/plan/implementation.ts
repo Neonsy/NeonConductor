@@ -105,6 +105,9 @@ export async function implementApprovedPlan(input: {
             profileId: input.profileId,
             planId: input.plan.id,
             runtimeOptions: input.implementationInput.runtimeOptions,
+            ...(input.implementationInput.executionStrategy
+                ? { executionStrategy: input.implementationInput.executionStrategy }
+                : {}),
             ...(input.implementationInput.providerId ? { providerId: input.implementationInput.providerId } : {}),
             ...(input.implementationInput.modelId ? { modelId: input.implementationInput.modelId } : {}),
             ...(input.implementationInput.workspaceFingerprint

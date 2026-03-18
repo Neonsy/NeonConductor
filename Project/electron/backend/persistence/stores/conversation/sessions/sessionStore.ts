@@ -36,6 +36,15 @@ function mapSessionSummary(row: SessionRow, turnCount: number): SessionSummaryRe
         threadId: row.thread_id,
         kind: parseEnumValue(row.kind, 'sessions.kind', sessionKinds),
         ...(row.worktree_id ? { worktreeId: parseEntityId(row.worktree_id, 'sessions.worktree_id', 'wt') } : {}),
+        ...(row.delegated_from_orchestrator_run_id
+            ? {
+                  delegatedFromOrchestratorRunId: parseEntityId(
+                      row.delegated_from_orchestrator_run_id,
+                      'sessions.delegated_from_orchestrator_run_id',
+                      'orch'
+                  ),
+              }
+            : {}),
         runStatus: parseRunStatus(row.run_status),
         turnCount,
         createdAt: row.created_at,
@@ -140,7 +149,10 @@ export class SessionStore {
     async create(
         profileId: string,
         threadId: string,
-        kind: SessionKind
+        kind: SessionKind,
+        options?: {
+            delegatedFromOrchestratorRunId?: EntityId<'orch'>;
+        }
     ): Promise<{ created: false; reason: 'thread_not_found' } | { created: true; session: SessionSummaryRecord }> {
         const { db } = getPersistence();
         const now = nowIso();
@@ -169,6 +181,7 @@ export class SessionStore {
                 thread_id: thread.id,
                 kind: resolvedKind,
                 worktree_id: thread.worktree_id,
+                delegated_from_orchestrator_run_id: options?.delegatedFromOrchestratorRunId ?? null,
                 run_status: 'idle',
                 pending_completion_run_id: null,
                 created_at: now,

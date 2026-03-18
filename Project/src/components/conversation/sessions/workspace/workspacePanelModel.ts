@@ -124,6 +124,7 @@ export interface SessionWorkspacePanelProps {
     canCompactContext?: boolean;
     isCompactingContext?: boolean;
     executionEnvironmentPanel?: ReactNode;
+    modeExecutionPanel?: ReactNode;
     contextAssetsPanel?: ReactNode;
     diffCheckpointPanel?: ReactNode;
     promptResetKey?: number;

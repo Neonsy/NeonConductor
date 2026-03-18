@@ -3,7 +3,12 @@ import { err, ok, type Result } from 'neverthrow';
 import type { PlanRecord } from '@/app/backend/persistence/types';
 import type { EntityId } from '@/app/backend/runtime/contracts';
 
-export type OrchestratorExecutionErrorCode = 'plan_not_found' | 'invalid_tab' | 'plan_not_approved';
+export type OrchestratorExecutionErrorCode =
+    | 'plan_not_found'
+    | 'invalid_tab'
+    | 'plan_not_approved'
+    | 'delegation_not_allowed'
+    | 'session_not_found';
 
 export interface OrchestratorExecutionError {
     code: OrchestratorExecutionErrorCode;

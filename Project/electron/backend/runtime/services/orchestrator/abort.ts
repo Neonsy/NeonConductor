@@ -17,14 +17,19 @@ export async function abortOrchestratorRun(input: {
 
     const active = input.activeRuns.cancel(input.orchestratorRunId);
     if (active) {
-        await runExecutionService.abortRun(active.profileId, active.sessionId);
+        await Promise.all(
+            [...active.childSessionIds].map((childSessionId) => runExecutionService.abortRun(active.profileId, childSessionId))
+        );
     }
 
     await orchestratorStore.setRunStatus(input.orchestratorRunId, { status: 'aborted' });
     const steps = await orchestratorStore.listSteps(input.orchestratorRunId);
     for (const step of steps) {
         if (step.status === 'pending' || step.status === 'running') {
-            await orchestratorStore.setStepStatus(step.id, 'aborted');
+            await orchestratorStore.updateStep(step.id, {
+                status: 'aborted',
+                activeRunId: null,
+            });
         }
     }
 

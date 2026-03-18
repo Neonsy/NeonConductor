@@ -275,6 +275,7 @@ CREATE TABLE threads (
     top_level_tab TEXT NOT NULL CHECK (top_level_tab IN ('chat', 'agent', 'orchestrator')),
     parent_thread_id TEXT NULL REFERENCES threads(id) ON DELETE SET NULL,
     root_thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+    delegated_from_orchestrator_run_id TEXT NULL,
     last_assistant_at TEXT NULL,
     execution_environment_mode TEXT NOT NULL DEFAULT 'local',
     execution_branch TEXT NULL,
@@ -308,6 +309,7 @@ CREATE TABLE sessions (
     thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
     kind TEXT NOT NULL CHECK (kind IN ('local', 'worktree', 'cloud')),
     worktree_id TEXT NULL REFERENCES worktrees(id) ON DELETE SET NULL,
+    delegated_from_orchestrator_run_id TEXT NULL,
     run_status TEXT NOT NULL CHECK (run_status IN ('idle', 'running', 'completed', 'aborted', 'error')),
     pending_completion_run_id TEXT NULL,
     created_at TEXT NOT NULL,
@@ -563,6 +565,7 @@ CREATE TABLE orchestrator_runs (
     session_id TEXT NOT NULL,
     plan_id TEXT NOT NULL,
     status TEXT NOT NULL CHECK (status IN ('running', 'completed', 'aborted', 'failed')),
+    execution_strategy TEXT NOT NULL CHECK (execution_strategy IN ('delegate', 'parallel')),
     active_step_index INTEGER NULL,
     started_at TEXT NOT NULL,
     completed_at TEXT NULL,
@@ -580,6 +583,9 @@ CREATE TABLE orchestrator_steps (
     sequence INTEGER NOT NULL,
     description TEXT NOT NULL,
     status TEXT NOT NULL CHECK (status IN ('pending', 'running', 'completed', 'failed', 'aborted')),
+    child_thread_id TEXT NULL REFERENCES threads(id) ON DELETE SET NULL,
+    child_session_id TEXT NULL REFERENCES sessions(id) ON DELETE SET NULL,
+    active_run_id TEXT NULL REFERENCES runs(id) ON DELETE SET NULL,
     run_id TEXT NULL,
     error_message TEXT NULL,
     created_at TEXT NOT NULL,
@@ -730,6 +736,9 @@ CREATE INDEX idx_threads_profile_last_assistant_at
 CREATE INDEX idx_threads_profile_mode_updated_at
     ON threads(profile_id, top_level_tab, updated_at DESC);
 
+CREATE INDEX idx_threads_delegated_orchestrator_run_id
+    ON threads(delegated_from_orchestrator_run_id);
+
 CREATE INDEX idx_threads_profile_parent_updated_at
     ON threads(profile_id, parent_thread_id, updated_at DESC);
 
@@ -753,6 +762,9 @@ CREATE INDEX idx_sessions_profile_conversation_updated_at
 
 CREATE INDEX idx_sessions_profile_thread_updated_at
     ON sessions(profile_id, thread_id, updated_at DESC);
+
+CREATE INDEX idx_sessions_delegated_orchestrator_run_id
+    ON sessions(delegated_from_orchestrator_run_id);
 
 CREATE INDEX idx_sessions_profile_worktree_updated_at
     ON sessions(profile_id, worktree_id, updated_at DESC);
