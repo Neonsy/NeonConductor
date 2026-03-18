@@ -1,6 +1,10 @@
 import type {
     ComposerMediaSettings,
     ContextCompactionSource,
+    MemoryCreatedByKind,
+    MemoryScopeKind,
+    MemoryState,
+    MemoryType,
     ModelLimitOverrideRecord as RuntimeModelLimitOverrideRecord,
     ContextProfileSettings,
     ContextGlobalSettings,
@@ -67,6 +71,25 @@ export interface SessionAttachedRuleRecord {
     profileId: string;
     assetKey: string;
     createdAt: string;
+}
+
+export interface MemoryRecord {
+    id: EntityId<'mem'>;
+    profileId: string;
+    memoryType: MemoryType;
+    scopeKind: MemoryScopeKind;
+    state: MemoryState;
+    createdByKind: MemoryCreatedByKind;
+    title: string;
+    bodyMarkdown: string;
+    summaryText?: string;
+    metadata: Record<string, unknown>;
+    workspaceFingerprint?: string;
+    threadId?: EntityId<'thr'>;
+    runId?: EntityId<'run'>;
+    supersededByMemoryId?: EntityId<'mem'>;
+    createdAt: string;
+    updatedAt: string;
 }
 
 export interface ProfileRecord {

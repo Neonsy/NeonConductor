@@ -64,6 +64,18 @@ export type ContextProfileOverrideMode = (typeof contextProfileOverrideModes)[nu
 export const contextCompactionSources = ['auto', 'manual'] as const;
 export type ContextCompactionSource = (typeof contextCompactionSources)[number];
 
+export const memoryTypes = ['semantic', 'episodic', 'procedural'] as const;
+export type MemoryType = (typeof memoryTypes)[number];
+
+export const memoryScopeKinds = ['global', 'workspace', 'thread', 'run'] as const;
+export type MemoryScopeKind = (typeof memoryScopeKinds)[number];
+
+export const memoryStates = ['active', 'disabled', 'superseded'] as const;
+export type MemoryState = (typeof memoryStates)[number];
+
+export const memoryCreatedByKinds = ['user', 'system'] as const;
+export type MemoryCreatedByKind = (typeof memoryCreatedByKinds)[number];
+
 export const contextLimitSources = ['override', 'discovery', 'static', 'unknown', 'mixed'] as const;
 export type ContextLimitSource = (typeof contextLimitSources)[number];
 

@@ -1,15 +1,21 @@
 import { describe, expect, it } from 'vitest';
 
+import { parseEntityId } from '@/app/backend/persistence/stores/shared/rowParsers';
 import {
     registerPersistenceStoreHooks,
     accountSnapshotStore,
+    conversationStore,
     getDefaultProfileId,
     marketplaceStore,
+    memoryStore,
     mcpStore,
     modeStore,
     permissionStore,
     providerSecretStore,
+    runStore,
+    sessionStore,
     skillfileStore,
+    threadStore,
     toolStore,
 } from '@/app/backend/persistence/__tests__/stores.shared';
 
@@ -50,6 +56,272 @@ describe('persistence stores: runtime domain', () => {
 
         const denied = await permissionStore.resolve(created.id, 'deny');
         expect(denied?.decision).toBe('denied');
+    });
+
+    it('supports memory record persistence, filters, and lifecycle transitions', async () => {
+        const profileId = getDefaultProfileId();
+        const workspaceFingerprint = 'wsf_memory_store_runtime';
+        const workspaceConversation = await conversationStore.createOrGetBucket({
+            profileId,
+            scope: 'workspace',
+            workspaceFingerprint,
+            title: 'Memory Workspace',
+        });
+        expect(workspaceConversation.isOk()).toBe(true);
+        if (workspaceConversation.isErr()) {
+            throw new Error(workspaceConversation.error.message);
+        }
+
+        const thread = await threadStore.create({
+            profileId,
+            conversationId: workspaceConversation.value.id,
+            title: 'Memory Thread',
+            topLevelTab: 'agent',
+        });
+        expect(thread.isOk()).toBe(true);
+        if (thread.isErr()) {
+            throw new Error(thread.error.message);
+        }
+        const threadId = parseEntityId(thread.value.id, 'threads.id', 'thr');
+
+        const session = await sessionStore.create(profileId, thread.value.id, 'local');
+        expect(session.created).toBe(true);
+        if (!session.created) {
+            throw new Error(session.reason);
+        }
+
+        const run = await runStore.create({
+            profileId,
+            sessionId: session.session.id,
+            prompt: 'Memory run',
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
+            authMethod: 'api_key',
+            runtimeOptions: {
+                reasoning: {
+                    effort: 'medium',
+                    summary: 'auto',
+                    includeEncrypted: true,
+                },
+                cache: {
+                    strategy: 'auto',
+                },
+                transport: {
+                    family: 'auto',
+                },
+            },
+            cache: {
+                applied: false,
+            },
+            transport: {},
+        });
+
+        const globalMemory = await memoryStore.create({
+            profileId,
+            memoryType: 'semantic',
+            scopeKind: 'global',
+            createdByKind: 'user',
+            title: 'Global Memory',
+            bodyMarkdown: 'Global body',
+        });
+        const workspaceMemory = await memoryStore.create({
+            profileId,
+            memoryType: 'episodic',
+            scopeKind: 'workspace',
+            createdByKind: 'system',
+            title: 'Workspace Memory',
+            bodyMarkdown: 'Workspace body',
+            workspaceFingerprint,
+        });
+        const threadMemory = await memoryStore.create({
+            profileId,
+            memoryType: 'procedural',
+            scopeKind: 'thread',
+            createdByKind: 'user',
+            title: 'Thread Memory',
+            bodyMarkdown: 'Thread body',
+            workspaceFingerprint,
+            threadId,
+        });
+        const runMemory = await memoryStore.create({
+            profileId,
+            memoryType: 'episodic',
+            scopeKind: 'run',
+            createdByKind: 'system',
+            title: 'Run Memory',
+            bodyMarkdown: 'Run body',
+            workspaceFingerprint,
+            threadId,
+            runId: run.id,
+        });
+
+        const listed = await memoryStore.listByProfile({ profileId });
+        expect(new Set(listed.map((memory) => memory.id))).toEqual(
+            new Set([globalMemory.id, workspaceMemory.id, threadMemory.id, runMemory.id])
+        );
+
+        const workspaceFiltered = await memoryStore.listByProfile({
+            profileId,
+            scopeKind: 'workspace',
+            workspaceFingerprint,
+        });
+        expect(workspaceFiltered.map((memory) => memory.id)).toEqual([workspaceMemory.id]);
+
+        const disabled = await memoryStore.disable(profileId, workspaceMemory.id);
+        expect(disabled?.state).toBe('disabled');
+
+        const superseded = await memoryStore.supersede({
+            profileId,
+            previousMemoryId: threadMemory.id,
+            replacement: {
+                profileId,
+                memoryType: threadMemory.memoryType,
+                scopeKind: threadMemory.scopeKind,
+                createdByKind: 'system',
+                title: 'Thread Memory v2',
+                bodyMarkdown: 'Updated thread body',
+                workspaceFingerprint,
+                threadId,
+            },
+        });
+        expect(superseded?.previous.state).toBe('superseded');
+        expect(superseded?.previous.supersededByMemoryId).toBe(superseded?.replacement.id);
+        expect(superseded?.replacement.state).toBe('active');
+        expect(superseded?.replacement.title).toBe('Thread Memory v2');
+    });
+
+    it('cascades owned memory when the owning run or thread is deleted', async () => {
+        const profileId = getDefaultProfileId();
+        const workspaceFingerprint = 'wsf_memory_store_cascade';
+        const workspaceConversation = await conversationStore.createOrGetBucket({
+            profileId,
+            scope: 'workspace',
+            workspaceFingerprint,
+            title: 'Memory Cascade Workspace',
+        });
+        expect(workspaceConversation.isOk()).toBe(true);
+        if (workspaceConversation.isErr()) {
+            throw new Error(workspaceConversation.error.message);
+        }
+
+        const runOwnerThread = await threadStore.create({
+            profileId,
+            conversationId: workspaceConversation.value.id,
+            title: 'Run Owner Thread',
+            topLevelTab: 'agent',
+        });
+        const threadOwnerThread = await threadStore.create({
+            profileId,
+            conversationId: workspaceConversation.value.id,
+            title: 'Thread Owner Thread',
+            topLevelTab: 'agent',
+        });
+        expect(runOwnerThread.isOk()).toBe(true);
+        expect(threadOwnerThread.isOk()).toBe(true);
+        if (runOwnerThread.isErr()) {
+            throw new Error(runOwnerThread.error.message);
+        }
+        if (threadOwnerThread.isErr()) {
+            throw new Error(threadOwnerThread.error.message);
+        }
+
+        const runOwnerThreadId = parseEntityId(runOwnerThread.value.id, 'threads.id', 'thr');
+        const threadOwnerThreadId = parseEntityId(threadOwnerThread.value.id, 'threads.id', 'thr');
+
+        const runOwnerSession = await sessionStore.create(profileId, runOwnerThread.value.id, 'local');
+        expect(runOwnerSession.created).toBe(true);
+        if (!runOwnerSession.created) {
+            throw new Error(runOwnerSession.reason);
+        }
+
+        const runOwnerRun = await runStore.create({
+            profileId,
+            sessionId: runOwnerSession.session.id,
+            prompt: 'Run memory owner',
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
+            authMethod: 'api_key',
+            runtimeOptions: {
+                reasoning: {
+                    effort: 'medium',
+                    summary: 'auto',
+                    includeEncrypted: true,
+                },
+                cache: {
+                    strategy: 'auto',
+                },
+                transport: {
+                    family: 'auto',
+                },
+            },
+            cache: {
+                applied: false,
+            },
+            transport: {},
+        });
+
+        const runScopedMemory = await memoryStore.create({
+            profileId,
+            memoryType: 'episodic',
+            scopeKind: 'run',
+            createdByKind: 'system',
+            title: 'Run Scoped Memory',
+            bodyMarkdown: 'Owned by run',
+            workspaceFingerprint,
+            threadId: runOwnerThreadId,
+            runId: runOwnerRun.id,
+        });
+        const threadScopedMemory = await memoryStore.create({
+            profileId,
+            memoryType: 'procedural',
+            scopeKind: 'thread',
+            createdByKind: 'user',
+            title: 'Thread Scoped Memory',
+            bodyMarkdown: 'Owned by thread',
+            workspaceFingerprint,
+            threadId: threadOwnerThreadId,
+        });
+
+        const deletedRun = await runStore.deleteById(runOwnerRun.id);
+        expect(deletedRun).toBe(true);
+        expect(await memoryStore.getById(profileId, runScopedMemory.id)).toBeNull();
+
+        const deletedThreads = await threadStore.deleteWorkspaceThreads({
+            profileId,
+            workspaceFingerprint,
+            includeFavorites: true,
+        });
+        expect(deletedThreads.deletedThreadIds).toEqual(
+            expect.arrayContaining([runOwnerThreadId, threadOwnerThreadId])
+        );
+        expect(await memoryStore.getById(profileId, threadScopedMemory.id)).toBeNull();
+    });
+
+    it('enforces scope invariants at the database layer', async () => {
+        const profileId = getDefaultProfileId();
+
+        await expect(
+            memoryStore.create({
+                profileId,
+                memoryType: 'semantic',
+                scopeKind: 'workspace',
+                createdByKind: 'user',
+                title: 'Invalid Workspace Memory',
+                bodyMarkdown: 'Missing workspace fingerprint',
+            })
+        ).rejects.toThrow();
+
+        await expect(
+            memoryStore.create({
+                profileId,
+                memoryType: 'episodic',
+                scopeKind: 'thread',
+                createdByKind: 'system',
+                title: 'Invalid Thread Memory',
+                bodyMarkdown: 'Missing thread id',
+                workspaceFingerprint: 'wsf_invalid_memory_scope',
+            })
+        ).rejects.toThrow();
     });
 
 

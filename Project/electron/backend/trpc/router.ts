@@ -10,6 +10,7 @@ import { contextRouter } from '@/app/backend/trpc/routers/context';
 import { conversationRouter } from '@/app/backend/trpc/routers/conversation';
 import { diffRouter } from '@/app/backend/trpc/routers/diff';
 import { mcpRouter } from '@/app/backend/trpc/routers/mcp';
+import { memoryRouter } from '@/app/backend/trpc/routers/memory';
 import { modeRouter } from '@/app/backend/trpc/routers/mode';
 import { orchestratorRouter } from '@/app/backend/trpc/routers/orchestrator';
 import { permissionRouter } from '@/app/backend/trpc/routers/permission';
@@ -37,6 +38,7 @@ export const appRouter = router({
     permission: permissionRouter,
     tool: toolRouter,
     mcp: mcpRouter,
+    memory: memoryRouter,
     mode: modeRouter,
     plan: planRouter,
     orchestrator: orchestratorRouter,

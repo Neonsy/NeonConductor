@@ -52,6 +52,25 @@ export interface SessionAttachedRulesTable {
     created_at: string;
 }
 
+export interface MemoryRecordsTable {
+    id: string;
+    profile_id: string;
+    memory_type: string;
+    scope_kind: string;
+    state: string;
+    workspace_fingerprint: string | null;
+    thread_id: string | null;
+    run_id: string | null;
+    created_by_kind: string;
+    title: string;
+    body_markdown: string;
+    summary_text: string | null;
+    metadata_json: string;
+    superseded_by_memory_id: string | null;
+    created_at: string;
+    updated_at: string;
+}
+
 export interface RunsTable {
     id: string;
     session_id: string;
@@ -606,6 +625,7 @@ export interface DatabaseSchema {
     sessions: SessionsTable;
     session_attached_skills: SessionAttachedSkillsTable;
     session_attached_rules: SessionAttachedRulesTable;
+    memory_records: MemoryRecordsTable;
     runs: RunsTable;
     messages: MessagesTable;
     message_parts: MessagePartsTable;

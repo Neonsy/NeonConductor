@@ -533,6 +533,35 @@ CREATE TABLE session_attached_rules (
     PRIMARY KEY (session_id, asset_key)
 );
 
+CREATE TABLE memory_records (
+    id TEXT PRIMARY KEY,
+    profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    memory_type TEXT NOT NULL CHECK (memory_type IN ('semantic', 'episodic', 'procedural')),
+    scope_kind TEXT NOT NULL CHECK (scope_kind IN ('global', 'workspace', 'thread', 'run')),
+    state TEXT NOT NULL CHECK (state IN ('active', 'disabled', 'superseded')),
+    workspace_fingerprint TEXT NULL,
+    thread_id TEXT NULL REFERENCES threads(id) ON DELETE CASCADE,
+    run_id TEXT NULL REFERENCES runs(id) ON DELETE CASCADE,
+    created_by_kind TEXT NOT NULL CHECK (created_by_kind IN ('user', 'system')),
+    title TEXT NOT NULL,
+    body_markdown TEXT NOT NULL,
+    summary_text TEXT NULL,
+    metadata_json TEXT NOT NULL DEFAULT '{}',
+    superseded_by_memory_id TEXT NULL REFERENCES memory_records(id) ON DELETE SET NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    CHECK (
+        (scope_kind = 'global' AND workspace_fingerprint IS NULL AND thread_id IS NULL AND run_id IS NULL) OR
+        (scope_kind = 'workspace' AND workspace_fingerprint IS NOT NULL AND thread_id IS NULL AND run_id IS NULL) OR
+        (scope_kind = 'thread' AND thread_id IS NOT NULL AND run_id IS NULL) OR
+        (scope_kind = 'run' AND run_id IS NOT NULL)
+    ),
+    CHECK (
+        (state = 'superseded' AND superseded_by_memory_id IS NOT NULL) OR
+        (state IN ('active', 'disabled') AND superseded_by_memory_id IS NULL)
+    )
+);
+
 -- Planning and orchestration.
 CREATE TABLE plan_records (
     id TEXT PRIMARY KEY,
@@ -848,6 +877,21 @@ CREATE INDEX idx_session_attached_skills_profile_session
 
 CREATE INDEX idx_session_attached_rules_profile_session
     ON session_attached_rules(profile_id, session_id, created_at);
+
+CREATE INDEX idx_memory_records_profile_type_state
+    ON memory_records(profile_id, memory_type, state);
+
+CREATE INDEX idx_memory_records_profile_scope
+    ON memory_records(profile_id, scope_kind);
+
+CREATE INDEX idx_memory_records_profile_workspace
+    ON memory_records(profile_id, workspace_fingerprint);
+
+CREATE INDEX idx_memory_records_profile_thread
+    ON memory_records(profile_id, thread_id);
+
+CREATE INDEX idx_memory_records_profile_run
+    ON memory_records(profile_id, run_id);
 
 CREATE INDEX idx_plan_records_profile_session
     ON plan_records(profile_id, session_id, created_at DESC);
