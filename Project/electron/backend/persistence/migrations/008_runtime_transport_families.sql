@@ -1,4 +1,0 @@
--- No-op migration.
--- Fresh databases get the corrected runtime transport family constraint from the baseline schema.
--- Older alpha development databases may need a reset because SQLite cannot safely rewrite the runs table
--- without rebuilding dependent foreign-key tables as well.

@@ -5,10 +5,6 @@ import { runtimeSqlMigrations } from '@/app/backend/persistence/generatedMigrati
 describe('generated migrations', () => {
     it('includes ordered sql migrations used by runtime', () => {
         const names = runtimeSqlMigrations.map((migration) => migration.name);
-        expect(names).toEqual([
-            '001_runtime_baseline_v5.sql',
-            '002_app_composer_media_settings.sql',
-            '003_provider_catalog_contract.sql',
-        ]);
+        expect(names).toEqual(['001_runtime_baseline.sql']);
     });
 });

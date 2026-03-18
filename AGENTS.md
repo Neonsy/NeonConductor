@@ -7,6 +7,8 @@
 - Do not carry forward unstable APIs, weak abstractions, or legacy behavior just to avoid churn during alpha.
 - When a simpler or more correct design requires reshaping contracts, storage, flows, or UI assumptions, make the breaking change and update the surrounding code coherently.
 - Optimize for the codebase we want to keep, not the intermediate shape we happen to have today.
+- Persistence migrations are also in alpha-rebaseline mode: do not add new SQL migration files until the first alpha is done.
+- Until that milestone, rewrite the single canonical baseline migration instead of growing a numbered migration chain.
 
 ## Engineering Standard
 
