@@ -9,11 +9,13 @@ import {
     type CompactSessionResult,
     type ResolvedContextPolicy,
     type ResolvedContextState,
+    type RetrievedMemorySummary,
     type TokenCountEstimate,
 } from '@/app/backend/runtime/contracts';
 import { createEntityId } from '@/app/backend/runtime/identity/entityIds';
 import { errOp, okOp, type OperationalResult } from '@/app/backend/runtime/services/common/operationalError';
 import { contextPolicyService } from '@/app/backend/runtime/services/context/policyService';
+import { memoryRetrievalService } from '@/app/backend/runtime/services/memory/retrieval';
 import { tokenCountingService } from '@/app/backend/runtime/services/context/tokenCountingService';
 import {
     appendPromptMessage,
@@ -260,6 +262,7 @@ export interface PreparedSessionContext {
     estimate?: TokenCountEstimate;
     policy: ResolvedContextPolicy;
     compaction?: SessionContextCompactionRecord;
+    retrievedMemory?: RetrievedMemorySummary;
 }
 
 class SessionContextService {
@@ -314,12 +317,14 @@ class SessionContextService {
         policy: ResolvedContextPolicy;
         estimate?: TokenCountEstimate;
         compaction?: SessionContextCompactionRecord | null;
+        retrievedMemory?: RetrievedMemorySummary;
     }): ResolvedContextState {
         return {
             policy: input.policy,
             countingMode: input.estimate?.mode ?? tokenCountingService.getPreferredMode(input.policy),
             ...(input.estimate ? { estimate: input.estimate } : {}),
             ...(input.compaction ? { compaction: input.compaction } : {}),
+            ...(input.retrievedMemory ? { retrievedMemory: input.retrievedMemory } : {}),
             compactable:
                 input.policy.enabled &&
                 input.policy.disabledReason === undefined &&
@@ -372,6 +377,8 @@ class SessionContextService {
         topLevelTab: 'chat' | 'agent' | 'orchestrator';
         modeKey: string;
         workspaceFingerprint?: string;
+        runId?: EntityId<'run'>;
+        prompt?: string;
     }): Promise<OperationalResult<ResolvedContextState>> {
         const resolvedModeResult = await resolveModeExecution({
             profileId: input.profileId,
@@ -395,13 +402,35 @@ class SessionContextService {
             return errOp(systemPreludeResult.error.code, systemPreludeResult.error.message);
         }
 
-        return okOp(await this.getResolvedState({
+        const preparedContext = await this.prepareSessionContext({
             profileId: input.profileId,
             sessionId: input.sessionId,
             providerId: input.providerId,
             modelId: input.modelId,
             systemMessages: systemPreludeResult.value,
-        }));
+            prompt: input.prompt ?? '',
+            topLevelTab: input.topLevelTab,
+            modeKey: input.modeKey,
+            ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
+            ...(input.runId ? { runId: input.runId } : {}),
+        });
+        if (preparedContext.isErr()) {
+            return errOp(preparedContext.error.code, preparedContext.error.message, {
+                ...(preparedContext.error.details ? { details: preparedContext.error.details } : {}),
+                ...(preparedContext.error.retryable !== undefined ? { retryable: preparedContext.error.retryable } : {}),
+            });
+        }
+
+        return okOp(
+            this.buildResolvedState({
+                policy: preparedContext.value.policy,
+                ...(preparedContext.value.estimate ? { estimate: preparedContext.value.estimate } : {}),
+                ...(preparedContext.value.compaction ? { compaction: preparedContext.value.compaction } : {}),
+                ...(preparedContext.value.retrievedMemory
+                    ? { retrievedMemory: preparedContext.value.retrievedMemory }
+                    : {}),
+            })
+        );
     }
 
     async compactSession(input: {
@@ -549,12 +578,16 @@ class SessionContextService {
 
     async prepareSessionContext(input: {
         profileId: string;
-        sessionId: string;
+        sessionId: EntityId<'sess'>;
         providerId: ResolvedContextPolicy['providerId'];
         modelId: string;
         systemMessages: RunContextMessage[];
         prompt: string;
         attachments?: ComposerImageAttachmentInput[];
+        topLevelTab: 'chat' | 'agent' | 'orchestrator';
+        modeKey: string;
+        workspaceFingerprint?: string;
+        runId?: EntityId<'run'>;
     }): Promise<OperationalResult<PreparedSessionContext>> {
         const replayMessages = await this.loadReplayMessages(input.profileId, input.sessionId);
         const policy = await contextPolicyService.resolvePolicy({
@@ -565,12 +598,22 @@ class SessionContextService {
                 replayMessages.some((message) => message.parts.some((part) => part.type === 'image')) ||
                 Boolean(input.attachments && input.attachments.length > 0),
         });
+        const retrievedMemory = await memoryRetrievalService.retrieveRelevantMemory({
+            profileId: input.profileId,
+            sessionId: input.sessionId,
+            topLevelTab: input.topLevelTab,
+            modeKey: input.modeKey,
+            prompt: input.prompt,
+            ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
+            ...(input.runId ? { runId: input.runId } : {}),
+        });
+        const combinedSystemMessages = [...input.systemMessages, ...retrievedMemory.messages];
         let compaction = await sessionContextCompactionStore.get(input.profileId, input.sessionId);
 
         let prepared = await this.estimateMessages({
             profileId: input.profileId,
             policy,
-            systemMessages: input.systemMessages,
+            systemMessages: combinedSystemMessages,
             replayMessages,
             prompt: input.prompt,
             ...(input.attachments ? { attachments: input.attachments } : {}),
@@ -604,7 +647,7 @@ class SessionContextService {
                 prepared = await this.estimateMessages({
                     profileId: input.profileId,
                     policy,
-                    systemMessages: input.systemMessages,
+                    systemMessages: combinedSystemMessages,
                     replayMessages,
                     prompt: input.prompt,
                     ...(input.attachments ? { attachments: input.attachments } : {}),
@@ -631,6 +674,7 @@ class SessionContextService {
             ...(prepared.estimate ? { estimate: prepared.estimate } : {}),
             policy,
             ...(compaction ? { compaction } : {}),
+            ...(retrievedMemory.summary ? { retrievedMemory: retrievedMemory.summary } : {}),
         });
     }
 }

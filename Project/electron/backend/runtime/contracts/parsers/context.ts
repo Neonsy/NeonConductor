@@ -133,11 +133,13 @@ export function parseResolvedContextStateInput(input: unknown): ResolvedContextS
     const topLevelTabValue = source.topLevelTab;
     const modeKeyValue = source.modeKey;
     const workspaceFingerprint = readOptionalString(source.workspaceFingerprint, 'workspaceFingerprint');
+    const runIdValue = source.runId;
     const parsed: ResolvedContextStateInput = {
         profileId: readProfileId(source),
         providerId: readProviderId(source.providerId, 'providerId'),
         modelId: readString(source.modelId, 'modelId'),
         ...(workspaceFingerprint ? { workspaceFingerprint } : {}),
+        ...(runIdValue !== undefined ? { runId: readEntityId(runIdValue, 'runId', 'run') } : {}),
     };
 
     const hasSessionFields =

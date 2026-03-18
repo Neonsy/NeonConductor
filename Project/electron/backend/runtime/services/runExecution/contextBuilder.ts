@@ -67,6 +67,9 @@ export async function buildRunContext(input: {
         modelId: input.modelId,
         systemMessages: systemPreludeResult.value,
         prompt: input.prompt,
+        topLevelTab: input.topLevelTab,
+        modeKey: input.resolvedMode.mode.modeKey,
+        ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
         ...(input.attachments ? { attachments: input.attachments } : {}),
     });
     if (preparedContext.isErr()) {
@@ -76,5 +79,6 @@ export async function buildRunContext(input: {
     return okRunExecution({
         messages: preparedContext.value.messages,
         digest: preparedContext.value.digest,
+        ...(preparedContext.value.retrievedMemory ? { retrievedMemory: preparedContext.value.retrievedMemory } : {}),
     });
 }

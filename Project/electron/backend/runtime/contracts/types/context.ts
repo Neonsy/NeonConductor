@@ -8,6 +8,7 @@ import type {
     TopLevelTab,
 } from '@/app/backend/runtime/contracts';
 import type { EntityId } from '@/app/backend/runtime/contracts/ids';
+import type { RetrievedMemorySummary } from '@/app/backend/runtime/contracts/types/memory';
 
 export interface ContextGlobalSettings {
     enabled: boolean;
@@ -117,6 +118,7 @@ export interface ResolvedContextStateInput extends ContextPolicyInput {
     topLevelTab?: TopLevelTab;
     modeKey?: string;
     workspaceFingerprint?: string;
+    runId?: EntityId<'run'>;
 }
 
 export interface ResolvedContextState {
@@ -124,6 +126,7 @@ export interface ResolvedContextState {
     countingMode: TokenCountMode;
     estimate?: TokenCountEstimate;
     compaction?: SessionContextCompactionRecord;
+    retrievedMemory?: RetrievedMemorySummary;
     compactable: boolean;
 }
 

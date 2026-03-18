@@ -333,6 +333,7 @@ export function ConversationShell({
         modelId: contextModelId,
         topLevelTab,
         modeKey,
+        ...(isEntityId(selectedRunId, 'run') ? { runId: selectedRunId } : {}),
         ...(shellViewModel.selectedThread?.workspaceFingerprint
             ? { workspaceFingerprint: shellViewModel.selectedThread.workspaceFingerprint }
             : {}),
@@ -351,7 +352,6 @@ export function ConversationShell({
     const contextStateQuery = trpc.context.getResolvedState.useQuery(contextStateQueryInput, {
         enabled:
             hasSelectedSession &&
-            topLevelTab !== 'orchestrator' &&
             Boolean(runTargetState.selectedProviderIdForComposer) &&
             Boolean(runTargetState.selectedModelIdForComposer),
         ...PROGRESSIVE_QUERY_OPTIONS,
@@ -399,7 +399,10 @@ export function ConversationShell({
             });
             setResolvedContextStateCache({
                 utils,
-                queryInput: contextStateQueryInput,
+                queryInput: {
+                    ...contextStateQueryInput,
+                    runId: acceptedRun.run.id,
+                },
                 state: acceptedRun.resolvedContextState,
             });
         },
@@ -849,6 +852,7 @@ export function ConversationShell({
         onTopLevelTabChange,
         executionStrategy,
         onExecutionStrategyChange: handleExecutionStrategyChange,
+        ...(contextStateQuery.data ? { contextState: contextStateQuery.data } : {}),
     });
     const workspaceSectionProps = {
         header: {

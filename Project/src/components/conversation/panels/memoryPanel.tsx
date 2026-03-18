@@ -4,7 +4,7 @@ import { Button } from '@/web/components/ui/button';
 import { PROGRESSIVE_QUERY_OPTIONS } from '@/web/lib/query/progressiveQueryOptions';
 import { trpc } from '@/web/trpc/client';
 
-import type { EntityId, ProjectedMemoryRecord, TopLevelTab } from '@/shared/contracts';
+import type { EntityId, ProjectedMemoryRecord, RetrievedMemorySummary, TopLevelTab } from '@/shared/contracts';
 
 interface MemoryPanelProps {
     profileId: string;
@@ -14,6 +14,7 @@ interface MemoryPanelProps {
     worktreeId?: EntityId<'wt'>;
     threadId?: EntityId<'thr'>;
     runId?: EntityId<'run'>;
+    retrievedMemory?: RetrievedMemorySummary;
 }
 
 function readRuntimeRunOutcomeMetadata(metadata: Record<string, unknown>): {
@@ -77,6 +78,7 @@ export function MemoryPanel({
     worktreeId,
     threadId,
     runId,
+    retrievedMemory,
 }: MemoryPanelProps) {
     const [includeBroaderScopes, setIncludeBroaderScopes] = useState(true);
     const [feedbackMessage, setFeedbackMessage] = useState<string | undefined>(undefined);
@@ -131,6 +133,7 @@ export function MemoryPanel({
 
     const projectionStatus = projectionStatusQuery.data;
     const scannedEdits = scanProjectionEditsQuery.data;
+    const retrievedMemoryById = new Map(retrievedMemory?.records.map((record) => [record.memoryId, record] as const) ?? []);
 
     return (
         <section className='border-border bg-card mb-3 rounded-2xl border p-3'>
@@ -207,6 +210,32 @@ export function MemoryPanel({
 
             <div className='mt-4 space-y-2'>
                 <div className='flex items-center justify-between gap-2'>
+                    <p className='text-sm font-semibold'>Retrieved For Current Context</p>
+                    <span className='text-muted-foreground text-xs'>{retrievedMemory?.records.length ?? 0} records</span>
+                </div>
+                {(retrievedMemory?.records.length ?? 0) > 0 ? (
+                    <div className='space-y-2'>
+                        {retrievedMemory?.records.map((record) => (
+                            <div key={record.memoryId} className='border-border bg-background/70 rounded-xl border px-3 py-3'>
+                                <div className='flex flex-wrap items-center gap-2'>
+                                    <p className='text-sm font-medium'>{record.title}</p>
+                                    <ScopeBadge label={record.memoryType} />
+                                    <ScopeBadge label={record.scopeKind} />
+                                    <ScopeBadge label={record.matchReason} />
+                                </div>
+                                <p className='text-muted-foreground mt-1 text-xs'>{record.memoryId}</p>
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <p className='text-muted-foreground rounded-xl border border-dashed px-3 py-3 text-sm'>
+                        No memory was injected into the current resolved context.
+                    </p>
+                )}
+            </div>
+
+            <div className='mt-4 space-y-2'>
+                <div className='flex items-center justify-between gap-2'>
                     <p className='text-sm font-semibold'>Projected Memory</p>
                     <span className='text-muted-foreground text-xs'>
                         {projectionStatusQuery.isFetching ? 'Refreshing…' : `${projectionStatus?.projectedMemories.length ?? 0} records`}
@@ -224,6 +253,7 @@ export function MemoryPanel({
                                 <ScopeBadge label={projectedMemory.memory.scopeKind} />
                                 <ScopeBadge label={projectedMemory.projectionTarget} />
                                 {projectedMemory.memory.createdByKind === 'system' ? <ScopeBadge label='system' /> : null}
+                                {retrievedMemoryById.has(projectedMemory.memory.id) ? <ScopeBadge label='retrieved' /> : null}
                                 {(() => {
                                     const runtimeMetadata = readRuntimeRunOutcomeMetadata(projectedMemory.memory.metadata);
                                     if (!runtimeMetadata) {

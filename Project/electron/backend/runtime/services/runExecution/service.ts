@@ -242,6 +242,8 @@ export class RunExecutionService {
                 modelId: prepared.activeTarget.modelId,
                 topLevelTab: input.topLevelTab,
                 modeKey: input.modeKey,
+                prompt: input.prompt,
+                runId: persisted.run.id,
                 ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
             }),
             messageStore.listMessagesBySession(input.profileId, input.sessionId, persisted.run.id),

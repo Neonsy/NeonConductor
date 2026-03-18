@@ -15,6 +15,7 @@ import type {
     RuntimeProviderId,
     RuntimeRunOptions,
     RunStatus,
+    RetrievedMemorySummary,
     TopLevelTab,
     RunStartRejectionAction,
     ResolvedWorkspaceContext,
@@ -119,6 +120,7 @@ export type RunContextPart =
 export interface RunContext {
     messages: RunContextMessage[];
     digest: string;
+    retrievedMemory?: RetrievedMemorySummary;
 }
 
 export interface RunTransportResolution {

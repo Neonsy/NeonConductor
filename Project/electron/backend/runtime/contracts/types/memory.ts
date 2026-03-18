@@ -26,6 +26,28 @@ export interface MemoryRecord {
     updatedAt: string;
 }
 
+export type RetrievedMemoryMatchReason =
+    | 'exact_run'
+    | 'exact_thread'
+    | 'exact_workspace'
+    | 'exact_global'
+    | 'structured'
+    | 'prompt';
+
+export interface RetrievedMemoryRecord {
+    memoryId: EntityId<'mem'>;
+    title: string;
+    memoryType: MemoryType;
+    scopeKind: MemoryScopeKind;
+    matchReason: RetrievedMemoryMatchReason;
+    order: number;
+}
+
+export interface RetrievedMemorySummary {
+    records: RetrievedMemoryRecord[];
+    injectedTextLength: number;
+}
+
 export interface MemoryCreateInput extends ProfileInput {
     memoryType: MemoryType;
     scopeKind: MemoryScopeKind;

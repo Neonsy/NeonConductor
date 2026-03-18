@@ -143,14 +143,30 @@ describe('MemoryPanel', () => {
                 modeKey: 'code',
                 workspaceFingerprint: 'wsf_memory',
                 threadId: 'thr_1',
+                retrievedMemory: {
+                    records: [
+                        {
+                            memoryId: 'mem_1',
+                            title: 'Editable memory',
+                            memoryType: 'procedural',
+                            scopeKind: 'thread',
+                            matchReason: 'exact_thread',
+                            order: 1,
+                        },
+                    ],
+                    injectedTextLength: 240,
+                },
             })
         );
 
         expect(html).toContain('Memory Projection');
+        expect(html).toContain('Retrieved For Current Context');
         expect(html).toContain('C:/memory/global');
         expect(html).toContain('Editable memory');
         expect(html).toContain('system');
         expect(html).toContain('completed run');
+        expect(html).toContain('exact_thread');
+        expect(html).toContain('retrieved');
         expect(html).toContain('Pending File Edits');
         expect(html).toContain('Editable memory v2');
         expect(html).toContain('Apply');

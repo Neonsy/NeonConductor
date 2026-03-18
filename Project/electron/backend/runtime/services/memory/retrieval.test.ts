@@ -1,0 +1,279 @@
+import { writeFileSync } from 'node:fs';
+
+import { describe, expect, it } from 'vitest';
+
+import { memoryStore } from '@/app/backend/persistence/stores';
+import type { ModeDefinition } from '@/app/backend/runtime/contracts';
+import { memoryService } from '@/app/backend/runtime/services/memory/service';
+import { memoryRetrievalService } from '@/app/backend/runtime/services/memory/retrieval';
+import { buildRunContext } from '@/app/backend/runtime/services/runExecution/contextBuilder';
+import {
+    createCaller,
+    createSessionInScope,
+    registerRuntimeContractHooks,
+    requireEntityId,
+    runtimeContractProfileId,
+} from '@/app/backend/trpc/__tests__/runtime-contracts.shared';
+
+registerRuntimeContractHooks();
+
+function createResolvedMode(modeKey: string, topLevelTab: 'chat' | 'agent' | 'orchestrator'): { mode: ModeDefinition } {
+    return {
+        mode: {
+            id: `mode_${topLevelTab}_${modeKey}`,
+            profileId: runtimeContractProfileId,
+            topLevelTab,
+            modeKey,
+            label: `${topLevelTab} ${modeKey}`,
+            prompt: {},
+            executionPolicy: {},
+            source: 'system',
+            enabled: true,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            assetKey: `${topLevelTab}-${modeKey}`,
+            sourceKind: 'system_seed',
+            scope: 'system',
+            tags: [] as string[],
+            precedence: 0,
+        },
+    };
+}
+
+describe('memoryRetrievalService', () => {
+    const profileId = runtimeContractProfileId;
+
+    it('orders exact scope matches before prompt matches and excludes disabled or superseded memory', async () => {
+        const caller = createCaller();
+        const current = await createSessionInScope(caller, profileId, {
+            scope: 'workspace',
+            workspaceFingerprint: 'wsf_memory_retrieval_current',
+            title: 'Current retrieval thread',
+            kind: 'local',
+            topLevelTab: 'agent',
+        });
+        const currentThreadId = requireEntityId(current.thread.id, 'thr', 'Expected current retrieval thread id.');
+        const other = await createSessionInScope(caller, profileId, {
+            scope: 'workspace',
+            workspaceFingerprint: 'wsf_memory_retrieval_other',
+            title: 'Other retrieval thread',
+            kind: 'local',
+            topLevelTab: 'agent',
+        });
+        const otherThreadId = requireEntityId(other.thread.id, 'thr', 'Expected other retrieval thread id.');
+
+        await caller.memory.create({
+            profileId,
+            memoryType: 'procedural',
+            scopeKind: 'thread',
+            createdByKind: 'user',
+            threadId: currentThreadId,
+            title: 'Current thread memory',
+            bodyMarkdown: 'Use the current-thread procedure.',
+        });
+        await caller.memory.create({
+            profileId,
+            memoryType: 'semantic',
+            scopeKind: 'workspace',
+            createdByKind: 'user',
+            workspaceFingerprint: 'wsf_memory_retrieval_current',
+            title: 'Workspace memory',
+            bodyMarkdown: 'Workspace truth.',
+        });
+        await caller.memory.create({
+            profileId,
+            memoryType: 'semantic',
+            scopeKind: 'global',
+            createdByKind: 'user',
+            title: 'Global memory',
+            bodyMarkdown: 'Global default.',
+        });
+        const disabledMemory = await memoryStore.create({
+            profileId,
+            memoryType: 'procedural',
+            scopeKind: 'thread',
+            state: 'disabled',
+            createdByKind: 'user',
+            threadId: currentThreadId,
+            title: 'Disabled memory',
+            bodyMarkdown: 'Should never be retrieved.',
+        });
+        const supersededOriginal = await caller.memory.create({
+            profileId,
+            memoryType: 'procedural',
+            scopeKind: 'thread',
+            createdByKind: 'user',
+            threadId: otherThreadId,
+            title: 'Superseded zebra memory',
+            bodyMarkdown: 'Old zebra instruction.',
+        });
+        await caller.memory.supersede({
+            profileId,
+            memoryId: supersededOriginal.memory.id,
+            createdByKind: 'user',
+            title: 'Superseded zebra memory v2',
+            bodyMarkdown: 'New zebra instruction.',
+        });
+        const promptMatch = await caller.memory.create({
+            profileId,
+            memoryType: 'procedural',
+            scopeKind: 'thread',
+            createdByKind: 'user',
+            threadId: otherThreadId,
+            title: 'Zebra fallback procedure',
+            bodyMarkdown: 'Use the zebra fallback when asked.',
+        });
+
+        const retrieved = await memoryRetrievalService.retrieveRelevantMemory({
+            profileId,
+            sessionId: current.session.id,
+            topLevelTab: 'agent',
+            modeKey: 'code',
+            workspaceFingerprint: 'wsf_memory_retrieval_current',
+            prompt: 'Please use the zebra procedure for this task.',
+        });
+
+        expect(retrieved.summary?.records.slice(0, 3).map((record) => record.title)).toEqual([
+            'Current thread memory',
+            'Workspace memory',
+            'Global memory',
+        ]);
+        expect(retrieved.summary?.records.some((record) => record.memoryId === disabledMemory.id)).toBe(false);
+        expect(
+            retrieved.summary?.records.some((record) => record.memoryId === supersededOriginal.memory.id)
+        ).toBe(false);
+        expect(retrieved.summary?.records.some((record) => record.memoryId === promptMatch.memory.id)).toBe(true);
+        expect(retrieved.summary?.records.some((record) => record.title === 'Superseded zebra memory v2')).toBe(true);
+    });
+
+    it('includes retrieved memory in the built run context and digest', async () => {
+        const caller = createCaller();
+        const created = await createSessionInScope(caller, profileId, {
+            scope: 'detached',
+            title: 'Digest retrieval thread',
+            kind: 'local',
+            topLevelTab: 'chat',
+        });
+
+        const memory = await caller.memory.create({
+            profileId,
+            memoryType: 'semantic',
+            scopeKind: 'global',
+            createdByKind: 'user',
+            title: 'Digest memory',
+            bodyMarkdown: 'First digest body.',
+        });
+
+        const firstContext = await buildRunContext({
+            profileId,
+            sessionId: created.session.id,
+            prompt: 'Use the available memory.',
+            topLevelTab: 'chat',
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
+            resolvedMode: createResolvedMode('chat', 'chat'),
+        });
+        expect(firstContext.isOk()).toBe(true);
+        if (firstContext.isErr() || !firstContext.value) {
+            throw new Error(firstContext.isErr() ? firstContext.error.message : 'Expected first run context.');
+        }
+        expect(firstContext.value.retrievedMemory?.records.map((record) => record.title)).toEqual(['Digest memory']);
+        expect(firstContext.value.messages.some((message) => JSON.stringify(message).includes('Retrieved memory'))).toBe(
+            true
+        );
+
+        const updated = await memoryService.updateMemory({
+            profileId,
+            memoryId: memory.memory.id,
+            title: 'Digest memory updated',
+            bodyMarkdown: 'Second digest body.',
+        });
+        expect(updated.isOk()).toBe(true);
+
+        const secondContext = await buildRunContext({
+            profileId,
+            sessionId: created.session.id,
+            prompt: 'Use the available memory.',
+            topLevelTab: 'chat',
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
+            resolvedMode: createResolvedMode('chat', 'chat'),
+        });
+        expect(secondContext.isOk()).toBe(true);
+        if (secondContext.isErr() || !secondContext.value) {
+            throw new Error(secondContext.isErr() ? secondContext.error.message : 'Expected second run context.');
+        }
+        expect(secondContext.value.digest).not.toBe(firstContext.value.digest);
+        expect(secondContext.value.retrievedMemory?.records[0]?.title).toBe('Digest memory updated');
+    });
+
+    it('does not mutate pending projection edits while retrieving memory', async () => {
+        const caller = createCaller();
+        const created = await createSessionInScope(caller, profileId, {
+            scope: 'workspace',
+            workspaceFingerprint: 'wsf_memory_retrieval_projection_safety',
+            title: 'Projection safety thread',
+            kind: 'local',
+            topLevelTab: 'agent',
+        });
+        const threadId = requireEntityId(created.thread.id, 'thr', 'Expected projection safety thread id.');
+        const memory = await caller.memory.create({
+            profileId,
+            memoryType: 'procedural',
+            scopeKind: 'thread',
+            createdByKind: 'user',
+            threadId,
+            title: 'Projection safety memory',
+            bodyMarkdown: 'Original body.',
+        });
+
+        const synced = await caller.memory.syncProjection({
+            profileId,
+            workspaceFingerprint: 'wsf_memory_retrieval_projection_safety',
+            threadId,
+        });
+        const projected = synced.projectedMemories.find((record) => record.memory.id === memory.memory.id);
+        if (!projected) {
+            throw new Error('Expected projected memory for retrieval safety test.');
+        }
+
+        const editedContent =
+            `---\n` +
+            `id: "${memory.memory.id}"\n` +
+            `memoryType: "procedural"\n` +
+            `scopeKind: "thread"\n` +
+            `state: "active"\n` +
+            `title: "Projection safety memory edited"\n` +
+            `threadId: "${threadId}"\n` +
+            `workspaceFingerprint: "wsf_memory_retrieval_projection_safety"\n` +
+            `metadata: {"edited":true}\n` +
+            `---\n` +
+            `Edited body that retrieval must not touch.\n`;
+        writeFileSync(projected.absolutePath, editedContent, 'utf8');
+
+        const beforeRetrieval = await caller.memory.scanProjectionEdits({
+            profileId,
+            workspaceFingerprint: 'wsf_memory_retrieval_projection_safety',
+            threadId,
+        });
+        expect(beforeRetrieval.proposals).toHaveLength(1);
+
+        const retrieved = await memoryRetrievalService.retrieveRelevantMemory({
+            profileId,
+            sessionId: created.session.id,
+            topLevelTab: 'agent',
+            modeKey: 'code',
+            workspaceFingerprint: 'wsf_memory_retrieval_projection_safety',
+            prompt: 'Use the projection safety memory.',
+        });
+        expect(retrieved.summary?.records.some((record) => record.memoryId === memory.memory.id)).toBe(true);
+
+        const afterRetrieval = await caller.memory.scanProjectionEdits({
+            profileId,
+            workspaceFingerprint: 'wsf_memory_retrieval_projection_safety',
+            threadId,
+        });
+        expect(afterRetrieval.proposals).toHaveLength(1);
+        expect(afterRetrieval.proposals[0]?.proposedTitle).toBe('Projection safety memory edited');
+    });
+});

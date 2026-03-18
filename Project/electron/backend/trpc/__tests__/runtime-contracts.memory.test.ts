@@ -309,6 +309,111 @@ describe('runtime contracts: memory', () => {
         expect(automaticMemory.bodyMarkdown).toContain('total 28 tokens');
     });
 
+    it('retrieves and injects memory for chat, agent, and orchestrator runs', async () => {
+        const caller = createCaller();
+        const requestBodies: string[] = [];
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(async (_url: string, init?: RequestInit) => {
+                if (typeof init?.body === 'string') {
+                    requestBodies.push(init.body);
+                }
+
+                return {
+                    ok: true,
+                    status: 200,
+                    statusText: 'OK',
+                    json: () => ({
+                        choices: [
+                            {
+                                message: {
+                                    content: 'Memory-aware response.',
+                                },
+                            },
+                        ],
+                        usage: {
+                            prompt_tokens: 9,
+                            completion_tokens: 13,
+                            total_tokens: 22,
+                        },
+                    }),
+                };
+            })
+        );
+
+        const configured = await caller.provider.setApiKey({
+            profileId,
+            providerId: 'openai',
+            apiKey: 'openai-memory-injection-key',
+        });
+        expect(configured.success).toBe(true);
+
+        await caller.memory.create({
+            profileId,
+            memoryType: 'semantic',
+            scopeKind: 'global',
+            createdByKind: 'user',
+            title: 'Cross-tab retrieval memory',
+            bodyMarkdown: 'This memory should be injected for every supported tab.',
+            metadata: {
+                topLevelTab: 'shared',
+            },
+        });
+
+        const scenarios = [
+            {
+                topLevelTab: 'chat' as const,
+                modeKey: 'chat',
+                scope: 'detached' as const,
+                title: 'Chat retrieval thread',
+            },
+            {
+                topLevelTab: 'agent' as const,
+                modeKey: 'code',
+                scope: 'workspace' as const,
+                workspaceFingerprint: 'wsf_runtime_memory_agent_injection',
+                title: 'Agent retrieval thread',
+            },
+            {
+                topLevelTab: 'orchestrator' as const,
+                modeKey: 'orchestrate',
+                scope: 'workspace' as const,
+                workspaceFingerprint: 'wsf_runtime_memory_orchestrator_injection',
+                title: 'Orchestrator retrieval thread',
+            },
+        ];
+
+        for (const scenario of scenarios) {
+            const created = await createSessionInScope(caller, profileId, {
+                scope: scenario.scope,
+                ...(scenario.workspaceFingerprint ? { workspaceFingerprint: scenario.workspaceFingerprint } : {}),
+                title: scenario.title,
+                kind: 'local',
+                topLevelTab: scenario.topLevelTab,
+            });
+            const started = await caller.session.startRun({
+                profileId,
+                sessionId: created.session.id,
+                prompt: `Use cross-tab retrieval for ${scenario.topLevelTab}.`,
+                topLevelTab: scenario.topLevelTab,
+                modeKey: scenario.modeKey,
+                runtimeOptions: defaultRuntimeOptions,
+                providerId: 'openai',
+                modelId: 'openai/gpt-5',
+            });
+            expect(started.accepted).toBe(true);
+            if (!started.accepted) {
+                throw new Error(`Expected ${scenario.topLevelTab} retrieval run to start.`);
+            }
+            expect(started.resolvedContextState.retrievedMemory?.records.some((record) => record.title === 'Cross-tab retrieval memory')).toBe(true);
+
+            await waitForRunStatus(caller, profileId, created.session.id, 'completed');
+        }
+
+        expect(requestBodies.some((body) => body.includes('Retrieved memory'))).toBe(true);
+        expect(requestBodies.some((body) => body.includes('Cross-tab retrieval memory'))).toBe(true);
+    });
+
     it('syncs memory projection files to workspace and global roots', async () => {
         const caller = createCaller();
         const globalMemoryRoot = mkdtempSync(path.join(os.tmpdir(), 'nc-memory-global-'));

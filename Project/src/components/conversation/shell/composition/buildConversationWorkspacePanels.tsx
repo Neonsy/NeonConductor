@@ -10,7 +10,7 @@ import { useConversationQueries } from '@/web/components/conversation/shell/quer
 import { isEntityId } from '@/web/components/conversation/shell/workspace/helpers';
 import { useConversationWorkspaceActions } from '@/web/components/conversation/shell/workspace/useConversationWorkspaceActions';
 
-import type { EntityId, OrchestratorExecutionStrategy, TopLevelTab } from '@/shared/contracts';
+import type { EntityId, OrchestratorExecutionStrategy, ResolvedContextState, TopLevelTab } from '@/shared/contracts';
 
 interface BuildConversationWorkspacePanelsInput {
     profileId: string;
@@ -29,6 +29,7 @@ interface BuildConversationWorkspacePanelsInput {
     onTopLevelTabChange: (topLevelTab: TopLevelTab) => void;
     executionStrategy: OrchestratorExecutionStrategy;
     onExecutionStrategyChange: (executionStrategy: OrchestratorExecutionStrategy) => void;
+    contextState?: ResolvedContextState;
 }
 
 export function buildConversationWorkspacePanels(input: BuildConversationWorkspacePanelsInput) {
@@ -168,6 +169,7 @@ export function buildConversationWorkspacePanels(input: BuildConversationWorkspa
                     : {})}
                 {...(isEntityId(selectedThread.id, 'thr') ? { threadId: selectedThread.id } : {})}
                 {...(isEntityId(input.selectedRunId, 'run') ? { runId: input.selectedRunId } : {})}
+                {...(input.contextState ? { retrievedMemory: input.contextState.retrievedMemory } : {})}
             />
         ) : undefined,
         diffCheckpointPanel:
