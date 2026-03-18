@@ -58,11 +58,11 @@ export function ProviderDefaultModelSection({
     return (
         <section className='border-border/70 bg-card/40 space-y-3 rounded-2xl border p-4'>
             <div className='space-y-1'>
-                <p className='text-sm font-semibold'>Default Model</p>
+                <p className='text-sm font-semibold'>Shared Fallback Model</p>
                 <p className='text-muted-foreground text-xs'>
                     {isKilo
-                        ? 'Choose the Kilo model profile that should be preselected in settings and the composer. Changes save immediately.'
-                        : 'Choose the model that should be preselected for this provider in settings and the composer. Changes save immediately.'}
+                        ? 'Choose the Kilo model profile that NeonConductor should use only when a runnable specialist preset does not have its own saved default. Changes save immediately.'
+                        : 'Choose the direct-provider model NeonConductor should use only when a runnable specialist preset does not have its own saved default. Changes save immediately.'}
                 </p>
             </div>
             <div className='space-y-2'>
@@ -82,12 +82,12 @@ export function ProviderDefaultModelSection({
                 />
                 <p className='text-muted-foreground text-[11px] leading-5'>
                     {isSavingDefault
-                        ? 'Saving default model...'
+                        ? 'Saving shared fallback model...'
                         : isDefaultModel
-                          ? 'Selected model is already the saved default.'
+                          ? 'Selected model is already the saved shared fallback.'
                           : selectedModelId
-                            ? 'Selecting a different model updates the saved default immediately.'
-                            : 'Select a model to save it as the default.'}
+                            ? 'Selecting a different model updates the shared fallback immediately.'
+                            : 'Select a model to save it as the shared fallback.'}
                 </p>
                 {selectedModel?.compatibilityReason && selectedModel.compatibilityScope !== 'provider' ? (
                     <p

@@ -10,6 +10,7 @@ import {
     providerSetConnectionProfileInputSchema,
     providerSetExecutionPreferenceInputSchema,
     providerSetModelRoutingPreferenceInputSchema,
+    providerSetSpecialistDefaultInputSchema,
     providerSetOrganizationInputSchema,
     providerStartAuthInputSchema,
     providerSyncCatalogInputSchema,
@@ -437,4 +438,26 @@ export const providerMutationProcedures = {
 
         return result;
     }),
+    setSpecialistDefault: publicProcedure
+        .input(providerSetSpecialistDefaultInputSchema)
+        .mutation(async ({ input }) => {
+            const result = await providerManagementService.setSpecialistDefault(input);
+
+            if (result.success) {
+                await emitProviderUpsertEvent({
+                    providerId: input.providerId,
+                    eventType: 'provider.specialist-default-set',
+                    payload: {
+                        profileId: input.profileId,
+                        topLevelTab: input.topLevelTab,
+                        modeKey: input.modeKey,
+                        providerId: input.providerId,
+                        modelId: input.modelId,
+                        specialistDefaults: result.specialistDefaults,
+                    },
+                });
+            }
+
+            return result;
+        }),
 };

@@ -4,6 +4,7 @@ import { formatDateTime, formatInteger } from '@/web/components/settings/provide
 import { KiloAccountSection } from '@/web/components/settings/providerSettings/kiloAccountSection';
 import { KiloRoutingSection } from '@/web/components/settings/providerSettings/kiloRoutingSection';
 import { useProviderSettingsController } from '@/web/components/settings/providerSettings/hooks/useProviderSettingsController';
+import { ProviderSpecialistDefaultsSection } from '@/web/components/settings/providerSettings/specialistDefaultsSection';
 import { SettingsFeedbackBanner } from '@/web/components/settings/shared/settingsFeedbackBanner';
 import { SensitiveValue } from '@/web/components/ui/sensitiveValue';
 
@@ -85,7 +86,7 @@ export function KiloSettingsView({ profileId }: KiloSettingsViewProps) {
                             <div className='space-y-1'>
                                 <h4 className='text-xl font-semibold text-balance'>Kilo account and model setup</h4>
                                 <p className='text-muted-foreground max-w-3xl text-sm leading-6'>
-                                    Sign in to Kilo, choose the default Kilo model, and review the synced identity,
+                                    Sign in to Kilo, review specialist defaults, and inspect the synced identity,
                                     organization membership, and balance snapshots here.
                                 </p>
                             </div>
@@ -96,6 +97,8 @@ export function KiloSettingsView({ profileId }: KiloSettingsViewProps) {
                     </div>
 
                     <SettingsFeedbackBanner message={controller.feedback.message} tone={controller.feedback.tone} />
+
+                    <ProviderSpecialistDefaultsSection profileId={profileId} />
 
                     <div className='grid gap-4 md:grid-cols-2 xl:grid-cols-4'>
                         <SummaryCard

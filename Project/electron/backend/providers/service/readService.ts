@@ -27,7 +27,12 @@ import type {
     ProviderCredentialValueResult,
     ProviderListItem,
 } from '@/app/backend/providers/service/types';
-import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
+import type {
+    ProviderSpecialistDefaultModeKey,
+    ProviderSpecialistDefaultTopLevelTab,
+    RuntimeProviderId,
+} from '@/app/backend/runtime/contracts';
+import type { ProviderSpecialistDefaultRecord } from '@/app/backend/runtime/contracts/types/provider';
 import { appLog } from '@/app/main/logging';
 
 export async function listProviders(profileId: string): Promise<ProviderListItem[]> {
@@ -178,6 +183,10 @@ export async function getDefaults(profileId: string): Promise<{ providerId: stri
     return providerStore.getDefaults(profileId);
 }
 
+export async function getSpecialistDefaults(profileId: string): Promise<ProviderSpecialistDefaultRecord[]> {
+    return providerStore.getSpecialistDefaults(profileId);
+}
+
 export async function setDefault(
     profileId: string,
     providerId: RuntimeProviderId,
@@ -224,6 +233,82 @@ export async function setDefault(
         reason: null,
         defaultProviderId: defaults.providerId,
         defaultModelId: defaults.modelId,
+    };
+}
+
+export async function setSpecialistDefault(input: {
+    profileId: string;
+    topLevelTab: ProviderSpecialistDefaultTopLevelTab;
+    modeKey: ProviderSpecialistDefaultModeKey;
+    providerId: RuntimeProviderId;
+    modelId: string;
+}): Promise<{
+    success: boolean;
+    reason:
+        | 'provider_not_found'
+        | 'model_not_found'
+        | 'model_tools_required'
+        | 'specialist_default_not_supported'
+        | null;
+    specialistDefaults: ProviderSpecialistDefaultRecord[];
+    specialistDefault?: ProviderSpecialistDefaultRecord;
+}> {
+    const supportedTarget =
+        (input.topLevelTab === 'agent' &&
+            (input.modeKey === 'ask' || input.modeKey === 'code' || input.modeKey === 'debug')) ||
+        (input.topLevelTab === 'orchestrator' && (input.modeKey === 'orchestrate' || input.modeKey === 'debug'));
+    if (!supportedTarget) {
+        return {
+            success: false,
+            reason: 'specialist_default_not_supported',
+            specialistDefaults: await providerStore.getSpecialistDefaults(input.profileId),
+        };
+    }
+
+    const ensuredProviderResult = await ensureSupportedProvider(input.providerId);
+    if (ensuredProviderResult.isErr()) {
+        appLog.warn({
+            tag: 'provider.read-service',
+            message: 'Rejected specialist default update due to unsupported or unregistered provider.',
+            profileId: input.profileId,
+            providerId: input.providerId,
+            topLevelTab: input.topLevelTab,
+            modeKey: input.modeKey,
+            error: ensuredProviderResult.error.message,
+        });
+        return {
+            success: false,
+            reason: 'provider_not_found',
+            specialistDefaults: await providerStore.getSpecialistDefaults(input.profileId),
+        };
+    }
+
+    const modelCapabilities = await providerStore.getModelCapabilities(input.profileId, input.providerId, input.modelId);
+    if (!modelCapabilities) {
+        return {
+            success: false,
+            reason: 'model_not_found',
+            specialistDefaults: await providerStore.getSpecialistDefaults(input.profileId),
+        };
+    }
+
+    if (!modelCapabilities.supportsTools) {
+        return {
+            success: false,
+            reason: 'model_tools_required',
+            specialistDefaults: await providerStore.getSpecialistDefaults(input.profileId),
+        };
+    }
+
+    const specialistDefaults = await providerStore.setSpecialistDefault(input.profileId, input);
+    const specialistDefault = specialistDefaults.find(
+        (value) => value.topLevelTab === input.topLevelTab && value.modeKey === input.modeKey
+    );
+    return {
+        success: true,
+        reason: null,
+        specialistDefaults,
+        ...(specialistDefault ? { specialistDefault } : {}),
     };
 }
 

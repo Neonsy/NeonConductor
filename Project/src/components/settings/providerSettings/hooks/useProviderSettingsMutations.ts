@@ -50,15 +50,13 @@ export function useProviderSettingsMutations(input: UseProviderSettingsMutations
             }
 
             input.setStatusMessage('Default provider/model updated.');
-            utils.provider.getDefaults.setData(
-                { profileId: input.profileId },
-                {
-                    defaults: {
-                        providerId: result.defaultProviderId,
-                        modelId: result.defaultModelId,
-                    },
-                }
-            );
+            utils.provider.getDefaults.setData({ profileId: input.profileId }, (current) => ({
+                defaults: {
+                    providerId: result.defaultProviderId,
+                    modelId: result.defaultModelId,
+                },
+                specialistDefaults: current?.specialistDefaults ?? [],
+            }));
             utils.provider.listProviders.setData({ profileId: input.profileId }, (current) => {
                 if (!current) {
                     return current;

@@ -2,6 +2,7 @@ import { ProviderAuthenticationSection } from '@/web/components/settings/provide
 import { ProviderDefaultModelSection } from '@/web/components/settings/providerSettings/defaultModelSection';
 import { useProviderSettingsController } from '@/web/components/settings/providerSettings/hooks/useProviderSettingsController';
 import { ProviderSidebar } from '@/web/components/settings/providerSettings/providerSidebar';
+import { ProviderSpecialistDefaultsSection } from '@/web/components/settings/providerSettings/specialistDefaultsSection';
 import { ProviderStatusSection } from '@/web/components/settings/providerSettings/providerStatusSection';
 import { SettingsFeedbackBanner } from '@/web/components/settings/shared/settingsFeedbackBanner';
 
@@ -43,6 +44,9 @@ export function ProviderSettingsView({ profileId }: ProviderSettingsViewProps) {
             />
 
             <div className='min-h-0 min-w-0 overflow-y-auto p-4 md:p-5'>
+                <div className='mb-4'>
+                    <ProviderSpecialistDefaultsSection profileId={profileId} />
+                </div>
                 {selectedProvider ? (
                     <div className='flex w-full min-w-0 flex-col gap-4'>
                         <SettingsFeedbackBanner message={controller.feedback.message} tone={controller.feedback.tone} />
@@ -50,8 +54,9 @@ export function ProviderSettingsView({ profileId }: ProviderSettingsViewProps) {
                             <div className='min-w-0'>
                                 <h4 className='text-xl font-semibold text-balance'>{selectedProvider.label}</h4>
                                 <p className='text-muted-foreground mt-1 max-w-3xl text-sm leading-6'>
-                                    Connect and tune direct providers here. Kilo sign-in, Kilo default models, and Kilo
-                                    routing live in the dedicated Kilo section.
+                                    Connect and tune direct providers here. Specialist defaults above can target any
+                                    provider, while Kilo sign-in and account routing still live in the dedicated Kilo
+                                    section.
                                 </p>
                             </div>
                             <div className='border-border/70 bg-background/80 self-start rounded-full border px-3 py-1.5 text-xs font-medium'>
@@ -154,8 +159,8 @@ export function ProviderSettingsView({ profileId }: ProviderSettingsViewProps) {
                     <div className='border-border/70 bg-card/40 space-y-2 rounded-[24px] border p-5'>
                         <p className='text-sm font-semibold'>No custom providers selected</p>
                         <p className='text-muted-foreground text-sm leading-6'>
-                            Use the Kilo section for the default app experience. This area is reserved for direct
-                            OpenAI, Moonshot, and Z.AI credentials.
+                            Specialist defaults are still available above. This area below is reserved for direct
+                            OpenAI, Moonshot, and Z.AI credentials and fallback provider tuning.
                         </p>
                     </div>
                 )}

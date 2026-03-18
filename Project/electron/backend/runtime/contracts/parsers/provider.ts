@@ -1,4 +1,5 @@
 import { kiloDynamicSorts, kiloRoutingModes, openAIExecutionModes } from '@/app/backend/runtime/contracts/enums';
+import { isSupportedProviderSpecialistDefaultTarget } from '@/app/backend/runtime/contracts/specialistDefaults';
 import {
     createParser,
     readEnumValue,
@@ -32,6 +33,7 @@ import type {
     ProviderSetModelRoutingPreferenceInput,
     ProviderSetApiKeyInput,
     ProviderSetDefaultInput,
+    ProviderSetSpecialistDefaultInput,
     ProviderSetOrganizationInput,
     ProviderStartAuthInput,
     ProviderSyncCatalogInput,
@@ -76,6 +78,26 @@ export function parseProviderSetApiKeyInput(input: unknown): ProviderSetApiKeyIn
         profileId: readProfileId(source),
         providerId: readProviderId(source.providerId, 'providerId'),
         apiKey: readString(source.apiKey, 'apiKey'),
+    };
+}
+
+export function parseProviderSetSpecialistDefaultInput(input: unknown): ProviderSetSpecialistDefaultInput {
+    const source = readObject(input, 'input');
+    const target = {
+        topLevelTab: readString(source.topLevelTab, 'topLevelTab'),
+        modeKey: readString(source.modeKey, 'modeKey'),
+    };
+
+    if (!isSupportedProviderSpecialistDefaultTarget(target)) {
+        throw new Error(`Invalid specialist default target "${target.topLevelTab}.${target.modeKey}".`);
+    }
+
+    return {
+        profileId: readProfileId(source),
+        topLevelTab: target.topLevelTab,
+        modeKey: target.modeKey,
+        providerId: readProviderId(source.providerId, 'providerId'),
+        modelId: readString(source.modelId, 'modelId'),
     };
 }
 
@@ -274,6 +296,7 @@ export function parseProviderListModelProvidersInput(input: unknown): ProviderLi
 }
 
 export const providerSetDefaultInputSchema = createParser(parseProviderSetDefaultInput);
+export const providerSetSpecialistDefaultInputSchema = createParser(parseProviderSetSpecialistDefaultInput);
 export const providerListProvidersInputSchema = createParser(parseProviderListProvidersInput);
 export const providerListModelsInputSchema = createParser(parseProviderListModelsInput);
 export const providerByIdInputSchema = createParser(parseProviderByIdInput);

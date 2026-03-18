@@ -22,6 +22,7 @@ import {
     getCredentialValue,
     getOpenAISubscriptionRateLimits,
     getOpenAISubscriptionUsage,
+    getSpecialistDefaults,
     listAuthStates,
     listDiscoverySnapshots,
     listModelsByProfile,
@@ -30,6 +31,7 @@ import {
     listProviders,
     listUsageSummaries,
     setDefault,
+    setSpecialistDefault,
 } from '@/app/backend/providers/service/readService';
 import type {
     ProviderCredentialSummaryResult,
@@ -79,6 +81,20 @@ class ProviderManagementService {
 
     async setDefault(profileId: string, providerId: RuntimeProviderId, modelId: string) {
         return setDefault(profileId, providerId, modelId);
+    }
+
+    async getSpecialistDefaults(profileId: string) {
+        return getSpecialistDefaults(profileId);
+    }
+
+    async setSpecialistDefault(input: {
+        profileId: string;
+        topLevelTab: 'agent' | 'orchestrator';
+        modeKey: 'ask' | 'code' | 'debug' | 'orchestrate';
+        providerId: RuntimeProviderId;
+        modelId: string;
+    }) {
+        return setSpecialistDefault(input);
     }
 
     async getAuthState(profileId: string, providerId: RuntimeProviderId): Promise<ProviderAuthStateRecord> {

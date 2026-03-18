@@ -57,6 +57,7 @@ describe('runtime contracts: core flows', () => {
         expect(shellBootstrap.threadTags).toEqual([]);
         expect(shellBootstrap.providers.length).toBeGreaterThan(0);
         expect(shellBootstrap.providerModels.length).toBeGreaterThan(0);
+        expect(shellBootstrap.specialistDefaults).toEqual([]);
         expect(defaults.defaults.providerId).toBe('kilo');
         expect(providers.providers.length).toBeGreaterThan(0);
         expect(modes.modes.some((mode) => mode.modeKey === 'code')).toBe(true);

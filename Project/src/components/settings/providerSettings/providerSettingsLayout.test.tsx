@@ -162,6 +162,10 @@ vi.mock('@/web/components/settings/providerSettings/defaultModelSection', () => 
     ProviderDefaultModelSection: () => <section>model</section>,
 }));
 
+vi.mock('@/web/components/settings/providerSettings/specialistDefaultsSection', () => ({
+    ProviderSpecialistDefaultsSection: () => <section>specialist defaults</section>,
+}));
+
 vi.mock('@/web/components/settings/providerSettings/kiloRoutingSection', () => ({
     KiloRoutingSection: () => <section>routing</section>,
 }));

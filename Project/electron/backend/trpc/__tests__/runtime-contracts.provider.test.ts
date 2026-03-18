@@ -727,6 +727,38 @@ describe('runtime contracts: provider and account flows', () => {
         expect(providersBefore.providers.some((item) => item.id === 'kilo')).toBe(true);
     });
 
+    it('persists specialist defaults independently from the shared fallback default', async () => {
+        const caller = createCaller();
+
+        const changed = await caller.provider.setSpecialistDefault({
+            profileId,
+            topLevelTab: 'agent',
+            modeKey: 'code',
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
+        });
+        expect(changed.success).toBe(true);
+        if (!changed.success) {
+            throw new Error('Expected specialist default update to succeed.');
+        }
+
+        const defaults = await caller.provider.getDefaults({ profileId });
+        expect(defaults.specialistDefaults).toContainEqual({
+            topLevelTab: 'agent',
+            modeKey: 'code',
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
+        });
+
+        const shellBootstrap = await caller.runtime.getShellBootstrap({ profileId });
+        expect(shellBootstrap.specialistDefaults).toContainEqual({
+            topLevelTab: 'agent',
+            modeKey: 'code',
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
+        });
+    });
+
     it('supports provider auth control plane and static catalog sync remains explicit', async () => {
         const caller = createCaller();
 
@@ -1694,6 +1726,7 @@ describe('runtime contracts: provider and account flows', () => {
             providerId: 'kilo',
             modelId: 'minimax/minimax-m2.1:free',
         });
+        expect(defaults.specialistDefaults).toEqual([]);
     });
 
     it('supports openai oauth device auth start and pending polling', async () => {

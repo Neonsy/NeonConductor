@@ -6,6 +6,7 @@ import type {
     ProviderConnectionProfileResult,
     ProviderListItem,
 } from '@/app/backend/providers/service/types';
+import type { ProviderSpecialistDefaultRecord } from '@/app/backend/runtime/contracts/types/provider';
 
 import type {
     KiloModelRoutingPreference,
@@ -73,6 +74,7 @@ export function patchProviderCache(input: {
     providerId: RuntimeProviderId;
     provider?: ProviderListItem;
     defaults?: { providerId: string; modelId: string };
+    specialistDefaults?: ProviderSpecialistDefaultRecord[];
     models?: ProviderModelRecord[];
     catalogStateReason?: EmptyCatalogStateReason;
     catalogStateDetail?: string;
@@ -106,11 +108,13 @@ export function patchProviderCache(input: {
     }
 
     if (input.defaults) {
+        const nextDefaults = input.defaults;
         input.utils.provider.getDefaults.setData(
             { profileId: input.profileId },
-            {
-                defaults: input.defaults,
-            } satisfies ProviderDefaultsData
+            (current: ProviderDefaultsData | undefined) => ({
+                defaults: nextDefaults,
+                specialistDefaults: input.specialistDefaults ?? current?.specialistDefaults ?? [],
+            })
         );
     }
 
@@ -225,7 +229,14 @@ export function patchProviderCache(input: {
         );
     }
 
-    if (input.provider || input.defaults || input.models || authState || input.executionPreference) {
+    if (
+        input.provider ||
+        input.defaults ||
+        input.specialistDefaults ||
+        input.models ||
+        authState ||
+        input.executionPreference
+    ) {
         input.utils.runtime.getShellBootstrap.setData(
             { profileId: input.profileId },
             (current: ShellBootstrapData | undefined) => {
@@ -257,6 +268,7 @@ export function patchProviderCache(input: {
                     ...current,
                     providers: nextProviders,
                     ...(input.defaults ? { defaults: input.defaults } : {}),
+                    ...(input.specialistDefaults ? { specialistDefaults: input.specialistDefaults } : {}),
                     ...(input.models
                         ? {
                               providerModels: replaceProviderModels(

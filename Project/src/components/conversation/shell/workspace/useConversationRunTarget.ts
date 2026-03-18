@@ -8,10 +8,15 @@ import {
 
 import type { ProviderModelRecord, RunRecord } from '@/app/backend/persistence/types';
 import type { ProviderListItem } from '@/app/backend/providers/service/types';
+import {
+    findProviderSpecialistDefault,
+    isSupportedProviderSpecialistDefaultTarget,
+} from '@/app/backend/runtime/contracts';
+import type { ProviderSpecialistDefaultRecord } from '@/app/backend/runtime/contracts/types/provider';
 import type { WorkspacePreferenceRecord } from '@/app/backend/runtime/contracts/types/runtime';
 import { canonicalizeProviderModelId } from '@/shared/kiloModels';
 
-import type { RuntimeProviderId } from '@/shared/contracts';
+import type { RuntimeProviderId, TopLevelTab } from '@/shared/contracts';
 
 interface UseConversationRunTargetInput {
     providers: ProviderListItem[];
@@ -22,10 +27,12 @@ interface UseConversationRunTargetInput {
               modelId: string;
           }
         | undefined;
+    specialistDefaults?: ProviderSpecialistDefaultRecord[];
     workspacePreference?: WorkspacePreferenceRecord;
     sessionOverride?: { providerId?: RuntimeProviderId; modelId?: string };
     mainViewDraft?: { providerId?: RuntimeProviderId; modelId?: string };
     runs: RunRecord[];
+    topLevelTab?: TopLevelTab;
     requiresTools?: boolean;
     modeKey?: string;
     hasPendingImageAttachments?: boolean;
@@ -61,6 +68,17 @@ export function useConversationRunTarget(input: UseConversationRunTargetInput) {
         modelOptions.map((option) => [`${option.providerId ?? 'unknown'}:${option.id}`, option] as const)
     );
     const hasCompatibleOptions = modelOptions.some((option) => isCompatibleModelOption(option));
+    const specialistTarget =
+        input.topLevelTab && input.modeKey
+            ? {
+                  topLevelTab: input.topLevelTab,
+                  modeKey: input.modeKey,
+              }
+            : undefined;
+    const matchingSpecialistDefault =
+        specialistTarget && isSupportedProviderSpecialistDefaultTarget(specialistTarget)
+            ? findProviderSpecialistDefault(input.specialistDefaults ?? [], specialistTarget)
+            : undefined;
 
     function getOption(providerId: RuntimeProviderId, modelId: string): ModelPickerOption | undefined {
         const canonicalModelId = canonicalizeProviderModelId(providerId, modelId);
@@ -123,6 +141,20 @@ export function useConversationRunTarget(input: UseConversationRunTargetInput) {
             };
             break;
         }
+    }
+
+    if (
+        !resolvedRunTarget &&
+        matchingSpecialistDefault &&
+        canAutoResolve(getOption(matchingSpecialistDefault.providerId, matchingSpecialistDefault.modelId))
+    ) {
+        resolvedRunTarget = {
+            providerId: matchingSpecialistDefault.providerId,
+            modelId: canonicalizeProviderModelId(
+                matchingSpecialistDefault.providerId,
+                matchingSpecialistDefault.modelId
+            ),
+        };
     }
 
     if (

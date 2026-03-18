@@ -206,9 +206,13 @@ export function ConversationShell({
         providers: queries.shellBootstrapQuery.data?.providers ?? [],
         providerModels: queries.shellBootstrapQuery.data?.providerModels ?? [],
         defaults: queries.shellBootstrapQuery.data?.defaults,
+        ...(queries.shellBootstrapQuery.data?.specialistDefaults
+            ? { specialistDefaults: queries.shellBootstrapQuery.data.specialistDefaults }
+            : {}),
         ...(preferredWorkspacePreference ? { workspacePreference: preferredWorkspacePreference } : {}),
         ...(mainViewDraftTarget ? { mainViewDraft: mainViewDraftTarget } : {}),
         runs: [],
+        topLevelTab,
         requiresTools: activeModeRequiresNativeTools,
         modeKey,
         imageAttachmentsAllowed,
@@ -236,9 +240,13 @@ export function ConversationShell({
         providers: queries.shellBootstrapQuery.data?.providers ?? [],
         providerModels: queries.shellBootstrapQuery.data?.providerModels ?? [],
         defaults: queries.shellBootstrapQuery.data?.defaults,
+        ...(queries.shellBootstrapQuery.data?.specialistDefaults
+            ? { specialistDefaults: queries.shellBootstrapQuery.data.specialistDefaults }
+            : {}),
         ...(selectedWorkspacePreference ? { workspacePreference: selectedWorkspacePreference } : {}),
         ...(mainViewDraftTarget ? { mainViewDraft: mainViewDraftTarget } : {}),
         runs: shellViewModel.sessionRunSelection.runs,
+        topLevelTab,
         requiresTools: activeModeRequiresNativeTools,
         modeKey,
         imageAttachmentsAllowed,

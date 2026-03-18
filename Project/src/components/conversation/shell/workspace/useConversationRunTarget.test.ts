@@ -234,4 +234,56 @@ describe('useConversationRunTarget', () => {
         expect(state.selectedProviderIdForComposer).toBe('moonshot');
         expect(state.selectedModelIdForComposer).toBe('moonshot/kimi-k2.5');
     });
+
+    it('prefers the matching specialist default over workspace and shared fallback defaults for the active preset', () => {
+        const state = useConversationRunTarget({
+            providers: [
+                createProvider({ id: 'kilo', label: 'Kilo', authMethod: 'device_code', authState: 'authenticated' }),
+                createProvider({ id: 'openai', label: 'OpenAI', authMethod: 'api_key', authState: 'configured' }),
+            ],
+            providerModels: [
+                createModel({
+                    id: kiloFrontierModelId,
+                    providerId: 'kilo',
+                    label: 'Kilo Frontier',
+                    supportsTools: true,
+                }),
+                createModel({
+                    id: 'openai/gpt-5',
+                    providerId: 'openai',
+                    label: 'GPT-5',
+                    supportsTools: true,
+                }),
+            ],
+            defaults: {
+                providerId: 'openai',
+                modelId: 'openai/gpt-5',
+            },
+            specialistDefaults: [
+                {
+                    topLevelTab: 'agent',
+                    modeKey: 'code',
+                    providerId: 'kilo',
+                    modelId: kiloFrontierModelId,
+                },
+            ],
+            workspacePreference: {
+                profileId: 'profile_test',
+                workspaceFingerprint: 'workspace_test',
+                defaultTopLevelTab: 'agent',
+                defaultProviderId: 'openai',
+                defaultModelId: 'openai/gpt-5',
+                updatedAt: '2026-03-12T12:00:00.000Z',
+            },
+            runs: [],
+            topLevelTab: 'agent',
+            modeKey: 'code',
+            requiresTools: true,
+        });
+
+        expect(state.resolvedRunTarget).toEqual({
+            providerId: 'kilo',
+            modelId: kiloFrontierModelId,
+        });
+    });
 });

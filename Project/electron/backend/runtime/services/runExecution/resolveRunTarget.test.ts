@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { kiloFrontierModelId } from '@/shared/kiloModels';
+
 const providerStoreMock = vi.hoisted(() => ({
     getDefaults: vi.fn(),
+    getSpecialistDefaults: vi.fn(),
     modelExists: vi.fn(),
 }));
 
@@ -18,6 +21,7 @@ describe('resolveRunTarget', () => {
             providerId: 'openai',
             modelId: 'openai/gpt-5',
         });
+        providerStoreMock.getSpecialistDefaults.mockResolvedValue([]);
     });
 
     it('fails closed when an explicit model is unavailable for the provider', async () => {
@@ -51,6 +55,33 @@ describe('resolveRunTarget', () => {
         expect(result.value).toEqual({
             providerId: 'openai',
             modelId: 'openai/gpt-5',
+        });
+    });
+
+    it('prefers the matching specialist default over the shared fallback for runnable presets', async () => {
+        providerStoreMock.getSpecialistDefaults.mockResolvedValue([
+            {
+                topLevelTab: 'agent',
+                modeKey: 'code',
+                providerId: 'kilo',
+                modelId: 'kilo/auto',
+            },
+        ]);
+        providerStoreMock.modelExists.mockResolvedValue(true);
+
+        const result = await resolveRunTarget({
+            profileId: 'profile_default',
+            topLevelTab: 'agent',
+            modeKey: 'code',
+        });
+
+        expect(result.isOk()).toBe(true);
+        if (result.isErr()) {
+            throw new Error(result.error.message);
+        }
+        expect(result.value).toEqual({
+            providerId: 'kilo',
+            modelId: kiloFrontierModelId,
         });
     });
 });

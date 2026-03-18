@@ -6,6 +6,10 @@ import type {
     ProviderSecretKind,
     RuntimeProviderId,
 } from '@/app/backend/runtime/contracts/enums';
+import type {
+    ProviderSpecialistDefaultModeKey,
+    ProviderSpecialistDefaultTopLevelTab,
+} from '@/app/backend/runtime/contracts/specialistDefaults';
 import type { ProfileInput } from '@/app/backend/runtime/contracts/types/common';
 
 export interface MarketplacePackage {
@@ -48,6 +52,20 @@ export interface KiloAccountContext {
 }
 
 export interface ProviderSetDefaultInput extends ProfileInput {
+    providerId: RuntimeProviderId;
+    modelId: string;
+}
+
+export interface ProviderSpecialistDefaultRecord {
+    topLevelTab: ProviderSpecialistDefaultTopLevelTab;
+    modeKey: ProviderSpecialistDefaultModeKey;
+    providerId: RuntimeProviderId;
+    modelId: string;
+}
+
+export interface ProviderSetSpecialistDefaultInput extends ProfileInput {
+    topLevelTab: ProviderSpecialistDefaultTopLevelTab;
+    modeKey: ProviderSpecialistDefaultModeKey;
     providerId: RuntimeProviderId;
     modelId: string;
 }

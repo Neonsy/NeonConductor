@@ -1,6 +1,11 @@
 import { providerStore } from '@/app/backend/persistence/stores';
 import { toSupportedProviderIdResult } from '@/app/backend/providers/registry';
-import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
+import {
+    findProviderSpecialistDefault,
+    isSupportedProviderSpecialistDefaultTarget,
+    type RuntimeProviderId,
+    type TopLevelTab,
+} from '@/app/backend/runtime/contracts';
 import {
     errRunExecution,
     okRunExecution,
@@ -22,8 +27,24 @@ export async function resolveRunTarget(input: {
     profileId: string;
     providerId?: string;
     modelId?: string;
+    topLevelTab?: TopLevelTab;
+    modeKey?: string;
 }): Promise<RunExecutionResult<ResolvedRunTarget>> {
-    const defaults = await providerStore.getDefaults(input.profileId);
+    const [defaults, specialistDefaults] = await Promise.all([
+        providerStore.getDefaults(input.profileId),
+        providerStore.getSpecialistDefaults(input.profileId),
+    ]);
+    const specialistTarget =
+        input.topLevelTab && input.modeKey
+            ? {
+                  topLevelTab: input.topLevelTab,
+                  modeKey: input.modeKey,
+              }
+            : undefined;
+    const specialistDefault =
+        specialistTarget && isSupportedProviderSpecialistDefaultTarget(specialistTarget)
+            ? findProviderSpecialistDefault(specialistDefaults, specialistTarget)
+            : undefined;
 
     let providerId: RuntimeProviderId | undefined;
     if (input.providerId) {
@@ -50,11 +71,13 @@ export async function resolveRunTarget(input: {
     }
 
     if (!providerId) {
-        providerId = tryAssertProviderId(defaults.providerId);
+        providerId = tryAssertProviderId(specialistDefault?.providerId ?? defaults.providerId);
     }
 
     if (providerId && !modelId) {
-        if (defaults.providerId === providerId && defaults.modelId.trim().length > 0) {
+        if (specialistDefault?.providerId === providerId && specialistDefault.modelId.trim().length > 0) {
+            modelId = canonicalizeProviderModelId(providerId, specialistDefault.modelId);
+        } else if (defaults.providerId === providerId && defaults.modelId.trim().length > 0) {
             modelId = canonicalizeProviderModelId(providerId, defaults.modelId);
         }
     }

@@ -28,6 +28,12 @@ describe('patchProviderCache', () => {
         const shellBootstrapStore = createSetDataSpy<{
             providers: Array<{ id: string }>;
             defaults: { providerId: string; modelId: string };
+            specialistDefaults: Array<{
+                topLevelTab: 'agent' | 'orchestrator';
+                modeKey: 'ask' | 'code' | 'debug' | 'orchestrate';
+                providerId: string;
+                modelId: string;
+            }>;
             providerModels: Array<{ id: string; providerId: string }>;
         }>();
 
@@ -45,6 +51,7 @@ describe('patchProviderCache', () => {
             {
                 providers: [{ id: 'kilo' }],
                 defaults: { providerId: 'kilo', modelId: kiloFrontierModelId },
+                specialistDefaults: [],
                 providerModels: [{ id: kiloFrontierModelId, providerId: 'kilo' }],
             }
         );

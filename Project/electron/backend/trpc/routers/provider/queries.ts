@@ -22,6 +22,7 @@ export const providerQueryProcedures = {
     getDefaults: publicProcedure.input(providerListProvidersInputSchema).query(async ({ input }) => {
         return {
             defaults: await providerManagementService.getDefaults(input.profileId),
+            specialistDefaults: await providerManagementService.getSpecialistDefaults(input.profileId),
         };
     }),
     getUsageSummary: publicProcedure.input(providerListProvidersInputSchema).query(async ({ input }) => {

@@ -218,6 +218,13 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
         providerId: string;
         modelId: string;
     }>();
+    expectTypeOf<Inputs['provider']['setSpecialistDefault']>().toExtend<{
+        profileId: string;
+        topLevelTab: 'agent' | 'orchestrator';
+        modeKey: 'ask' | 'code' | 'debug' | 'orchestrate';
+        providerId: string;
+        modelId: string;
+    }>();
 
     expectTypeOf<Inputs['provider']['listModels']>().toExtend<{
         profileId: string;
@@ -305,6 +312,18 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
                 };
             }>;
         };
+    }>();
+    expectTypeOf<Outputs['provider']['getDefaults']>().toExtend<{
+        defaults: {
+            providerId: string;
+            modelId: string;
+        };
+        specialistDefaults: Array<{
+            topLevelTab: 'agent' | 'orchestrator';
+            modeKey: 'ask' | 'code' | 'debug' | 'orchestrate';
+            providerId: string;
+            modelId: string;
+        }>;
     }>();
 
     expectTypeOf<Inputs['provider']['setApiKey']>().toExtend<{
@@ -555,6 +574,12 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
             providerId: string;
             modelId: string;
         };
+        specialistDefaults: Array<{
+            topLevelTab: 'agent' | 'orchestrator';
+            modeKey: 'ask' | 'code' | 'debug' | 'orchestrate';
+            providerId: string;
+            modelId: string;
+        }>;
     }>();
     expectTypeOf<Outputs['registry']['listResolved']>().toExtend<{
         paths: {

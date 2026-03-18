@@ -62,6 +62,8 @@ export async function prepareRunStart(input: StartRunInput): Promise<RunExecutio
     if (explicitTargetRequested) {
         const resolvedTargetResult = await resolveRunTarget({
             profileId: input.profileId,
+            topLevelTab: input.topLevelTab,
+            modeKey: input.modeKey,
             ...(input.providerId ? { providerId: input.providerId } : {}),
             ...(input.modelId ? { modelId: input.modelId } : {}),
         });
@@ -87,6 +89,8 @@ export async function prepareRunStart(input: StartRunInput): Promise<RunExecutio
     } else {
         const preferredTargetResult = await resolveRunTarget({
             profileId: input.profileId,
+            topLevelTab: input.topLevelTab,
+            modeKey: input.modeKey,
         });
         const fallback = await resolveFirstRunnableRunTarget({
             profileId: input.profileId,
