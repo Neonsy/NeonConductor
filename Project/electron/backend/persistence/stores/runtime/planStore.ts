@@ -271,7 +271,12 @@ export class PlanStore {
         return updated ? mapPlanRecord(updated) : null;
     }
 
-    async approve(planId: EntityId<'plan'>): Promise<PlanRecord | null> {
+    async approve(
+        planId: EntityId<'plan'>,
+        options?: {
+            resetImplementationState?: boolean;
+        }
+    ): Promise<PlanRecord | null> {
         const { db } = getPersistence();
         const now = nowIso();
         const updated = await db
@@ -279,6 +284,13 @@ export class PlanStore {
             .set({
                 status: 'approved',
                 approved_at: now,
+                ...(options?.resetImplementationState
+                    ? {
+                          implementation_run_id: null,
+                          orchestrator_run_id: null,
+                          implemented_at: null,
+                      }
+                    : {}),
                 updated_at: now,
             })
             .where('id', '=', planId)
@@ -286,6 +298,24 @@ export class PlanStore {
             .executeTakeFirst();
 
         return updated ? mapPlanRecord(updated) : null;
+    }
+
+    async resetItemsForFreshImplementation(planId: EntityId<'plan'>): Promise<PlanItemRecord[]> {
+        const { db } = getPersistence();
+        const now = nowIso();
+
+        await db
+            .updateTable('plan_items')
+            .set({
+                status: 'pending',
+                run_id: null,
+                error_message: null,
+                updated_at: now,
+            })
+            .where('plan_id', '=', planId)
+            .execute();
+
+        return this.listItems(planId);
     }
 
     async markImplementing(

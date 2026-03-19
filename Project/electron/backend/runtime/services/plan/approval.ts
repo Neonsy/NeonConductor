@@ -24,8 +24,14 @@ export async function approvePlan(
         return errPlan('unanswered_questions', 'Cannot approve plan before answering all clarifying questions.');
     }
 
-    const approved = await planStore.approve(planId);
-    const items = await planStore.listItems(planId);
+    const shouldResetImplementationState =
+        existing.status === 'failed' || existing.status === 'implemented' || existing.status === 'cancelled';
+    const approved = await planStore.approve(planId, {
+        resetImplementationState: shouldResetImplementationState,
+    });
+    const items = shouldResetImplementationState
+        ? await planStore.resetItemsForFreshImplementation(planId)
+        : await planStore.listItems(planId);
 
     await appendPlanApprovedEvent({
         profileId,

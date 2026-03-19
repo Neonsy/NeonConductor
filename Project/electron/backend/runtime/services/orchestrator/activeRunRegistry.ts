@@ -36,6 +36,17 @@ export class ActiveOrchestratorRunRegistry {
         this.activeRuns.get(runId)?.childSessionIds.add(childSessionId);
     }
 
+    takeChildSessionIds(runId: EntityId<'orch'>): EntityId<'sess'>[] {
+        const active = this.activeRuns.get(runId);
+        if (!active) {
+            return [];
+        }
+
+        const childSessionIds = [...active.childSessionIds];
+        active.childSessionIds.clear();
+        return childSessionIds;
+    }
+
     unregisterChildSession(runId: EntityId<'orch'>, childSessionId: EntityId<'sess'>): void {
         this.activeRuns.get(runId)?.childSessionIds.delete(childSessionId);
     }

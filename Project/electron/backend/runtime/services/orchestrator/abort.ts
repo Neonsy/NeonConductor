@@ -17,8 +17,9 @@ export async function abortOrchestratorRun(input: {
 
     const active = input.activeRuns.cancel(input.orchestratorRunId);
     if (active) {
+        const childSessionIds = input.activeRuns.takeChildSessionIds(input.orchestratorRunId);
         await Promise.all(
-            [...active.childSessionIds].map((childSessionId) => runExecutionService.abortRun(active.profileId, childSessionId))
+            childSessionIds.map((childSessionId) => runExecutionService.abortRun(active.profileId, childSessionId))
         );
     }
 
