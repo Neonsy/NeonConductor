@@ -3,6 +3,10 @@ import { useState } from 'react';
 import type { ConversationUiState } from '@/web/components/conversation/hooks/useConversationUiState';
 import type { MessageFlowMessage } from '@/web/components/conversation/messages/messageFlowModel';
 import {
+    buildBranchSelectionTransition,
+    buildEditSelectionTransition,
+} from '@/web/components/conversation/shell/editFlowSelection';
+import {
     toBranchFailureMessage,
     toEditFailureMessage,
     type PendingMessageEdit,
@@ -131,14 +135,19 @@ export function useConversationShellEditFlow(input: UseConversationShellEditFlow
                         return;
                     }
 
-                    if (isEntityId(result.threadId, 'thr')) {
-                        input.uiState.setSelectedThreadId(result.threadId);
+                    const selectionTransition = buildBranchSelectionTransition({
+                        currentTopLevelTab: input.topLevelTab,
+                        result,
+                    });
+
+                    if (selectionTransition.selectedThreadId) {
+                        input.uiState.setSelectedThreadId(selectionTransition.selectedThreadId);
                     }
-                    if (result.topLevelTab !== input.topLevelTab) {
-                        input.onTopLevelTabChange(result.topLevelTab);
+                    if (selectionTransition.nextTopLevelTab) {
+                        input.onTopLevelTabChange(selectionTransition.nextTopLevelTab);
                     }
-                    input.uiState.setSelectedSessionId(result.sessionId);
-                    input.uiState.setSelectedRunId(undefined);
+                    input.uiState.setSelectedSessionId(selectionTransition.selectedSessionId);
+                    input.uiState.setSelectedRunId(selectionTransition.selectedRunId);
                     input.onPromptReset();
                     input.onComposerFocusRequest();
                     input.onSessionEdited({
@@ -213,18 +222,19 @@ export function useConversationShellEditFlow(input: UseConversationShellEditFlow
                             );
                         }
 
-                        if (result.threadId && isEntityId(result.threadId, 'thr')) {
-                            input.uiState.setSelectedThreadId(result.threadId);
+                        const selectionTransition = buildEditSelectionTransition({
+                            currentTopLevelTab: input.topLevelTab,
+                            result,
+                        });
+
+                        if (selectionTransition.selectedThreadId) {
+                            input.uiState.setSelectedThreadId(selectionTransition.selectedThreadId);
                         }
-                        if (result.topLevelTab && result.topLevelTab !== input.topLevelTab) {
-                            input.onTopLevelTabChange(result.topLevelTab);
+                        if (selectionTransition.nextTopLevelTab) {
+                            input.onTopLevelTabChange(selectionTransition.nextTopLevelTab);
                         }
-                        input.uiState.setSelectedSessionId(result.sessionId);
-                        if (result.runId) {
-                            input.uiState.setSelectedRunId(result.runId);
-                        } else {
-                            input.uiState.setSelectedRunId(undefined);
-                        }
+                        input.uiState.setSelectedSessionId(selectionTransition.selectedSessionId);
+                        input.uiState.setSelectedRunId(selectionTransition.selectedRunId);
                         setPendingMessageEdit(undefined);
                         input.onPromptReset();
                         input.onSessionEdited({
