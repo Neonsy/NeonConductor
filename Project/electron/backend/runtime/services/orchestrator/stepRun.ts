@@ -1,4 +1,11 @@
-import { conversationStore, runStore, sessionStore, threadStore } from '@/app/backend/persistence/stores';
+import {
+    conversationStore,
+    runStore,
+    sessionAttachedRuleStore,
+    sessionAttachedSkillStore,
+    sessionStore,
+    threadStore,
+} from '@/app/backend/persistence/stores';
 import { parseEntityId } from '@/app/backend/persistence/stores/shared/rowParsers';
 import type {
     ConversationRecord,
@@ -7,15 +14,19 @@ import type {
     SessionSummaryRecord,
     ThreadRecord,
 } from '@/app/backend/persistence/types';
-import type { EntityId, OrchestratorStartInput } from '@/app/backend/runtime/contracts';
+import type { EntityId, OrchestratorStartInput, ResolvedWorkspaceContext } from '@/app/backend/runtime/contracts';
 import { eventMetadata } from '@/app/backend/runtime/services/common/logContext';
+import { workspaceContextService } from '@/app/backend/runtime/services/workspaceContext/service';
 import { runtimeUpsertEvent } from '@/app/backend/runtime/services/runtimeEventEnvelope';
 import { runtimeEventLogService } from '@/app/backend/runtime/services/runtimeEventLog';
 import { runExecutionService } from '@/app/backend/runtime/services/runExecution/service';
 
+type WorkspaceExecutionTarget = Extract<ResolvedWorkspaceContext, { kind: 'workspace' | 'sandbox' }>;
+
 interface OrchestratorRootExecutionContext {
     bucket: ConversationRecord;
     rootThread: ThreadRecord;
+    executionTarget: WorkspaceExecutionTarget;
 }
 
 export interface OrchestratorChildRunStart {
@@ -55,20 +66,82 @@ export async function resolveOrchestratorRootExecutionContext(input: {
     profileId: string;
     sessionId: EntityId<'sess'>;
 }): Promise<OrchestratorRootExecutionContext | null> {
-    const sessionThread = await threadStore.getBySessionId(input.profileId, input.sessionId);
-    if (!sessionThread) {
+    const initialSessionThread = await threadStore.getBySessionId(input.profileId, input.sessionId);
+    if (!initialSessionThread) {
         return null;
     }
 
-    const bucket = await conversationStore.getBucketById(input.profileId, sessionThread.thread.conversationId);
+    const bucket = await conversationStore.getBucketById(input.profileId, initialSessionThread.thread.conversationId);
     if (!bucket) {
+        return null;
+    }
+
+    const executionTarget = await workspaceContextService.resolveForSession({
+        profileId: input.profileId,
+        sessionId: input.sessionId,
+        topLevelTab: initialSessionThread.thread.topLevelTab,
+        allowLazySandboxCreation: true,
+    });
+    if (!executionTarget || executionTarget.kind === 'detached') {
+        return null;
+    }
+    if (executionTarget.kind === 'workspace' && executionTarget.executionEnvironmentMode === 'new_sandbox') {
+        return null;
+    }
+
+    const refreshedSessionThread = await threadStore.getBySessionId(input.profileId, input.sessionId);
+    if (!refreshedSessionThread) {
         return null;
     }
 
     return {
         bucket,
-        rootThread: sessionThread.thread,
+        rootThread: refreshedSessionThread.thread,
+        executionTarget,
     };
+}
+
+function buildChildExecutionBinding(executionTarget: WorkspaceExecutionTarget): {
+    executionEnvironmentMode: ThreadRecord['executionEnvironmentMode'];
+    sessionKind: SessionSummaryRecord['kind'];
+    sandboxId?: EntityId<'sb'>;
+} {
+    if (executionTarget.kind === 'sandbox') {
+        return {
+            executionEnvironmentMode: 'sandbox',
+            sessionKind: 'sandbox',
+            sandboxId: executionTarget.sandbox.id,
+        };
+    }
+
+    return {
+        executionEnvironmentMode: 'local',
+        sessionKind: 'local',
+    };
+}
+
+async function copyRootSessionAttachmentsToChildSession(input: {
+    profileId: string;
+    rootSessionId: EntityId<'sess'>;
+    childSessionId: EntityId<'sess'>;
+}): Promise<void> {
+    const [attachedRules, attachedSkills] = await Promise.all([
+        sessionAttachedRuleStore.listBySession(input.profileId, input.rootSessionId),
+        sessionAttachedSkillStore.listBySession(input.profileId, input.rootSessionId),
+    ]);
+
+    await Promise.all([
+        sessionAttachedRuleStore.replaceForSession({
+            profileId: input.profileId,
+            sessionId: input.childSessionId,
+            assetKeys: attachedRules.map((attachedRule) => attachedRule.assetKey),
+        }),
+        sessionAttachedSkillStore.replaceForSession({
+            profileId: input.profileId,
+            sessionId: input.childSessionId,
+            assetKeys: attachedSkills.map((attachedSkill) => attachedSkill.assetKey),
+        }),
+    ]);
 }
 
 async function appendDelegatedChildLaneEvents(input: {
@@ -118,6 +191,7 @@ export async function startDelegatedChildRun(input: {
     step: OrchestratorStepRecord;
     startInput: OrchestratorStartInput;
 }): Promise<{ accepted: true; started: OrchestratorChildRunStart } | { accepted: false; reason: string }> {
+    const childExecutionBinding = buildChildExecutionBinding(input.rootContext.executionTarget);
     const createdThread = await threadStore.create({
         profileId: input.profileId,
         conversationId: input.rootContext.bucket.id,
@@ -126,6 +200,8 @@ export async function startDelegatedChildRun(input: {
         parentThreadId: input.rootContext.rootThread.id,
         rootThreadId: input.rootContext.rootThread.id,
         delegatedFromOrchestratorRunId: input.orchestratorRunId,
+        executionEnvironmentMode: childExecutionBinding.executionEnvironmentMode,
+        ...(childExecutionBinding.sandboxId ? { sandboxId: childExecutionBinding.sandboxId } : {}),
     });
     if (createdThread.isErr()) {
         return {
@@ -134,7 +210,7 @@ export async function startDelegatedChildRun(input: {
         };
     }
 
-    const createdSession = await sessionStore.create(input.profileId, createdThread.value.id, 'local', {
+    const createdSession = await sessionStore.create(input.profileId, createdThread.value.id, childExecutionBinding.sessionKind, {
         delegatedFromOrchestratorRunId: input.orchestratorRunId,
     });
     if (!createdSession.created) {
@@ -149,6 +225,12 @@ export async function startDelegatedChildRun(input: {
         };
     }
 
+    await copyRootSessionAttachmentsToChildSession({
+        profileId: input.profileId,
+        rootSessionId: input.plan.sessionId,
+        childSessionId: createdSession.session.id,
+    });
+
     const startedRun = await runExecutionService.startRun({
         profileId: input.startInput.profileId,
         sessionId: createdSession.session.id,
@@ -158,8 +240,8 @@ export async function startDelegatedChildRun(input: {
         runtimeOptions: input.startInput.runtimeOptions,
         ...(input.startInput.providerId ? { providerId: input.startInput.providerId } : {}),
         ...(input.startInput.modelId ? { modelId: input.startInput.modelId } : {}),
-        ...(input.startInput.workspaceFingerprint
-            ? { workspaceFingerprint: input.startInput.workspaceFingerprint }
+        ...(input.rootContext.bucket.workspaceFingerprint
+            ? { workspaceFingerprint: input.rootContext.bucket.workspaceFingerprint }
             : {}),
     });
 

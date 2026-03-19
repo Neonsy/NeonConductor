@@ -135,13 +135,13 @@ function scopePriority(scopeKind: MemoryRecord['scopeKind']): number {
 function isExactScopeMatch(input: {
     memory: MemoryRecord;
     runId?: EntityId<'run'>;
-    threadId?: EntityId<'thr'>;
+    threadIds?: EntityId<'thr'>[];
     workspaceFingerprint?: string;
 }): RetrievedMemoryMatchReason | null {
     if (input.runId && input.memory.runId === input.runId) {
         return 'exact_run';
     }
-    if (input.threadId && input.memory.threadId === input.threadId) {
+    if (input.threadIds?.some((threadId) => input.memory.threadId === threadId)) {
         return 'exact_thread';
     }
     if (input.workspaceFingerprint && input.memory.workspaceFingerprint === input.workspaceFingerprint) {
@@ -159,14 +159,14 @@ function matchesStructuredContext(input: {
     topLevelTab: TopLevelTab;
     modeKey: string;
     workspaceFingerprint?: string;
-    threadId?: EntityId<'thr'>;
+    threadIds?: EntityId<'thr'>[];
     runId?: EntityId<'run'>;
 }): boolean {
     const contextualNeedles = [
         input.topLevelTab,
         input.modeKey,
         input.workspaceFingerprint,
-        input.threadId,
+        ...(input.threadIds ?? []),
         input.runId,
     ]
         .filter((value): value is string => typeof value === 'string' && value.length > 0)
@@ -273,6 +273,19 @@ export class MemoryRetrievalService {
         const threadId = sessionThread
             ? parseEntityId(sessionThread.thread.id, 'threads.id', 'thr')
             : undefined;
+        const inheritedRootThreadId =
+            sessionThread &&
+            sessionThread.thread.delegatedFromOrchestratorRunId &&
+            sessionThread.thread.rootThreadId !== sessionThread.thread.id
+                ? parseEntityId(sessionThread.thread.rootThreadId, 'threads.root_thread_id', 'thr')
+                : undefined;
+        const threadIds = Array.from(
+            new Set(
+                [threadId, inheritedRootThreadId].filter(
+                    (value): value is EntityId<'thr'> => typeof value === 'string' && value.length > 0
+                )
+            )
+        );
         const workspaceFingerprint = input.workspaceFingerprint ?? sessionThread?.workspaceFingerprint;
         const promptTerms = uniquePromptTerms(input.prompt);
         const activeMemories = await memoryStore.listByProfile({
@@ -285,7 +298,7 @@ export class MemoryRetrievalService {
             const exactMatchReason = isExactScopeMatch({
                 memory,
                 ...(input.runId ? { runId: input.runId } : {}),
-                ...(threadId ? { threadId } : {}),
+                ...(threadIds.length > 0 ? { threadIds } : {}),
                 ...(workspaceFingerprint ? { workspaceFingerprint } : {}),
             });
             if (exactMatchReason) {
@@ -303,7 +316,7 @@ export class MemoryRetrievalService {
                     topLevelTab: input.topLevelTab,
                     modeKey: input.modeKey,
                     ...(workspaceFingerprint ? { workspaceFingerprint } : {}),
-                    ...(threadId ? { threadId } : {}),
+                    ...(threadIds.length > 0 ? { threadIds } : {}),
                     ...(input.runId ? { runId: input.runId } : {}),
                 })
             ) {
