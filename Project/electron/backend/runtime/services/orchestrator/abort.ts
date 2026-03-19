@@ -1,4 +1,4 @@
-import { orchestratorStore } from '@/app/backend/persistence/stores';
+import { orchestratorStore, planStore } from '@/app/backend/persistence/stores';
 import type { EntityId } from '@/app/backend/runtime/contracts';
 import { ActiveOrchestratorRunRegistry } from '@/app/backend/runtime/services/orchestrator/activeRunRegistry';
 import { appendOrchestratorAbortedEvent } from '@/app/backend/runtime/services/orchestrator/events';
@@ -23,13 +23,22 @@ export async function abortOrchestratorRun(input: {
     }
 
     await orchestratorStore.setRunStatus(input.orchestratorRunId, { status: 'aborted' });
+    await planStore.markFailed(run.planId);
+
     const steps = await orchestratorStore.listSteps(input.orchestratorRunId);
+    const planItems = await planStore.listItems(run.planId);
     for (const step of steps) {
+        const linkedPlanItem = planItems.find((planItem) => planItem.sequence === step.sequence);
         if (step.status === 'pending' || step.status === 'running') {
             await orchestratorStore.updateStep(step.id, {
                 status: 'aborted',
                 activeRunId: null,
             });
+            if (linkedPlanItem) {
+                await planStore.setItemStatus(linkedPlanItem.id, 'aborted', step.runId ?? step.activeRunId);
+            }
+        } else if (linkedPlanItem && linkedPlanItem.status === 'running' && step.status === 'aborted') {
+            await planStore.setItemStatus(linkedPlanItem.id, 'aborted', step.runId ?? step.activeRunId);
         }
     }
 

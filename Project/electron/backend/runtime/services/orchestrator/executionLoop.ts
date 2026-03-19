@@ -5,10 +5,9 @@ import {
     markOrchestratorCompleted,
     markOrchestratorStopped,
     markStepAborted,
-    markStepChildLaneAttached,
     markStepCompleted,
     markStepFailed,
-    markStepRunAttached,
+    markStepRunning,
     markStepStarted,
 } from '@/app/backend/runtime/services/orchestrator/stepLifecycle';
 import {
@@ -61,7 +60,6 @@ async function startStepChild(input: {
     await markStepStarted({
         orchestratorRunId: input.orchestratorRunId,
         step: input.step,
-        planItems: input.planItems,
     });
 
     const rootContext = await resolveOrchestratorRootExecutionContext({
@@ -91,14 +89,12 @@ async function startStepChild(input: {
     }
 
     input.activeRuns.registerChildSession(input.orchestratorRunId, started.started.childSessionId);
-    await markStepChildLaneAttached({
-        step: input.step,
-        childThreadId: started.started.childThreadId,
-        childSessionId: started.started.childSessionId,
-    });
-    await markStepRunAttached({
+    await markStepRunning({
+        orchestratorRunId: input.orchestratorRunId,
         step: input.step,
         planItems: input.planItems,
+        childThreadId: started.started.childThreadId,
+        childSessionId: started.started.childSessionId,
         runId: started.started.runId,
     });
 

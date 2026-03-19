@@ -1,4 +1,4 @@
-import { planStore, runStore } from '@/app/backend/persistence/stores';
+import { orchestratorStore, planStore, runStore } from '@/app/backend/persistence/stores';
 import type { EntityId, PlanRecordView } from '@/app/backend/runtime/contracts';
 import { toPlanView } from '@/app/backend/runtime/services/plan/views';
 
@@ -16,6 +16,13 @@ export async function refreshPlanViewById(input: {
         if (run?.status === 'completed') {
             await planStore.markImplemented(plan.id);
         } else if (run?.status === 'aborted' || run?.status === 'error') {
+            await planStore.markFailed(plan.id);
+        }
+    } else if (plan.status === 'implementing' && plan.orchestratorRunId) {
+        const orchestratorRun = await orchestratorStore.getRunById(input.profileId, plan.orchestratorRunId);
+        if (orchestratorRun?.status === 'completed') {
+            await planStore.markImplemented(plan.id);
+        } else if (orchestratorRun?.status === 'aborted' || orchestratorRun?.status === 'failed') {
             await planStore.markFailed(plan.id);
         }
     }

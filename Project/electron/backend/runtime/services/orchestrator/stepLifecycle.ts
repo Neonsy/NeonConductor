@@ -18,19 +18,39 @@ function findLinkedPlanItem(
 export async function markStepStarted(input: {
     orchestratorRunId: EntityId<'orch'>;
     step: OrchestratorStepRecord;
-    planItems: PlanItemRecord[];
 }): Promise<void> {
     await orchestratorStore.setRunStatus(input.orchestratorRunId, {
         status: 'running',
         activeStepIndex: input.step.sequence,
     });
+
+    appLog.debug({
+        tag: 'orchestrator',
+        message: 'Began orchestrator step startup.',
+        orchestratorRunId: input.orchestratorRunId,
+        stepId: input.step.id,
+        sequence: input.step.sequence,
+    });
+}
+
+export async function markStepRunning(input: {
+    orchestratorRunId: EntityId<'orch'>;
+    step: OrchestratorStepRecord;
+    planItems: PlanItemRecord[];
+    childThreadId: EntityId<'thr'>;
+    childSessionId: EntityId<'sess'>;
+    runId: EntityId<'run'>;
+}): Promise<void> {
     await orchestratorStore.updateStep(input.step.id, {
         status: 'running',
+        childThreadId: input.childThreadId,
+        childSessionId: input.childSessionId,
+        activeRunId: input.runId,
     });
 
     const linkedPlanItem = findLinkedPlanItem(input.planItems, input.step);
     if (linkedPlanItem) {
-        await planStore.setItemStatus(linkedPlanItem.id, 'running');
+        await planStore.setItemStatus(linkedPlanItem.id, 'running', input.runId);
     }
 
     await appendOrchestratorStepStartedEvent({
@@ -45,34 +65,10 @@ export async function markStepStarted(input: {
         orchestratorRunId: input.orchestratorRunId,
         stepId: input.step.id,
         sequence: input.step.sequence,
-    });
-}
-
-export async function markStepChildLaneAttached(input: {
-    step: OrchestratorStepRecord;
-    childThreadId: EntityId<'thr'>;
-    childSessionId: EntityId<'sess'>;
-}): Promise<void> {
-    await orchestratorStore.updateStep(input.step.id, {
-        status: 'running',
+        runId: input.runId,
         childThreadId: input.childThreadId,
         childSessionId: input.childSessionId,
     });
-}
-
-export async function markStepRunAttached(input: {
-    step: OrchestratorStepRecord;
-    planItems: PlanItemRecord[];
-    runId: EntityId<'run'>;
-}): Promise<void> {
-    await orchestratorStore.updateStep(input.step.id, {
-        status: 'running',
-        activeRunId: input.runId,
-    });
-    const linkedPlanItem = findLinkedPlanItem(input.planItems, input.step);
-    if (linkedPlanItem) {
-        await planStore.setItemStatus(linkedPlanItem.id, 'running', input.runId);
-    }
 }
 
 export async function markStepCompleted(input: {

@@ -406,7 +406,8 @@ describe('runtime contracts: planning and orchestrator', () => {
             throw new Error('Expected parallel orchestrator mode.');
         }
 
-        for (let attempt = 0; attempt < 40; attempt += 1) {
+        let observedParallelRunning = false;
+        for (let attempt = 0; attempt < 200; attempt += 1) {
             const status = await caller.orchestrator.status({
                 profileId,
                 orchestratorRunId: implemented.orchestratorRunId,
@@ -416,12 +417,21 @@ describe('runtime contracts: planning and orchestrator', () => {
                 expect(status.steps.every((step) => step.childThreadId && step.childSessionId && step.activeRunId)).toBe(
                     true
                 );
+                observedParallelRunning = true;
                 break;
             }
 
             await new Promise((resolve) => setTimeout(resolve, 25));
         }
 
+        expect(observedParallelRunning).toBe(true);
+        for (let attempt = 0; attempt < 200; attempt += 1) {
+            if (completionFetchMock.mock.calls.length >= 2 && fetchResolvers.length >= 2) {
+                break;
+            }
+
+            await new Promise((resolve) => setTimeout(resolve, 25));
+        }
         expect(completionFetchMock).toHaveBeenCalledTimes(2);
         expect(fetchResolvers).toHaveLength(2);
 
@@ -431,6 +441,139 @@ describe('runtime contracts: planning and orchestrator', () => {
 
         await waitForOrchestratorStatus(caller, profileId, implemented.orchestratorRunId, 'completed');
     });
+
+    it(
+        'marks orchestrator-backed plans as failed when the orchestrator run is aborted',
+        async () => {
+        const caller = createCaller();
+        const completionFetchMock = vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
+            const signal = init?.signal;
+            return new Promise((_resolve, reject) => {
+                const rejectAbort = () => {
+                    reject(new DOMException('The operation was aborted.', 'AbortError'));
+                };
+
+                if (signal?.aborted) {
+                    rejectAbort();
+                    return;
+                }
+
+                signal?.addEventListener('abort', rejectAbort, { once: true });
+            });
+        });
+        vi.stubGlobal('fetch', completionFetchMock);
+
+        await caller.provider.setApiKey({
+            profileId,
+            providerId: 'openai',
+            apiKey: 'openai-orchestrator-abort-test-key',
+        });
+
+        const created = await createSessionInScope(caller, profileId, {
+            scope: 'workspace',
+            workspaceFingerprint: 'wsf_orchestrator_abort_plan_status',
+            title: 'Orchestrator abort lifecycle thread',
+            kind: 'local',
+            topLevelTab: 'orchestrator',
+        });
+
+        const started = await caller.plan.start({
+            profileId,
+            sessionId: created.session.id,
+            topLevelTab: 'orchestrator',
+            modeKey: 'plan',
+            prompt: 'Create one delegated worker that will be aborted.',
+        });
+        await caller.plan.answerQuestion({
+            profileId,
+            planId: started.plan.id,
+            questionId: 'scope',
+            answer: 'Start one delegated child and abort it while running.',
+        });
+        await caller.plan.answerQuestion({
+            profileId,
+            planId: started.plan.id,
+            questionId: 'constraints',
+            answer: 'Fail closed and reconcile plan state.',
+        });
+        await caller.plan.revise({
+            profileId,
+            planId: started.plan.id,
+            summaryMarkdown: '# Abort Orchestrator Plan',
+            items: [{ description: 'Long-running delegated child' }],
+        });
+        await caller.plan.approve({
+            profileId,
+            planId: started.plan.id,
+        });
+
+        const implemented = await caller.plan.implement({
+            profileId,
+            planId: started.plan.id,
+            runtimeOptions: defaultRuntimeOptions,
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
+        });
+        expect(implemented.found).toBe(true);
+        if (!implemented.found) {
+            throw new Error('Expected orchestrator implementation start for abort test.');
+        }
+        if (implemented.mode !== 'orchestrator.orchestrate') {
+            throw new Error('Expected orchestrator mode for abort test.');
+        }
+
+        let observedRunningStep = false;
+        for (let attempt = 0; attempt < 200; attempt += 1) {
+            const status = await caller.orchestrator.status({
+                profileId,
+                orchestratorRunId: implemented.orchestratorRunId,
+            });
+            if (status.found && status.steps.some((step) => step.status === 'running')) {
+                expect(
+                    status.steps
+                        .filter((step) => step.status === 'running')
+                        .every((step) => step.childThreadId && step.childSessionId && step.activeRunId)
+                ).toBe(true);
+                observedRunningStep = true;
+                break;
+            }
+
+            await new Promise((resolve) => setTimeout(resolve, 25));
+        }
+        expect(observedRunningStep).toBe(true);
+
+        const aborted = await caller.orchestrator.abort({
+            profileId,
+            orchestratorRunId: implemented.orchestratorRunId,
+        });
+        expect(aborted.aborted).toBe(true);
+
+        await waitForOrchestratorStatus(caller, profileId, implemented.orchestratorRunId, 'aborted');
+
+        const status = await caller.orchestrator.status({
+            profileId,
+            orchestratorRunId: implemented.orchestratorRunId,
+        });
+        expect(status.found).toBe(true);
+        if (!status.found) {
+            throw new Error('Expected orchestrator status after abort.');
+        }
+        expect(status.steps[0]?.status).toBe('aborted');
+        expect(status.steps[0]?.activeRunId).toBeUndefined();
+
+        const planState = await caller.plan.get({
+            profileId,
+            planId: started.plan.id,
+        });
+        expect(planState.found).toBe(true);
+        if (!planState.found) {
+            throw new Error('Expected plan state after orchestrator abort.');
+        }
+        expect(planState.plan.status).toBe('failed');
+        expect(planState.plan.items[0]?.status).toBe('aborted');
+        },
+        15000
+    );
 
     it('rejects delegated child lanes that try to start orchestrator strategies', async () => {
         const caller = createCaller();
