@@ -1,5 +1,5 @@
 import type { CheckpointRecord, DiffRecord } from '@/app/backend/persistence/types';
-import type { CheckpointRollbackPreview } from '@/app/backend/runtime/contracts';
+import type { CheckpointRollbackPreview, CheckpointStorageSummary } from '@/app/backend/runtime/contracts';
 
 export function resolveSelectedDiffPath(input: {
     selectedDiff: DiffRecord | undefined;
@@ -90,4 +90,33 @@ export function describeRetentionDisposition(
     }
 
     return null;
+}
+
+export function formatCheckpointByteSize(byteSize: number): string {
+    if (byteSize < 1024) {
+        return `${String(byteSize)} B`;
+    }
+
+    if (byteSize < 1024 * 1024) {
+        return `${(byteSize / 1024).toFixed(1)} KiB`;
+    }
+
+    return `${(byteSize / (1024 * 1024)).toFixed(1)} MiB`;
+}
+
+export function describeCompactionRun(
+    run: CheckpointStorageSummary['lastCompactionRun']
+): string {
+    if (!run) {
+        return 'No compaction run has been recorded yet.';
+    }
+
+    const summary =
+        run.status === 'failed'
+            ? `Last ${run.triggerKind} compaction failed`
+            : run.status === 'noop'
+              ? `Last ${run.triggerKind} compaction made no changes`
+              : `Last ${run.triggerKind} compaction packed ${String(run.blobsCompacted)} blobs`;
+
+    return run.message ? `${summary}. ${run.message}` : summary;
 }

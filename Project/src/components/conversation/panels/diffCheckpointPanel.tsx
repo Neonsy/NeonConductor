@@ -3,8 +3,10 @@ import { startTransition, useState } from 'react';
 import { MarkdownContent } from '@/web/components/content/markdown/markdownContent';
 import {
     buildRollbackWarningLines,
+    describeCompactionRun,
     describeRetentionDisposition,
     filterVisibleCheckpoints,
+    formatCheckpointByteSize,
     resolveSelectedDiffPath,
 } from '@/web/components/conversation/panels/diffCheckpointPanelState';
 import { Button } from '@/web/components/ui/button';
@@ -12,6 +14,7 @@ import { PROGRESSIVE_QUERY_OPTIONS } from '@/web/lib/query/progressiveQueryOptio
 import { trpc } from '@/web/trpc/client';
 
 import type { CheckpointRecord, DiffFileArtifact, DiffRecord } from '@/app/backend/persistence/types';
+import type { CheckpointStorageSummary } from '@/app/backend/runtime/contracts';
 
 function groupFilesByDirectory(files: DiffFileArtifact[]): Array<{ directory: string; files: DiffFileArtifact[] }> {
     const groups = new Map<string, DiffFileArtifact[]>();
@@ -45,6 +48,7 @@ interface DiffCheckpointPanelProps {
     selectedSessionId?: CheckpointRecord['sessionId'];
     diffs: DiffRecord[];
     checkpoints: CheckpointRecord[];
+    checkpointStorage?: CheckpointStorageSummary;
     disabled: boolean;
 }
 
@@ -54,6 +58,7 @@ export function DiffCheckpointPanel({
     selectedSessionId,
     diffs,
     checkpoints,
+    checkpointStorage,
     disabled,
 }: DiffCheckpointPanelProps) {
     const selectedDiff = diffs[0];
@@ -115,7 +120,7 @@ export function DiffCheckpointPanel({
         }
     );
     const rollbackMutation = trpc.checkpoint.rollback.useMutation({
-        onSuccess: (result) => {
+        onSuccess: async (result) => {
             if (!result.rolledBack) {
                 setFeedbackMessage(result.message ?? 'Rollback could not be completed.');
                 return;
@@ -123,6 +128,7 @@ export function DiffCheckpointPanel({
 
             setFeedbackMessage('Checkpoint rollback completed.');
             setConfirmRollbackId(undefined);
+            await invalidateCheckpointList();
         },
         onError: (error) => {
             setFeedbackMessage(error.message);
@@ -234,7 +240,7 @@ export function DiffCheckpointPanel({
         },
     });
     const revertChangesetMutation = trpc.checkpoint.revertChangeset.useMutation({
-        onSuccess: (result) => {
+        onSuccess: async (result) => {
             if (!result.reverted) {
                 setFeedbackMessage(result.message ?? 'Changeset revert could not be completed.');
                 return;
@@ -242,12 +248,31 @@ export function DiffCheckpointPanel({
 
             setFeedbackMessage('Changeset revert completed.');
             setConfirmRollbackId(undefined);
+            await invalidateCheckpointList();
         },
         onError: (error) => {
             setFeedbackMessage(error.message);
         },
         onSettled: () => {
             setRollbackTargetId(undefined);
+        },
+    });
+    const forceCompactMutation = trpc.checkpoint.forceCompact.useMutation({
+        onSuccess: async (result) => {
+            if (!result.compacted) {
+                setFeedbackMessage(result.message ?? 'Compaction requires explicit confirmation.');
+            } else if (result.run?.status === 'failed') {
+                setFeedbackMessage(result.run.message ?? 'Checkpoint compaction failed.');
+            } else if (result.run?.status === 'noop') {
+                setFeedbackMessage(result.run.message ?? 'No checkpoint blobs were eligible for compaction.');
+            } else {
+                setFeedbackMessage(result.run?.message ?? 'Checkpoint storage compaction completed.');
+            }
+
+            await invalidateCheckpointList();
+        },
+        onError: (error) => {
+            setFeedbackMessage(error.message);
         },
     });
 
@@ -274,6 +299,7 @@ export function DiffCheckpointPanel({
             ? rollbackPreviewQuery.data.preview
             : undefined;
     const visibleCheckpoints = filterVisibleCheckpoints(checkpoints, milestonesOnly);
+    const lastCompactionRun = checkpointStorage?.lastCompactionRun;
 
     return (
         <section className='border-border bg-card/80 mt-3 rounded-2xl border p-4 shadow-sm'>
@@ -420,6 +446,55 @@ export function DiffCheckpointPanel({
                                     <span className='text-muted-foreground text-xs'>{String(checkpoints.length)} saved</span>
                                 </div>
                             </header>
+                            {checkpointStorage ? (
+                                <div className='border-border border-b p-3'>
+                                    <p className='text-sm font-medium'>Storage</p>
+                                    <p className='text-muted-foreground mt-1 text-xs'>
+                                        Compaction affects checkpoint storage only. It does not modify live workspace or sandbox files.
+                                    </p>
+                                    <div className='mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2'>
+                                        <p>
+                                            Loose blobs: {String(checkpointStorage.looseReferencedBlobCount)} ·{' '}
+                                            {formatCheckpointByteSize(checkpointStorage.looseReferencedByteSize)}
+                                        </p>
+                                        <p>
+                                            Packed blobs: {String(checkpointStorage.packedReferencedBlobCount)} ·{' '}
+                                            {formatCheckpointByteSize(checkpointStorage.packedReferencedByteSize)}
+                                        </p>
+                                        <p>
+                                            Total referenced: {String(checkpointStorage.totalReferencedBlobCount)} ·{' '}
+                                            {formatCheckpointByteSize(checkpointStorage.totalReferencedByteSize)}
+                                        </p>
+                                        <p>{describeCompactionRun(lastCompactionRun)}</p>
+                                    </div>
+                                    <div className='mt-3 flex flex-wrap items-center gap-2'>
+                                        <Button
+                                            type='button'
+                                            size='sm'
+                                            className='h-11'
+                                            disabled={forceCompactMutation.isPending || !selectedSessionId}
+                                            onClick={() => {
+                                                if (!selectedSessionId) {
+                                                    return;
+                                                }
+
+                                                setFeedbackMessage(undefined);
+                                                void forceCompactMutation.mutateAsync({
+                                                    profileId,
+                                                    sessionId: selectedSessionId,
+                                                    confirm: true,
+                                                });
+                                            }}>
+                                            {forceCompactMutation.isPending ? 'Compacting…' : 'Force Compact'}
+                                        </Button>
+                                        {lastCompactionRun ? (
+                                            <span className='text-muted-foreground text-xs'>
+                                                {lastCompactionRun.status} · {lastCompactionRun.completedAt}
+                                            </span>
+                                        ) : null}
+                                    </div>
+                                </div>
+                            ) : null}
                             <div className='max-h-72 overflow-y-auto p-2'>
                                 {visibleCheckpoints.length === 0 ? (
                                     <p className='text-muted-foreground rounded-xl border border-dashed p-3 text-sm'>

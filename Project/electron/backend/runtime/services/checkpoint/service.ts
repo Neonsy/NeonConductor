@@ -18,8 +18,12 @@ import type {
     CheckpointCleanupApplyResult,
     CheckpointCleanupPreview,
     CheckpointCleanupPreviewInput,
+    CheckpointCompactionRunSummary,
     CheckpointCreateInput,
     CheckpointDeleteMilestoneInput,
+    CheckpointForceCompactInput,
+    CheckpointForceCompactResult,
+    CheckpointListResult,
     CheckpointPromoteMilestoneInput,
     CheckpointRevertChangesetInput,
     CheckpointRevertChangesetResult,
@@ -38,6 +42,10 @@ import {
     deriveChangesetFromSnapshots,
     evaluateRevertApplicability,
 } from '@/app/backend/runtime/services/checkpoint/changeset';
+import {
+    compactCheckpointStorage,
+    getCheckpointStorageSummary,
+} from '@/app/backend/runtime/services/checkpoint/compaction';
 import {
     listAffectedSessionsForExecutionTarget,
     resolveCheckpointExecutionTarget,
@@ -63,6 +71,44 @@ type CheckpointCreateResult = {
     diff?: DiffRecord;
     checkpoint?: CheckpointRecord;
 };
+
+function mapCompactionRunSummary(run: import('@/app/backend/persistence/types').CheckpointCompactionRunRecord): CheckpointCompactionRunSummary {
+    return {
+        id: run.id,
+        triggerKind: run.triggerKind,
+        status: run.status,
+        ...(run.message ? { message: run.message } : {}),
+        blobCountBefore: run.blobCountBefore,
+        blobCountAfter: run.blobCountAfter,
+        bytesBefore: run.bytesBefore,
+        bytesAfter: run.bytesAfter,
+        blobsCompacted: run.blobsCompacted,
+        databaseReclaimed: run.databaseReclaimed,
+        startedAt: run.startedAt,
+        completedAt: run.completedAt,
+    };
+}
+
+async function buildCheckpointListResult(input: {
+    profileId: string;
+    sessionId: CheckpointRecord['sessionId'];
+}): Promise<CheckpointListResult> {
+    const retentionState = await loadRetentionState(input);
+    const storage = await getCheckpointStorageSummary(input.profileId);
+
+    return {
+        checkpoints: retentionState.decoratedCheckpoints,
+        storage: {
+            looseReferencedBlobCount: storage.looseReferencedBlobCount,
+            looseReferencedByteSize: storage.looseReferencedByteSize,
+            packedReferencedBlobCount: storage.packedReferencedBlobCount,
+            packedReferencedByteSize: storage.packedReferencedByteSize,
+            totalReferencedBlobCount: storage.totalReferencedBlobCount,
+            totalReferencedByteSize: storage.totalReferencedByteSize,
+            ...(storage.lastCompactionRun ? { lastCompactionRun: mapCompactionRunSummary(storage.lastCompactionRun) } : {}),
+        },
+    };
+}
 
 function isMutatingCheckpointMode(topLevelTab: TopLevelTab, modeKey: string): boolean {
     return (topLevelTab === 'agent' && modeKey === 'code') || topLevelTab === 'orchestrator';
@@ -197,6 +243,11 @@ async function createNativeCheckpointForResolvedTarget(input: {
         await checkpointSnapshotStore.replaceSnapshot({
             checkpointId: checkpoint.id,
             files: snapshotResult.value.files,
+        });
+        await compactCheckpointStorage({
+            profileId: input.profileId,
+            triggerKind: 'automatic',
+            force: false,
         });
         return checkpoint;
     } catch (error) {
@@ -344,7 +395,7 @@ async function captureRunChangeset(input: {
         afterFiles: buildSnapshotIndexFromCapture(currentSnapshotResult.value.files),
     });
 
-    return checkpointChangesetStore.replaceForCheckpoint({
+    const changeset = await checkpointChangesetStore.replaceForCheckpoint({
         profileId: input.profileId,
         checkpointId: checkpoint.id,
         sessionId: checkpoint.sessionId,
@@ -358,6 +409,13 @@ async function captureRunChangeset(input: {
         summary: derivedChangeset.summary,
         entries: derivedChangeset.entries,
     });
+    await compactCheckpointStorage({
+        profileId: input.profileId,
+        triggerKind: 'automatic',
+        force: false,
+    });
+
+    return changeset;
 }
 
 async function assessRevertAction(input: {
@@ -537,11 +595,8 @@ export async function ensureCheckpointForRun(input: {
 export async function listCheckpoints(input: {
     profileId: string;
     sessionId: CheckpointRecord['sessionId'];
-}): Promise<{ checkpoints: CheckpointRecord[] }> {
-    const retentionState = await loadRetentionState(input);
-    return {
-        checkpoints: retentionState.decoratedCheckpoints,
-    };
+}): Promise<CheckpointListResult> {
+    return buildCheckpointListResult(input);
 }
 
 export async function createCheckpoint(input: CheckpointCreateInput): Promise<CheckpointCreateResult> {
@@ -758,6 +813,11 @@ export async function applyCheckpointCleanup(
         retentionState.preview.candidates.map((candidate) => candidate.checkpointId)
     );
     const prunedBlobCount = await checkpointSnapshotStore.pruneUnreferencedBlobs();
+    await compactCheckpointStorage({
+        profileId: input.profileId,
+        triggerKind: 'automatic',
+        force: false,
+    });
 
     return {
         cleanedUp: true,
@@ -765,6 +825,51 @@ export async function applyCheckpointCleanup(
         deletedCheckpointIds,
         deletedCount: deletedCheckpointIds.length,
         prunedBlobCount,
+    };
+}
+
+export async function forceCompactCheckpointStorage(
+    input: CheckpointForceCompactInput
+): Promise<CheckpointForceCompactResult> {
+    if (!input.confirm) {
+        const storage = await getCheckpointStorageSummary(input.profileId);
+        return {
+            compacted: false,
+            reason: 'confirmation_required',
+            message: 'Checkpoint compaction requires explicit confirmation.',
+            storage: {
+                looseReferencedBlobCount: storage.looseReferencedBlobCount,
+                looseReferencedByteSize: storage.looseReferencedByteSize,
+                packedReferencedBlobCount: storage.packedReferencedBlobCount,
+                packedReferencedByteSize: storage.packedReferencedByteSize,
+                totalReferencedBlobCount: storage.totalReferencedBlobCount,
+                totalReferencedByteSize: storage.totalReferencedByteSize,
+                ...(storage.lastCompactionRun ? { lastCompactionRun: mapCompactionRunSummary(storage.lastCompactionRun) } : {}),
+            },
+        };
+    }
+
+    const result = await compactCheckpointStorage({
+        profileId: input.profileId,
+        triggerKind: 'manual',
+        force: true,
+    });
+
+    return {
+        compacted: result.run.status !== 'failed',
+        ...(result.run.message ? { message: result.run.message } : {}),
+        run: mapCompactionRunSummary(result.run),
+        storage: {
+            looseReferencedBlobCount: result.storage.looseReferencedBlobCount,
+            looseReferencedByteSize: result.storage.looseReferencedByteSize,
+            packedReferencedBlobCount: result.storage.packedReferencedBlobCount,
+            packedReferencedByteSize: result.storage.packedReferencedByteSize,
+            totalReferencedBlobCount: result.storage.totalReferencedBlobCount,
+            totalReferencedByteSize: result.storage.totalReferencedByteSize,
+            ...(result.storage.lastCompactionRun
+                ? { lastCompactionRun: mapCompactionRunSummary(result.storage.lastCompactionRun) }
+                : {}),
+        },
     };
 }
 

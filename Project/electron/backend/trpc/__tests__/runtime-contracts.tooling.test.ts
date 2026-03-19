@@ -804,12 +804,24 @@ describe('runtime contracts: permissions and tooling', () => {
             sessionId: created.session.id,
         });
         expect(checkpoints.checkpoints).toHaveLength(1);
+        expect(checkpoints.storage.looseReferencedBlobCount).toBeGreaterThan(0);
         const checkpoint = checkpoints.checkpoints[0];
         if (!checkpoint) {
             throw new Error('Expected auto-created checkpoint for mutating run.');
         }
         expect(checkpoint.checkpointKind).toBe('auto');
         expect(checkpoint.executionTargetKind).toBe('workspace');
+
+        const compacted = await caller.checkpoint.forceCompact({
+            profileId,
+            sessionId: created.session.id,
+            confirm: true,
+        });
+        expect(compacted.compacted).toBe(true);
+        expect(compacted.storage.packedReferencedBlobCount).toBeGreaterThan(0);
+        expect(readFileSync(path.join(workspacePath, 'README.md'), 'utf8').replace(/\r\n/g, '\n')).toBe(
+            'changed by checkpoint\n'
+        );
 
         const preview = await caller.checkpoint.previewRollback({
             profileId,
@@ -1664,12 +1676,22 @@ describe('runtime contracts: permissions and tooling', () => {
             sessionId: created.session.id,
         });
         expect(checkpoints.checkpoints).toHaveLength(1);
+        expect(checkpoints.storage.looseReferencedBlobCount).toBeGreaterThan(0);
         const checkpoint = checkpoints.checkpoints[0];
         expect(checkpoint?.checkpointKind).toBe('auto');
         expect(checkpoint?.snapshotFileCount).toBeGreaterThanOrEqual(0);
         if (!checkpoint) {
             throw new Error('Expected native checkpoint for non-git mutation run.');
         }
+
+        const compacted = await caller.checkpoint.forceCompact({
+            profileId,
+            sessionId: created.session.id,
+            confirm: true,
+        });
+        expect(compacted.compacted).toBe(true);
+        expect(compacted.storage.packedReferencedBlobCount).toBeGreaterThan(0);
+        expect(readFileSync(path.join(workspacePath, 'notes.txt'), 'utf8').replace(/\r\n/g, '\n')).toBe('new content\n');
 
         const preview = await caller.checkpoint.previewRollback({
             profileId,

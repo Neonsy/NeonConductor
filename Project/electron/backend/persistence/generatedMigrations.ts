@@ -462,8 +462,53 @@ CREATE TABLE checkpoints (
 CREATE TABLE checkpoint_snapshot_blobs (
     sha256 TEXT PRIMARY KEY,
     byte_size INTEGER NOT NULL CHECK (byte_size >= 0),
-    bytes_blob BLOB NOT NULL,
+    storage_state TEXT NOT NULL CHECK (storage_state IN ('inline', 'packed')),
+    bytes_blob BLOB NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    CHECK (
+        (storage_state = 'inline' AND bytes_blob IS NOT NULL)
+        OR
+        (storage_state = 'packed' AND bytes_blob IS NULL)
+    )
+);
+
+CREATE TABLE checkpoint_blob_packs (
+    id TEXT PRIMARY KEY,
+    profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    trigger_kind TEXT NOT NULL CHECK (trigger_kind IN ('automatic', 'manual')),
+    compression_kind TEXT NOT NULL CHECK (compression_kind IN ('brotli')),
+    blob_count INTEGER NOT NULL CHECK (blob_count >= 0),
+    original_byte_size INTEGER NOT NULL CHECK (original_byte_size >= 0),
+    packed_byte_size INTEGER NOT NULL CHECK (packed_byte_size >= 0),
+    pack_bytes_blob BLOB NOT NULL,
     created_at TEXT NOT NULL
+);
+
+CREATE TABLE checkpoint_blob_pack_members (
+    blob_sha256 TEXT PRIMARY KEY REFERENCES checkpoint_snapshot_blobs(sha256) ON DELETE CASCADE,
+    pack_id TEXT NOT NULL REFERENCES checkpoint_blob_packs(id) ON DELETE CASCADE,
+    byte_offset INTEGER NOT NULL CHECK (byte_offset >= 0),
+    compressed_byte_size INTEGER NOT NULL CHECK (compressed_byte_size > 0),
+    original_byte_size INTEGER NOT NULL CHECK (original_byte_size >= 0),
+    compression_kind TEXT NOT NULL CHECK (compression_kind IN ('brotli')),
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE checkpoint_compaction_runs (
+    id TEXT PRIMARY KEY,
+    profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    trigger_kind TEXT NOT NULL CHECK (trigger_kind IN ('automatic', 'manual')),
+    status TEXT NOT NULL CHECK (status IN ('success', 'failed', 'noop')),
+    message TEXT NULL,
+    blob_count_before INTEGER NOT NULL CHECK (blob_count_before >= 0),
+    blob_count_after INTEGER NOT NULL CHECK (blob_count_after >= 0),
+    bytes_before INTEGER NOT NULL CHECK (bytes_before >= 0),
+    bytes_after INTEGER NOT NULL CHECK (bytes_after >= 0),
+    blobs_compacted INTEGER NOT NULL CHECK (blobs_compacted >= 0),
+    database_reclaimed INTEGER NOT NULL CHECK (database_reclaimed IN (0, 1)),
+    started_at TEXT NOT NULL,
+    completed_at TEXT NOT NULL
 );
 
 CREATE TABLE checkpoint_snapshot_entries (
@@ -954,6 +999,18 @@ CREATE INDEX idx_checkpoints_profile_thread_created_at
 
 CREATE INDEX idx_checkpoint_snapshot_entries_blob_sha256
     ON checkpoint_snapshot_entries(blob_sha256);
+
+CREATE INDEX idx_checkpoint_snapshot_blobs_storage_state
+    ON checkpoint_snapshot_blobs(storage_state);
+
+CREATE INDEX idx_checkpoint_blob_packs_profile_created_at
+    ON checkpoint_blob_packs(profile_id, created_at DESC);
+
+CREATE INDEX idx_checkpoint_blob_pack_members_pack_id
+    ON checkpoint_blob_pack_members(pack_id);
+
+CREATE INDEX idx_checkpoint_compaction_runs_profile_completed_at
+    ON checkpoint_compaction_runs(profile_id, completed_at DESC);
 
 CREATE INDEX idx_checkpoint_changesets_profile_target_created_at
     ON checkpoint_changesets(profile_id, execution_target_key, created_at DESC);

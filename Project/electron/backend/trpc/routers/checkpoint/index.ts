@@ -3,6 +3,7 @@ import {
     checkpointCleanupPreviewInputSchema,
     checkpointCreateInputSchema,
     checkpointDeleteMilestoneInputSchema,
+    checkpointForceCompactInputSchema,
     checkpointListInputSchema,
     checkpointPromoteMilestoneInputSchema,
     checkpointRenameMilestoneInputSchema,
@@ -14,6 +15,7 @@ import {
     applyCheckpointCleanup,
     createCheckpoint,
     deleteCheckpointMilestone,
+    forceCompactCheckpointStorage,
     getRollbackPreview,
     listCheckpoints,
     previewCheckpointCleanup,
@@ -138,6 +140,29 @@ export const checkpointRouter = router({
                         profileId: input.profileId,
                         sessionId: input.sessionId,
                         deletedCheckpointIds: result.deletedCheckpointIds ?? [],
+                        requestId: ctx.requestId,
+                        correlationId: ctx.correlationId,
+                    },
+                })
+            );
+        }
+
+        return result;
+    }),
+    forceCompact: publicProcedure.input(checkpointForceCompactInputSchema).mutation(async ({ input, ctx }) => {
+        const result = await forceCompactCheckpointStorage(input);
+        if (result.run) {
+            await runtimeEventLogService.append(
+                runtimeStatusEvent({
+                    entityType: 'checkpoint',
+                    domain: 'checkpoint',
+                    entityId: result.run.id,
+                    eventType: 'checkpoint.compaction_completed',
+                    payload: {
+                        profileId: input.profileId,
+                        sessionId: input.sessionId,
+                        compactionRunId: result.run.id,
+                        status: result.run.status,
                         requestId: ctx.requestId,
                         correlationId: ctx.correlationId,
                     },

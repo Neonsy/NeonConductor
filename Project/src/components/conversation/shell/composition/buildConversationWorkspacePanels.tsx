@@ -174,6 +174,9 @@ export function buildConversationWorkspacePanels(input: BuildConversationWorkspa
                         : {})}
                     diffs={input.queries.runDiffsQuery.data?.diffs ?? []}
                     checkpoints={input.queries.checkpointsQuery.data?.checkpoints ?? []}
+                    {...(input.queries.checkpointsQuery.data?.storage
+                        ? { checkpointStorage: input.queries.checkpointsQuery.data.storage }
+                        : {})}
                     disabled={input.mutations.startRunMutation.isPending || input.mutations.planStartMutation.isPending}
                 />
             ) : undefined,

@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 
 import { getPersistence } from '@/app/backend/persistence/db';
+import { checkpointSnapshotStore } from '@/app/backend/persistence/stores/runtime/checkpointSnapshotStore';
 import { parseEntityId } from '@/app/backend/persistence/stores/shared/rowParsers';
 import { nowIso } from '@/app/backend/persistence/stores/shared/utils';
 import type { CheckpointChangesetRecord, CheckpointRecord } from '@/app/backend/persistence/types';
@@ -167,8 +168,10 @@ export class CheckpointChangesetStore {
                         .values({
                             sha256: entry.beforeBlobSha256,
                             byte_size: entry.beforeByteSize ?? 0,
+                            storage_state: 'inline',
                             bytes_blob: Buffer.from(entry.beforeBytes),
                             created_at: createdAt,
+                            updated_at: createdAt,
                         })
                         .onConflict((oc) => oc.column('sha256').doNothing())
                         .execute();
@@ -180,8 +183,10 @@ export class CheckpointChangesetStore {
                         .values({
                             sha256: entry.afterBlobSha256,
                             byte_size: entry.afterByteSize ?? 0,
+                            storage_state: 'inline',
                             bytes_blob: Buffer.from(entry.afterBytes),
                             created_at: createdAt,
+                            updated_at: createdAt,
                         })
                         .onConflict((oc) => oc.column('sha256').doNothing())
                         .execute();
@@ -292,49 +297,53 @@ export class CheckpointChangesetStore {
 
         const entryRows = await input.transaction
             .selectFrom('checkpoint_changeset_entries')
-            .leftJoin(
-                'checkpoint_snapshot_blobs as before_blobs',
-                'before_blobs.sha256',
-                'checkpoint_changeset_entries.before_blob_sha256'
-            )
-            .leftJoin(
-                'checkpoint_snapshot_blobs as after_blobs',
-                'after_blobs.sha256',
-                'checkpoint_changeset_entries.after_blob_sha256'
-            )
             .select([
                 'checkpoint_changeset_entries.changeset_id as changeset_id',
                 'checkpoint_changeset_entries.relative_path as relative_path',
                 'checkpoint_changeset_entries.change_kind as change_kind',
                 'checkpoint_changeset_entries.before_blob_sha256 as before_blob_sha256',
                 'checkpoint_changeset_entries.before_byte_size as before_byte_size',
-                'before_blobs.bytes_blob as before_bytes_blob',
                 'checkpoint_changeset_entries.after_blob_sha256 as after_blob_sha256',
                 'checkpoint_changeset_entries.after_byte_size as after_byte_size',
-                'after_blobs.bytes_blob as after_bytes_blob',
             ])
             .where('checkpoint_changeset_entries.changeset_id', '=', input.changesetId)
             .orderBy('checkpoint_changeset_entries.relative_path', 'asc')
             .execute();
+        const blobBytesBySha = await checkpointSnapshotStore.loadBlobBytesBySha(
+            entryRows.flatMap((entryRow) => [entryRow.before_blob_sha256, entryRow.after_blob_sha256]).filter(Boolean) as string[]
+        );
 
         return {
             ...mapCheckpointChangesetRecord(row),
-            entries: entryRows.map((entryRow) => ({
-                changesetId: parseEntityId(entryRow.changeset_id, 'checkpoint_changeset_entries.changeset_id', 'chg'),
-                relativePath: entryRow.relative_path,
-                changeKind:
-                    entryRow.change_kind === 'added'
-                        ? 'added'
-                        : entryRow.change_kind === 'deleted'
-                          ? 'deleted'
-                          : 'modified',
-                ...(entryRow.before_blob_sha256 ? { beforeBlobSha256: entryRow.before_blob_sha256 } : {}),
-                ...(entryRow.before_byte_size !== null ? { beforeByteSize: entryRow.before_byte_size } : {}),
-                ...(entryRow.before_bytes_blob ? { beforeBytes: entryRow.before_bytes_blob } : {}),
-                ...(entryRow.after_blob_sha256 ? { afterBlobSha256: entryRow.after_blob_sha256 } : {}),
-                ...(entryRow.after_byte_size !== null ? { afterByteSize: entryRow.after_byte_size } : {}),
-                ...(entryRow.after_bytes_blob ? { afterBytes: entryRow.after_bytes_blob } : {}),
-            })),
+            entries: entryRows.map((entryRow) => {
+                const beforeBytes = entryRow.before_blob_sha256
+                    ? blobBytesBySha.get(entryRow.before_blob_sha256)
+                    : undefined;
+                const afterBytes = entryRow.after_blob_sha256
+                    ? blobBytesBySha.get(entryRow.after_blob_sha256)
+                    : undefined;
+
+                return {
+                    changesetId: parseEntityId(
+                        entryRow.changeset_id,
+                        'checkpoint_changeset_entries.changeset_id',
+                        'chg'
+                    ),
+                    relativePath: entryRow.relative_path,
+                    changeKind:
+                        entryRow.change_kind === 'added'
+                            ? 'added'
+                            : entryRow.change_kind === 'deleted'
+                              ? 'deleted'
+                              : 'modified',
+                    ...(entryRow.before_blob_sha256 ? { beforeBlobSha256: entryRow.before_blob_sha256 } : {}),
+                    ...(entryRow.before_byte_size !== null ? { beforeByteSize: entryRow.before_byte_size } : {}),
+                    ...(beforeBytes ? { beforeBytes } : {}),
+                    ...(entryRow.after_blob_sha256 ? { afterBlobSha256: entryRow.after_blob_sha256 } : {}),
+                    ...(entryRow.after_byte_size !== null ? { afterByteSize: entryRow.after_byte_size } : {}),
+                    ...(afterBytes ? { afterBytes } : {}),
+                };
+            }),
         };
     }
 }

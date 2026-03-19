@@ -470,6 +470,33 @@ export interface CheckpointRecord {
     updatedAt: string;
 }
 
+export interface CheckpointStorageSummary {
+    profileId: string;
+    looseReferencedBlobCount: number;
+    looseReferencedByteSize: number;
+    packedReferencedBlobCount: number;
+    packedReferencedByteSize: number;
+    totalReferencedBlobCount: number;
+    totalReferencedByteSize: number;
+    lastCompactionRun?: CheckpointCompactionRunRecord;
+}
+
+export interface CheckpointCompactionRunRecord {
+    id: EntityId<'cpr'>;
+    profileId: string;
+    triggerKind: 'automatic' | 'manual';
+    status: 'success' | 'failed' | 'noop';
+    message?: string;
+    blobCountBefore: number;
+    blobCountAfter: number;
+    bytesBefore: number;
+    bytesAfter: number;
+    blobsCompacted: number;
+    databaseReclaimed: boolean;
+    startedAt: string;
+    completedAt: string;
+}
+
 export interface CheckpointChangesetEntryRecord {
     changesetId?: EntityId<'chg'>;
     relativePath: string;

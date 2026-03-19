@@ -374,8 +374,48 @@ export interface CheckpointsTable {
 export interface CheckpointSnapshotBlobsTable {
     sha256: string;
     byte_size: number;
-    bytes_blob: Uint8Array;
+    storage_state: 'inline' | 'packed';
+    bytes_blob: Uint8Array | null;
     created_at: string;
+    updated_at: string;
+}
+
+export interface CheckpointBlobPacksTable {
+    id: string;
+    profile_id: string;
+    trigger_kind: 'automatic' | 'manual';
+    compression_kind: 'brotli';
+    blob_count: number;
+    original_byte_size: number;
+    packed_byte_size: number;
+    pack_bytes_blob: Uint8Array;
+    created_at: string;
+}
+
+export interface CheckpointBlobPackMembersTable {
+    blob_sha256: string;
+    pack_id: string;
+    byte_offset: number;
+    compressed_byte_size: number;
+    original_byte_size: number;
+    compression_kind: 'brotli';
+    created_at: string;
+}
+
+export interface CheckpointCompactionRunsTable {
+    id: string;
+    profile_id: string;
+    trigger_kind: 'automatic' | 'manual';
+    status: 'success' | 'failed' | 'noop';
+    message: string | null;
+    blob_count_before: number;
+    blob_count_after: number;
+    bytes_before: number;
+    bytes_after: number;
+    blobs_compacted: number;
+    database_reclaimed: 0 | 1;
+    started_at: string;
+    completed_at: string;
 }
 
 export interface CheckpointSnapshotEntriesTable {
@@ -733,6 +773,9 @@ export interface DatabaseSchema {
     diffs: DiffsTable;
     checkpoints: CheckpointsTable;
     checkpoint_snapshot_blobs: CheckpointSnapshotBlobsTable;
+    checkpoint_blob_packs: CheckpointBlobPacksTable;
+    checkpoint_blob_pack_members: CheckpointBlobPackMembersTable;
+    checkpoint_compaction_runs: CheckpointCompactionRunsTable;
     checkpoint_snapshot_entries: CheckpointSnapshotEntriesTable;
     checkpoint_changesets: CheckpointChangesetsTable;
     checkpoint_changeset_entries: CheckpointChangesetEntriesTable;

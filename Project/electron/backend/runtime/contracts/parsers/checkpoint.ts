@@ -11,6 +11,7 @@ import type {
     CheckpointCleanupPreviewInput,
     CheckpointCreateInput,
     CheckpointDeleteMilestoneInput,
+    CheckpointForceCompactInput,
     CheckpointListInput,
     CheckpointPromoteMilestoneInput,
     CheckpointRenameMilestoneInput,
@@ -35,6 +36,16 @@ export function parseCheckpointListInput(input: unknown): CheckpointListInput {
     return {
         profileId: readProfileId(source),
         sessionId: readEntityId(source.sessionId, 'sessionId', 'sess'),
+    };
+}
+
+export function parseCheckpointForceCompactInput(input: unknown): CheckpointForceCompactInput {
+    const source = readObject(input, 'input');
+
+    return {
+        profileId: readProfileId(source),
+        sessionId: readEntityId(source.sessionId, 'sessionId', 'sess'),
+        confirm: readBoolean(source.confirm, 'confirm'),
     };
 }
 
@@ -118,6 +129,7 @@ export function parseCheckpointCleanupApplyInput(input: unknown): CheckpointClea
 
 export const checkpointCreateInputSchema = createParser(parseCheckpointCreateInput);
 export const checkpointListInputSchema = createParser(parseCheckpointListInput);
+export const checkpointForceCompactInputSchema = createParser(parseCheckpointForceCompactInput);
 export const checkpointRollbackInputSchema = createParser(parseCheckpointRollbackInput);
 export const checkpointRevertChangesetInputSchema = createParser(parseCheckpointRevertChangesetInput);
 export const checkpointRollbackPreviewInputSchema = createParser(parseCheckpointRollbackPreviewInput);

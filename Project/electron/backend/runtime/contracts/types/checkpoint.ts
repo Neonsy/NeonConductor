@@ -11,6 +11,11 @@ export interface CheckpointListInput extends ProfileInput {
     sessionId: EntityId<'sess'>;
 }
 
+export interface CheckpointForceCompactInput extends ProfileInput {
+    sessionId: EntityId<'sess'>;
+    confirm: boolean;
+}
+
 export interface CheckpointPromoteMilestoneInput extends ProfileInput {
     checkpointId: EntityId<'ckpt'>;
     milestoneTitle: string;
@@ -86,6 +91,66 @@ export interface CheckpointCleanupApplyResult {
     deletedCheckpointIds?: EntityId<'ckpt'>[];
     deletedCount?: number;
     prunedBlobCount?: number;
+}
+
+export interface CheckpointCompactionRunSummary {
+    id: EntityId<'cpr'>;
+    triggerKind: 'automatic' | 'manual';
+    status: 'success' | 'failed' | 'noop';
+    message?: string;
+    blobCountBefore: number;
+    blobCountAfter: number;
+    bytesBefore: number;
+    bytesAfter: number;
+    blobsCompacted: number;
+    databaseReclaimed: boolean;
+    startedAt: string;
+    completedAt: string;
+}
+
+export interface CheckpointStorageSummary {
+    looseReferencedBlobCount: number;
+    looseReferencedByteSize: number;
+    packedReferencedBlobCount: number;
+    packedReferencedByteSize: number;
+    totalReferencedBlobCount: number;
+    totalReferencedByteSize: number;
+    lastCompactionRun?: CheckpointCompactionRunSummary;
+}
+
+export interface CheckpointListResult {
+    checkpoints: Array<{
+        id: EntityId<'ckpt'>;
+        profileId: string;
+        sessionId: EntityId<'sess'>;
+        threadId: EntityId<'thr'>;
+        runId?: EntityId<'run'>;
+        diffId?: string;
+        workspaceFingerprint: string;
+        sandboxId?: EntityId<'sb'>;
+        executionTargetKey: string;
+        executionTargetKind: 'workspace' | 'sandbox';
+        executionTargetLabel: string;
+        createdByKind: 'system' | 'user';
+        checkpointKind: 'auto' | 'safety' | 'named';
+        milestoneTitle?: string;
+        retentionDisposition?: CheckpointRetentionDisposition;
+        snapshotFileCount: number;
+        topLevelTab: TopLevelTab;
+        modeKey: string;
+        summary: string;
+        createdAt: string;
+        updatedAt: string;
+    }>;
+    storage: CheckpointStorageSummary;
+}
+
+export interface CheckpointForceCompactResult {
+    compacted: boolean;
+    reason?: 'confirmation_required';
+    message?: string;
+    storage: CheckpointStorageSummary;
+    run?: CheckpointCompactionRunSummary;
 }
 
 export interface CheckpointRollbackPreview {

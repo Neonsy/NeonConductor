@@ -291,6 +291,12 @@ function readCheckpointRecord(value: unknown): CheckpointRecord | undefined {
     const createdAt = readString(value['createdAt']);
     const updatedAt = readString(value['updatedAt']);
     const sandboxId = readString(value['sandboxId']);
+    const milestoneTitle = readString(value['milestoneTitle']);
+    const retentionDisposition = readLiteral(value['retentionDisposition'], [
+        'milestone',
+        'protected_recent',
+        'eligible_for_cleanup',
+    ] as const);
     if (
         !id ||
         !isEntityId(id, 'ckpt') ||
@@ -329,6 +335,8 @@ function readCheckpointRecord(value: unknown): CheckpointRecord | undefined {
         executionTargetLabel,
         createdByKind,
         checkpointKind,
+        ...(milestoneTitle ? { milestoneTitle } : {}),
+        ...(retentionDisposition ? { retentionDisposition } : {}),
         snapshotFileCount,
         topLevelTab,
         modeKey,
@@ -1315,9 +1323,16 @@ export function applyRuntimeEventPatches(
                     profileId: context.profileId,
                     sessionId: checkpoint.sessionId,
                 },
-                (current) => ({
-                    checkpoints: [checkpoint, ...(current?.checkpoints ?? []).filter((candidate) => candidate.id !== checkpoint.id)],
-                })
+                (current) =>
+                    current
+                        ? {
+                              ...current,
+                              checkpoints: [
+                                  checkpoint,
+                                  ...current.checkpoints.filter((candidate) => candidate.id !== checkpoint.id),
+                              ],
+                          }
+                        : current
             );
             const diff = readDiffRecord(event.payload['diff']);
             const runId = diff ? readString(diff.runId) : undefined;
@@ -1335,7 +1350,7 @@ export function applyRuntimeEventPatches(
             return true;
         }
 
-        return event.eventType === 'checkpoint.rolled_back';
+        return event.eventType === 'checkpoint.rolled_back' || event.eventType === 'checkpoint.compaction_completed';
     }
 
     if (event.domain === 'provider') {

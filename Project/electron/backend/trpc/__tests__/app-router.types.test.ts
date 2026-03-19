@@ -163,6 +163,11 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
         profileId: string;
         sessionId: string;
     }>();
+    expectTypeOf<Inputs['checkpoint']['forceCompact']>().toExtend<{
+        profileId: string;
+        sessionId: string;
+        confirm: boolean;
+    }>();
     expectTypeOf<Inputs['checkpoint']['promoteToMilestone']>().toExtend<{
         profileId: string;
         checkpointId: string;
@@ -708,6 +713,19 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
             snapshotFileCount: number;
             diffId?: string;
         }>;
+        storage: {
+            looseReferencedBlobCount: number;
+            looseReferencedByteSize: number;
+            packedReferencedBlobCount: number;
+            packedReferencedByteSize: number;
+            totalReferencedBlobCount: number;
+            totalReferencedByteSize: number;
+            lastCompactionRun?: {
+                id: string;
+                triggerKind: 'automatic' | 'manual';
+                status: 'success' | 'failed' | 'noop';
+            };
+        };
     }>();
 
     expect(true).toBe(true);

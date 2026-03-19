@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import {
     buildRollbackWarningLines,
+    describeCompactionRun,
     describeRetentionDisposition,
     filterVisibleCheckpoints,
+    formatCheckpointByteSize,
     resolveSelectedDiffPath,
 } from '@/web/components/conversation/panels/diffCheckpointPanelState';
 
@@ -163,5 +165,46 @@ describe('checkpoint milestone helpers', () => {
         expect(describeRetentionDisposition('milestone')).toBe('Milestone');
         expect(describeRetentionDisposition('protected_recent')).toBe('Protected recent');
         expect(describeRetentionDisposition('eligible_for_cleanup')).toBe('Cleanup eligible');
+    });
+});
+
+describe('checkpoint compaction helpers', () => {
+    it('formats storage sizes and summarises the last compaction result', () => {
+        expect(formatCheckpointByteSize(512)).toBe('512 B');
+        expect(formatCheckpointByteSize(1536)).toBe('1.5 KiB');
+        expect(formatCheckpointByteSize(2 * 1024 * 1024)).toBe('2.0 MiB');
+
+        expect(describeCompactionRun(undefined)).toBe('No compaction run has been recorded yet.');
+        expect(
+            describeCompactionRun({
+                id: 'cpr_1',
+                triggerKind: 'automatic',
+                status: 'success',
+                blobCountBefore: 4,
+                blobCountAfter: 4,
+                bytesBefore: 4096,
+                bytesAfter: 1024,
+                blobsCompacted: 4,
+                databaseReclaimed: false,
+                startedAt: '2026-03-19T10:00:00.000Z',
+                completedAt: '2026-03-19T10:00:01.000Z',
+            })
+        ).toBe('Last automatic compaction packed 4 blobs');
+        expect(
+            describeCompactionRun({
+                id: 'cpr_2',
+                triggerKind: 'manual',
+                status: 'failed',
+                message: 'Verification failed.',
+                blobCountBefore: 4,
+                blobCountAfter: 4,
+                bytesBefore: 4096,
+                bytesAfter: 4096,
+                blobsCompacted: 0,
+                databaseReclaimed: false,
+                startedAt: '2026-03-19T10:00:00.000Z',
+                completedAt: '2026-03-19T10:00:01.000Z',
+            })
+        ).toBe('Last manual compaction failed. Verification failed.');
     });
 });
