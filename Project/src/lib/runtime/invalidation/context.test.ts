@@ -19,7 +19,7 @@ function createEvent(input: Partial<RuntimeEventRecordV1>): RuntimeEventRecordV1
     };
 }
 
-function stubSelection(profileId: string, state: { selectedSessionId?: string; selectedRunId?: string }) {
+function stubSelection(profileId: string, state: { selectedThreadId?: string; selectedSessionId?: string; selectedRunId?: string }) {
     const storage = new Map<string, string>();
     storage.set(`neonconductor.conversation.ui.${profileId}`, JSON.stringify(state));
     vi.stubGlobal('window', {
@@ -38,6 +38,7 @@ afterEach(() => {
 describe('runtime invalidation context', () => {
     it('hydrates entity ids from payload and persisted selection state', () => {
         stubSelection('profile_default', {
+            selectedThreadId: 'thr_1',
             selectedSessionId: 'sess_1',
             selectedRunId: 'run_1',
         });
@@ -58,6 +59,7 @@ describe('runtime invalidation context', () => {
         );
 
         expect(context.profileId).toBe('profile_default');
+        expect(context.selection.selectedThreadId).toBe('thr_1');
         expect(context.sessionId).toBe('sess_1');
         expect(context.runId).toBe('run_1');
         expect(context.modelId).toBe('openai/gpt-5');

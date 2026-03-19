@@ -18,9 +18,10 @@ afterEach(() => {
 
 describe('readConversationSelectionState', () => {
     it('reads persisted selection ids when they are valid', () => {
-        stubStorage(JSON.stringify({ selectedSessionId: 'sess_1', selectedRunId: 'run_1' }));
+        stubStorage(JSON.stringify({ selectedThreadId: 'thr_1', selectedSessionId: 'sess_1', selectedRunId: 'run_1' }));
 
         expect(readConversationSelectionState('profile_default')).toEqual({
+            selectedThreadId: 'thr_1',
             selectedSessionId: 'sess_1',
             selectedRunId: 'run_1',
         });
@@ -30,6 +31,7 @@ describe('readConversationSelectionState', () => {
         stubStorage('{"selectedSessionId":"bad"}');
 
         expect(readConversationSelectionState('profile_default')).toEqual({
+            selectedThreadId: undefined,
             selectedSessionId: undefined,
             selectedRunId: undefined,
         });

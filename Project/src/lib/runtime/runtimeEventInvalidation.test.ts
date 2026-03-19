@@ -129,7 +129,10 @@ function createEvent(input: Partial<RuntimeEventRecordV1>): RuntimeEventRecordV1
     };
 }
 
-function setSelectionState(profileId: string, state: { selectedSessionId?: string; selectedRunId?: string }) {
+function setSelectionState(
+    profileId: string,
+    state: { selectedThreadId?: string; selectedSessionId?: string; selectedRunId?: string }
+) {
     const storage = new Map<string, string>();
     storage.set(`neonconductor.conversation.ui.${profileId}`, JSON.stringify(state));
     vi.stubGlobal('window', {
@@ -173,6 +176,87 @@ describe('invalidateQueriesForRuntimeEvent', () => {
         expect(calls).toEqual([]);
         expect(utils.runtime.getShellBootstrap.setData).toHaveBeenCalledTimes(1);
         expect(setQueriesDataMock).not.toHaveBeenCalled();
+    });
+
+    it('runs scoped shell freshness invalidation when a patched thread removal deletes the selected thread', async () => {
+        const calls: InvalidationCall[] = [];
+        const utils = createUtilsMock(calls);
+        setSelectionState('profile_default', {
+            selectedThreadId: 'thr_selected',
+            selectedSessionId: 'sess_selected',
+            selectedRunId: 'run_selected',
+        });
+
+        await invalidateQueriesForRuntimeEvent(
+            utils as never,
+            createEvent({
+                entityType: 'thread',
+                domain: 'thread',
+                operation: 'remove',
+                entityId: 'thr_selected',
+                payload: {
+                    profileId: 'profile_default',
+                    threadId: 'thr_selected',
+                    deletedThreadIds: ['thr_selected'],
+                    deletedTagIds: [],
+                    deletedConversationIds: [],
+                    sessionIds: ['sess_selected'],
+                },
+            })
+        );
+
+        expect(calls).toEqual(
+            expect.arrayContaining([
+                { key: 'session.list', args: { profileId: 'profile_default' } },
+                { key: 'session.status', args: { profileId: 'profile_default', sessionId: 'sess_selected' } },
+                { key: 'session.listRuns', args: { profileId: 'profile_default', sessionId: 'sess_selected' } },
+                {
+                    key: 'session.listMessages',
+                    args: { profileId: 'profile_default', sessionId: 'sess_selected', runId: 'run_selected' },
+                },
+                { key: 'checkpoint.list', args: { profileId: 'profile_default', sessionId: 'sess_selected' } },
+                { key: 'session.getAttachedRules', args: null },
+                { key: 'session.getAttachedSkills', args: null },
+            ])
+        );
+        expect(utils.runtime.getShellBootstrap.setData).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps patched thread updates narrow when they do not affect the selected shell identity', async () => {
+        const calls: InvalidationCall[] = [];
+        const utils = createUtilsMock(calls);
+        setSelectionState('profile_default', {
+            selectedThreadId: 'thr_selected',
+            selectedSessionId: 'sess_selected',
+            selectedRunId: 'run_selected',
+        });
+
+        await invalidateQueriesForRuntimeEvent(
+            utils as never,
+            createEvent({
+                entityType: 'thread',
+                domain: 'thread',
+                operation: 'upsert',
+                entityId: 'thr_other',
+                payload: {
+                    profileId: 'profile_default',
+                    thread: {
+                        id: 'thr_other',
+                        profileId: 'profile_default',
+                        conversationId: 'conv_other',
+                        title: 'Other thread',
+                        topLevelTab: 'chat',
+                        rootThreadId: 'thr_other',
+                        isFavorite: false,
+                        executionEnvironmentMode: 'local',
+                        createdAt: '2026-03-13T10:00:00.000Z',
+                        updatedAt: '2026-03-13T10:00:00.000Z',
+                    },
+                },
+            })
+        );
+
+        expect(calls).toEqual([]);
     });
 
     it('patches selected message queries for message part updates without refetch invalidation', async () => {

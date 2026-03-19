@@ -5,6 +5,7 @@ import type { EntityId, RuntimeProviderId, TopLevelTab } from '@/shared/contract
 export type TrpcUtils = ReturnType<typeof trpc.useUtils>;
 
 export interface ConversationSelectionState {
+    selectedThreadId: EntityId<'thr'> | undefined;
     selectedSessionId: EntityId<'sess'> | undefined;
     selectedRunId: EntityId<'run'> | undefined;
 }

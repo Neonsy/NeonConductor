@@ -5,6 +5,7 @@ export {
     hasSelectedWorkspaceImpact,
     isSelectedRunAffected,
     isSelectedSessionAffected,
+    isSelectedThreadAffected,
 } from '@/web/lib/runtime/invalidation/context';
 export { readConversationSelectionState } from '@/web/lib/runtime/invalidation/selectionState';
 export {

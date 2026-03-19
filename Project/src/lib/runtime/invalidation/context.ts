@@ -70,6 +70,10 @@ export function isSelectedRunAffected(context: RuntimeEventContext): boolean {
     return Boolean(context.runId && context.selection.selectedRunId === context.runId);
 }
 
+export function isSelectedThreadAffected(context: RuntimeEventContext): boolean {
+    return Boolean(context.threadId && context.selection.selectedThreadId === context.threadId);
+}
+
 export function hasSelectedWorkspaceImpact(context: RuntimeEventContext): boolean {
     if (isSelectedSessionAffected(context) || isSelectedRunAffected(context)) {
         return true;

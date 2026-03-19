@@ -2,7 +2,12 @@ import { invalidateNoopDomain, invalidateOrchestratorQueries, invalidatePlanQuer
 import { invalidateProviderQueries } from '@/web/lib/runtime/invalidation/providerDomain';
 import { invalidateMessageQueries, invalidateRunQueries, invalidateSessionQueries } from '@/web/lib/runtime/invalidation/sessionDomain';
 import { getRuntimeEventContext, type RuntimeEventContext, type TrpcUtils } from '@/web/lib/runtime/invalidation/shared';
-import { invalidateConversationQueries, invalidateTagQueries, invalidateThreadQueries } from '@/web/lib/runtime/invalidation/threadDomain';
+import {
+    invalidateConversationQueries,
+    invalidateTagQueries,
+    invalidateThreadQueries,
+    invalidateThreadSelectionFreshnessQueries,
+} from '@/web/lib/runtime/invalidation/threadDomain';
 import { applyRuntimeEventPatches } from '@/web/lib/runtime/runtimeEventPatches';
 
 import type { RuntimeEventDomain, RuntimeEventRecordV1 } from '@/app/backend/persistence/types';
@@ -57,6 +62,11 @@ export async function invalidateQueriesForRuntimeEvent(
     const context = getRuntimeEventContext(event);
     const patched = applyRuntimeEventPatches(utils, event, context);
     if (patched) {
+        if (event.domain === 'thread') {
+            // Patch-first remains the default, but selected-thread identity changes still need scoped
+            // query invalidation so shell selection can converge immediately after cache updates.
+            await invalidateThreadSelectionFreshnessQueries(utils, event, context);
+        }
         return;
     }
 

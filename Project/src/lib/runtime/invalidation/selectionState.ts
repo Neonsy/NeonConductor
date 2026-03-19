@@ -3,6 +3,7 @@ import type { ConversationSelectionState } from '@/web/lib/runtime/invalidation/
 
 function emptySelectionState(): ConversationSelectionState {
     return {
+        selectedThreadId: undefined,
         selectedSessionId: undefined,
         selectedRunId: undefined,
     };
@@ -32,9 +33,11 @@ export function readConversationSelectionState(profileId: string | undefined): C
             return emptySelectionState();
         }
 
+        const selectedThreadId = readString(parsed['selectedThreadId']);
         const selectedSessionId = readString(parsed['selectedSessionId']);
         const selectedRunId = readString(parsed['selectedRunId']);
         return {
+            selectedThreadId: isEntityId(selectedThreadId, 'thr') ? selectedThreadId : undefined,
             selectedSessionId: isEntityId(selectedSessionId, 'sess') ? selectedSessionId : undefined,
             selectedRunId: isEntityId(selectedRunId, 'run') ? selectedRunId : undefined,
         };
