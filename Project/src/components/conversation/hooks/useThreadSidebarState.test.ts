@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { filterThreadsBySelectedTagIds } from '@/web/components/conversation/hooks/useThreadSidebarState';
+import {
+    filterThreadsBySelectedTagIds,
+    resolveVisibleThreadSelection,
+} from '@/web/components/conversation/hooks/useThreadSidebarState';
 
 import type { ThreadListRecord } from '@/app/backend/persistence/types';
 
@@ -65,5 +68,46 @@ describe('filterThreadsBySelectedTagIds', () => {
                 selectedTagIds: ['tag_ui', 'tag_urgent'],
             }).map((thread) => thread.id)
         ).toEqual(['thr_alpha']);
+    });
+});
+
+describe('resolveVisibleThreadSelection', () => {
+    it('selects the first visible thread when the persisted thread selection is stale', () => {
+        expect(
+            resolveVisibleThreadSelection({
+                visibleThreads: threads,
+                selectedThreadId: 'thr_missing',
+            })
+        ).toEqual({
+            resolvedThreadId: 'thr_alpha',
+            shouldSelectFallbackThread: true,
+            shouldClearSelection: false,
+        });
+    });
+
+    it('clears the selection when no visible threads remain after shell filtering', () => {
+        expect(
+            resolveVisibleThreadSelection({
+                visibleThreads: [],
+                selectedThreadId: 'thr_alpha',
+            })
+        ).toEqual({
+            resolvedThreadId: undefined,
+            shouldSelectFallbackThread: false,
+            shouldClearSelection: true,
+        });
+    });
+
+    it('keeps a valid visible selection without forcing a shell fallback', () => {
+        expect(
+            resolveVisibleThreadSelection({
+                visibleThreads: threads,
+                selectedThreadId: 'thr_beta',
+            })
+        ).toEqual({
+            resolvedThreadId: 'thr_beta',
+            shouldSelectFallbackThread: false,
+            shouldClearSelection: false,
+        });
     });
 });

@@ -16,6 +16,12 @@ export interface ThreadSidebarState {
     visibleThreads: ThreadListRecord[];
 }
 
+export interface VisibleThreadSelectionResolution {
+    resolvedThreadId: string | undefined;
+    shouldSelectFallbackThread: boolean;
+    shouldClearSelection: boolean;
+}
+
 export function filterThreadsBySelectedTagIds(input: {
     threads: ThreadListRecord[];
     threadTagIdsByThread: Map<string, string[]>;
@@ -29,6 +35,33 @@ export function filterThreadsBySelectedTagIds(input: {
         const tagIds = new Set(input.threadTagIdsByThread.get(thread.id) ?? []);
         return input.selectedTagIds.every((tagId) => tagIds.has(tagId));
     });
+}
+
+export function resolveVisibleThreadSelection(input: {
+    visibleThreads: ThreadListRecord[];
+    selectedThreadId: string | undefined;
+}): VisibleThreadSelectionResolution {
+    if (input.visibleThreads.length === 0) {
+        return {
+            resolvedThreadId: undefined,
+            shouldSelectFallbackThread: false,
+            shouldClearSelection: input.selectedThreadId !== undefined,
+        };
+    }
+
+    if (input.selectedThreadId && input.visibleThreads.some((thread) => thread.id === input.selectedThreadId)) {
+        return {
+            resolvedThreadId: input.selectedThreadId,
+            shouldSelectFallbackThread: false,
+            shouldClearSelection: false,
+        };
+    }
+
+    return {
+        resolvedThreadId: input.visibleThreads[0]?.id,
+        shouldSelectFallbackThread: true,
+        shouldClearSelection: false,
+    };
 }
 
 export function useThreadSidebarState(input: UseThreadSidebarStateInput): ThreadSidebarState {
@@ -46,18 +79,18 @@ export function useThreadSidebarState(input: UseThreadSidebarStateInput): Thread
     });
 
     useEffect(() => {
-        if (visibleThreads.length === 0) {
+        const selection = resolveVisibleThreadSelection({
+            visibleThreads,
+            selectedThreadId: input.selectedThreadId,
+        });
+
+        if (selection.shouldClearSelection) {
             input.onSelectedThreadInvalid();
             return;
         }
 
-        if (input.selectedThreadId && visibleThreads.some((thread) => thread.id === input.selectedThreadId)) {
-            return;
-        }
-
-        const firstVisibleThread = visibleThreads.at(0);
-        if (firstVisibleThread) {
-            input.onSelectFallbackThread(firstVisibleThread.id);
+        if (selection.shouldSelectFallbackThread && selection.resolvedThreadId) {
+            input.onSelectFallbackThread(selection.resolvedThreadId);
         }
     }, [input.onSelectFallbackThread, input.onSelectedThreadInvalid, input.selectedThreadId, visibleThreads]);
 

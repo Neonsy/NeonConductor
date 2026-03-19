@@ -22,6 +22,7 @@ import {
 } from '@/web/components/conversation/shell/orchestratorExecutionStrategyDrafts';
 import { setActivePlanCache, setOrchestratorLatestCache } from '@/web/components/conversation/shell/planCache';
 import { useConversationQueries } from '@/web/components/conversation/shell/queries/useConversationQueries';
+import { buildConversationSelectionSyncPatch } from '@/web/components/conversation/shell/selectionSync';
 import { buildConversationUiSyncPatch } from '@/web/components/conversation/shell/queries/useConversationSync';
 import {
     buildRuntimeRunOptions,
@@ -474,12 +475,18 @@ export function ConversationShell({
         },
     });
     const reconcileConversationSelection = useEffectEvent(() => {
-        const selection = shellViewModel.sessionRunSelection.selection;
-        if (selection.shouldUpdateSessionSelection) {
-            uiState.setSelectedSessionId(selection.resolvedSessionId);
+        const patch = buildConversationSelectionSyncPatch({
+            selection: shellViewModel.sessionRunSelection.selection,
+        });
+        if (!patch) {
+            return;
         }
-        if (selection.shouldUpdateRunSelection) {
-            uiState.setSelectedRunId(selection.resolvedRunId);
+
+        if ('selectedSessionId' in patch) {
+            uiState.setSelectedSessionId(patch.selectedSessionId);
+        }
+        if ('selectedRunId' in patch) {
+            uiState.setSelectedRunId(patch.selectedRunId);
         }
     });
     const reconcileConversationUiState = useEffectEvent(() => {
