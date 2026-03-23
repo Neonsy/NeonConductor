@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest';
 
-import { createCaller, getPersistence, registerRuntimeContractHooks, runtimeContractProfileId } from '@/app/backend/trpc/__tests__/runtime-contracts.shared';
+import {
+    createCaller,
+    createSessionInScope,
+    getPersistence,
+    mkdirSync,
+    path,
+    readFileSync,
+    registerRuntimeContractHooks,
+    rmSync,
+    runtimeContractProfileId,
+    writeFileSync,
+} from '@/app/backend/trpc/__tests__/runtime-contracts.shared';
 
 registerRuntimeContractHooks();
 
@@ -17,6 +28,13 @@ describe('runtime contracts: prompt layers', () => {
             chat: '',
             agent: '',
             orchestrator: '',
+        });
+        expect(initialSettings.settings.fileBackedCustomModes).toEqual({
+            global: {
+                chat: [],
+                agent: [],
+                orchestrator: [],
+            },
         });
         expect(initialSettings.settings.builtInModes.chat).toEqual([
             {
@@ -255,5 +273,217 @@ describe('runtime contracts: prompt layers', () => {
                 },
             })
         );
+    });
+
+    it('imports and exports text-based file-backed custom modes without mutating unrelated settings', async () => {
+        const caller = createCaller();
+        const workspaceFingerprint = 'wsf_prompt_portability';
+
+        await caller.prompt.setBuiltInModePrompt({
+            profileId,
+            topLevelTab: 'chat',
+            modeKey: 'chat',
+            roleDefinition: 'Built-in chat role override',
+            customInstructions: 'Built-in chat custom override',
+        });
+
+        const globalRegistry = await caller.registry.listResolved({ profileId });
+        const globalModesRoot = path.join(globalRegistry.paths.globalAssetsRoot, 'modes');
+        rmSync(globalModesRoot, { recursive: true, force: true });
+        mkdirSync(globalModesRoot, { recursive: true });
+
+        const importedGlobal = await caller.prompt.importCustomMode({
+            profileId,
+            topLevelTab: 'chat',
+            scope: 'global',
+            jsonText: JSON.stringify({
+                slug: 'review',
+                name: 'Portable Review',
+                description: 'Global chat review mode',
+                roleDefinition: 'Act as a precise reviewer.',
+                customInstructions: 'Review the current conversation carefully.',
+            }),
+            overwrite: false,
+        });
+        expect(importedGlobal.settings.fileBackedCustomModes.global.chat).toEqual([
+            {
+                topLevelTab: 'chat',
+                modeKey: 'review',
+                label: 'Portable Review',
+                description: 'Global chat review mode',
+            },
+        ]);
+        expect(
+            importedGlobal.settings.builtInModes.chat.find((mode) => mode.modeKey === 'chat')?.prompt
+        ).toEqual({
+            roleDefinition: 'Built-in chat role override',
+            customInstructions: 'Built-in chat custom override',
+        });
+
+        const globalModeFile = path.join(globalModesRoot, 'chat-review.md');
+        const globalModeMarkdown = readFileSync(globalModeFile, 'utf8');
+        expect(globalModeMarkdown).toContain('topLevelTab: chat');
+        expect(globalModeMarkdown).toContain('modeKey: review');
+        expect(globalModeMarkdown).toContain('roleDefinition: \"Act as a precise reviewer.\"');
+        expect(globalModeMarkdown).toContain('Review the current conversation carefully.');
+
+        const exportedGlobal = await caller.prompt.exportCustomMode({
+            profileId,
+            topLevelTab: 'chat',
+            modeKey: 'review',
+            scope: 'global',
+        });
+        expect(JSON.parse(exportedGlobal.jsonText)).toEqual({
+            slug: 'review',
+            name: 'Portable Review',
+            description: 'Global chat review mode',
+            roleDefinition: 'Act as a precise reviewer.',
+            customInstructions: 'Review the current conversation carefully.',
+        });
+
+        await createSessionInScope(caller, profileId, {
+            scope: 'workspace',
+            workspaceFingerprint,
+            title: 'Prompt portability workspace',
+            kind: 'local',
+            topLevelTab: 'orchestrator',
+        });
+        const workspaceRegistry = await caller.registry.listResolved({
+            profileId,
+            workspaceFingerprint,
+        });
+        const workspaceModesRoot = path.join(workspaceRegistry.paths.workspaceAssetsRoot!, 'modes');
+        rmSync(workspaceModesRoot, { recursive: true, force: true });
+        mkdirSync(workspaceModesRoot, { recursive: true });
+
+        const importedWorkspace = await caller.prompt.importCustomMode({
+            profileId,
+            topLevelTab: 'orchestrator',
+            scope: 'workspace',
+            workspaceFingerprint,
+            jsonText: JSON.stringify({
+                slug: 'workspace-orchestrator',
+                name: 'Workspace Orchestrator',
+                customInstructions: 'Coordinate work from the workspace root first.',
+            }),
+            overwrite: false,
+        });
+        expect(importedWorkspace.settings.fileBackedCustomModes.workspace?.orchestrator).toEqual([
+            {
+                topLevelTab: 'orchestrator',
+                modeKey: 'workspace-orchestrator',
+                label: 'Workspace Orchestrator',
+            },
+        ]);
+        expect(readFileSync(globalModeFile, 'utf8')).toBe(globalModeMarkdown);
+
+        const workspaceModeFile = path.join(workspaceModesRoot, 'orchestrator-workspace-orchestrator.md');
+        const workspaceModeMarkdown = readFileSync(workspaceModeFile, 'utf8');
+        expect(workspaceModeMarkdown).toContain('topLevelTab: orchestrator');
+        expect(workspaceModeMarkdown).toContain('Coordinate work from the workspace root first.');
+
+        const workspaceModes = await caller.mode.list({
+            profileId,
+            topLevelTab: 'orchestrator',
+            workspaceFingerprint,
+        });
+        expect(
+            workspaceModes.modes.find((mode) => mode.modeKey === 'workspace-orchestrator')?.label
+        ).toBe('Workspace Orchestrator');
+    });
+
+    it('fails closed on unsupported fields and overwrite without explicit confirmation', async () => {
+        const caller = createCaller();
+        const globalRegistry = await caller.registry.listResolved({ profileId });
+        const globalModesRoot = path.join(globalRegistry.paths.globalAssetsRoot, 'modes');
+        rmSync(globalModesRoot, { recursive: true, force: true });
+        mkdirSync(globalModesRoot, { recursive: true });
+        const existingModeFile = path.join(globalModesRoot, 'chat-review.md');
+
+        await caller.prompt.importCustomMode({
+            profileId,
+            topLevelTab: 'chat',
+            scope: 'global',
+            jsonText: JSON.stringify({
+                slug: 'review',
+                name: 'Original Review',
+                customInstructions: 'Original instructions.',
+            }),
+            overwrite: false,
+        });
+        const initialMarkdown = readFileSync(existingModeFile, 'utf8');
+
+        await expect(
+            caller.prompt.importCustomMode({
+                profileId,
+                topLevelTab: 'chat',
+                scope: 'global',
+                jsonText: JSON.stringify({
+                    slug: 'review',
+                    name: 'Replacement Review',
+                    customInstructions: 'Replacement instructions.',
+                }),
+                overwrite: false,
+            })
+        ).rejects.toThrow('overwrite confirmation');
+        expect(readFileSync(existingModeFile, 'utf8')).toBe(initialMarkdown);
+
+        await expect(
+            caller.prompt.importCustomMode({
+                profileId,
+                topLevelTab: 'chat',
+                scope: 'global',
+                jsonText: JSON.stringify({
+                    slug: 'invalid-mode',
+                    name: 'Invalid Mode',
+                    whenToUse: 'Never silently discard unsupported fields.',
+                }),
+                overwrite: false,
+            })
+        ).rejects.toThrow('Unsupported custom mode field "whenToUse"');
+
+        expect(readFileSync(existingModeFile, 'utf8')).toBe(initialMarkdown);
+    });
+
+    it('exports a legacy markdown-only custom mode as the supported portable subset without mutation', async () => {
+        const caller = createCaller();
+        const globalRegistry = await caller.registry.listResolved({ profileId });
+        const globalModesRoot = path.join(globalRegistry.paths.globalAssetsRoot, 'modes');
+        rmSync(globalModesRoot, { recursive: true, force: true });
+        mkdirSync(globalModesRoot, { recursive: true });
+        const legacyModeFile = path.join(globalModesRoot, 'agent-legacy-review.md');
+
+        writeFileSync(
+            legacyModeFile,
+            `---
+topLevelTab: agent
+modeKey: legacy-review
+label: Legacy Review
+description: Legacy markdown-only review mode
+---
+# Legacy Review
+
+- Review the repository with the legacy markdown prompt only.
+`,
+            'utf8'
+        );
+
+        await caller.registry.refresh({ profileId });
+        const beforeExport = readFileSync(legacyModeFile, 'utf8');
+
+        const exported = await caller.prompt.exportCustomMode({
+            profileId,
+            topLevelTab: 'agent',
+            modeKey: 'legacy-review',
+            scope: 'global',
+        });
+
+        expect(JSON.parse(exported.jsonText)).toEqual({
+            slug: 'legacy-review',
+            name: 'Legacy Review',
+            description: 'Legacy markdown-only review mode',
+            customInstructions: '# Legacy Review\n\n- Review the repository with the legacy markdown prompt only.',
+        });
+        expect(readFileSync(legacyModeFile, 'utf8')).toBe(beforeExport);
     });
 });

@@ -25,6 +25,12 @@ function SettingsRouteComponent() {
         <SettingsWorkspace
             profileId={controller.resolvedProfileId}
             selection={selection}
+            {...(controller.currentWorkspaceFingerprint
+                ? { currentWorkspaceFingerprint: controller.currentWorkspaceFingerprint }
+                : {})}
+            {...(controller.selectedWorkspaceRoot?.label
+                ? { selectedWorkspaceLabel: controller.selectedWorkspaceRoot.label }
+                : {})}
             onSelectionChange={(nextSelection) => {
                 void navigate({
                     search: getSettingsRouteSearch(nextSelection),

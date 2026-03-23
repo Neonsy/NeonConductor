@@ -5,6 +5,10 @@ vi.mock('@/web/components/settings/kiloSettingsView', () => ({
     KiloSettingsView: () => <div>kilo view</div>,
 }));
 
+vi.mock('@/web/components/settings/modesSettings/view', () => ({
+    ModesSettingsView: () => <div>modes view</div>,
+}));
+
 vi.mock('@/web/components/settings/providerSettingsView', () => ({
     ProviderSettingsView: () => <div>providers view</div>,
 }));
@@ -47,8 +51,9 @@ describe('settings workspace', () => {
         expect(html).toContain('Back to sessions');
         expect(html).toContain('Settings');
         expect(html).toContain('Kilo');
+        expect(html).toContain('Modes &amp; Instructions');
         expect(html).toContain('Providers &amp; Models');
-        expect(html).toContain('Kilo is the primary path.');
+        expect(html).toContain('Modes are app-level.');
     });
 
     it('keeps the settings body overflow-safe inside the workspace surface', () => {
@@ -65,6 +70,22 @@ describe('settings workspace', () => {
         expect(html).toContain('min-w-0');
         expect(html).toContain('overflow-hidden');
         expect(html).toContain('kilo view');
+    });
+
+    it('renders the shared modes surface when that primary section is selected', () => {
+        const html = renderToStaticMarkup(
+            <SettingsWorkspace
+                profileId='profile_default'
+                selection={{ section: 'modes', subsection: 'instructions' }}
+                onSelectionChange={vi.fn()}
+                onProfileActivated={vi.fn()}
+                onReturnToSessions={vi.fn()}
+                currentWorkspaceFingerprint='wsf_modes_surface'
+                selectedWorkspaceLabel='Workspace Root'
+            />
+        );
+
+        expect(html).toContain('modes view');
     });
 
     it('keeps the settings rail scrollable and wrap-safe for dense labels at narrow sizes', () => {

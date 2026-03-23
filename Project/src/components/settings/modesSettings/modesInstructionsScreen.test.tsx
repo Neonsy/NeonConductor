@@ -2,8 +2,8 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/web/components/settings/kiloPromptLayers/useKiloPromptLayerSettingsController', () => ({
-    useKiloPromptLayerSettingsController: () => ({
+vi.mock('@/web/components/settings/modesSettings/useModesInstructionsSettingsController', () => ({
+    useModesInstructionsSettingsController: () => ({
         feedback: {
             message: undefined,
             tone: 'info',
@@ -52,8 +52,38 @@ vi.mock('@/web/components/settings/kiloPromptLayers/useKiloPromptLayerSettingsCo
                             },
                         ],
                     },
+                    fileBackedCustomModes: {
+                        global: {
+                            chat: [
+                                {
+                                    topLevelTab: 'chat',
+                                    modeKey: 'review',
+                                    label: 'Global Chat Review',
+                                    description: 'Global chat review mode',
+                                },
+                            ],
+                            agent: [],
+                            orchestrator: [],
+                        },
+                        workspace: {
+                            chat: [],
+                            agent: [],
+                            orchestrator: [
+                                {
+                                    topLevelTab: 'orchestrator',
+                                    modeKey: 'workspace-orchestrator',
+                                    label: 'Workspace Orchestrator',
+                                    description: 'Workspace orchestrator mode',
+                                },
+                            ],
+                        },
+                    },
                 },
             },
+        },
+        workspace: {
+            fingerprint: 'wsf_modes_screen',
+            selectedLabel: 'Workspace Root',
         },
         appGlobal: {
             value: '',
@@ -121,29 +151,79 @@ vi.mock('@/web/components/settings/kiloPromptLayers/useKiloPromptLayerSettingsCo
             save: vi.fn(),
             reset: vi.fn(),
         },
+        customModes: {
+            global: {
+                chat: [
+                    {
+                        topLevelTab: 'chat',
+                        modeKey: 'review',
+                        label: 'Global Chat Review',
+                        description: 'Global chat review mode',
+                    },
+                ],
+                agent: [],
+                orchestrator: [],
+            },
+            workspace: {
+                chat: [],
+                agent: [],
+                orchestrator: [
+                    {
+                        topLevelTab: 'orchestrator',
+                        modeKey: 'workspace-orchestrator',
+                        label: 'Workspace Orchestrator',
+                        description: 'Workspace orchestrator mode',
+                    },
+                ],
+            },
+            importDraft: {
+                jsonText: '',
+                scope: 'global',
+                topLevelTab: 'chat',
+                allowOverwrite: false,
+                hasWorkspaceScope: true,
+                selectedWorkspaceLabel: 'Workspace Root',
+            },
+            exportState: {
+                jsonText: '',
+                selectedLabel: undefined,
+            },
+            isImporting: false,
+            isExporting: false,
+            setImportJsonText: vi.fn(),
+            setImportScope: vi.fn(),
+            setImportTopLevelTab: vi.fn(),
+            setAllowOverwrite: vi.fn(),
+            importMode: vi.fn(),
+            exportMode: vi.fn(),
+            copyExportJson: vi.fn(),
+        },
     }),
 }));
 
-import { KiloModesInstructionsScreen } from '@/web/components/settings/kiloPromptLayers/modesInstructionsScreen';
+import { ModesInstructionsScreen } from '@/web/components/settings/modesSettings/modesInstructionsScreen';
 
-describe('kilo modes and instructions screen', () => {
-    it('renders editable app, profile, top-level, and built-in mode prompt sections with warning copy', () => {
-        const html = renderToStaticMarkup(createElement(KiloModesInstructionsScreen, { profileId: 'profile_default' }));
+describe('modes instructions screen', () => {
+    it('renders app-level prompt layers, built-in overrides, and portable custom mode controls', () => {
+        const html = renderToStaticMarkup(
+            createElement(ModesInstructionsScreen, {
+                profileId: 'profile_default',
+                workspaceFingerprint: 'wsf_modes_screen',
+                selectedWorkspaceLabel: 'Workspace Root',
+            })
+        );
 
         expect(html).toContain('Modes &amp; Instructions');
+        expect(html).toContain('App-Level Modes');
         expect(html).toContain('App-Scope Global Instructions');
         expect(html).toContain('Profile-Scope Global Instructions');
-        expect(html).toContain('Chat Instructions');
-        expect(html).toContain('Agent Instructions');
-        expect(html).toContain('Orchestrator Instructions');
-        expect(html).toContain('Editing built-in chat instructions can make the app behave differently');
         expect(html).toContain('Built-In Mode Prompts');
         expect(html).toContain('Agent Code');
-        expect(html).toContain('Orchestrator Orchestrate');
-        expect(html).toContain('Editing the built-in agent code prompt can make the app behave unexpectedly');
-        expect(html).toContain('Role Definition');
-        expect(html).toContain('Custom Instructions');
-        expect(html).toContain('Reset');
-        expect(html).toContain('Save');
+        expect(html).toContain('Import Portable Mode JSON');
+        expect(html).toContain('Export Portable Mode JSON');
+        expect(html).toContain('Global Chat Review');
+        expect(html).toContain('Workspace Orchestrator');
+        expect(html).toContain('Import will write into the global');
+        expect(html).toContain('Copy JSON');
     });
 });

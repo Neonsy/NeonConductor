@@ -2,6 +2,18 @@ import type { TopLevelTab } from '@/app/backend/runtime/contracts/enums';
 import type { ModePromptDefinition } from '@/app/backend/runtime/contracts/types/mode';
 import type { ProfileInput } from '@/app/backend/runtime/contracts/types/common';
 
+export interface FileBackedCustomModeSettingsItem {
+    topLevelTab: TopLevelTab;
+    modeKey: string;
+    label: string;
+    description?: string;
+}
+
+export interface FileBackedCustomModeSettingsByScope {
+    global: Record<TopLevelTab, FileBackedCustomModeSettingsItem[]>;
+    workspace?: Record<TopLevelTab, FileBackedCustomModeSettingsItem[]>;
+}
+
 export interface BuiltInModePromptSettingsItem {
     topLevelTab: TopLevelTab;
     modeKey: string;
@@ -15,9 +27,12 @@ export interface PromptLayerSettings {
     profileGlobalInstructions: string;
     topLevelInstructions: Record<TopLevelTab, string>;
     builtInModes: Record<TopLevelTab, BuiltInModePromptSettingsItem[]>;
+    fileBackedCustomModes: FileBackedCustomModeSettingsByScope;
 }
 
-export type PromptLayerGetSettingsInput = ProfileInput;
+export interface PromptLayerGetSettingsInput extends ProfileInput {
+    workspaceFingerprint?: string;
+}
 
 export interface PromptLayerSetAppGlobalInstructionsInput extends ProfileInput {
     value: string;
@@ -50,4 +65,25 @@ export interface PromptLayerSetBuiltInModePromptInput extends ProfileInput {
 export interface PromptLayerResetBuiltInModePromptInput extends ProfileInput {
     topLevelTab: TopLevelTab;
     modeKey: string;
+}
+
+export interface PromptLayerExportCustomModeInput extends ProfileInput {
+    topLevelTab: TopLevelTab;
+    modeKey: string;
+    scope: 'global' | 'workspace';
+    workspaceFingerprint?: string;
+}
+
+export interface PromptLayerImportCustomModeInput extends ProfileInput {
+    topLevelTab: TopLevelTab;
+    scope: 'global' | 'workspace';
+    workspaceFingerprint?: string;
+    jsonText: string;
+    overwrite: boolean;
+}
+
+export interface PromptLayerExportCustomModeResult {
+    modeKey: string;
+    scope: 'global' | 'workspace';
+    jsonText: string;
 }

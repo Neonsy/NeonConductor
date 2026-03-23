@@ -32,7 +32,16 @@ function stripQuotes(value: string): string {
 }
 
 function parseScalar(value: string): unknown {
-    const trimmed = stripQuotes(value);
+    const rawValue = value.trim();
+    if (rawValue.startsWith('"') && rawValue.endsWith('"')) {
+        try {
+            return JSON.parse(rawValue);
+        } catch {
+            return stripQuotes(rawValue);
+        }
+    }
+
+    const trimmed = stripQuotes(rawValue);
     if (trimmed === 'true') {
         return true;
     }

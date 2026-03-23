@@ -12,6 +12,18 @@ describe('settingsNavigation route search', () => {
         expect(resolveSettingsSelectionFromRouteSearch({})).toEqual(getDefaultSettingsSelection('kilo'));
     });
 
+    it('keeps the shared modes section selection when the route search is valid', () => {
+        expect(
+            resolveSettingsSelectionFromRouteSearch({
+                section: 'modes',
+                subsection: 'instructions',
+            })
+        ).toEqual({
+            section: 'modes',
+            subsection: 'instructions',
+        });
+    });
+
     it('keeps a valid settings route selection', () => {
         expect(
             resolveSettingsSelectionFromRouteSearch({

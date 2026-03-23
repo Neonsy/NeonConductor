@@ -3,7 +3,11 @@ import { useState } from 'react';
 import { PROGRESSIVE_QUERY_OPTIONS } from '@/web/lib/query/progressiveQueryOptions';
 import { trpc } from '@/web/trpc/client';
 
-import type { BuiltInModePromptSettingsItem, TopLevelTab } from '@/shared/contracts';
+import type {
+    BuiltInModePromptSettingsItem,
+    FileBackedCustomModeSettingsItem,
+    TopLevelTab,
+} from '@/shared/contracts';
 
 type TopLevelDraftState = Partial<Record<TopLevelTab, { profileId: string; value: string }>>;
 type BuiltInModeDraftState = Partial<
@@ -24,7 +28,20 @@ function resolveTopLevelDraftValue(input: {
     return input.persistedValue ?? '';
 }
 
-export function useKiloPromptLayerSettingsController(profileId: string) {
+function emptyModeItems(): Record<TopLevelTab, FileBackedCustomModeSettingsItem[]> {
+    return {
+        chat: [],
+        agent: [],
+        orchestrator: [],
+    };
+}
+
+export function useModesInstructionsSettingsController(input: {
+    profileId: string;
+    workspaceFingerprint?: string;
+    selectedWorkspaceLabel?: string;
+}) {
+    const { profileId, workspaceFingerprint, selectedWorkspaceLabel } = input;
     const utils = trpc.useUtils();
     const [feedbackMessage, setFeedbackMessage] = useState<string | undefined>(undefined);
     const [feedbackTone, setFeedbackTone] = useState<'success' | 'error' | 'info'>('info');
@@ -34,16 +51,30 @@ export function useKiloPromptLayerSettingsController(profileId: string) {
     );
     const [topLevelDrafts, setTopLevelDrafts] = useState<TopLevelDraftState>({});
     const [builtInModeDrafts, setBuiltInModeDrafts] = useState<BuiltInModeDraftState>({});
+    const [importJsonText, setImportJsonText] = useState('');
+    const [importScope, setImportScope] = useState<'global' | 'workspace'>('global');
+    const [importTopLevelTab, setImportTopLevelTab] = useState<TopLevelTab>('chat');
+    const [allowOverwrite, setAllowOverwrite] = useState(false);
+    const [exportJsonText, setExportJsonText] = useState('');
+    const [selectedExportLabel, setSelectedExportLabel] = useState<string | undefined>(undefined);
 
-    const settingsQuery = trpc.prompt.getSettings.useQuery({ profileId }, PROGRESSIVE_QUERY_OPTIONS);
+    const settingsQueryInput = {
+        profileId,
+        ...(workspaceFingerprint ? { workspaceFingerprint } : {}),
+    };
+    const settingsQuery = trpc.prompt.getSettings.useQuery(settingsQueryInput, PROGRESSIVE_QUERY_OPTIONS);
 
     function applySettings(settings: {
         appGlobalInstructions: string;
         profileGlobalInstructions: string;
         topLevelInstructions: Record<TopLevelTab, string>;
         builtInModes: Record<TopLevelTab, BuiltInModePromptSettingsItem[]>;
+        fileBackedCustomModes: {
+            global: Record<TopLevelTab, FileBackedCustomModeSettingsItem[]>;
+            workspace?: Record<TopLevelTab, FileBackedCustomModeSettingsItem[]>;
+        };
     }) {
-        utils.prompt.getSettings.setData({ profileId }, { settings });
+        utils.prompt.getSettings.setData(settingsQueryInput, { settings });
     }
 
     function getBuiltInModeDraftKey(topLevelTab: TopLevelTab, modeKey: string): string {
@@ -70,6 +101,11 @@ export function useKiloPromptLayerSettingsController(profileId: string) {
             roleDefinition: input.persistedPrompt.roleDefinition ?? '',
             customInstructions: input.persistedPrompt.customInstructions ?? '',
         };
+    }
+
+    function clearFeedback(): void {
+        setFeedbackMessage(undefined);
+        setFeedbackTone('info');
     }
 
     const setAppGlobalInstructionsMutation = trpc.prompt.setAppGlobalInstructions.useMutation({
@@ -188,6 +224,33 @@ export function useKiloPromptLayerSettingsController(profileId: string) {
         },
     });
 
+    const importCustomModeMutation = trpc.prompt.importCustomMode.useMutation({
+        onSuccess: ({ settings }) => {
+            applySettings(settings);
+            setImportJsonText('');
+            setAllowOverwrite(false);
+            setFeedbackTone('success');
+            setFeedbackMessage('Imported file-backed custom mode.');
+        },
+        onError: (error) => {
+            setFeedbackTone('error');
+            setFeedbackMessage(error.message);
+        },
+    });
+
+    const exportCustomModeMutation = trpc.prompt.exportCustomMode.useMutation({
+        onSuccess: (result) => {
+            setExportJsonText(result.jsonText);
+            setSelectedExportLabel(`${result.scope} :: ${result.modeKey}`);
+            setFeedbackTone('success');
+            setFeedbackMessage('Loaded export JSON for the selected custom mode.');
+        },
+        onError: (error) => {
+            setFeedbackTone('error');
+            setFeedbackMessage(error.message);
+        },
+    });
+
     const persistedSettings = settingsQuery.data?.settings;
     const appGlobalInstructions = appGlobalDraft ?? persistedSettings?.appGlobalInstructions ?? '';
     const profileGlobalInstructions =
@@ -195,9 +258,19 @@ export function useKiloPromptLayerSettingsController(profileId: string) {
             ? profileGlobalDraft.value
             : persistedSettings?.profileGlobalInstructions ?? '';
 
-    function clearFeedback(): void {
-        setFeedbackMessage(undefined);
-        setFeedbackTone('info');
+    async function copyExportJson(): Promise<void> {
+        if (exportJsonText.trim().length === 0) {
+            return;
+        }
+        if (!navigator.clipboard?.writeText) {
+            setFeedbackTone('error');
+            setFeedbackMessage('Clipboard access is not available in this environment.');
+            return;
+        }
+
+        await navigator.clipboard.writeText(exportJsonText);
+        setFeedbackTone('success');
+        setFeedbackMessage('Copied custom mode JSON.');
     }
 
     return {
@@ -207,6 +280,10 @@ export function useKiloPromptLayerSettingsController(profileId: string) {
             clear: clearFeedback,
         },
         query: settingsQuery,
+        workspace: {
+            fingerprint: workspaceFingerprint,
+            selectedLabel: selectedWorkspaceLabel,
+        },
         appGlobal: {
             value: appGlobalInstructions,
             isSaving:
@@ -343,6 +420,60 @@ export function useKiloPromptLayerSettingsController(profileId: string) {
                     modeKey,
                 });
             },
+        },
+        customModes: {
+            global: persistedSettings?.fileBackedCustomModes.global ?? emptyModeItems(),
+            workspace: persistedSettings?.fileBackedCustomModes.workspace ?? emptyModeItems(),
+            importDraft: {
+                jsonText: importJsonText,
+                scope: importScope,
+                topLevelTab: importTopLevelTab,
+                allowOverwrite,
+                hasWorkspaceScope: Boolean(workspaceFingerprint),
+                selectedWorkspaceLabel,
+            },
+            exportState: {
+                jsonText: exportJsonText,
+                selectedLabel: selectedExportLabel,
+            },
+            isImporting: importCustomModeMutation.isPending,
+            isExporting: exportCustomModeMutation.isPending,
+            setImportJsonText: (value: string) => {
+                setImportJsonText(value);
+                clearFeedback();
+            },
+            setImportScope: (scope: 'global' | 'workspace') => {
+                setImportScope(scope);
+                clearFeedback();
+            },
+            setImportTopLevelTab: (topLevelTab: TopLevelTab) => {
+                setImportTopLevelTab(topLevelTab);
+                clearFeedback();
+            },
+            setAllowOverwrite: (value: boolean) => {
+                setAllowOverwrite(value);
+                clearFeedback();
+            },
+            importMode: async () => {
+                await importCustomModeMutation.mutateAsync({
+                    profileId,
+                    topLevelTab: importTopLevelTab,
+                    scope: importScope,
+                    ...(importScope === 'workspace' && workspaceFingerprint ? { workspaceFingerprint } : {}),
+                    jsonText: importJsonText,
+                    overwrite: allowOverwrite,
+                });
+            },
+            exportMode: async (scope: 'global' | 'workspace', topLevelTab: TopLevelTab, modeKey: string) => {
+                await exportCustomModeMutation.mutateAsync({
+                    profileId,
+                    topLevelTab,
+                    modeKey,
+                    scope,
+                    ...(scope === 'workspace' && workspaceFingerprint ? { workspaceFingerprint } : {}),
+                });
+            },
+            copyExportJson,
         },
     };
 }

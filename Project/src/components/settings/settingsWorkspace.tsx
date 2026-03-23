@@ -4,6 +4,7 @@ import { startTransition } from 'react';
 import { AppSettingsView } from '@/web/components/settings/appSettings/view';
 import { ContextSettingsView } from '@/web/components/settings/contextSettingsView';
 import { KiloSettingsView } from '@/web/components/settings/kiloSettingsView';
+import { ModesSettingsView } from '@/web/components/settings/modesSettings/view';
 import { ProfileSettingsView } from '@/web/components/settings/profileSettingsView';
 import { ProviderSettingsView } from '@/web/components/settings/providerSettingsView';
 import { RegistrySettingsView } from '@/web/components/settings/registrySettingsView';
@@ -13,6 +14,7 @@ import {
     type AppSettingsSubsectionId,
     type ContextSettingsSubsectionId,
     type KiloSettingsSubsectionId,
+    type ModesSettingsSubsectionId,
     type ProfileSettingsSubsectionId,
     type RegistrySettingsSubsectionId,
     type SettingsPrimarySectionId,
@@ -27,6 +29,8 @@ interface SettingsWorkspaceProps {
     onProfileActivated: (profileId: string) => void;
     onReturnToSessions: () => void;
     onPreviewReturnToSessions?: () => void;
+    currentWorkspaceFingerprint?: string;
+    selectedWorkspaceLabel?: string;
 }
 
 function PrimaryRailButton({
@@ -64,6 +68,8 @@ export function SettingsWorkspace({
     onProfileActivated,
     onReturnToSessions,
     onPreviewReturnToSessions,
+    currentWorkspaceFingerprint,
+    selectedWorkspaceLabel,
 }: SettingsWorkspaceProps) {
     const privacyMode = usePrivacyMode();
     const kiloSections = SETTINGS_PRIMARY_SECTIONS.filter((section) => section.group === 'kilo');
@@ -93,7 +99,7 @@ export function SettingsWorkspace({
                     <div className='space-y-1'>
                         <h2 className='text-sm font-semibold tracking-[0.18em] uppercase'>Settings</h2>
                         <p className='text-muted-foreground text-xs'>
-                            Kilo is the primary path. Providers, profiles, registry, and app utilities stay grouped below.
+                            Modes are app-level. Kilo, providers, profiles, registry, and app utilities stay grouped by concern.
                         </p>
                         {privacyMode.enabled ? (
                             <p className='text-primary text-[11px] font-semibold tracking-[0.12em] uppercase'>
@@ -137,6 +143,17 @@ export function SettingsWorkspace({
                         subsection={selection.subsection as KiloSettingsSubsectionId}
                         onSubsectionChange={(subsection) => {
                             onSelectionChange({ section: 'kilo', subsection });
+                        }}
+                    />
+                ) : null}
+                {selection.section === 'modes' ? (
+                    <ModesSettingsView
+                        profileId={profileId}
+                        subsection={selection.subsection as ModesSettingsSubsectionId}
+                        {...(currentWorkspaceFingerprint ? { workspaceFingerprint: currentWorkspaceFingerprint } : {})}
+                        {...(selectedWorkspaceLabel ? { selectedWorkspaceLabel } : {})}
+                        onSubsectionChange={(subsection) => {
+                            onSelectionChange({ section: 'modes', subsection });
                         }}
                     />
                 ) : null}

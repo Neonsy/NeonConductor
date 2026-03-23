@@ -1,5 +1,7 @@
 import {
+    promptLayerExportCustomModeInputSchema,
     promptLayerGetSettingsInputSchema,
+    promptLayerImportCustomModeInputSchema,
     promptLayerResetBuiltInModePromptInputSchema,
     promptLayerResetAppGlobalInstructionsInputSchema,
     promptLayerResetProfileGlobalInstructionsInputSchema,
@@ -10,7 +12,9 @@ import {
     promptLayerSetTopLevelInstructionsInputSchema,
 } from '@/app/backend/runtime/contracts';
 import {
+    exportCustomMode,
     getPromptLayerSettings,
+    importCustomMode,
     resetBuiltInModePrompt,
     resetAppGlobalInstructions,
     resetProfileGlobalInstructions,
@@ -25,7 +29,7 @@ import { publicProcedure, router } from '@/app/backend/trpc/init';
 export const promptRouter = router({
     getSettings: publicProcedure.input(promptLayerGetSettingsInputSchema).query(async ({ input }) => {
         return {
-            settings: await getPromptLayerSettings(input.profileId),
+            settings: await getPromptLayerSettings(input.profileId, input.workspaceFingerprint),
         };
     }),
     setAppGlobalInstructions: publicProcedure
@@ -84,4 +88,12 @@ export const promptRouter = router({
                 settings: await resetBuiltInModePrompt(input),
             };
         }),
+    exportCustomMode: publicProcedure.input(promptLayerExportCustomModeInputSchema).mutation(async ({ input }) => {
+        return exportCustomMode(input);
+    }),
+    importCustomMode: publicProcedure.input(promptLayerImportCustomModeInputSchema).mutation(async ({ input }) => {
+        return {
+            settings: await importCustomMode(input),
+        };
+    }),
 });

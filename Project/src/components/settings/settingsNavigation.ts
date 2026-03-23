@@ -1,8 +1,9 @@
 import { providerIds, type RuntimeProviderId } from '@/shared/contracts';
 
-export type SettingsPrimarySectionId = 'kilo' | 'providers' | 'profiles' | 'context' | 'registry' | 'app';
+export type SettingsPrimarySectionId = 'kilo' | 'modes' | 'providers' | 'profiles' | 'context' | 'registry' | 'app';
 
-export type KiloSettingsSubsectionId = 'account' | 'models' | 'routing' | 'instructions' | 'marketplace';
+export type KiloSettingsSubsectionId = 'account' | 'models' | 'routing' | 'marketplace';
+export type ModesSettingsSubsectionId = 'instructions';
 export type ProfileSettingsSubsectionId = 'management' | 'execution' | 'naming' | 'utility';
 export type ContextSettingsSubsectionId = 'workspace' | 'budgeting';
 export type RegistrySettingsSubsectionId = 'rules' | 'skills' | 'modes' | 'diagnostics';
@@ -10,6 +11,7 @@ export type AppSettingsSubsectionId = 'privacy' | 'maintenance';
 
 export type SettingsSelection =
     | { section: 'kilo'; subsection: KiloSettingsSubsectionId }
+    | { section: 'modes'; subsection: ModesSettingsSubsectionId }
     | { section: 'providers'; subsection: RuntimeProviderId }
     | { section: 'profiles'; subsection: ProfileSettingsSubsectionId }
     | { section: 'context'; subsection: ContextSettingsSubsectionId }
@@ -39,8 +41,14 @@ export const SETTINGS_PRIMARY_SECTIONS: ReadonlyArray<SettingsPrimarySectionDefi
     {
         id: 'kilo',
         label: 'Kilo',
-        description: 'Product-default account, gateway routing, and shipped mode instruction controls.',
+        description: 'Product-default account, gateway models, routing, and future marketplace concerns.',
         group: 'kilo',
+    },
+    {
+        id: 'modes',
+        label: 'Modes & Instructions',
+        description: 'App-level prompt layers, built-in mode overrides, and portable custom mode management.',
+        group: 'general',
     },
     {
         id: 'providers',
@@ -94,16 +102,19 @@ export const KILO_SETTINGS_SUBSECTIONS: ReadonlyArray<SettingsSubsectionDefiniti
         availability: 'available',
     },
     {
-        id: 'instructions',
-        label: 'Modes & Instructions',
-        description: 'Global Kilo prompt layers, built-in mode overrides, and custom mode management.',
-        availability: 'available',
-    },
-    {
         id: 'marketplace',
         label: 'Marketplace',
         description: 'Reserved for post-MVP marketplace management.',
         availability: 'planned',
+    },
+];
+
+export const MODES_SETTINGS_SUBSECTIONS: ReadonlyArray<SettingsSubsectionDefinition<ModesSettingsSubsectionId>> = [
+    {
+        id: 'instructions',
+        label: 'Shared Modes & Instructions',
+        description: 'App-level prompt layers, built-in mode overrides, and file-backed custom mode portability.',
+        availability: 'available',
     },
 ];
 
@@ -196,6 +207,7 @@ function isOneOf<const TValue extends readonly string[]>(value: string | undefin
 }
 
 const kiloSettingsSubsectionIds = KILO_SETTINGS_SUBSECTIONS.map((subsection) => subsection.id) as readonly KiloSettingsSubsectionId[];
+const modesSettingsSubsectionIds = MODES_SETTINGS_SUBSECTIONS.map((subsection) => subsection.id) as readonly ModesSettingsSubsectionId[];
 const profileSettingsSubsectionIds = PROFILE_SETTINGS_SUBSECTIONS.map((subsection) => subsection.id) as readonly ProfileSettingsSubsectionId[];
 const contextSettingsSubsectionIds = CONTEXT_SETTINGS_SUBSECTIONS.map((subsection) => subsection.id) as readonly ContextSettingsSubsectionId[];
 const registrySettingsSubsectionIds = REGISTRY_SETTINGS_SUBSECTIONS.map((subsection) => subsection.id) as readonly RegistrySettingsSubsectionId[];
@@ -206,6 +218,8 @@ export function getDefaultSettingsSelection(section: SettingsPrimarySectionId = 
     switch (section) {
         case 'kilo':
             return { section, subsection: 'account' };
+        case 'modes':
+            return { section, subsection: 'instructions' };
         case 'providers':
             return { section, subsection: 'kilo' };
         case 'profiles':
@@ -226,6 +240,10 @@ export function resolveSettingsSelectionFromRouteSearch(search: SettingsRouteSea
     switch (section) {
         case 'kilo':
             return isOneOf(subsection, kiloSettingsSubsectionIds)
+                ? { section, subsection }
+                : getDefaultSettingsSelection(section);
+        case 'modes':
+            return isOneOf(subsection, modesSettingsSubsectionIds)
                 ? { section, subsection }
                 : getDefaultSettingsSelection(section);
         case 'providers':

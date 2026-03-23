@@ -68,9 +68,17 @@ function readToolCapabilities(value: unknown): ToolCapability[] | undefined {
     return capabilities.length > 0 ? Array.from(new Set(capabilities)) : undefined;
 }
 
-function mapModePrompt(bodyMarkdown: string): ModePromptDefinition {
+function mapModePrompt(input: {
+    bodyMarkdown: string;
+    attributes: Record<string, unknown>;
+}): ModePromptDefinition {
+    const bodyInstructions = input.bodyMarkdown.trim();
+    const customInstructions = readString(input.attributes['customInstructions']) ?? bodyInstructions;
+    const roleDefinition = readString(input.attributes['roleDefinition']);
+
     return {
-        customInstructions: bodyMarkdown.trim(),
+        ...(roleDefinition ? { roleDefinition } : {}),
+        ...(customInstructions.length > 0 ? { customInstructions } : {}),
     };
 }
 
@@ -449,7 +457,10 @@ export async function buildDiscoveredAssets(input: {
                         readString(file.parsed.attributes['key']) ??
                         file.assetPath
                 ),
-                prompt: mapModePrompt(file.parsed.bodyMarkdown),
+                prompt: mapModePrompt({
+                    bodyMarkdown: file.parsed.bodyMarkdown,
+                    attributes: file.parsed.attributes,
+                }),
                 executionPolicy: buildModeExecutionPolicy({
                     planningOnly: readBoolean(file.parsed.attributes['planningOnly']),
                     readOnly: readBoolean(file.parsed.attributes['readOnly']),

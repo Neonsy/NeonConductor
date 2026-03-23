@@ -245,6 +245,7 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
     }>();
     expectTypeOf<Inputs['prompt']['getSettings']>().toExtend<{
         profileId: string;
+        workspaceFingerprint?: string;
     }>();
     expectTypeOf<Inputs['prompt']['setAppGlobalInstructions']>().toExtend<{
         profileId: string;
@@ -270,6 +271,21 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
         profileId: string;
         topLevelTab: 'chat' | 'agent' | 'orchestrator';
         modeKey: string;
+    }>();
+    expectTypeOf<Inputs['prompt']['exportCustomMode']>().toExtend<{
+        profileId: string;
+        topLevelTab: 'chat' | 'agent' | 'orchestrator';
+        modeKey: string;
+        scope: 'global' | 'workspace';
+        workspaceFingerprint?: string;
+    }>();
+    expectTypeOf<Inputs['prompt']['importCustomMode']>().toExtend<{
+        profileId: string;
+        topLevelTab: 'chat' | 'agent' | 'orchestrator';
+        scope: 'global' | 'workspace';
+        workspaceFingerprint?: string;
+        jsonText: string;
+        overwrite: boolean;
     }>();
 
     expectTypeOf<Inputs['session']['list']>().toExtend<{
@@ -686,7 +702,32 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
                     hasOverride: boolean;
                 }>
             >;
+            fileBackedCustomModes: {
+                global: Record<
+                    'chat' | 'agent' | 'orchestrator',
+                    Array<{
+                        topLevelTab: 'chat' | 'agent' | 'orchestrator';
+                        modeKey: string;
+                        label: string;
+                        description?: string;
+                    }>
+                >;
+                workspace?: Record<
+                    'chat' | 'agent' | 'orchestrator',
+                    Array<{
+                        topLevelTab: 'chat' | 'agent' | 'orchestrator';
+                        modeKey: string;
+                        label: string;
+                        description?: string;
+                    }>
+                >;
+            };
         };
+    }>();
+    expectTypeOf<Outputs['prompt']['exportCustomMode']>().toExtend<{
+        modeKey: string;
+        scope: 'global' | 'workspace';
+        jsonText: string;
     }>();
     expectTypeOf<Outputs['session']['getAttachedSkills']>().toExtend<{
         sessionId: string;

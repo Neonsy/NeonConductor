@@ -1,7 +1,6 @@
 import { ProviderAuthenticationSection } from '@/web/components/settings/providerSettings/authenticationSection';
 import { ProviderDefaultModelSection } from '@/web/components/settings/providerSettings/defaultModelSection';
 import { formatDateTime, formatInteger } from '@/web/components/settings/providerSettings/helpers';
-import { KiloModesInstructionsScreen } from '@/web/components/settings/kiloPromptLayers/modesInstructionsScreen';
 import { KiloAccountSection } from '@/web/components/settings/providerSettings/kiloAccountSection';
 import { KiloRoutingSection } from '@/web/components/settings/providerSettings/kiloRoutingSection';
 import { useProviderSettingsController } from '@/web/components/settings/providerSettings/hooks/useProviderSettingsController';
@@ -398,13 +397,12 @@ export function KiloSettingsView({ profileId, subsection = 'account', onSubsecti
                 ) : null}
                 {subsection === 'models' ? <KiloGatewayModelsScreen profileId={profileId} controller={controller} /> : null}
                 {subsection === 'routing' ? <KiloRoutingScreen controller={controller} /> : null}
-                {subsection === 'instructions' ? <KiloModesInstructionsScreen profileId={profileId} /> : null}
                 {subsection === 'marketplace' ? (
                     <div className='border-border/70 bg-card/50 rounded-[24px] border p-5'>
                         <p className='text-sm font-semibold'>Marketplace is not available yet</p>
                         <p className='text-muted-foreground mt-2 text-sm leading-6'>
-                            Marketplace installation and update management remain reserved here instead of being mixed
-                            into registry diagnostics.
+                            Marketplace installation and update management remain reserved here, while app-level modes
+                            and instruction controls now live in their own shared settings surface.
                         </p>
                     </div>
                 ) : null}
