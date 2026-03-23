@@ -53,6 +53,7 @@ export default defineConfig(async () => {
             tanstackRouter({
                 target: 'react',
                 autoCodeSplitting: true,
+                routeFileIgnorePattern: '(?:^|\\.)test\\.(?:ts|tsx)$',
             }),
             react(),
             reactCompilerPlugin,

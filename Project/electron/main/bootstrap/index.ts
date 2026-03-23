@@ -57,8 +57,8 @@ export function bootstrapMainProcess(deps: BootstrapDeps, importMetaUrl: string)
     };
 
     function createBootManagedMainWindow(): BrowserWindow {
-        const splashWindow = createSplashWindow(splashWindowOptions);
         const nextMainWindow = createMainWindow(runtimeWindowOptions);
+        const splashWindow = createSplashWindow(splashWindowOptions);
         registerBootWindows({
             mainWindow: nextMainWindow,
             splashWindow,
@@ -123,6 +123,10 @@ export function bootstrapMainProcess(deps: BootstrapDeps, importMetaUrl: string)
 
             // Set up Content Security Policy via HTTP headers.
             attachCspHeaders(runtimeCspOptions);
+
+            if (process.platform === 'win32') {
+                app.setAppUserModelId('com.neonsy.neonconductor');
+            }
 
             mainWindow = createBootManagedMainWindow();
             registerWindowStateBridge(mainWindow);

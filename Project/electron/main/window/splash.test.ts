@@ -1,9 +1,37 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const { browserWindowSpy, splashWindowMock } = vi.hoisted(() => {
+    const splashWindowMock = {
+        id: 101,
+        isDestroyed: vi.fn(() => false),
+        show: vi.fn(),
+        once: vi.fn(),
+        removeMenu: vi.fn(),
+        loadURL: vi.fn(),
+        loadFile: vi.fn(),
+        webContents: {
+            on: vi.fn(),
+            send: vi.fn(),
+        },
+    };
+
+    return {
+        browserWindowSpy: vi.fn(function BrowserWindowMock() {
+            return splashWindowMock;
+        }),
+        splashWindowMock,
+    };
+});
+
+vi.mock('electron', () => ({
+    BrowserWindow: browserWindowSpy,
+}));
 
 import {
     buildSplashBootstrapPayload,
+    createSplashWindow,
     resolveSplashAssetPath,
     resolveSplashAssetUrl,
     resolveSplashPageLocation,
@@ -11,6 +39,11 @@ import {
 } from '@/app/main/window/splash';
 
 describe('splash window', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        splashWindowMock.isDestroyed.mockReturnValue(false);
+    });
+
     it('resolves the mascot from the project app path during development', () => {
         expect(
             resolveSplashAssetPath({
@@ -129,5 +162,23 @@ describe('splash window', () => {
                 stage: 'main_initializing',
             }),
         });
+    });
+
+    it('creates the splash as a taskbar-visible top-level window', () => {
+        createSplashWindow({
+            appPath: 'C:\\repo\\Project',
+            devServerUrl: 'http://localhost:5173',
+            isPackaged: false,
+            mainDirname: 'C:\\repo\\Project\\dist-electron',
+        });
+
+        expect(browserWindowSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                skipTaskbar: false,
+                frame: false,
+                show: false,
+            })
+        );
+        expect(splashWindowMock.loadURL).toHaveBeenCalledWith('http://localhost:5173/splash.html');
     });
 });

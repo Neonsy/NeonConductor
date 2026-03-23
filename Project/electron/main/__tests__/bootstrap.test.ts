@@ -1,11 +1,15 @@
 import path from 'node:path';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
     appOnSpy,
     appQuitSpy,
     appExitSpy,
+    appSetAppUserModelIdSpy,
     appSetPathSpy,
+    dialogShowOpenDialogSpy,
+    ipcMainHandleSpy,
+    ipcMainRemoveHandlerSpy,
     setApplicationMenuSpy,
     initializePersistenceSpy,
     closePersistenceSpy,
@@ -30,7 +34,11 @@ const {
     appOnSpy: vi.fn(),
     appQuitSpy: vi.fn(),
     appExitSpy: vi.fn(),
+    appSetAppUserModelIdSpy: vi.fn(),
     appSetPathSpy: vi.fn(),
+    dialogShowOpenDialogSpy: vi.fn(() => Promise.resolve({ canceled: true, filePaths: [] })),
+    ipcMainHandleSpy: vi.fn(),
+    ipcMainRemoveHandlerSpy: vi.fn(),
     setApplicationMenuSpy: vi.fn(),
     initializePersistenceSpy: vi.fn(),
     closePersistenceSpy: vi.fn(),
@@ -80,6 +88,7 @@ vi.mock('electron', () => ({
                 appState.userDataPath = nextValue;
             }
         },
+        setAppUserModelId: appSetAppUserModelIdSpy,
         on: (eventName: string, handler: (...arguments_: unknown[]) => unknown) => {
             const handlers = appEventHandlers.get(eventName) ?? [];
             handlers.push(handler);
@@ -95,6 +104,13 @@ vi.mock('electron', () => ({
     },
     Menu: {
         setApplicationMenu: setApplicationMenuSpy,
+    },
+    dialog: {
+        showOpenDialog: dialogShowOpenDialogSpy,
+    },
+    ipcMain: {
+        handle: ipcMainHandleSpy,
+        removeHandler: ipcMainRemoveHandlerSpy,
     },
 }));
 
@@ -162,10 +178,16 @@ vi.mock('@/app/main/window/bootCoordinator', () => ({
 }));
 
 describe('bootstrapMainProcess', () => {
+    const originalPlatform = process.platform;
+
     beforeEach(() => {
         appEventHandlers.clear();
         vi.clearAllMocks();
         vi.resetModules();
+        Object.defineProperty(process, 'platform', {
+            value: 'win32',
+            configurable: true,
+        });
         appState.userDataPath = defaultUserDataPath;
         appState.appPath = 'M:\\Neonsy\\Projects\\NeonConductor\\Project';
         appState.isPackaged = false;
@@ -178,6 +200,13 @@ describe('bootstrapMainProcess', () => {
         delete process.env['NEONCONDUCTOR_USER_DATA_PATH'];
         delete process.env['NEONCONDUCTOR_RUNTIME_NAMESPACE'];
         delete process.env['NEONCONDUCTOR_PERSISTENCE_CHANNEL'];
+    });
+
+    afterAll(() => {
+        Object.defineProperty(process, 'platform', {
+            value: originalPlatform,
+            configurable: true,
+        });
     });
 
     it('isolates dev startup under a dedicated development userData root', async () => {
@@ -212,6 +241,8 @@ describe('bootstrapMainProcess', () => {
         expect(process.env['NEONCONDUCTOR_PERSISTENCE_CHANNEL']).toBe('development');
         expect(initializeSecretStoreSpy).toHaveBeenCalled();
         expect(attachCspHeadersSpy).toHaveBeenCalled();
+        expect(appSetAppUserModelIdSpy).toHaveBeenCalledWith('com.neonsy.neonconductor');
+        expect(createMainWindowSpy).toHaveBeenCalled();
         expect(createSplashWindowSpy).toHaveBeenCalledWith({
             appPath: 'M:\\Neonsy\\Projects\\NeonConductor\\Project',
             devServerUrl: 'http://localhost:5173',
@@ -219,24 +250,22 @@ describe('bootstrapMainProcess', () => {
             mainDirname: 'M:\\Neonsy\\Projects\\NeonConductor\\Project\\electron\\main',
             resourcesPath: process.resourcesPath,
         });
-        expect(createMainWindowSpy).toHaveBeenCalled();
-        expect(createSplashWindowSpy.mock.invocationCallOrder[0]).toBeLessThan(
-            createMainWindowSpy.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY
+        expect(createMainWindowSpy.mock.invocationCallOrder[0]).toBeLessThan(
+            createSplashWindowSpy.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY
         );
         expect(registerBootWindowsSpy).toHaveBeenCalledWith({
             mainWindow: { id: 'window-main' },
             splashWindow: { id: 'window-splash' },
         });
-        expect(reportMainBootStatusSpy.mock.calls).toEqual(
-            expect.arrayContaining([
-                [{ stage: 'main_initializing' }],
-                [{ stage: 'storage_ready' }],
-                [{ stage: 'persistence_ready' }],
-                [{ stage: 'secrets_ready' }],
-                [{ stage: 'windows_ready' }],
-                [{ stage: 'renderer_connecting', blockingPrerequisite: 'renderer_first_report' }],
-            ])
-        );
+        expect(reportMainBootStatusSpy).toHaveBeenCalledWith({ stage: 'main_initializing' });
+        expect(reportMainBootStatusSpy).toHaveBeenCalledWith({ stage: 'storage_ready' });
+        expect(reportMainBootStatusSpy).toHaveBeenCalledWith({ stage: 'persistence_ready' });
+        expect(reportMainBootStatusSpy).toHaveBeenCalledWith({ stage: 'secrets_ready' });
+        expect(reportMainBootStatusSpy).toHaveBeenCalledWith({ stage: 'windows_ready' });
+        expect(reportMainBootStatusSpy).toHaveBeenCalledWith({
+            stage: 'renderer_connecting',
+            blockingPrerequisite: 'renderer_first_report',
+        });
         expect(registerWindowStateBridgeSpy).toHaveBeenCalledWith({ id: 'window-main' });
         expect(createIPCHandlerInputSpy).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -256,6 +285,7 @@ describe('bootstrapMainProcess', () => {
         const beforeQuitHandlers = appEventHandlers.get('before-quit') ?? [];
         expect(beforeQuitHandlers).toHaveLength(1);
         beforeQuitHandlers[0]?.();
+        expect(ipcMainRemoveHandlerSpy).toHaveBeenCalled();
         expect(closePersistenceSpy).toHaveBeenCalled();
         expect(flushAppLoggerSpy).toHaveBeenCalled();
         expect(handleStartupFailureSpy).not.toHaveBeenCalled();
@@ -284,6 +314,7 @@ describe('bootstrapMainProcess', () => {
         expect(initializePersistenceSpy).toHaveBeenCalledWith({
             dbPath: path.join(defaultUserDataPath, 'runtime', 'beta', 'neonconductor.db'),
         });
+        expect(appSetAppUserModelIdSpy).toHaveBeenCalledWith('com.neonsy.neonconductor');
         expect(process.env['NEONCONDUCTOR_USER_DATA_PATH']).toBe(defaultUserDataPath);
         expect(process.env['NEONCONDUCTOR_RUNTIME_NAMESPACE']).toBe('beta');
         expect(process.env['NEONCONDUCTOR_PERSISTENCE_CHANNEL']).toBe('beta');

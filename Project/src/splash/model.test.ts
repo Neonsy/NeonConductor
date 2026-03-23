@@ -98,4 +98,61 @@ describe('splash model', () => {
         expect(subtitleTarget.textContent).toBe('Waiting for the active workspace profile.');
         expect(diagnosticsTarget.textContent).toBe('Elapsed: 1.3s');
     });
+
+    it('updates renderer-connecting and boot-stuck content in place without changing slot ownership', () => {
+        const headlineTarget = {
+            textContent: 'Starting NeonConductor',
+        };
+        const subtitleTarget = {
+            textContent: 'Initializing the desktop runtime.',
+        };
+        const diagnosticsTarget = {
+            textContent: '',
+        };
+        const target = {
+            body: {
+                dataset: {} as Record<string, string | undefined>,
+            },
+            getElementById: (id: string) => {
+                if (id === 'splash-headline') {
+                    return headlineTarget;
+                }
+                if (id === 'splash-subtitle') {
+                    return subtitleTarget;
+                }
+                if (id === 'splash-diagnostics') {
+                    return diagnosticsTarget;
+                }
+                return null;
+            },
+        };
+
+        applyBootStatus(target, {
+            stage: 'renderer_connecting',
+            headline: 'Connecting the renderer',
+            detail: 'Waiting for the renderer to report boot progress.',
+            isStuck: false,
+            blockingPrerequisite: 'renderer_first_report',
+            elapsedMs: 0,
+            source: 'main',
+        });
+
+        expect(headlineTarget.textContent).toBe('Connecting the renderer');
+        expect(subtitleTarget.textContent).toBe('Waiting for the renderer to report boot progress.');
+        expect(diagnosticsTarget.textContent).toBe('Current blocker: renderer boot report');
+
+        applyBootStatus(target, {
+            stage: 'boot_stuck',
+            headline: 'Startup is taking longer than expected',
+            detail: 'Waiting on: renderer boot report.',
+            isStuck: true,
+            blockingPrerequisite: 'renderer_first_report',
+            elapsedMs: 4300,
+            source: 'main',
+        });
+
+        expect(headlineTarget.textContent).toBe('Startup is taking longer than expected');
+        expect(subtitleTarget.textContent).toBe('Waiting on: renderer boot report.');
+        expect(diagnosticsTarget.textContent).toBe('Elapsed: 4.3s');
+    });
 });

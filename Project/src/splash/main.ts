@@ -6,8 +6,6 @@ import {
     type SplashBootstrapPayload,
 } from '@/app/shared/splashContract';
 
-import './styles.css';
-
 function initializeSplash(): void {
     const bootstrapPayload: SplashBootstrapPayload = window.neonSplash?.getBootstrapPayload() ?? {
         mascotSource: null,
