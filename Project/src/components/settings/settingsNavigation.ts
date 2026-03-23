@@ -140,7 +140,7 @@ export const PROFILE_SETTINGS_SUBSECTIONS: ReadonlyArray<SettingsSubsectionDefin
     {
         id: 'utility',
         label: 'Utility AI',
-        description: 'Reserved for the future shared utility model used by naming and commit generation.',
+        description: 'Reserved for the future shared utility model used by conversation naming and other small utility tasks.',
         availability: 'planned',
     },
 ];

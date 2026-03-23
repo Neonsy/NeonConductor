@@ -402,7 +402,7 @@ export function ProfileSettingsView({
                     <SettingsPlannedSection
                         eyebrow='Profiles'
                         title='Utility AI'
-                        description='The shared utility model will live here once conversation naming and commit-message generation move off dedicated raw model settings.'
+                        description='The shared utility model will live here once conversation naming and future utility tasks move off dedicated raw model settings.'
                     />
                 ) : null}
             </div>
