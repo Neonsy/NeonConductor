@@ -29,6 +29,8 @@ import type {
     ProviderSecretKind,
     PermissionPolicy,
     PermissionScopeKind,
+    McpDiscoveredToolRecord as RuntimeMcpDiscoveredToolRecord,
+    McpServerRecord as RuntimeMcpServerRecord,
     RuntimeRequestedTransportFamily,
     RuntimeMessagePartType,
     RuntimeReasoningEffort,
@@ -297,13 +299,9 @@ export interface ToolRecord {
     allowsIgnoredPaths: boolean;
 }
 
-export interface McpServerRecord {
-    id: string;
-    label: string;
-    authMode: 'none' | 'token';
-    connectionState: 'disconnected' | 'connected';
-    authState: 'unauthenticated' | 'authenticated';
-}
+export type McpDiscoveredToolRecord = RuntimeMcpDiscoveredToolRecord;
+
+export type McpServerRecord = RuntimeMcpServerRecord;
 
 export const runtimeEntityTypes = [
     'session',

@@ -197,6 +197,7 @@ export async function invalidateRuntimeResetQueries(utils: TrpcUtils): Promise<v
         utils.permission.listPending.invalidate(),
         utils.tool.list.invalidate(),
         utils.mcp.listServers.invalidate(),
+        utils.mcp.getServer.invalidate(),
     ].map(toVoidPromise);
 
     invalidations.push(toVoidPromise(utils.profile.getExecutionPreset.invalidate()));

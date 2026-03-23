@@ -12,6 +12,15 @@ import { applyRuntimeEventPatches } from '@/web/lib/runtime/runtimeEventPatches'
 
 import type { RuntimeEventDomain, RuntimeEventRecordV1 } from '@/app/backend/persistence/types';
 
+async function invalidateMcpQueries(utils: TrpcUtils, event: RuntimeEventRecordV1): Promise<void> {
+    await Promise.all([
+        utils.mcp.listServers.invalidate(),
+        utils.mcp.getServer.invalidate(
+            event.entityId ? { serverId: event.entityId } : undefined
+        ),
+    ]);
+}
+
 const runtimeEventInvalidators: Record<
     RuntimeEventDomain,
     (utils: TrpcUtils, event: RuntimeEventRecordV1, context: RuntimeEventContext) => Promise<void>
@@ -49,7 +58,7 @@ const runtimeEventInvalidators: Record<
     },
     permission: invalidateNoopDomain,
     tool: invalidateNoopDomain,
-    mcp: invalidateNoopDomain,
+    mcp: invalidateMcpQueries,
     runtime: async (utils, event) => {
         await invalidateRuntimeQueries(utils, event);
     },

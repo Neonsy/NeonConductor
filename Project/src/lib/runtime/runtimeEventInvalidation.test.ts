@@ -107,6 +107,7 @@ function createUtilsMock(calls: InvalidationCall[]) {
         },
         mcp: {
             listServers: createInvalidateLeaf(calls, 'mcp.listServers'),
+            getServer: createInvalidateLeaf(calls, 'mcp.getServer'),
         },
         sandbox: {
             list: createInvalidateLeaf(calls, 'sandbox.list'),

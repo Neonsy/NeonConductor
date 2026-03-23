@@ -826,11 +826,36 @@ CREATE TABLE tools_catalog (
 CREATE TABLE mcp_servers (
     id TEXT PRIMARY KEY,
     label TEXT NOT NULL,
-    auth_mode TEXT NOT NULL,
-    connection_state TEXT NOT NULL,
-    auth_state TEXT NOT NULL,
+    transport TEXT NOT NULL CHECK (transport IN ('stdio')),
+    command TEXT NOT NULL,
+    args_json TEXT NOT NULL DEFAULT '[]',
+    working_directory_mode TEXT NOT NULL CHECK (working_directory_mode IN ('inherit_process', 'workspace_root', 'fixed_path')),
+    fixed_working_directory TEXT NULL,
+    timeout_ms INTEGER NULL,
+    enabled INTEGER NOT NULL CHECK (enabled IN (0, 1)),
+    connection_state TEXT NOT NULL CHECK (connection_state IN ('disconnected', 'connecting', 'connected', 'error')),
+    last_error TEXT NULL,
+    connected_at TEXT NULL,
+    tool_discovery_state TEXT NOT NULL CHECK (tool_discovery_state IN ('idle', 'discovering', 'ready', 'error')),
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
+);
+
+CREATE TABLE mcp_server_tools (
+    server_id TEXT NOT NULL REFERENCES mcp_servers(id) ON DELETE CASCADE,
+    tool_name TEXT NOT NULL,
+    description TEXT NULL,
+    input_schema_json TEXT NOT NULL DEFAULT '{}',
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (server_id, tool_name)
+);
+
+CREATE TABLE mcp_server_env_secrets (
+    server_id TEXT NOT NULL REFERENCES mcp_servers(id) ON DELETE CASCADE,
+    env_key TEXT NOT NULL,
+    secret_value TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (server_id, env_key)
 );
 
 CREATE TABLE marketplace_packages (
@@ -888,6 +913,9 @@ CREATE INDEX idx_provider_auth_flows_profile_provider_status
 
 CREATE INDEX idx_provider_model_catalog_profile_provider_label
     ON provider_model_catalog(profile_id, provider_id, label);
+
+CREATE INDEX idx_mcp_servers_label
+    ON mcp_servers(label);
 
 CREATE INDEX idx_provider_models_provider_id
     ON provider_models(provider_id);

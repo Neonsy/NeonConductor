@@ -1,4 +1,6 @@
+import { err, ok } from 'neverthrow';
 import type { ToolInvokeInput } from '@/app/backend/runtime/contracts';
+import { mcpService } from '@/app/backend/runtime/services/mcp/service';
 import { getExecutionPreset } from '@/app/backend/runtime/services/profile/executionPreset';
 import { buildBlockedToolResult } from '@/app/backend/runtime/services/toolExecution/blocked';
 import {
@@ -278,9 +280,25 @@ export class ToolExecutionService {
             return blockedResult;
         }
 
-        const execution = await invokeToolHandler(definition.tool, executionArgs, {
-            ...(workspaceRootPath ? { cwd: workspaceRootPath } : {}),
-        });
+        const execution =
+            definition.source === 'mcp'
+                ? await (async () => {
+                      try {
+                          const output = await mcpService.invokeTool({
+                              toolId: definition.tool.id,
+                              args: executionArgs,
+                          });
+                          return ok(output);
+                      } catch (error) {
+                          return err({
+                              code: 'execution_failed' as const,
+                              message: error instanceof Error ? error.message : 'MCP tool execution failed.',
+                          });
+                      }
+                  })()
+                : await invokeToolHandler(definition.tool, executionArgs, {
+                      ...(workspaceRootPath ? { cwd: workspaceRootPath } : {}),
+                  });
         if (execution.isOk()) {
             await emitToolCompletedEvent({
                 toolId: definition.tool.id,

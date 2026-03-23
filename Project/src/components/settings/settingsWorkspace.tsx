@@ -196,7 +196,9 @@ export function SettingsWorkspace({
                 ) : null}
                 {selection.section === 'app' ? (
                     <AppSettingsView
+                        profileId={profileId}
                         subsection={selection.subsection as AppSettingsSubsectionId}
+                        {...(currentWorkspaceFingerprint ? { currentWorkspaceFingerprint } : {})}
                         onSubsectionChange={(subsection) => {
                             onSelectionChange({ section: 'app', subsection });
                         }}

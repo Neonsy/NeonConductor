@@ -62,7 +62,3 @@ export interface ToolInvokeInput extends ProfileInput {
     workspaceFingerprint?: string;
     sandboxId?: EntityId<'sb'>;
 }
-
-export interface McpByServerInput {
-    serverId: string;
-}

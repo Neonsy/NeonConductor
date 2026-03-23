@@ -7,6 +7,7 @@ import {
     appPromptLayerSettingsStore,
     builtInModePromptOverrideStore,
     conversationStore,
+    getPersistence,
     getDefaultProfileId,
     marketplaceStore,
     memoryStore,
@@ -374,10 +375,62 @@ describe('persistence stores: runtime domain', () => {
         expect(tools.some((tool) => tool.id === 'read_file')).toBe(true);
 
         const servers = await mcpStore.listServers();
-        expect(servers.some((server) => server.id === 'github')).toBe(true);
+        expect(servers).toEqual([]);
 
-        const connected = await mcpStore.connect('github');
-        expect(connected?.connectionState).toBe('connected');
+        const created = await mcpStore.createServer({
+            label: 'Repo MCP',
+            command: 'node',
+            args: ['server.js'],
+            workingDirectoryMode: 'inherit_process',
+            enabled: true,
+        });
+        expect(created.transport).toBe('stdio');
+        expect(created.connectionState).toBe('disconnected');
+        expect(created.toolDiscoveryState).toBe('idle');
+
+        await mcpStore.setEnvSecrets({
+            serverId: created.id,
+            values: [{ key: 'MCP_TOKEN', value: 'top-secret' }],
+        });
+        await mcpStore.replaceDiscoveredTools({
+            serverId: created.id,
+            tools: [
+                {
+                    name: 'echo_text',
+                    description: 'Echoes text back.',
+                    inputSchema: {
+                        type: 'object',
+                        properties: {
+                            text: {
+                                type: 'string',
+                            },
+                        },
+                        required: ['text'],
+                    },
+                },
+            ],
+            toolDiscoveryState: 'ready',
+            connectionState: 'connected',
+            connectedAt: new Date('2026-03-23T10:00:00.000Z').toISOString(),
+        });
+
+        expect(await mcpStore.getEnvSecrets(created.id)).toEqual({ MCP_TOKEN: 'top-secret' });
+        expect((await mcpStore.getServer(created.id))?.envKeys).toEqual(['MCP_TOKEN']);
+
+        const deleted = await mcpStore.deleteServer(created.id);
+        expect(deleted).toBe(true);
+        expect(await mcpStore.getServer(created.id)).toBeNull();
+        expect(await mcpStore.getEnvSecrets(created.id)).toEqual({});
+
+        const { sqlite } = getPersistence();
+        const toolRowCount = sqlite
+            .prepare('SELECT COUNT(*) AS count FROM mcp_server_tools WHERE server_id = ?')
+            .get(created.id) as { count: number };
+        const envRowCount = sqlite
+            .prepare('SELECT COUNT(*) AS count FROM mcp_server_env_secrets WHERE server_id = ?')
+            .get(created.id) as { count: number };
+        expect(toolRowCount.count).toBe(0);
+        expect(envRowCount.count).toBe(0);
     });
 
 

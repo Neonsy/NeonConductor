@@ -1,100 +1,174 @@
 import { mcpStore } from '@/app/backend/persistence/stores';
-import type { McpServerRecord } from '@/app/backend/persistence/types';
-import { mcpByServerInputSchema } from '@/app/backend/runtime/contracts';
-import { runtimeStatusEvent } from '@/app/backend/runtime/services/runtimeEventEnvelope';
+import {
+    mcpConnectInputSchema,
+    mcpCreateServerInputSchema,
+    mcpDeleteServerInputSchema,
+    mcpDisconnectInputSchema,
+    mcpGetServerInputSchema,
+    mcpSetEnvSecretsInputSchema,
+    mcpUpdateServerInputSchema,
+} from '@/app/backend/runtime/contracts';
+import { runtimeRemoveEvent, runtimeStatusEvent, runtimeUpsertEvent } from '@/app/backend/runtime/services/runtimeEventEnvelope';
 import { runtimeEventLogService } from '@/app/backend/runtime/services/runtimeEventLog';
+import { mcpService } from '@/app/backend/runtime/services/mcp/service';
 import { publicProcedure, router } from '@/app/backend/trpc/init';
-
-interface UnsupportedMcpMutationEnvelope {
-    reason: 'not_implemented';
-    code: 'not_implemented';
-    message: string;
-    unsupportedReason: string;
-    server: McpServerRecord;
-}
-
-function createUnsupportedMcpMutationEnvelope(
-    server: McpServerRecord,
-    action: 'connect' | 'disconnect'
-): UnsupportedMcpMutationEnvelope {
-    const unsupportedReason = 'MCP server lifecycle mutation is not implemented yet.';
-    return {
-        reason: 'not_implemented',
-        code: 'not_implemented',
-        message: `MCP ${action} is not implemented yet for server "${server.id}".`,
-        unsupportedReason,
-        server,
-    };
-}
 
 export const mcpRouter = router({
     listServers: publicProcedure.query(async () => {
-        return { servers: await mcpStore.listServers() };
+        return {
+            servers: await mcpStore.listServers(),
+        };
     }),
-    connect: publicProcedure.input(mcpByServerInputSchema).mutation(async ({ input }) => {
+    getServer: publicProcedure.input(mcpGetServerInputSchema).query(async ({ input }) => {
         const server = await mcpStore.getServer(input.serverId);
+        return server
+            ? {
+                  found: true as const,
+                  server,
+              }
+            : {
+                  found: false as const,
+              };
+    }),
+    createServer: publicProcedure.input(mcpCreateServerInputSchema).mutation(async ({ input }) => {
+        const server = await mcpStore.createServer(input);
+        await runtimeEventLogService.append(
+            runtimeUpsertEvent({
+                entityType: 'mcp',
+                domain: 'mcp',
+                entityId: server.id,
+                eventType: 'mcp.server.created',
+                payload: {
+                    server,
+                },
+            })
+        );
+        return {
+            server,
+        };
+    }),
+    updateServer: publicProcedure.input(mcpUpdateServerInputSchema).mutation(async ({ input }) => {
+        const server = await mcpStore.updateServer(input);
         if (!server) {
-            return { connected: false, reason: 'not_found' as const };
+            return {
+                updated: false as const,
+                reason: 'not_found' as const,
+            };
         }
 
         await runtimeEventLogService.append(
-            runtimeStatusEvent({
-            entityType: 'mcp',
-            domain: 'mcp',
-            entityId: server.id,
-            eventType: 'mcp.lifecycle.unsupported',
-            payload: {
-                serverId: server.id,
-                action: 'connect',
-                reason: 'not_implemented',
-                message: 'MCP connect is not implemented yet.',
-            },
+            runtimeUpsertEvent({
+                entityType: 'mcp',
+                domain: 'mcp',
+                entityId: server.id,
+                eventType: 'mcp.server.updated',
+                payload: {
+                    server,
+                },
             })
         );
 
         return {
-            connected: false,
-            ...createUnsupportedMcpMutationEnvelope(server, 'connect'),
+            updated: true as const,
+            server,
         };
     }),
-    disconnect: publicProcedure.input(mcpByServerInputSchema).mutation(async ({ input }) => {
-        const server = await mcpStore.getServer(input.serverId);
+    deleteServer: publicProcedure.input(mcpDeleteServerInputSchema).mutation(async ({ input }) => {
+        const deleted = await mcpStore.deleteServer(input.serverId);
+        if (deleted) {
+            await runtimeEventLogService.append(
+                runtimeRemoveEvent({
+                    entityType: 'mcp',
+                    domain: 'mcp',
+                    entityId: input.serverId,
+                    eventType: 'mcp.server.deleted',
+                    payload: {
+                        serverId: input.serverId,
+                    },
+                })
+            );
+        }
+
+        return {
+            deleted,
+        };
+    }),
+    connect: publicProcedure.input(mcpConnectInputSchema).mutation(async ({ input }) => {
+        const server = await mcpService.connect(input);
         if (!server) {
-            return { disconnected: false, reason: 'not_found' as const };
+            return {
+                connected: false as const,
+                reason: 'not_found' as const,
+            };
         }
 
         await runtimeEventLogService.append(
             runtimeStatusEvent({
-            entityType: 'mcp',
-            domain: 'mcp',
-            entityId: server.id,
-            eventType: 'mcp.lifecycle.unsupported',
-            payload: {
-                serverId: server.id,
-                action: 'disconnect',
-                reason: 'not_implemented',
-                message: 'MCP disconnect is not implemented yet.',
-            },
+                entityType: 'mcp',
+                domain: 'mcp',
+                entityId: server.id,
+                eventType: 'mcp.server.connection.updated',
+                payload: {
+                    server,
+                },
             })
         );
 
         return {
-            disconnected: false,
-            ...createUnsupportedMcpMutationEnvelope(server, 'disconnect'),
+            connected: server.connectionState === 'connected',
+            server,
         };
     }),
-    authStatus: publicProcedure.input(mcpByServerInputSchema).query(async ({ input }) => {
-        const server = await mcpStore.getServer(input.serverId);
+    disconnect: publicProcedure.input(mcpDisconnectInputSchema).mutation(async ({ input }) => {
+        const server = await mcpService.disconnect(input.serverId);
         if (!server) {
-            return { found: false as const };
+            return {
+                disconnected: false as const,
+                reason: 'not_found' as const,
+            };
         }
 
+        await runtimeEventLogService.append(
+            runtimeStatusEvent({
+                entityType: 'mcp',
+                domain: 'mcp',
+                entityId: server.id,
+                eventType: 'mcp.server.connection.updated',
+                payload: {
+                    server,
+                },
+            })
+        );
+
         return {
-            found: true as const,
-            serverId: server.id,
-            authMode: server.authMode,
-            authState: server.authState,
-            connectionState: server.connectionState,
+            disconnected: true as const,
+            server,
+        };
+    }),
+    setEnvSecrets: publicProcedure.input(mcpSetEnvSecretsInputSchema).mutation(async ({ input }) => {
+        const server = await mcpStore.setEnvSecrets(input);
+        if (!server) {
+            return {
+                updated: false as const,
+                reason: 'not_found' as const,
+            };
+        }
+
+        await runtimeEventLogService.append(
+            runtimeStatusEvent({
+                entityType: 'mcp',
+                domain: 'mcp',
+                entityId: server.id,
+                eventType: 'mcp.server.env.updated',
+                payload: {
+                    server,
+                },
+            })
+        );
+
+        return {
+            updated: true as const,
+            server,
         };
     }),
 });

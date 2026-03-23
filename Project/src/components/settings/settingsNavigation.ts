@@ -7,7 +7,7 @@ export type ModesSettingsSubsectionId = 'instructions';
 export type ProfileSettingsSubsectionId = 'management' | 'execution' | 'naming' | 'utility';
 export type ContextSettingsSubsectionId = 'workspace' | 'budgeting';
 export type RegistrySettingsSubsectionId = 'rules' | 'skills' | 'modes' | 'diagnostics';
-export type AppSettingsSubsectionId = 'privacy' | 'maintenance';
+export type AppSettingsSubsectionId = 'privacy' | 'mcp' | 'maintenance';
 
 export type SettingsSelection =
     | { section: 'kilo'; subsection: KiloSettingsSubsectionId }
@@ -192,6 +192,12 @@ export const APP_SETTINGS_SUBSECTIONS: ReadonlyArray<SettingsSubsectionDefinitio
         id: 'privacy',
         label: 'Privacy',
         description: 'Sensitive value redaction across the app.',
+        availability: 'available',
+    },
+    {
+        id: 'mcp',
+        label: 'MCP',
+        description: 'Manage backend-owned MCP stdio servers, env keys, and live tool discovery.',
         availability: 'available',
     },
     {

@@ -67,7 +67,7 @@ describe('runtime contracts: core flows', () => {
         expect(activeMode.activeMode.modeKey).toBe('code');
         expect(pendingPermissions.requests).toEqual([]);
         expect(tools.tools.length).toBeGreaterThan(0);
-        expect(mcpServers.servers.length).toBeGreaterThan(0);
+        expect(mcpServers.servers).toEqual([]);
     });
 
 

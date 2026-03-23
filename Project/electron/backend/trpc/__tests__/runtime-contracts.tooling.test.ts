@@ -43,8 +43,8 @@ describe('runtime contracts: permissions and tooling', () => {
         });
         expect(agentModes.modes.map((mode) => [mode.modeKey, mode.executionPolicy.toolCapabilities ?? []])).toEqual([
             ['ask', ['filesystem_read']],
-            ['code', ['filesystem_read', 'shell']],
-            ['debug', ['filesystem_read', 'shell']],
+            ['code', ['filesystem_read', 'shell', 'mcp']],
+            ['debug', ['filesystem_read', 'shell', 'mcp']],
             ['plan', []],
         ]);
 
@@ -264,22 +264,211 @@ describe('runtime contracts: permissions and tooling', () => {
         expect(effectivePolicy.source).toBe('profile_override');
 
         const mcpServers = await caller.mcp.listServers();
-        expect(mcpServers.servers.map((item) => item.id)).toContain('github');
+        expect(mcpServers.servers).toEqual([]);
 
-        const connected = await caller.mcp.connect({ serverId: 'github' });
+        const createdServer = await caller.mcp.createServer({
+            label: 'Invalid MCP',
+            command: 'missing-mcp-command',
+            args: [],
+            workingDirectoryMode: 'inherit_process',
+            enabled: true,
+        });
+        expect(createdServer.server.transport).toBe('stdio');
+
+        const connected = await caller.mcp.connect({
+            profileId,
+            serverId: createdServer.server.id,
+        });
         expect(connected.connected).toBe(false);
-        expect(connected.reason).toBe('not_implemented');
-
-        const authStatus = await caller.mcp.authStatus({ serverId: 'github' });
-        expect(authStatus.found).toBe(true);
-        if (!authStatus.found) {
-            throw new Error('Expected MCP auth status result.');
+        if (!connected.server) {
+            throw new Error('Expected MCP connect result to return the updated server.');
         }
-        expect(authStatus.connectionState).toBe('disconnected');
+        expect(connected.server.connectionState).toBe('error');
+        expect(connected.server.toolDiscoveryState).toBe('error');
 
-        const disconnected = await caller.mcp.disconnect({ serverId: 'github' });
-        expect(disconnected.disconnected).toBe(false);
-        expect(disconnected.reason).toBe('not_implemented');
+        const serverDetail = await caller.mcp.getServer({ serverId: createdServer.server.id });
+        expect(serverDetail.found).toBe(true);
+        if (!serverDetail.found) {
+            throw new Error('Expected MCP getServer result.');
+        }
+        expect(serverDetail.server.envKeys).toEqual([]);
+
+        const disconnected = await caller.mcp.disconnect({ serverId: createdServer.server.id });
+        expect(disconnected.disconnected).toBe(true);
+    });
+
+    it('connects a stdio MCP server, exposes tools only for mcp-capable modes, and routes detached permissions through mcp resources', async () => {
+        const caller = createCaller();
+        const fixturePath = path.join(
+            process.cwd(),
+            'electron',
+            'backend',
+            'trpc',
+            '__tests__',
+            'fixtures',
+            'mcp-stdio-server.cjs'
+        );
+
+        const createdServer = await caller.mcp.createServer({
+            label: 'Fixture MCP',
+            command: process.execPath,
+            args: [fixturePath],
+            workingDirectoryMode: 'inherit_process',
+            enabled: true,
+        });
+        await caller.mcp.setEnvSecrets({
+            serverId: createdServer.server.id,
+            values: [{ key: 'MCP_TEST_SECRET', value: 'top-secret' }],
+        });
+
+        const connected = await caller.mcp.connect({
+            profileId,
+            serverId: createdServer.server.id,
+        });
+        expect(connected.connected).toBe(true);
+        if (!connected.server) {
+            throw new Error('Expected connected MCP server record.');
+        }
+        expect(connected.server.tools.map((tool) => tool.name)).toEqual(['echo_text', 'read_secret']);
+
+        const agentModes = await caller.mode.list({
+            profileId,
+            topLevelTab: 'agent',
+        });
+        const codeMode = agentModes.modes.find((mode) => mode.modeKey === 'code');
+        const askMode = agentModes.modes.find((mode) => mode.modeKey === 'ask');
+        if (!codeMode || !askMode) {
+            throw new Error('Expected seeded agent modes.');
+        }
+
+        const codeTools = await resolveRuntimeToolsForMode({ mode: codeMode });
+        const askTools = await resolveRuntimeToolsForMode({ mode: askMode });
+        const mcpTool = codeTools.find((tool) => tool.id.startsWith('mcp__'));
+        expect(mcpTool).toBeDefined();
+        expect(askTools.some((tool) => tool.id.startsWith('mcp__'))).toBe(false);
+        if (!mcpTool) {
+            throw new Error('Expected MCP runtime tool exposure for agent.code.');
+        }
+
+        const firstAttempt = await caller.tool.invoke({
+            profileId,
+            toolId: mcpTool.id,
+            topLevelTab: 'agent',
+            modeKey: 'code',
+            args: {
+                text: 'hello',
+            },
+        });
+        expect(firstAttempt.ok).toBe(false);
+        if (firstAttempt.ok) {
+            throw new Error('Expected first MCP tool call to require approval.');
+        }
+        expect(firstAttempt.error).toBe('permission_required');
+        expect(firstAttempt.requestId).toBeDefined();
+
+        const pending = await caller.permission.listPending();
+        const mcpPermission = pending.requests.find((request) => request.id === firstAttempt.requestId);
+        expect(mcpPermission?.resource).toMatch(/^mcp:/);
+        expect(mcpPermission?.workspaceFingerprint).toBeUndefined();
+
+        const allowed = await caller.permission.resolve({
+            profileId,
+            requestId: firstAttempt.requestId as EntityId<'perm'>,
+            resolution: 'allow_once',
+        });
+        expect(allowed.updated).toBe(true);
+
+        const secondAttempt = await caller.tool.invoke({
+            profileId,
+            toolId: mcpTool.id,
+            topLevelTab: 'agent',
+            modeKey: 'code',
+            args: {
+                text: 'hello',
+            },
+        });
+        expect(secondAttempt.ok).toBe(true);
+        if (!secondAttempt.ok) {
+            throw new Error('Expected approved MCP tool call to succeed.');
+        }
+        expect(secondAttempt.output).toMatchObject({
+            content: [{ type: 'text', text: 'echo:hello' }],
+        });
+
+        const secretTool = codeTools.find((tool) => tool.id !== mcpTool.id && tool.id.startsWith('mcp__'));
+        if (!secretTool) {
+            throw new Error('Expected second MCP tool exposure for read_secret.');
+        }
+
+        const secretApproval = await caller.tool.invoke({
+            profileId,
+            toolId: secretTool.id,
+            topLevelTab: 'agent',
+            modeKey: 'code',
+            args: {},
+        });
+        if (secretApproval.ok || !secretApproval.requestId) {
+            throw new Error('Expected MCP secret tool to require approval.');
+        }
+        await caller.permission.resolve({
+            profileId,
+            requestId: secretApproval.requestId as EntityId<'perm'>,
+            resolution: 'allow_once',
+        });
+        const secretResult = await caller.tool.invoke({
+            profileId,
+            toolId: secretTool.id,
+            topLevelTab: 'agent',
+            modeKey: 'code',
+            args: {},
+        });
+        expect(secretResult.ok).toBe(true);
+        if (!secretResult.ok) {
+            throw new Error('Expected MCP secret tool call to succeed.');
+        }
+        expect(secretResult.output).toMatchObject({
+            content: [{ type: 'text', text: 'top-secret' }],
+        });
+
+        await caller.mcp.disconnect({ serverId: createdServer.server.id });
+        expect((await resolveRuntimeToolsForMode({ mode: codeMode })).some((tool) => tool.id.startsWith('mcp__'))).toBe(false);
+    });
+
+    it('fails closed for workspace_root MCP servers when no workspace fingerprint is supplied', async () => {
+        const caller = createCaller();
+        const fixturePath = path.join(
+            process.cwd(),
+            'electron',
+            'backend',
+            'trpc',
+            '__tests__',
+            'fixtures',
+            'mcp-stdio-server.cjs'
+        );
+
+        const createdServer = await caller.mcp.createServer({
+            label: 'Workspace Root MCP',
+            command: process.execPath,
+            args: [fixturePath],
+            workingDirectoryMode: 'workspace_root',
+            enabled: true,
+        });
+        await caller.mcp.setEnvSecrets({
+            serverId: createdServer.server.id,
+            values: [{ key: 'MCP_TEST_SECRET', value: 'still-there' }],
+        });
+
+        const connected = await caller.mcp.connect({
+            profileId,
+            serverId: createdServer.server.id,
+        });
+        expect(connected.connected).toBe(false);
+        if (!connected.server) {
+            throw new Error('Expected MCP connect failure to return the updated server.');
+        }
+        expect(connected.server.connectionState).toBe('error');
+        expect(connected.server.lastError).toContain('requires a selected workspace root');
+        expect(connected.server.envKeys).toEqual(['MCP_TEST_SECRET']);
     });
 
 

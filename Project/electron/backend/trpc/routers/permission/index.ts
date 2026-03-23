@@ -36,7 +36,9 @@ export const permissionRouter = router({
         const tools = await toolStore.list();
         const toolId = input.resource.startsWith('tool:') ? input.resource.slice('tool:'.length).split(':', 1)[0] : null;
         const tool = toolId ? tools.find((item) => item.id === toolId) : null;
-        const defaultPolicy = tool?.permissionPolicy ?? 'deny';
+        const isMcpResource = !tool && input.resource.startsWith('mcp:');
+        const defaultPolicy = tool?.permissionPolicy ?? (isMcpResource ? 'ask' : 'deny');
+        const capabilities = tool?.capabilities ?? (isMcpResource ? ['mcp'] : []);
 
         const resolved = await resolveEffectivePermissionPolicy({
             profileId: input.profileId,
@@ -44,7 +46,7 @@ export const permissionRouter = router({
             topLevelTab: input.topLevelTab,
             modeKey: input.modeKey,
             executionPreset: await getExecutionPreset(input.profileId),
-            capabilities: tool?.capabilities ?? [],
+            capabilities,
             toolDefaultPolicy: defaultPolicy,
             ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
         });

@@ -40,4 +40,7 @@ export type ToolExecutionResult =
 export interface ResolvedToolDefinition {
     tool: ToolRecord;
     resource: string;
+    source: 'native' | 'mcp';
+    mcpServerId?: string;
+    mcpToolName?: string;
 }

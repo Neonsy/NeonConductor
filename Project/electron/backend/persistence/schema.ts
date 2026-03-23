@@ -286,10 +286,33 @@ export interface ToolsCatalogTable {
 export interface McpServersTable {
     id: string;
     label: string;
-    auth_mode: string;
+    transport: string;
+    command: string;
+    args_json: string;
+    working_directory_mode: string;
+    fixed_working_directory: string | null;
+    timeout_ms: number | null;
+    enabled: 0 | 1;
     connection_state: string;
-    auth_state: string;
+    last_error: string | null;
+    connected_at: string | null;
+    tool_discovery_state: string;
     created_at: string;
+    updated_at: string;
+}
+
+export interface McpServerToolsTable {
+    server_id: string;
+    tool_name: string;
+    description: string | null;
+    input_schema_json: string;
+    updated_at: string;
+}
+
+export interface McpServerEnvSecretsTable {
+    server_id: string;
+    env_key: string;
+    secret_value: string;
     updated_at: string;
 }
 
@@ -782,6 +805,8 @@ export interface DatabaseSchema {
     runtime_events: RuntimeEventsTable;
     tools_catalog: ToolsCatalogTable;
     mcp_servers: McpServersTable;
+    mcp_server_tools: McpServerToolsTable;
+    mcp_server_env_secrets: McpServerEnvSecretsTable;
     schema_migrations: SchemaMigrationsTable;
     conversations: ConversationsTable;
     workspace_roots: WorkspaceRootsTable;

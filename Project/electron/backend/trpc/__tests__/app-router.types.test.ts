@@ -299,7 +299,7 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
             customInstructions?: string;
             whenToUse?: string;
             tags?: string[];
-            toolCapabilities?: Array<'filesystem_read' | 'filesystem_write' | 'shell' | 'git'>;
+            toolCapabilities?: Array<'filesystem_read' | 'filesystem_write' | 'shell' | 'git' | 'mcp'>;
         };
     }>();
     expectTypeOf<Inputs['prompt']['updateCustomMode']>().toExtend<{
@@ -315,7 +315,7 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
             customInstructions?: string;
             whenToUse?: string;
             tags?: string[];
-            toolCapabilities?: Array<'filesystem_read' | 'filesystem_write' | 'shell' | 'git'>;
+            toolCapabilities?: Array<'filesystem_read' | 'filesystem_write' | 'shell' | 'git' | 'mcp'>;
         };
     }>();
     expectTypeOf<Inputs['prompt']['deleteCustomMode']>().toExtend<{
@@ -632,9 +632,24 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
         servers: Array<{
             id: string;
             label: string;
-            authMode: 'none' | 'token';
-            connectionState: 'disconnected' | 'connected';
-            authState: 'unauthenticated' | 'authenticated';
+            transport: 'stdio';
+            command: string;
+            args: string[];
+            workingDirectoryMode: 'inherit_process' | 'workspace_root' | 'fixed_path';
+            fixedWorkingDirectory?: string;
+            timeoutMs?: number;
+            enabled: boolean;
+            connectionState: 'disconnected' | 'connecting' | 'connected' | 'error';
+            lastError?: string;
+            connectedAt?: string;
+            updatedAt: string;
+            toolDiscoveryState: 'idle' | 'discovering' | 'ready' | 'error';
+            tools: Array<{
+                name: string;
+                description?: string;
+                inputSchema: Record<string, unknown>;
+            }>;
+            envKeys: string[];
         }>;
     }>();
 
@@ -790,7 +805,7 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
                         description?: string;
                         whenToUse?: string;
                         tags?: string[];
-                        toolCapabilities?: Array<'filesystem_read' | 'filesystem_write' | 'shell' | 'git'>;
+                        toolCapabilities?: Array<'filesystem_read' | 'filesystem_write' | 'shell' | 'git' | 'mcp'>;
                     }>
                 >;
                 workspace?: Record<
@@ -802,7 +817,7 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
                         description?: string;
                         whenToUse?: string;
                         tags?: string[];
-                        toolCapabilities?: Array<'filesystem_read' | 'filesystem_write' | 'shell' | 'git'>;
+                        toolCapabilities?: Array<'filesystem_read' | 'filesystem_write' | 'shell' | 'git' | 'mcp'>;
                     }>
                 >;
             };
@@ -825,7 +840,7 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
             customInstructions?: string;
             whenToUse?: string;
             tags?: string[];
-            toolCapabilities?: Array<'filesystem_read' | 'filesystem_write' | 'shell' | 'git'>;
+            toolCapabilities?: Array<'filesystem_read' | 'filesystem_write' | 'shell' | 'git' | 'mcp'>;
         };
     }>();
     expectTypeOf<Outputs['session']['getAttachedSkills']>().toExtend<{

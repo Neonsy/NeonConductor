@@ -9,6 +9,7 @@ export * from '@/app/backend/runtime/contracts/parsers/conversation';
 export * from '@/app/backend/runtime/contracts/parsers/provider';
 export * from '@/app/backend/runtime/contracts/parsers/mode';
 export * from '@/app/backend/runtime/contracts/parsers/permission';
+export * from '@/app/backend/runtime/contracts/parsers/mcp';
 export * from '@/app/backend/runtime/contracts/parsers/plan';
 export * from '@/app/backend/runtime/contracts/parsers/orchestrator';
 export * from '@/app/backend/runtime/contracts/parsers/tooling';

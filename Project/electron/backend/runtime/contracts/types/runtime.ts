@@ -124,6 +124,9 @@ export interface RuntimeResetCounts {
     providerCatalogModels: number;
     providerDiscoverySnapshots: number;
     kiloModelRoutingPreferences: number;
+    mcpServers: number;
+    mcpServerTools: number;
+    mcpServerEnvSecrets: number;
     profiles: number;
     workspaceRoots: number;
     sandboxes: number;

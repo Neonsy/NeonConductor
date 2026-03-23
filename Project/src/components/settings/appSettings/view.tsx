@@ -1,5 +1,6 @@
 import { useState } from 'react';
 
+import { McpSettingsSection } from '@/web/components/settings/appSettings/mcpSection';
 import { SettingsSelectionRail } from '@/web/components/settings/shared/settingsSelectionRail';
 import { APP_SETTINGS_SUBSECTIONS, type AppSettingsSubsectionId } from '@/web/components/settings/settingsNavigation';
 import PrivacyModeToggle from '@/web/components/window/privacyModeToggle';
@@ -9,7 +10,9 @@ import { trpc } from '@/web/trpc/client';
 import { FACTORY_RESET_CONFIRMATION_TEXT } from '@/shared/contracts';
 
 interface AppSettingsViewProps {
+    profileId: string;
     subsection?: AppSettingsSubsectionId;
+    currentWorkspaceFingerprint?: string;
     onSubsectionChange?: (subsection: AppSettingsSubsectionId) => void;
 }
 
@@ -31,7 +34,12 @@ function AppSectionHeader({
     );
 }
 
-export function AppSettingsView({ subsection = 'privacy', onSubsectionChange }: AppSettingsViewProps) {
+export function AppSettingsView({
+    profileId,
+    subsection = 'privacy',
+    currentWorkspaceFingerprint,
+    onSubsectionChange,
+}: AppSettingsViewProps) {
     const [confirmOpen, setConfirmOpen] = useState(false);
     const [confirmationText, setConfirmationText] = useState('');
     const factoryResetMutation = trpc.runtime.factoryReset.useMutation({
@@ -90,6 +98,20 @@ export function AppSettingsView({ subsection = 'privacy', onSubsectionChange }: 
                                     <PrivacyModeToggle />
                                 </div>
                             </section>
+                        </>
+                    ) : null}
+
+                    {subsection === 'mcp' ? (
+                        <>
+                            <AppSectionHeader
+                                title='MCP'
+                                description='Manage backend-owned stdio MCP servers, secret-backed env keys, and live tool discovery for agent.code and agent.debug.'
+                            />
+
+                            <McpSettingsSection
+                                profileId={profileId}
+                                {...(currentWorkspaceFingerprint ? { currentWorkspaceFingerprint } : {})}
+                            />
                         </>
                     ) : null}
 

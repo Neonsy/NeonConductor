@@ -188,6 +188,7 @@ export function SettingsSheet({ open, profileId, onClose, onProfileActivated }: 
                         ) : null}
                         {selection.section === 'app' ? (
                             <AppSettingsView
+                                profileId={profileId}
                                 subsection={selection.subsection as AppSettingsSubsectionId}
                                 onSubsectionChange={(subsection) => {
                                     setSelection({ section: 'app', subsection });

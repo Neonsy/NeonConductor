@@ -39,6 +39,9 @@ async function resolveFullCounts(db: RuntimeResetDatabase): Promise<RuntimeReset
         providerCatalogModels,
         providerDiscoverySnapshots,
         kiloModelRoutingPreferences,
+        mcpServers,
+        mcpServerTools,
+        mcpServerEnvSecrets,
         profiles,
         workspaceRoots,
         sandboxes,
@@ -103,6 +106,12 @@ async function resolveFullCounts(db: RuntimeResetDatabase): Promise<RuntimeReset
             .selectFrom('kilo_model_routing_preferences')
             .select((eb) => eb.fn.count<number>('model_id').as('count'))
             .executeTakeFirst(),
+        db.selectFrom('mcp_servers').select((eb) => eb.fn.count<number>('id').as('count')).executeTakeFirst(),
+        db.selectFrom('mcp_server_tools').select((eb) => eb.fn.count<number>('tool_name').as('count')).executeTakeFirst(),
+        db
+            .selectFrom('mcp_server_env_secrets')
+            .select((eb) => eb.fn.count<number>('env_key').as('count'))
+            .executeTakeFirst(),
         db.selectFrom('profiles').select((eb) => eb.fn.count<number>('id').as('count')).executeTakeFirst(),
         db
             .selectFrom('workspace_roots')
@@ -145,6 +154,9 @@ async function resolveFullCounts(db: RuntimeResetDatabase): Promise<RuntimeReset
         providerCatalogModels: providerCatalogModels?.count ?? 0,
         providerDiscoverySnapshots: providerDiscoverySnapshots?.count ?? 0,
         kiloModelRoutingPreferences: kiloModelRoutingPreferences?.count ?? 0,
+        mcpServers: mcpServers?.count ?? 0,
+        mcpServerTools: mcpServerTools?.count ?? 0,
+        mcpServerEnvSecrets: mcpServerEnvSecrets?.count ?? 0,
         profiles: profiles?.count ?? 0,
         workspaceRoots: workspaceRoots?.count ?? 0,
         sandboxes: sandboxes?.count ?? 0,
@@ -176,6 +188,8 @@ async function applyFullReset(db: RuntimeResetDatabase): Promise<void> {
     await db.deleteFrom('provider_model_catalog').execute();
     await db.deleteFrom('provider_discovery_snapshots').execute();
     await db.deleteFrom('kilo_model_routing_preferences').execute();
+    await db.deleteFrom('mcp_server_env_secrets').execute();
+    await db.deleteFrom('mcp_server_tools').execute();
     await db.deleteFrom('permission_policy_overrides').execute();
     await db.deleteFrom('sandboxes').execute();
     await db.deleteFrom('workspace_roots').execute();

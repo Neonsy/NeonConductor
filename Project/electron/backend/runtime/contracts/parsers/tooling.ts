@@ -8,7 +8,7 @@ import {
     readProfileId,
     readString,
 } from '@/app/backend/runtime/contracts/parsers/helpers';
-import type { McpByServerInput, ToolInvokeInput } from '@/app/backend/runtime/contracts/types';
+import type { ToolInvokeInput } from '@/app/backend/runtime/contracts/types';
 
 export function parseToolInvokeInput(input: unknown): ToolInvokeInput {
     const source = readObject(input, 'input');
@@ -28,13 +28,4 @@ export function parseToolInvokeInput(input: unknown): ToolInvokeInput {
     };
 }
 
-export function parseMcpByServerInput(input: unknown): McpByServerInput {
-    const source = readObject(input, 'input');
-
-    return {
-        serverId: readString(source.serverId, 'serverId'),
-    };
-}
-
 export const toolInvokeInputSchema = createParser(parseToolInvokeInput);
-export const mcpByServerInputSchema = createParser(parseMcpByServerInput);

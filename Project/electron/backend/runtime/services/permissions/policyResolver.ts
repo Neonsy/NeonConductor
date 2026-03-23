@@ -10,6 +10,10 @@ export interface ResolvedPermissionPolicy {
 }
 
 function extractToolIdFromResource(resource: string): string | null {
+    if (resource.startsWith('mcp:')) {
+        return 'mcp';
+    }
+
     if (!resource.startsWith('tool:')) {
         return null;
     }

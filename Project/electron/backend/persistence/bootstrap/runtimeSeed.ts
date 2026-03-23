@@ -104,23 +104,6 @@ const TOOL_SEED = [
     },
 ] as const;
 
-const MCP_SERVER_SEED = [
-    {
-        id: 'filesystem',
-        label: 'Filesystem MCP',
-        authMode: 'none',
-        connectionState: 'disconnected',
-        authState: 'authenticated',
-    },
-    {
-        id: 'github',
-        label: 'GitHub MCP',
-        authMode: 'token',
-        connectionState: 'disconnected',
-        authState: 'unauthenticated',
-    },
-] as const;
-
 const MODE_SEED = [
     {
         topLevelTab: 'chat',
@@ -146,7 +129,7 @@ const MODE_SEED = [
         label: 'Agent Debug',
         prompt: {},
         executionPolicy: {
-            toolCapabilities: ['filesystem_read', 'shell'],
+            toolCapabilities: ['filesystem_read', 'shell', 'mcp'],
         },
     },
     {
@@ -155,7 +138,7 @@ const MODE_SEED = [
         label: 'Agent Code',
         prompt: {},
         executionPolicy: {
-            toolCapabilities: ['filesystem_read', 'shell'],
+            toolCapabilities: ['filesystem_read', 'shell', 'mcp'],
         },
     },
     {
@@ -271,13 +254,6 @@ export function seedRuntimeData(sqlite: DatabaseSync, defaultProfileId: string):
         `
             INSERT OR IGNORE INTO tools_catalog (id, label, description, permission_policy, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?)
-        `
-    );
-    const insertMcpServer = sqlite.prepare(
-        `
-            INSERT OR IGNORE INTO mcp_servers
-                (id, label, auth_mode, connection_state, auth_state, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
         `
     );
     const insertModeDefinition = sqlite.prepare(
@@ -418,18 +394,6 @@ export function seedRuntimeData(sqlite: DatabaseSync, defaultProfileId: string):
 
     for (const tool of TOOL_SEED) {
         insertTool.run(tool.id, tool.label, tool.description, tool.permissionPolicy, now, now);
-    }
-
-    for (const server of MCP_SERVER_SEED) {
-        insertMcpServer.run(
-            server.id,
-            server.label,
-            server.authMode,
-            server.connectionState,
-            server.authState,
-            now,
-            now
-        );
     }
 
     for (const mode of MODE_SEED) {
