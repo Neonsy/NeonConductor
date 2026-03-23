@@ -34,6 +34,7 @@ describe('runtime contracts: core flows', () => {
         const defaults = await caller.provider.getDefaults({ profileId });
         const modes = await caller.mode.list({ profileId, topLevelTab: 'agent' });
         const activeMode = await caller.mode.getActive({ profileId, topLevelTab: 'agent' });
+        const promptLayers = await caller.prompt.getSettings({ profileId });
         const pendingPermissions = await caller.permission.listPending();
         const tools = await caller.tool.list();
         const mcpServers = await caller.mcp.listServers();
@@ -59,6 +60,7 @@ describe('runtime contracts: core flows', () => {
         expect(shellBootstrap.providerModels.length).toBeGreaterThan(0);
         expect(shellBootstrap.specialistDefaults).toEqual([]);
         expect(defaults.defaults.providerId).toBe('kilo');
+        expect(promptLayers.settings.topLevelInstructions.chat).toBe('');
         expect(providers.providers.length).toBeGreaterThan(0);
         expect(modes.modes.some((mode) => mode.modeKey === 'code')).toBe(true);
         expect(activeMode.activeMode.modeKey).toBe('code');

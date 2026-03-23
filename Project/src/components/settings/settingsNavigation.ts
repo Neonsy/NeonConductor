@@ -97,7 +97,7 @@ export const KILO_SETTINGS_SUBSECTIONS: ReadonlyArray<SettingsSubsectionDefiniti
         id: 'instructions',
         label: 'Modes & Instructions',
         description: 'Global Kilo prompt layers, built-in mode overrides, and custom mode management.',
-        availability: 'planned',
+        availability: 'available',
     },
     {
         id: 'marketplace',

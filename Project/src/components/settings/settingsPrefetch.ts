@@ -23,6 +23,11 @@ interface SettingsPrefetchInput {
                 prefetch: (input: undefined) => Promise<void>;
             };
         };
+        prompt: {
+            getSettings: {
+                prefetch: (input: { profileId: string }) => Promise<void>;
+            };
+        };
         context: {
             getGlobalSettings: {
                 prefetch: (input: undefined) => Promise<void>;
@@ -57,6 +62,7 @@ export function prefetchSettingsData(input: SettingsPrefetchInput): void {
         input.trpcUtils.provider.getAuthState.prefetch({ profileId: input.profileId, providerId: 'kilo' }),
         input.trpcUtils.provider.getAccountContext.prefetch({ profileId: input.profileId, providerId: 'kilo' }),
         input.trpcUtils.profile.list.prefetch(undefined),
+        input.trpcUtils.prompt.getSettings.prefetch({ profileId: input.profileId }),
         input.trpcUtils.context.getGlobalSettings.prefetch(undefined),
         input.trpcUtils.context.getProfileSettings.prefetch({ profileId: input.profileId }),
         input.trpcUtils.composer.getSettings.prefetch(undefined),

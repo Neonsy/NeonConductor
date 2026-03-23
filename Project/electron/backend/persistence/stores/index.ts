@@ -4,6 +4,7 @@ export { checkpointChangesetStore } from '@/app/backend/persistence/stores/runti
 export { checkpointSnapshotStore } from '@/app/backend/persistence/stores/runtime/checkpointSnapshotStore';
 export { appComposerMediaSettingsStore } from '@/app/backend/persistence/stores/runtime/appComposerMediaSettingsStore';
 export { appContextSettingsStore } from '@/app/backend/persistence/stores/runtime/appContextSettingsStore';
+export { appPromptLayerSettingsStore } from '@/app/backend/persistence/stores/runtime/appPromptLayerSettingsStore';
 export { conversationStore } from '@/app/backend/persistence/stores/conversation/conversationStore';
 export { diffStore } from '@/app/backend/persistence/stores/runtime/diffStore';
 export { kiloRoutingPreferenceStore } from '@/app/backend/persistence/stores/provider/kiloRoutingPreferenceStore';

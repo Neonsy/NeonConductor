@@ -1,1 +1,1 @@
-export type * from '@/app/backend/runtime/contracts/types/mode';
+export * from '@/app/backend/runtime/contracts/types/mode';

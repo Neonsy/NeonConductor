@@ -3,6 +3,7 @@ import { beforeEach } from 'vitest';
 import { getDefaultProfileId, getPersistence, resetPersistenceForTests } from '@/app/backend/persistence/db';
 import {
     accountSnapshotStore,
+    appPromptLayerSettingsStore,
     checkpointStore,
     conversationStore,
     diffStore,
@@ -37,6 +38,7 @@ export const persistenceStoreProfileId = getDefaultProfileId();
 
 export {
     accountSnapshotStore,
+    appPromptLayerSettingsStore,
     checkpointStore,
     conversationStore,
     diffStore,

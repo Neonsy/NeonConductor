@@ -10,6 +10,7 @@ describe('settingsPrefetch', () => {
         const authStatePrefetch = vi.fn().mockResolvedValue(undefined);
         const accountContextPrefetch = vi.fn().mockResolvedValue(undefined);
         const profileListPrefetch = vi.fn().mockResolvedValue(undefined);
+        const promptSettingsPrefetch = vi.fn().mockResolvedValue(undefined);
         const globalSettingsPrefetch = vi.fn().mockResolvedValue(undefined);
         const profileSettingsPrefetch = vi.fn().mockResolvedValue(undefined);
         const composerSettingsPrefetch = vi.fn().mockResolvedValue(undefined);
@@ -39,6 +40,11 @@ describe('settingsPrefetch', () => {
                 profile: {
                     list: {
                         prefetch: profileListPrefetch,
+                    },
+                },
+                prompt: {
+                    getSettings: {
+                        prefetch: promptSettingsPrefetch,
                     },
                 },
                 context: {
@@ -84,6 +90,9 @@ describe('settingsPrefetch', () => {
             providerId: 'kilo',
         });
         expect(profileListPrefetch).toHaveBeenCalledOnce();
+        expect(promptSettingsPrefetch).toHaveBeenCalledWith({
+            profileId: 'profile_default',
+        });
         expect(globalSettingsPrefetch).toHaveBeenCalledOnce();
         expect(profileSettingsPrefetch).toHaveBeenCalledWith({
             profileId: 'profile_default',

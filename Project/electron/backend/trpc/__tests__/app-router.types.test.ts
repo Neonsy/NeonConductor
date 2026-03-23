@@ -243,6 +243,22 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
     expectTypeOf<Inputs['profile']['delete']>().toExtend<{
         profileId: string;
     }>();
+    expectTypeOf<Inputs['prompt']['getSettings']>().toExtend<{
+        profileId: string;
+    }>();
+    expectTypeOf<Inputs['prompt']['setAppGlobalInstructions']>().toExtend<{
+        profileId: string;
+        value: string;
+    }>();
+    expectTypeOf<Inputs['prompt']['setProfileGlobalInstructions']>().toExtend<{
+        profileId: string;
+        value: string;
+    }>();
+    expectTypeOf<Inputs['prompt']['setTopLevelInstructions']>().toExtend<{
+        profileId: string;
+        topLevelTab: 'chat' | 'agent' | 'orchestrator';
+        value: string;
+    }>();
 
     expectTypeOf<Inputs['session']['list']>().toExtend<{
         profileId: string;
@@ -639,6 +655,13 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
             name: string;
             tags?: string[];
         }>;
+    }>();
+    expectTypeOf<Outputs['prompt']['getSettings']>().toExtend<{
+        settings: {
+            appGlobalInstructions: string;
+            profileGlobalInstructions: string;
+            topLevelInstructions: Record<'chat' | 'agent' | 'orchestrator', string>;
+        };
     }>();
     expectTypeOf<Outputs['session']['getAttachedSkills']>().toExtend<{
         sessionId: string;

@@ -51,6 +51,12 @@ CREATE TABLE app_context_settings (
     updated_at TEXT NOT NULL
 );
 
+CREATE TABLE app_prompt_layer_settings (
+    id TEXT PRIMARY KEY,
+    global_instructions TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
 CREATE TABLE app_composer_media_settings (
     id TEXT PRIMARY KEY,
     max_image_attachments_per_message INTEGER NOT NULL,
@@ -850,6 +856,9 @@ CREATE TABLE marketplace_assets (
 -- Default singleton rows for runtime settings.
 INSERT INTO app_context_settings (id, enabled, mode, percent, updated_at)
 VALUES ('global', 1, 'percent', 90, CURRENT_TIMESTAMP);
+
+INSERT INTO app_prompt_layer_settings (id, global_instructions, updated_at)
+VALUES ('global', '', CURRENT_TIMESTAMP);
 
 INSERT INTO app_composer_media_settings (id, max_image_attachments_per_message, image_compression_concurrency, updated_at)
 VALUES ('global', 10, 2, CURRENT_TIMESTAMP);

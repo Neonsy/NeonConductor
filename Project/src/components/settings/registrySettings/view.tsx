@@ -7,16 +7,12 @@ import {
     type RegistrySettingsSubsectionId,
 } from '@/web/components/settings/settingsNavigation';
 import { Button } from '@/web/components/ui/button';
+import { formatModePromptMarkdown } from '@/app/backend/runtime/contracts';
 
 interface RegistrySettingsViewProps {
     profileId: string;
     subsection?: RegistrySettingsSubsectionId;
     onSubsectionChange?: (subsection: RegistrySettingsSubsectionId) => void;
-}
-
-function readModeInstructionsMarkdown(prompt: Record<string, unknown>): string {
-    const instructionsMarkdown = prompt['instructionsMarkdown'];
-    return typeof instructionsMarkdown === 'string' ? instructionsMarkdown : '';
 }
 
 function RegistrySectionHeader({
@@ -312,7 +308,7 @@ export function RegistrySettingsScreen({
                                 assets={resolvedModes}
                                 renderTitle={(asset) => asset.label}
                                 renderSubtitle={(asset) => `${asset.modeKey} · ${asset.assetKey}`}
-                                renderBodyMarkdown={(asset) => readModeInstructionsMarkdown(asset.prompt)}
+                                renderBodyMarkdown={(asset) => formatModePromptMarkdown(asset.prompt)}
                             />
                             <AssetSection
                                 title='Discovered Global Modes'
@@ -320,7 +316,7 @@ export function RegistrySettingsScreen({
                                 assets={discoveredGlobalModes}
                                 renderTitle={(asset) => asset.label}
                                 renderSubtitle={(asset) => asset.assetKey}
-                                renderBodyMarkdown={(asset) => readModeInstructionsMarkdown(asset.prompt)}
+                                renderBodyMarkdown={(asset) => formatModePromptMarkdown(asset.prompt)}
                             />
                             {controller.selectedWorkspaceFingerprint ? (
                                 <AssetSection
@@ -329,7 +325,7 @@ export function RegistrySettingsScreen({
                                     assets={discoveredWorkspaceModes}
                                     renderTitle={(asset) => asset.label}
                                     renderSubtitle={(asset) => asset.assetKey}
-                                    renderBodyMarkdown={(asset) => readModeInstructionsMarkdown(asset.prompt)}
+                                    renderBodyMarkdown={(asset) => formatModePromptMarkdown(asset.prompt)}
                                 />
                             ) : null}
                         </>

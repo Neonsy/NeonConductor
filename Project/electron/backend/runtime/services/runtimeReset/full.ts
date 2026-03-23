@@ -8,6 +8,7 @@ async function resolveFullCounts(db: RuntimeResetDatabase): Promise<RuntimeReset
     const [
         settings,
         appContextSettings,
+        appPromptLayerSettings,
         profileContextSettings,
         sessionContextCompactions,
         modelLimitOverrides,
@@ -43,6 +44,10 @@ async function resolveFullCounts(db: RuntimeResetDatabase): Promise<RuntimeReset
     ] = await Promise.all([
         db.selectFrom('settings').select((eb) => eb.fn.count<number>('id').as('count')).executeTakeFirst(),
         db.selectFrom('app_context_settings').select((eb) => eb.fn.count<number>('id').as('count')).executeTakeFirst(),
+        db
+            .selectFrom('app_prompt_layer_settings')
+            .select((eb) => eb.fn.count<number>('id').as('count'))
+            .executeTakeFirst(),
         db.selectFrom('profile_context_settings').select((eb) => eb.fn.count<number>('profile_id').as('count')).executeTakeFirst(),
         db.selectFrom('session_context_compactions').select((eb) => eb.fn.count<number>('session_id').as('count')).executeTakeFirst(),
         db.selectFrom('model_limit_overrides').select((eb) => eb.fn.count<number>('model_id').as('count')).executeTakeFirst(),
@@ -104,6 +109,7 @@ async function resolveFullCounts(db: RuntimeResetDatabase): Promise<RuntimeReset
     return {
         settings: settings?.count ?? 0,
         appContextSettings: appContextSettings?.count ?? 0,
+        appPromptLayerSettings: appPromptLayerSettings?.count ?? 0,
         profileContextSettings: profileContextSettings?.count ?? 0,
         sessionContextCompactions: sessionContextCompactions?.count ?? 0,
         modelLimitOverrides: modelLimitOverrides?.count ?? 0,
@@ -150,6 +156,7 @@ async function applyFullReset(db: RuntimeResetDatabase): Promise<void> {
     await db.deleteFrom('profile_context_settings').execute();
     await db.deleteFrom('session_context_compactions').execute();
     await db.deleteFrom('app_context_settings').execute();
+    await db.deleteFrom('app_prompt_layer_settings').execute();
     await db.deleteFrom('model_limit_overrides').execute();
     await db.deleteFrom('mode_definitions').execute();
     await db.deleteFrom('rulesets').execute();

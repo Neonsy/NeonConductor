@@ -189,14 +189,16 @@ tags:
             profileId,
             workspaceFingerprint,
         });
-        expect(
-            resolvedWorkspace.resolved.modes.find((mode) => mode.topLevelTab === 'agent' && mode.modeKey === 'review')
-                ?.label
-        ).toBe('Workspace Review');
-        expect(
-            resolvedWorkspace.resolved.modes.find((mode) => mode.topLevelTab === 'agent' && mode.modeKey === 'review')
-                ?.executionPolicy.toolCapabilities
-        ).toEqual(['filesystem_read']);
+        const resolvedWorkspaceReviewMode = resolvedWorkspace.resolved.modes.find(
+            (mode) => mode.topLevelTab === 'agent' && mode.modeKey === 'review'
+        );
+        expect(resolvedWorkspaceReviewMode?.label).toBe('Workspace Review');
+        expect(resolvedWorkspaceReviewMode?.executionPolicy.toolCapabilities).toEqual(['filesystem_read']);
+        expect(resolvedWorkspaceReviewMode?.prompt.roleDefinition).toBeUndefined();
+        expect(resolvedWorkspaceReviewMode?.prompt.customInstructions).toContain('Workspace Review');
+        expect(resolvedWorkspaceReviewMode?.prompt.customInstructions).toContain(
+            'Prefer workspace-specific constraints.'
+        );
         expect(resolvedWorkspace.resolved.modes.some((mode) => mode.modeKey === 'workspace-orchestrator')).toBe(false);
         expect(resolvedWorkspace.resolved.rulesets.find((ruleset) => ruleset.assetKey === 'coding_rules')?.name).toBe(
             'Workspace Rules'

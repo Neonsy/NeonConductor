@@ -16,6 +16,7 @@ describe('settingsRoutePrefetch', () => {
         const authStatePrefetch = vi.fn().mockResolvedValue(undefined);
         const accountContextPrefetch = vi.fn().mockResolvedValue(undefined);
         const profileListPrefetch = vi.fn().mockResolvedValue(undefined);
+        const promptSettingsPrefetch = vi.fn().mockResolvedValue(undefined);
         const globalSettingsPrefetch = vi.fn().mockResolvedValue(undefined);
         const profileSettingsPrefetch = vi.fn().mockResolvedValue(undefined);
         const composerSettingsPrefetch = vi.fn().mockResolvedValue(undefined);
@@ -39,6 +40,9 @@ describe('settingsRoutePrefetch', () => {
                     getActive: {
                         ensureData: ensureActiveProfile,
                     },
+                },
+                prompt: {
+                    getSettings: { prefetch: promptSettingsPrefetch },
                 },
                 context: {
                     getGlobalSettings: { prefetch: globalSettingsPrefetch },
@@ -71,6 +75,9 @@ describe('settingsRoutePrefetch', () => {
         expect(accountContextPrefetch).toHaveBeenCalledWith({
             profileId: 'profile_default',
             providerId: 'kilo',
+        });
+        expect(promptSettingsPrefetch).toHaveBeenCalledWith({
+            profileId: 'profile_default',
         });
         expect(profileSettingsPrefetch).toHaveBeenCalledWith({
             profileId: 'profile_default',

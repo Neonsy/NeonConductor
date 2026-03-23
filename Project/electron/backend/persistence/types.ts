@@ -254,6 +254,11 @@ export interface ProviderDiscoverySnapshotRecord {
 
 export type AppContextSettingsRecord = ContextGlobalSettings;
 
+export interface AppPromptLayerSettingsRecord {
+    globalInstructions: string;
+    updatedAt: string;
+}
+
 export type AppComposerMediaSettingsRecord = ComposerMediaSettings;
 
 export type ProfileContextSettingsRecord = ContextProfileSettings;

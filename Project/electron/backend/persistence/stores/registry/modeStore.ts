@@ -3,6 +3,7 @@ import { parseEnumValue } from '@/app/backend/persistence/stores/shared/rowParse
 import { isJsonRecord, isJsonString, isJsonUnknownArray, parseJsonValue } from '@/app/backend/persistence/stores/shared/utils';
 import type { ModeDefinitionRecord } from '@/app/backend/persistence/types';
 import {
+    normalizeModePromptDefinition,
     registryScopes,
     registrySourceKinds,
     toolCapabilities as knownToolCapabilities,
@@ -71,7 +72,7 @@ function mapModeDefinition(row: {
         modeKey: row.mode_key,
         label: row.label,
         assetKey: row.asset_key,
-        prompt: parseJsonValue(row.prompt_json, {}, isJsonRecord),
+        prompt: normalizeModePromptDefinition(parseJsonValue(row.prompt_json, {}, isJsonRecord)),
         executionPolicy: parseExecutionPolicy(row.execution_policy_json),
         source: row.source,
         sourceKind: parseEnumValue(row.source_kind, 'mode_definitions.source_kind', registrySourceKinds),

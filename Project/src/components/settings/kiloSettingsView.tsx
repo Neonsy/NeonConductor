@@ -1,12 +1,12 @@
 import { ProviderAuthenticationSection } from '@/web/components/settings/providerSettings/authenticationSection';
 import { ProviderDefaultModelSection } from '@/web/components/settings/providerSettings/defaultModelSection';
 import { formatDateTime, formatInteger } from '@/web/components/settings/providerSettings/helpers';
+import { KiloModesInstructionsScreen } from '@/web/components/settings/kiloPromptLayers/modesInstructionsScreen';
 import { KiloAccountSection } from '@/web/components/settings/providerSettings/kiloAccountSection';
 import { KiloRoutingSection } from '@/web/components/settings/providerSettings/kiloRoutingSection';
 import { useProviderSettingsController } from '@/web/components/settings/providerSettings/hooks/useProviderSettingsController';
 import { ProviderSpecialistDefaultsSection } from '@/web/components/settings/providerSettings/specialistDefaultsSection';
 import { SettingsFeedbackBanner } from '@/web/components/settings/shared/settingsFeedbackBanner';
-import { SettingsPlannedSection } from '@/web/components/settings/shared/settingsPlannedSection';
 import { SettingsSelectionRail } from '@/web/components/settings/shared/settingsSelectionRail';
 import { KILO_SETTINGS_SUBSECTIONS, type KiloSettingsSubsectionId } from '@/web/components/settings/settingsNavigation';
 import { SensitiveValue } from '@/web/components/ui/sensitiveValue';
@@ -398,20 +398,15 @@ export function KiloSettingsView({ profileId, subsection = 'account', onSubsecti
                 ) : null}
                 {subsection === 'models' ? <KiloGatewayModelsScreen profileId={profileId} controller={controller} /> : null}
                 {subsection === 'routing' ? <KiloRoutingScreen controller={controller} /> : null}
-                {subsection === 'instructions' ? (
-                    <SettingsPlannedSection
-                        eyebrow='Kilo'
-                        title='Modes & Instructions'
-                        description='Global Kilo prompt layers, shipped mode overrides, and custom mode management will live here.'
-                        warning='Editing built-in Kilo, chat, agent, or orchestrator instructions can make the app behave differently than shipped defaults. This surface should ship with warnings and reset-to-default controls.'
-                    />
-                ) : null}
+                {subsection === 'instructions' ? <KiloModesInstructionsScreen profileId={profileId} /> : null}
                 {subsection === 'marketplace' ? (
-                    <SettingsPlannedSection
-                        eyebrow='Kilo'
-                        title='Marketplace'
-                        description='Marketplace installation and update management are intentionally reserved here instead of being mixed into registry diagnostics.'
-                    />
+                    <div className='border-border/70 bg-card/50 rounded-[24px] border p-5'>
+                        <p className='text-sm font-semibold'>Marketplace is not available yet</p>
+                        <p className='text-muted-foreground mt-2 text-sm leading-6'>
+                            Marketplace installation and update management remain reserved here instead of being mixed
+                            into registry diagnostics.
+                        </p>
+                    </div>
                 ) : null}
             </div>
         </section>

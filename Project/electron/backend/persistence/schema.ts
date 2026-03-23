@@ -212,6 +212,12 @@ export interface AppContextSettingsTable {
     updated_at: string;
 }
 
+export interface AppPromptLayerSettingsTable {
+    id: string;
+    global_instructions: string;
+    updated_at: string;
+}
+
 export interface AppComposerMediaSettingsTable {
     id: string;
     max_image_attachments_per_message: number;
@@ -757,6 +763,7 @@ export interface DatabaseSchema {
     permissions: PermissionsTable;
     settings: SettingsTable;
     app_context_settings: AppContextSettingsTable;
+    app_prompt_layer_settings: AppPromptLayerSettingsTable;
     app_composer_media_settings: AppComposerMediaSettingsTable;
     profile_context_settings: ProfileContextSettingsTable;
     session_context_compactions: SessionContextCompactionsTable;

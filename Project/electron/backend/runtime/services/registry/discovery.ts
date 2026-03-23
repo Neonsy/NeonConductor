@@ -4,6 +4,7 @@ import { getPersistence } from '@/app/backend/persistence/db';
 import { nowIso } from '@/app/backend/persistence/stores/shared/utils';
 import type {
     ModeExecutionPolicy,
+    ModePromptDefinition,
     RegistryPresetKey,
     RegistryScope,
     RuleActivationMode,
@@ -67,9 +68,9 @@ function readToolCapabilities(value: unknown): ToolCapability[] | undefined {
     return capabilities.length > 0 ? Array.from(new Set(capabilities)) : undefined;
 }
 
-function mapModePrompt(bodyMarkdown: string): Record<string, unknown> {
+function mapModePrompt(bodyMarkdown: string): ModePromptDefinition {
     return {
-        instructionsMarkdown: bodyMarkdown,
+        customInstructions: bodyMarkdown.trim(),
     };
 }
 
@@ -78,7 +79,7 @@ interface DiscoveredModeInput {
     modeKey: string;
     label: string;
     assetKey: string;
-    prompt: Record<string, unknown>;
+    prompt: ModePromptDefinition;
     executionPolicy: ModeExecutionPolicy;
     source: Extract<RegistrySourceKind, 'global_file' | 'workspace_file'>;
     sourceKind: Extract<RegistrySourceKind, 'global_file' | 'workspace_file'>;

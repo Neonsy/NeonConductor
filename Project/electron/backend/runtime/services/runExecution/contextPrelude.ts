@@ -1,6 +1,7 @@
 import { sessionAttachedRuleStore, sessionAttachedSkillStore } from '@/app/backend/persistence/stores';
 import type { RegistryPresetKey, RulesetDefinition, SkillfileDefinition, TopLevelTab } from '@/app/backend/runtime/contracts';
 import { getRegistryPresetKeysForMode, type ModeDefinition } from '@/app/backend/runtime/contracts';
+import { getPromptLayerSettings } from '@/app/backend/runtime/services/promptLayers/service';
 import { readRegistryMarkdownBody } from '@/app/backend/runtime/services/registry/filesystem';
 import { resolveContextualAssetDefinitions } from '@/app/backend/runtime/services/registry/resolution';
 import { listResolvedRegistry, resolveRulesetsByAssetKeys, resolveSkillfilesByAssetKeys } from '@/app/backend/runtime/services/registry/service';
@@ -13,9 +14,8 @@ import {
 } from '@/app/backend/runtime/services/runExecution/errors';
 import type { RunContextMessage } from '@/app/backend/runtime/services/runExecution/types';
 
-function readModeInstructions(mode: ModeDefinition): string | undefined {
-    const instructions = mode.prompt['instructionsMarkdown'];
-    return typeof instructions === 'string' && instructions.trim().length > 0 ? instructions.trim() : undefined;
+function readPromptText(value: string | undefined): string | undefined {
+    return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
 }
 
 function createSystemMessage(label: string, body: string): RunContextMessage {
@@ -47,6 +47,9 @@ function buildWorkspacePrelude(input: {
 }
 
 function buildAgentPrelude(input: {
+    appGlobalInstructions?: string;
+    profileGlobalInstructions?: string;
+    topLevelInstructions?: string;
     mode: ModeDefinition;
     rulesets: RulesetDefinition[];
     skillfiles: SkillfileDefinition[];
@@ -57,9 +60,29 @@ function buildAgentPrelude(input: {
         prelude.push(input.workspacePrelude);
     }
 
-    const modeInstructions = readModeInstructions(input.mode);
-    if (modeInstructions) {
-        prelude.push(createSystemMessage(`Active mode: ${input.mode.label}`, modeInstructions));
+    const appGlobalInstructions = readPromptText(input.appGlobalInstructions);
+    if (appGlobalInstructions) {
+        prelude.push(createSystemMessage('App instructions', appGlobalInstructions));
+    }
+
+    const profileGlobalInstructions = readPromptText(input.profileGlobalInstructions);
+    if (profileGlobalInstructions) {
+        prelude.push(createSystemMessage('Profile instructions', profileGlobalInstructions));
+    }
+
+    const topLevelInstructions = readPromptText(input.topLevelInstructions);
+    if (topLevelInstructions) {
+        prelude.push(createSystemMessage(`Built-in ${input.mode.topLevelTab} instructions`, topLevelInstructions));
+    }
+
+    const roleDefinition = readPromptText(input.mode.prompt.roleDefinition);
+    if (roleDefinition) {
+        prelude.push(createSystemMessage(`Active mode role: ${input.mode.label}`, roleDefinition));
+    }
+
+    const customInstructions = readPromptText(input.mode.prompt.customInstructions);
+    if (customInstructions) {
+        prelude.push(createSystemMessage(`Active mode instructions: ${input.mode.label}`, customInstructions));
     }
 
     for (const ruleset of input.rulesets) {
@@ -133,15 +156,12 @@ export async function buildSessionSystemPrelude(input: {
         mode: ModeDefinition;
     };
 }): Promise<RunExecutionResult<RunContextMessage[]>> {
-    if (input.topLevelTab === 'chat') {
-        return okRunExecution([]);
-    }
-
     const presetKeys = getRegistryPresetKeysForMode({
         topLevelTab: input.topLevelTab,
         modeKey: input.resolvedMode.mode.modeKey,
     });
-    const [resolvedRegistry, attachedRuleRows, attachedSkillRows] = await Promise.all([
+    const [promptLayerSettings, resolvedRegistry, attachedRuleRows, attachedSkillRows] = await Promise.all([
+        getPromptLayerSettings(input.profileId),
         listResolvedRegistry({
             profileId: input.profileId,
             ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
@@ -213,6 +233,9 @@ export async function buildSessionSystemPrelude(input: {
 
     return okRunExecution(
         buildAgentPrelude({
+            appGlobalInstructions: promptLayerSettings.appGlobalInstructions,
+            profileGlobalInstructions: promptLayerSettings.profileGlobalInstructions,
+            topLevelInstructions: promptLayerSettings.topLevelInstructions[input.topLevelTab],
             mode: input.resolvedMode.mode,
             rulesets: Array.from(activeRulesetsByAssetKey.values()),
             skillfiles: activeSkillfiles,

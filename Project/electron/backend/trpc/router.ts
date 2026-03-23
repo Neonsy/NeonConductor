@@ -15,6 +15,7 @@ import { modeRouter } from '@/app/backend/trpc/routers/mode';
 import { orchestratorRouter } from '@/app/backend/trpc/routers/orchestrator';
 import { permissionRouter } from '@/app/backend/trpc/routers/permission';
 import { planRouter } from '@/app/backend/trpc/routers/plan';
+import { promptRouter } from '@/app/backend/trpc/routers/prompt';
 import { profileRouter } from '@/app/backend/trpc/routers/profile';
 import { providerRouter } from '@/app/backend/trpc/routers/provider';
 import { registryRouter } from '@/app/backend/trpc/routers/registry';
@@ -40,6 +41,7 @@ export const appRouter = router({
     mcp: mcpRouter,
     memory: memoryRouter,
     mode: modeRouter,
+    prompt: promptRouter,
     plan: planRouter,
     orchestrator: orchestratorRouter,
     profile: profileRouter,

@@ -93,6 +93,7 @@ export interface RuntimeFactoryResetInput {
 export interface RuntimeResetCounts {
     settings: number;
     appContextSettings: number;
+    appPromptLayerSettings: number;
     profileContextSettings: number;
     sessionContextCompactions: number;
     modelLimitOverrides: number;

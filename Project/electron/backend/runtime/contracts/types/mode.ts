@@ -13,6 +13,56 @@ export interface ModeExecutionPolicy {
     toolCapabilities?: ToolCapability[];
 }
 
+export interface ModePromptDefinition {
+    roleDefinition?: string;
+    customInstructions?: string;
+}
+
+function isModePromptRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function readPromptText(value: unknown): string | undefined {
+    return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+export function normalizeModePromptDefinition(value: unknown): ModePromptDefinition {
+    if (!isModePromptRecord(value)) {
+        return {};
+    }
+
+    const roleDefinition = readPromptText(value['roleDefinition']);
+    const customInstructions = readPromptText(value['customInstructions']) ?? readPromptText(value['instructionsMarkdown']);
+
+    return {
+        ...(roleDefinition ? { roleDefinition } : {}),
+        ...(customInstructions ? { customInstructions } : {}),
+    };
+}
+
+export function formatModePromptMarkdown(prompt: ModePromptDefinition): string {
+    const roleDefinition = readPromptText(prompt.roleDefinition);
+    const customInstructions = readPromptText(prompt.customInstructions);
+
+    if (!roleDefinition && !customInstructions) {
+        return '';
+    }
+
+    if (!roleDefinition && customInstructions) {
+        return customInstructions;
+    }
+
+    const sections: string[] = [];
+    if (roleDefinition) {
+        sections.push(`## Role Definition\n\n${roleDefinition}`);
+    }
+    if (customInstructions) {
+        sections.push(`## Custom Instructions\n\n${customInstructions}`);
+    }
+
+    return sections.join('\n\n');
+}
+
 export interface ModeDefinition {
     id: string;
     profileId: string;
@@ -20,7 +70,7 @@ export interface ModeDefinition {
     modeKey: string;
     label: string;
     assetKey: string;
-    prompt: Record<string, unknown>;
+    prompt: ModePromptDefinition;
     executionPolicy: ModeExecutionPolicy;
     source: string;
     sourceKind: RegistrySourceKind;

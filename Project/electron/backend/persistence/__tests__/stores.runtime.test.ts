@@ -4,6 +4,7 @@ import { parseEntityId } from '@/app/backend/persistence/stores/shared/rowParser
 import {
     registerPersistenceStoreHooks,
     accountSnapshotStore,
+    appPromptLayerSettingsStore,
     conversationStore,
     getDefaultProfileId,
     marketplaceStore,
@@ -22,6 +23,17 @@ import {
 registerPersistenceStoreHooks();
 
 describe('persistence stores: runtime domain', () => {
+    it('supports app prompt-layer singleton settings', async () => {
+        const initial = await appPromptLayerSettingsStore.get();
+        expect(initial.globalInstructions).toBe('');
+
+        const updated = await appPromptLayerSettingsStore.setGlobalInstructions('Global instructions');
+        expect(updated.globalInstructions).toBe('Global instructions');
+
+        const persisted = await appPromptLayerSettingsStore.get();
+        expect(persisted.globalInstructions).toBe('Global instructions');
+    });
+
     it('supports permission store decision transitions', async () => {
         const profileId = getDefaultProfileId();
         const created = await permissionStore.create({

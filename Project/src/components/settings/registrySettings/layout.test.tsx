@@ -54,7 +54,7 @@ describe('registry settings layout', () => {
     it('wraps long registry content in an inner scroll container', () => {
         const html = renderToStaticMarkup(<RegistrySettingsScreen profileId='profile_default' />);
 
-        expect(html).toContain('flex h-full min-h-0 min-w-0 flex-col overflow-hidden');
-        expect(html).toContain('min-h-0 flex-1 overflow-y-auto p-4');
+        expect(html).toContain('grid h-full min-h-0 min-w-0 overflow-hidden xl:grid-cols-[280px_minmax(0,1fr)]');
+        expect(html).toContain('min-h-0 flex-1 overflow-y-auto p-5 md:p-6');
     });
 });
