@@ -45,6 +45,15 @@ describe('electron-builder packaging config', () => {
         expect(contents).not.toContain('.mjs');
     });
 
+    it('keeps route auto code splitting enabled while excluding tsr split virtual modules from the Babel compiler pass', () => {
+        const viteConfigPath = path.join(process.cwd(), 'vite.config.ts');
+        const contents = readFileSync(viteConfigPath, 'utf8');
+
+        expect(contents).toContain('autoCodeSplitting: true');
+        expect(contents).toContain("exclude: /\\?tsr-split=/");
+        expect(contents).toContain("plugins: ['jsx', 'typescript']");
+    });
+
     it('sanitizes the Electron child environment', () => {
         const childEnv = resolveElectronChildEnv({
             ELECTRON_RUN_AS_NODE: '1',

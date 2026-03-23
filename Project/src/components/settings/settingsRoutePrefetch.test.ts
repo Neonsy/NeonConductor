@@ -83,4 +83,124 @@ describe('settingsRoutePrefetch', () => {
             profileId: 'profile_default',
         });
     });
+
+    it('returns without throwing when the warm profile queries reject', async () => {
+        const listProvidersPrefetch = vi.fn().mockResolvedValue(undefined);
+        const defaultsPrefetch = vi.fn().mockResolvedValue(undefined);
+        const listModelsPrefetch = vi.fn().mockResolvedValue(undefined);
+        const authStatePrefetch = vi.fn().mockResolvedValue(undefined);
+        const accountContextPrefetch = vi.fn().mockResolvedValue(undefined);
+        const profileListPrefetch = vi.fn().mockResolvedValue(undefined);
+        const promptSettingsPrefetch = vi.fn().mockResolvedValue(undefined);
+        const globalSettingsPrefetch = vi.fn().mockResolvedValue(undefined);
+        const profileSettingsPrefetch = vi.fn().mockResolvedValue(undefined);
+        const composerSettingsPrefetch = vi.fn().mockResolvedValue(undefined);
+        const listWorkspaceRootsPrefetch = vi.fn().mockResolvedValue(undefined);
+        const registryPrefetch = vi.fn().mockResolvedValue(undefined);
+
+        await expect(
+            prefetchSettingsRouteData({
+                trpcUtils: {
+                    provider: {
+                        listProviders: { prefetch: listProvidersPrefetch },
+                        getDefaults: { prefetch: defaultsPrefetch },
+                        listModels: { prefetch: listModelsPrefetch },
+                        getAuthState: { prefetch: authStatePrefetch },
+                        getAccountContext: { prefetch: accountContextPrefetch },
+                    },
+                    profile: {
+                        list: {
+                            ensureData: vi.fn().mockRejectedValue(new Error('profile list failed')),
+                            prefetch: profileListPrefetch,
+                        },
+                        getActive: {
+                            ensureData: vi.fn().mockResolvedValue({
+                                activeProfileId: 'profile_default',
+                            }),
+                        },
+                    },
+                    prompt: {
+                        getSettings: { prefetch: promptSettingsPrefetch },
+                    },
+                    context: {
+                        getGlobalSettings: { prefetch: globalSettingsPrefetch },
+                        getProfileSettings: { prefetch: profileSettingsPrefetch },
+                    },
+                    composer: {
+                        getSettings: { prefetch: composerSettingsPrefetch },
+                    },
+                    runtime: {
+                        listWorkspaceRoots: { prefetch: listWorkspaceRootsPrefetch },
+                    },
+                    registry: {
+                        listResolved: { prefetch: registryPrefetch },
+                    },
+                },
+            })
+        ).resolves.toBeUndefined();
+
+        expect(listProvidersPrefetch).not.toHaveBeenCalled();
+        expect(defaultsPrefetch).not.toHaveBeenCalled();
+        expect(promptSettingsPrefetch).not.toHaveBeenCalled();
+    });
+
+    it('returns without throwing when the warm profile payloads are invalid', async () => {
+        const listProvidersPrefetch = vi.fn().mockResolvedValue(undefined);
+        const defaultsPrefetch = vi.fn().mockResolvedValue(undefined);
+        const listModelsPrefetch = vi.fn().mockResolvedValue(undefined);
+        const authStatePrefetch = vi.fn().mockResolvedValue(undefined);
+        const accountContextPrefetch = vi.fn().mockResolvedValue(undefined);
+        const profileListPrefetch = vi.fn().mockResolvedValue(undefined);
+        const promptSettingsPrefetch = vi.fn().mockResolvedValue(undefined);
+        const globalSettingsPrefetch = vi.fn().mockResolvedValue(undefined);
+        const profileSettingsPrefetch = vi.fn().mockResolvedValue(undefined);
+        const composerSettingsPrefetch = vi.fn().mockResolvedValue(undefined);
+        const listWorkspaceRootsPrefetch = vi.fn().mockResolvedValue(undefined);
+        const registryPrefetch = vi.fn().mockResolvedValue(undefined);
+
+        await expect(
+            prefetchSettingsRouteData({
+                trpcUtils: {
+                    provider: {
+                        listProviders: { prefetch: listProvidersPrefetch },
+                        getDefaults: { prefetch: defaultsPrefetch },
+                        listModels: { prefetch: listModelsPrefetch },
+                        getAuthState: { prefetch: authStatePrefetch },
+                        getAccountContext: { prefetch: accountContextPrefetch },
+                    },
+                    profile: {
+                        list: {
+                            ensureData: vi.fn().mockResolvedValue(undefined),
+                            prefetch: profileListPrefetch,
+                        },
+                        getActive: {
+                            ensureData: vi.fn().mockResolvedValue({
+                                activeProfileId: 'profile_default',
+                            }),
+                        },
+                    },
+                    prompt: {
+                        getSettings: { prefetch: promptSettingsPrefetch },
+                    },
+                    context: {
+                        getGlobalSettings: { prefetch: globalSettingsPrefetch },
+                        getProfileSettings: { prefetch: profileSettingsPrefetch },
+                    },
+                    composer: {
+                        getSettings: { prefetch: composerSettingsPrefetch },
+                    },
+                    runtime: {
+                        listWorkspaceRoots: { prefetch: listWorkspaceRootsPrefetch },
+                    },
+                    registry: {
+                        listResolved: { prefetch: registryPrefetch },
+                    },
+                },
+            })
+        ).resolves.toBeUndefined();
+
+        expect(listProvidersPrefetch).not.toHaveBeenCalled();
+        expect(defaultsPrefetch).not.toHaveBeenCalled();
+        expect(promptSettingsPrefetch).not.toHaveBeenCalled();
+    });
 });

@@ -199,4 +199,88 @@ describe('workspaceBootLoader', () => {
         expect(modeActivePrefetch).not.toHaveBeenCalled();
         expect(shellBootstrapPrefetch).not.toHaveBeenCalled();
     });
+
+    it('returns without throwing when warm profile queries reject', async () => {
+        resetWorkspaceBootPrefetchForTests();
+
+        const modeListPrefetch = vi.fn().mockResolvedValue(undefined);
+        const modeActivePrefetch = vi.fn().mockResolvedValue(undefined);
+        const shellBootstrapPrefetch = vi.fn().mockResolvedValue(undefined);
+
+        await expect(
+            prefetchWorkspaceBootData({
+                trpcUtils: {
+                    profile: {
+                        list: {
+                            ensureData: vi.fn().mockRejectedValue(new Error('profile list failed')),
+                        },
+                        getActive: {
+                            ensureData: vi.fn().mockResolvedValue({
+                                activeProfileId: 'profile_default',
+                            }),
+                        },
+                    },
+                    mode: {
+                        list: {
+                            prefetch: modeListPrefetch,
+                        },
+                        getActive: {
+                            prefetch: modeActivePrefetch,
+                        },
+                    },
+                    runtime: {
+                        getShellBootstrap: {
+                            prefetch: shellBootstrapPrefetch,
+                        },
+                    },
+                },
+            })
+        ).resolves.toBeUndefined();
+
+        expect(modeListPrefetch).not.toHaveBeenCalled();
+        expect(modeActivePrefetch).not.toHaveBeenCalled();
+        expect(shellBootstrapPrefetch).not.toHaveBeenCalled();
+    });
+
+    it('returns without throwing when warm profile payloads are invalid', async () => {
+        resetWorkspaceBootPrefetchForTests();
+
+        const modeListPrefetch = vi.fn().mockResolvedValue(undefined);
+        const modeActivePrefetch = vi.fn().mockResolvedValue(undefined);
+        const shellBootstrapPrefetch = vi.fn().mockResolvedValue(undefined);
+
+        await expect(
+            prefetchWorkspaceBootData({
+                trpcUtils: {
+                    profile: {
+                        list: {
+                            ensureData: vi.fn().mockResolvedValue(undefined),
+                        },
+                        getActive: {
+                            ensureData: vi.fn().mockResolvedValue({
+                                activeProfileId: 'profile_default',
+                            }),
+                        },
+                    },
+                    mode: {
+                        list: {
+                            prefetch: modeListPrefetch,
+                        },
+                        getActive: {
+                            prefetch: modeActivePrefetch,
+                        },
+                    },
+                    runtime: {
+                        getShellBootstrap: {
+                            prefetch: shellBootstrapPrefetch,
+                        },
+                    },
+                },
+            })
+        ).resolves.toBeUndefined();
+
+        expect(modeListPrefetch).not.toHaveBeenCalled();
+        expect(modeActivePrefetch).not.toHaveBeenCalled();
+        expect(shellBootstrapPrefetch).not.toHaveBeenCalled();
+    });
 });

@@ -33,6 +33,11 @@ function buildPreloadOptions(input: string, outputFileName: string) {
 // https://vite.dev/config/
 export default defineConfig(async () => {
     const reactCompilerPlugin = await babel({
+        include: /\.[jt]sx?$/,
+        exclude: /\?tsr-split=/,
+        parserOpts: {
+            plugins: ['jsx', 'typescript'],
+        },
         presets: [reactCompilerPreset()],
     });
 

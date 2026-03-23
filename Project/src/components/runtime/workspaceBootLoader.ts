@@ -1,5 +1,9 @@
 import { BOOT_CRITICAL_QUERY_OPTIONS } from '@/web/components/runtime/startupQueryOptions';
-import { resolveActiveWorkspaceProfileId } from '@/web/components/runtime/workspaceSurfaceModel';
+import {
+    isWarmActiveProfilePayload,
+    isWarmProfileListPayload,
+    resolveWarmProfileId,
+} from '@/web/components/runtime/profileWarmData';
 
 interface WorkspaceBootLoaderInput {
     trpcUtils: {
@@ -36,15 +40,22 @@ interface WorkspaceBootLoaderInput {
 let workspaceBootPrefetchPromise: Promise<void> | null = null;
 
 export async function prefetchWorkspaceBootData(input: WorkspaceBootLoaderInput): Promise<void> {
-    const [profileList, activeProfile] = await Promise.all([
+    const [profileListResult, activeProfileResult] = await Promise.allSettled([
         input.trpcUtils.profile.list.ensureData(undefined, BOOT_CRITICAL_QUERY_OPTIONS),
         input.trpcUtils.profile.getActive.ensureData(undefined, BOOT_CRITICAL_QUERY_OPTIONS),
     ]);
 
-    const resolvedProfileId = resolveActiveWorkspaceProfileId({
-        activeProfileId: undefined,
-        serverActiveProfileId: activeProfile.activeProfileId,
-        profiles: profileList.profiles,
+    if (profileListResult.status !== 'fulfilled' || activeProfileResult.status !== 'fulfilled') {
+        return;
+    }
+
+    if (!isWarmProfileListPayload(profileListResult.value) || !isWarmActiveProfilePayload(activeProfileResult.value)) {
+        return;
+    }
+
+    const resolvedProfileId = resolveWarmProfileId({
+        profileListPayload: profileListResult.value,
+        activeProfilePayload: activeProfileResult.value,
     });
     if (!resolvedProfileId) {
         return;
