@@ -710,6 +710,8 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
                         modeKey: string;
                         label: string;
                         description?: string;
+                        whenToUse?: string;
+                        groups?: string[];
                     }>
                 >;
                 workspace?: Record<
@@ -719,6 +721,8 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
                         modeKey: string;
                         label: string;
                         description?: string;
+                        whenToUse?: string;
+                        groups?: string[];
                     }>
                 >;
             };

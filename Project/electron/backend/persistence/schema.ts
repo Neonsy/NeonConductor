@@ -499,6 +499,8 @@ export interface ModeDefinitionsTable {
     workspace_fingerprint: string | null;
     origin_path: string | null;
     description: string | null;
+    when_to_use: string | null;
+    groups_json: string;
     tags_json: string;
     enabled: 0 | 1;
     precedence: number;

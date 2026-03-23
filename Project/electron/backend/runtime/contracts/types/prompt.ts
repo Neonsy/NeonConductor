@@ -7,6 +7,8 @@ export interface FileBackedCustomModeSettingsItem {
     modeKey: string;
     label: string;
     description?: string;
+    whenToUse?: string;
+    groups?: string[];
 }
 
 export interface FileBackedCustomModeSettingsByScope {

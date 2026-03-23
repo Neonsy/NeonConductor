@@ -60,6 +60,8 @@ vi.mock('@/web/components/settings/modesSettings/useModesInstructionsSettingsCon
                                     modeKey: 'review',
                                     label: 'Global Chat Review',
                                     description: 'Global chat review mode',
+                                    whenToUse: 'Use when a conversation needs a strict review pass.',
+                                    groups: ['quality', 'review'],
                                 },
                             ],
                             agent: [],
@@ -74,6 +76,8 @@ vi.mock('@/web/components/settings/modesSettings/useModesInstructionsSettingsCon
                                     modeKey: 'workspace-orchestrator',
                                     label: 'Workspace Orchestrator',
                                     description: 'Workspace orchestrator mode',
+                                    whenToUse: 'Use when a workspace needs coordination.',
+                                    groups: ['coordination'],
                                 },
                             ],
                         },
@@ -159,6 +163,8 @@ vi.mock('@/web/components/settings/modesSettings/useModesInstructionsSettingsCon
                         modeKey: 'review',
                         label: 'Global Chat Review',
                         description: 'Global chat review mode',
+                        whenToUse: 'Use when a conversation needs a strict review pass.',
+                        groups: ['quality', 'review'],
                     },
                 ],
                 agent: [],
@@ -173,6 +179,8 @@ vi.mock('@/web/components/settings/modesSettings/useModesInstructionsSettingsCon
                         modeKey: 'workspace-orchestrator',
                         label: 'Workspace Orchestrator',
                         description: 'Workspace orchestrator mode',
+                        whenToUse: 'Use when a workspace needs coordination.',
+                        groups: ['coordination'],
                     },
                 ],
             },
@@ -223,6 +231,8 @@ describe('modes instructions screen', () => {
         expect(html).toContain('Export Portable Mode JSON');
         expect(html).toContain('Global Chat Review');
         expect(html).toContain('Workspace Orchestrator');
+        expect(html).toContain('Use when a conversation needs a strict review pass.');
+        expect(html).toContain('quality');
         expect(html).toContain('Import will write into the global');
         expect(html).toContain('Copy JSON');
     });

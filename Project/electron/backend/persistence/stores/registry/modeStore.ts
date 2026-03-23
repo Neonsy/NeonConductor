@@ -3,6 +3,7 @@ import { parseEnumValue } from '@/app/backend/persistence/stores/shared/rowParse
 import { isJsonRecord, isJsonString, isJsonUnknownArray, parseJsonValue } from '@/app/backend/persistence/stores/shared/utils';
 import type { ModeDefinitionRecord } from '@/app/backend/persistence/types';
 import {
+    normalizeModeMetadata,
     normalizeModePromptDefinition,
     registryScopes,
     registrySourceKinds,
@@ -43,6 +44,14 @@ function parseTags(value: string): string[] | undefined {
     return parsed.length > 0 ? parsed : undefined;
 }
 
+function parseGroups(value: string): string[] | undefined {
+    const parsed = parseJsonValue(value, [], isJsonUnknownArray)
+        .filter(isJsonString)
+        .map((item) => item.trim())
+        .filter((item) => item.length > 0);
+    return parsed.length > 0 ? Array.from(new Set(parsed)) : undefined;
+}
+
 function mapModeDefinition(row: {
     id: string;
     profile_id: string;
@@ -58,6 +67,8 @@ function mapModeDefinition(row: {
     workspace_fingerprint: string | null;
     origin_path: string | null;
     description: string | null;
+    when_to_use: string | null;
+    groups_json: string;
     tags_json: string;
     enabled: 0 | 1;
     precedence: number;
@@ -65,6 +76,11 @@ function mapModeDefinition(row: {
     updated_at: string;
 }): ModeDefinitionRecord {
     const tags = parseTags(row.tags_json);
+    const groups = parseGroups(row.groups_json);
+    const metadata = normalizeModeMetadata({
+        whenToUse: row.when_to_use,
+        groups,
+    });
     return {
         id: row.id,
         profileId: row.profile_id,
@@ -80,6 +96,7 @@ function mapModeDefinition(row: {
         ...(row.workspace_fingerprint ? { workspaceFingerprint: row.workspace_fingerprint } : {}),
         ...(row.origin_path ? { originPath: row.origin_path } : {}),
         ...(row.description ? { description: row.description } : {}),
+        ...metadata,
         ...(tags ? { tags } : {}),
         enabled: row.enabled === 1,
         precedence: row.precedence,
@@ -112,6 +129,8 @@ export class ModeStore {
                 'workspace_fingerprint',
                 'origin_path',
                 'description',
+                'when_to_use',
+                'groups_json',
                 'tags_json',
                 'enabled',
                 'precedence',
@@ -150,6 +169,8 @@ export class ModeStore {
                 'workspace_fingerprint',
                 'origin_path',
                 'description',
+                'when_to_use',
+                'groups_json',
                 'tags_json',
                 'enabled',
                 'precedence',

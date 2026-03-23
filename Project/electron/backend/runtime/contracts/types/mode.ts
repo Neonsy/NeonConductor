@@ -18,6 +18,17 @@ export interface ModePromptDefinition {
     customInstructions?: string;
 }
 
+function readPromptTextArray(value: unknown): string[] | undefined {
+    if (!Array.isArray(value)) {
+        return undefined;
+    }
+
+    const items = value
+        .map((item) => (typeof item === 'string' ? item.trim() : ''))
+        .filter((item) => item.length > 0);
+    return items.length > 0 ? Array.from(new Set(items)) : undefined;
+}
+
 function isModePromptRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -37,6 +48,20 @@ export function normalizeModePromptDefinition(value: unknown): ModePromptDefinit
     return {
         ...(roleDefinition ? { roleDefinition } : {}),
         ...(customInstructions ? { customInstructions } : {}),
+    };
+}
+
+export function normalizeModeMetadata(value: unknown): { whenToUse?: string; groups?: string[] } {
+    if (!isModePromptRecord(value)) {
+        return {};
+    }
+
+    const whenToUse = readPromptText(value['whenToUse']);
+    const groups = readPromptTextArray(value['groups']);
+
+    return {
+        ...(whenToUse ? { whenToUse } : {}),
+        ...(groups ? { groups } : {}),
     };
 }
 
@@ -78,6 +103,8 @@ export interface ModeDefinition {
     workspaceFingerprint?: string;
     originPath?: string;
     description?: string;
+    whenToUse?: string;
+    groups?: string[];
     tags?: string[];
     enabled: boolean;
     precedence: number;

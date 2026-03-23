@@ -229,6 +229,23 @@ function FileBackedModeInventorySection(input: {
                                         <p className='text-muted-foreground text-sm leading-6'>
                                             {mode.description ?? 'No description set for this file-backed mode yet.'}
                                         </p>
+                                        {mode.whenToUse ? (
+                                            <p className='text-muted-foreground text-sm leading-6'>
+                                                <span className='text-foreground font-medium'>When to use:</span>{' '}
+                                                {mode.whenToUse}
+                                            </p>
+                                        ) : null}
+                                        {mode.groups && mode.groups.length > 0 ? (
+                                            <div className='flex flex-wrap gap-2 pt-1'>
+                                                {mode.groups.map((group) => (
+                                                    <span
+                                                        key={`${mode.modeKey}:${group}`}
+                                                        className='border-border/70 bg-background/80 rounded-full border px-3 py-1 text-[11px] font-medium'>
+                                                        {group}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        ) : null}
                                     </div>
 
                                     <div className='flex flex-wrap gap-2'>
@@ -395,8 +412,8 @@ export function ModesInstructionsScreen(input: {
                             <h6 className='text-sm font-semibold'>Import Portable Mode JSON</h6>
                             <p className='text-muted-foreground text-sm leading-6'>
                                 Supported fields: <code>slug</code>, <code>name</code>, <code>description</code>,{' '}
-                                <code>roleDefinition</code>, and <code>customInstructions</code>. Unsupported richer
-                                fields fail closed.
+                                <code>roleDefinition</code>, <code>customInstructions</code>, <code>whenToUse</code>,
+                                and <code>groups</code>.
                             </p>
                         </div>
 
@@ -464,7 +481,7 @@ export function ModesInstructionsScreen(input: {
                                 }}
                                 className='border-border bg-background min-h-64 w-full rounded-2xl border px-4 py-3 font-mono text-sm leading-6'
                                 spellCheck={false}
-                                placeholder='{\n  "slug": "review",\n  "name": "Review",\n  "description": "Workspace review mode",\n  "roleDefinition": "Act as a precise reviewer.",\n  "customInstructions": "Review the workspace carefully."\n}'
+                                placeholder='{\n  "slug": "review",\n  "name": "Review",\n  "description": "Workspace review mode",\n  "roleDefinition": "Act as a precise reviewer.",\n  "customInstructions": "Review the workspace carefully.",\n  "whenToUse": "Use when a change needs a strict review pass.",\n  "groups": ["quality", "review"]\n}'
                             />
                         </label>
 

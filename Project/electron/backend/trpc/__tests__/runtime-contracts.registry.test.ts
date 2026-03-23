@@ -17,6 +17,12 @@ import {
 
 registerRuntimeContractHooks();
 
+function resetRegistryAssetDirectories(rootPath: string): void {
+    rmSync(path.join(rootPath, 'modes'), { recursive: true, force: true });
+    rmSync(path.join(rootPath, 'rules'), { recursive: true, force: true });
+    rmSync(path.join(rootPath, 'skills'), { recursive: true, force: true });
+}
+
 describe('runtime contracts: registry and attached skills', () => {
     const profileId = runtimeContractProfileId;
 
@@ -26,7 +32,7 @@ describe('runtime contracts: registry and attached skills', () => {
 
         const globalRegistry = await caller.registry.listResolved({ profileId });
         const globalAssetsRoot = globalRegistry.paths.globalAssetsRoot;
-        rmSync(globalAssetsRoot, { recursive: true, force: true });
+        resetRegistryAssetDirectories(globalAssetsRoot);
         mkdirSync(path.join(globalAssetsRoot, 'modes'), { recursive: true });
         mkdirSync(path.join(globalAssetsRoot, 'rules'), { recursive: true });
         mkdirSync(path.join(globalAssetsRoot, 'skills'), { recursive: true });
@@ -119,6 +125,10 @@ tags:
 modeKey: review
 label: Workspace Review
 description: Workspace override
+whenToUse: Use when the workspace has stricter local constraints.
+groups:
+  - review
+  - workspace
 precedence: 5
 toolCapabilities:
   - filesystem_read
@@ -157,6 +167,20 @@ label: Invalid Shared Mode
 # Invalid
 
 - This should never load.
+`,
+            'utf8'
+        );
+        writeFileSync(
+            path.join(workspaceAssetsRoot, 'modes', 'invalid-groups.md'),
+            `---
+topLevelTab: agent
+modeKey: invalid-groups
+label: Invalid Groups
+groups: review
+---
+# Invalid Groups
+
+- This should never load either.
 `,
             'utf8'
         );
@@ -231,12 +255,15 @@ tags:
         expect(resolvedWorkspaceReviewMode?.prompt.customInstructions).toContain(
             'Prefer workspace-specific constraints.'
         );
+        expect(resolvedWorkspaceReviewMode?.whenToUse).toBe('Use when the workspace has stricter local constraints.');
+        expect(resolvedWorkspaceReviewMode?.groups).toEqual(['review', 'workspace']);
         expect(
             resolvedWorkspace.resolved.modes.find(
                 (mode) => mode.topLevelTab === 'orchestrator' && mode.modeKey === 'workspace-orchestrator'
             )?.label
         ).toBe('Workspace Orchestrator');
         expect(resolvedWorkspace.resolved.modes.some((mode) => mode.modeKey === 'invalid-shared')).toBe(false);
+        expect(resolvedWorkspace.resolved.modes.some((mode) => mode.modeKey === 'invalid-groups')).toBe(false);
         expect(resolvedWorkspace.resolved.rulesets.find((ruleset) => ruleset.assetKey === 'coding_rules')?.name).toBe(
             'Workspace Rules'
         );
@@ -361,7 +388,7 @@ tags:
 
         const globalRegistry = await caller.registry.listResolved({ profileId });
         const globalAssetsRoot = globalRegistry.paths.globalAssetsRoot;
-        rmSync(globalAssetsRoot, { recursive: true, force: true });
+        resetRegistryAssetDirectories(globalAssetsRoot);
         mkdirSync(path.join(globalAssetsRoot, 'modes'), { recursive: true });
         writeFileSync(
             path.join(globalAssetsRoot, 'modes', 'chat.md'),
@@ -597,8 +624,8 @@ precedence: 5
             throw new Error('Expected workspace asset root for registry-backed agent context test.');
         }
 
-        rmSync(globalAssetsRoot, { recursive: true, force: true });
-        rmSync(workspaceAssetsRoot, { recursive: true, force: true });
+        resetRegistryAssetDirectories(globalAssetsRoot);
+        resetRegistryAssetDirectories(workspaceAssetsRoot);
         mkdirSync(path.join(globalAssetsRoot, 'modes'), { recursive: true });
         mkdirSync(path.join(globalAssetsRoot, 'rules'), { recursive: true });
         mkdirSync(path.join(globalAssetsRoot, 'skills'), { recursive: true });

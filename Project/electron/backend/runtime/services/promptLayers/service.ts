@@ -87,6 +87,8 @@ async function readFileBackedCustomModes(input: {
             modeKey: mode.modeKey,
             label: mode.label,
             ...(mode.description ? { description: mode.description } : {}),
+            ...(mode.whenToUse ? { whenToUse: mode.whenToUse } : {}),
+            ...(mode.groups ? { groups: mode.groups } : {}),
         };
         if (mode.scope === 'workspace') {
             workspaceModes[mode.topLevelTab].push(item);

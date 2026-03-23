@@ -297,13 +297,15 @@ export function seedRuntimeData(sqlite: DatabaseSync, defaultProfileId: string):
                     workspace_fingerprint,
                     origin_path,
                     description,
+                    when_to_use,
+                    groups_json,
                     tags_json,
                     enabled,
                     precedence,
                     created_at,
                     updated_at
                 )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `
     );
     const insertKiloAccountSnapshot = sqlite.prepare(
@@ -446,6 +448,8 @@ export function seedRuntimeData(sqlite: DatabaseSync, defaultProfileId: string):
             null,
             null,
             null,
+            null,
+            '[]',
             '[]',
             1,
             0,

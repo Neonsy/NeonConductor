@@ -56,6 +56,20 @@ function readTags(value: unknown): string[] | undefined {
     return tags.length > 0 ? tags : undefined;
 }
 
+function readOptionalStringList(value: unknown): string[] | null | undefined {
+    if (value === undefined) {
+        return undefined;
+    }
+    if (!Array.isArray(value)) {
+        return null;
+    }
+
+    const items = value
+        .map((item) => (typeof item === 'string' ? item.trim() : ''))
+        .filter((item) => item.length > 0);
+    return items.length > 0 ? Array.from(new Set(items)) : undefined;
+}
+
 function readToolCapabilities(value: unknown): ToolCapability[] | undefined {
     if (!Array.isArray(value)) {
         return undefined;
@@ -95,14 +109,18 @@ interface DiscoveredModeInput {
     workspaceFingerprint?: string;
     originPath: string;
     description?: string;
+    whenToUse?: string;
+    groups?: string[];
     tags?: string[];
     enabled: boolean;
     precedence: number;
 }
 
-interface DiscoveredModeDraft extends Omit<DiscoveredModeInput, 'workspaceFingerprint' | 'description' | 'tags'> {
+interface DiscoveredModeDraft extends Omit<DiscoveredModeInput, 'workspaceFingerprint' | 'description' | 'whenToUse' | 'groups' | 'tags'> {
     workspaceFingerprint?: string | undefined;
     description?: string | undefined;
+    whenToUse?: string | undefined;
+    groups?: string[] | undefined;
     tags?: string[] | undefined;
 }
 
@@ -177,6 +195,8 @@ function buildDiscoveredMode(input: DiscoveredModeDraft): DiscoveredModeInput {
         ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
         originPath: input.originPath,
         ...(input.description ? { description: input.description } : {}),
+        ...(input.whenToUse ? { whenToUse: input.whenToUse } : {}),
+        ...(input.groups ? { groups: input.groups } : {}),
         ...(input.tags ? { tags: input.tags } : {}),
         enabled: input.enabled,
         precedence: input.precedence,
@@ -264,6 +284,8 @@ export async function replaceDiscoveredModes(input: {
                 workspace_fingerprint: mode.workspaceFingerprint ?? null,
                 origin_path: mode.originPath,
                 description: mode.description ?? null,
+                when_to_use: mode.whenToUse ?? null,
+                groups_json: JSON.stringify(mode.groups ?? []),
                 tags_json: JSON.stringify(mode.tags ?? []),
                 enabled: mode.enabled ? 1 : 0,
                 precedence: mode.precedence,
@@ -434,6 +456,15 @@ export async function buildDiscoveredAssets(input: {
         if (rawTopLevelTab !== undefined && !parsedTopLevelTab) {
             return [];
         }
+        const rawWhenToUse = file.parsed.attributes['whenToUse'];
+        const parsedWhenToUse = rawWhenToUse === undefined ? undefined : readString(rawWhenToUse);
+        if (rawWhenToUse !== undefined && !parsedWhenToUse) {
+            return [];
+        }
+        const parsedGroups = readOptionalStringList(file.parsed.attributes['groups']);
+        if (parsedGroups === null) {
+            return [];
+        }
         const topLevelTab = parsedTopLevelTab ?? 'agent';
 
         const modeKey = slugifyAssetKey(readString(file.parsed.attributes['modeKey']) ?? file.relativePath).replace(
@@ -474,6 +505,8 @@ export async function buildDiscoveredAssets(input: {
                 ...(readString(file.parsed.attributes['description'])
                     ? { description: readString(file.parsed.attributes['description']) }
                     : {}),
+                ...(parsedWhenToUse ? { whenToUse: parsedWhenToUse } : {}),
+                ...(parsedGroups ? { groups: parsedGroups } : {}),
                 ...(readTags(file.parsed.attributes['tags']) ? { tags: readTags(file.parsed.attributes['tags']) } : {}),
                 enabled: readBoolean(file.parsed.attributes['enabled']) ?? true,
                 precedence: readNumber(file.parsed.attributes['precedence']) ?? 0,

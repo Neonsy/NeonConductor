@@ -302,6 +302,8 @@ describe('runtime contracts: prompt layers', () => {
                 description: 'Global chat review mode',
                 roleDefinition: 'Act as a precise reviewer.',
                 customInstructions: 'Review the current conversation carefully.',
+                whenToUse: 'Use when a conversation needs a strict review pass.',
+                groups: ['quality', 'review'],
             }),
             overwrite: false,
         });
@@ -311,6 +313,8 @@ describe('runtime contracts: prompt layers', () => {
                 modeKey: 'review',
                 label: 'Portable Review',
                 description: 'Global chat review mode',
+                whenToUse: 'Use when a conversation needs a strict review pass.',
+                groups: ['quality', 'review'],
             },
         ]);
         expect(
@@ -324,6 +328,9 @@ describe('runtime contracts: prompt layers', () => {
         const globalModeMarkdown = readFileSync(globalModeFile, 'utf8');
         expect(globalModeMarkdown).toContain('topLevelTab: chat');
         expect(globalModeMarkdown).toContain('modeKey: review');
+        expect(globalModeMarkdown).toContain('whenToUse: "Use when a conversation needs a strict review pass."');
+        expect(globalModeMarkdown).toContain('groups:');
+        expect(globalModeMarkdown).toContain('- "quality"');
         expect(globalModeMarkdown).toContain('roleDefinition: \"Act as a precise reviewer.\"');
         expect(globalModeMarkdown).toContain('Review the current conversation carefully.');
 
@@ -339,7 +346,20 @@ describe('runtime contracts: prompt layers', () => {
             description: 'Global chat review mode',
             roleDefinition: 'Act as a precise reviewer.',
             customInstructions: 'Review the current conversation carefully.',
+            whenToUse: 'Use when a conversation needs a strict review pass.',
+            groups: ['quality', 'review'],
         });
+
+        const globalModes = await caller.mode.list({
+            profileId,
+            topLevelTab: 'chat',
+        });
+        expect(globalModes.modes.find((mode) => mode.modeKey === 'review')).toEqual(
+            expect.objectContaining({
+                whenToUse: 'Use when a conversation needs a strict review pass.',
+                groups: ['quality', 'review'],
+            })
+        );
 
         await createSessionInScope(caller, profileId, {
             scope: 'workspace',
@@ -365,6 +385,8 @@ describe('runtime contracts: prompt layers', () => {
                 slug: 'workspace-orchestrator',
                 name: 'Workspace Orchestrator',
                 customInstructions: 'Coordinate work from the workspace root first.',
+                whenToUse: 'Use when the workspace needs multi-step coordination.',
+                groups: ['coordination'],
             }),
             overwrite: false,
         });
@@ -373,6 +395,8 @@ describe('runtime contracts: prompt layers', () => {
                 topLevelTab: 'orchestrator',
                 modeKey: 'workspace-orchestrator',
                 label: 'Workspace Orchestrator',
+                whenToUse: 'Use when the workspace needs multi-step coordination.',
+                groups: ['coordination'],
             },
         ]);
         expect(readFileSync(globalModeFile, 'utf8')).toBe(globalModeMarkdown);
@@ -380,6 +404,7 @@ describe('runtime contracts: prompt layers', () => {
         const workspaceModeFile = path.join(workspaceModesRoot, 'orchestrator-workspace-orchestrator.md');
         const workspaceModeMarkdown = readFileSync(workspaceModeFile, 'utf8');
         expect(workspaceModeMarkdown).toContain('topLevelTab: orchestrator');
+        expect(workspaceModeMarkdown).toContain('whenToUse: "Use when the workspace needs multi-step coordination."');
         expect(workspaceModeMarkdown).toContain('Coordinate work from the workspace root first.');
 
         const workspaceModes = await caller.mode.list({
@@ -436,11 +461,25 @@ describe('runtime contracts: prompt layers', () => {
                 jsonText: JSON.stringify({
                     slug: 'invalid-mode',
                     name: 'Invalid Mode',
-                    whenToUse: 'Never silently discard unsupported fields.',
+                    groups: ['review', 42],
                 }),
                 overwrite: false,
             })
-        ).rejects.toThrow('Unsupported custom mode field "whenToUse"');
+        ).rejects.toThrow('Invalid "groups": expected string array.');
+
+        await expect(
+            caller.prompt.importCustomMode({
+                profileId,
+                topLevelTab: 'chat',
+                scope: 'global',
+                jsonText: JSON.stringify({
+                    slug: 'invalid-mode',
+                    name: 'Invalid Mode',
+                    unknownField: 'still fail closed',
+                }),
+                overwrite: false,
+            })
+        ).rejects.toThrow('Invalid custom mode field "unknownField"');
 
         expect(readFileSync(existingModeFile, 'utf8')).toBe(initialMarkdown);
     });

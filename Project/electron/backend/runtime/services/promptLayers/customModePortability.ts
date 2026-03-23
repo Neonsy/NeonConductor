@@ -12,6 +12,8 @@ export interface PortableCustomModePayload {
     description?: string;
     roleDefinition?: string;
     customInstructions?: string;
+    whenToUse?: string;
+    groups?: string[];
 }
 
 const portableModeAllowedKeys = new Set([
@@ -20,9 +22,11 @@ const portableModeAllowedKeys = new Set([
     'description',
     'roleDefinition',
     'customInstructions',
+    'whenToUse',
+    'groups',
 ]);
 
-const portableModeUnsupportedKeys = new Set(['whenToUse', 'groups', 'topLevelTab']);
+const portableModeUnsupportedKeys = new Set(['topLevelTab']);
 
 function readOptionalPortableString(value: unknown, field: keyof PortableCustomModePayload): string | undefined {
     if (value === undefined) {
@@ -33,6 +37,25 @@ function readOptionalPortableString(value: unknown, field: keyof PortableCustomM
     }
 
     return value.trim().length > 0 ? value.replace(/\r\n?/g, '\n').trim() : undefined;
+}
+
+function readOptionalPortableStringArray(value: unknown, field: 'groups'): string[] | undefined {
+    if (value === undefined) {
+        return undefined;
+    }
+    if (!Array.isArray(value)) {
+        throw new Error(`Invalid "${field}": expected string array.`);
+    }
+
+    const items = value.map((item) => {
+        if (typeof item !== 'string') {
+            throw new Error(`Invalid "${field}": expected string array.`);
+        }
+
+        return item.trim();
+    });
+    const filteredItems = items.filter((item) => item.length > 0);
+    return filteredItems.length > 0 ? Array.from(new Set(filteredItems)) : undefined;
 }
 
 export function parsePortableCustomModeJson(jsonText: string): PortableCustomModePayload {
@@ -69,6 +92,8 @@ export function parsePortableCustomModeJson(jsonText: string): PortableCustomMod
     const description = readOptionalPortableString(source.description, 'description');
     const roleDefinition = readOptionalPortableString(source.roleDefinition, 'roleDefinition');
     const customInstructions = readOptionalPortableString(source.customInstructions, 'customInstructions');
+    const whenToUse = readOptionalPortableString(source.whenToUse, 'whenToUse');
+    const groups = readOptionalPortableStringArray(source.groups, 'groups');
 
     return {
         slug,
@@ -76,6 +101,8 @@ export function parsePortableCustomModeJson(jsonText: string): PortableCustomMod
         ...(description ? { description } : {}),
         ...(roleDefinition ? { roleDefinition } : {}),
         ...(customInstructions ? { customInstructions } : {}),
+        ...(whenToUse ? { whenToUse } : {}),
+        ...(groups ? { groups } : {}),
     };
 }
 
@@ -86,6 +113,8 @@ export function toPortableModePayload(mode: ModeDefinitionRecord): PortableCusto
         ...(mode.description ? { description: mode.description } : {}),
         ...(mode.prompt.roleDefinition ? { roleDefinition: mode.prompt.roleDefinition } : {}),
         ...(mode.prompt.customInstructions ? { customInstructions: mode.prompt.customInstructions } : {}),
+        ...(mode.whenToUse ? { whenToUse: mode.whenToUse } : {}),
+        ...(mode.groups ? { groups: mode.groups } : {}),
     };
 }
 
@@ -110,6 +139,8 @@ export function renderPortableModeMarkdown(input: {
         ...(input.payload.description
             ? [`description: ${stringifyFrontmatterValue(input.payload.description)}`]
             : []),
+        ...(input.payload.whenToUse ? [`whenToUse: ${stringifyFrontmatterValue(input.payload.whenToUse)}`] : []),
+        ...(input.payload.groups ? ['groups:', ...input.payload.groups.map((group) => `  - ${stringifyFrontmatterValue(group)}`)] : []),
         ...(input.payload.roleDefinition
             ? [`roleDefinition: ${stringifyFrontmatterValue(input.payload.roleDefinition)}`]
             : []),
