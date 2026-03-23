@@ -12,7 +12,15 @@ import type {
     SessionSummaryRecord,
 } from '@/app/backend/persistence/types';
 
-import type { DiffOverview, ResolvedContextState, RuntimeReasoningEffort, TopLevelTab } from '@/shared/contracts';
+import type {
+    DiffOverview,
+    EntityId,
+    ResolvedContextState,
+    RulesetDefinition,
+    RuntimeReasoningEffort,
+    SkillfileDefinition,
+    TopLevelTab,
+} from '@/shared/contracts';
 
 import type { ReactNode } from 'react';
 
@@ -78,6 +86,8 @@ export interface SessionWorkspacePanelProps {
     partsByMessageId: Map<string, MessagePartRecord[]>;
     selectedSessionId?: string;
     selectedRunId?: string;
+    selectedWorkspaceFingerprint?: string;
+    selectedSandboxId?: EntityId<'sb'>;
     optimisticUserMessage?: OptimisticConversationUserMessage;
     executionPreset: 'privacy' | 'standard' | 'yolo';
     workspaceScope: WorkspaceScope;
@@ -117,6 +127,10 @@ export interface SessionWorkspacePanelProps {
     modelOptions: ModelPickerOption[];
     runErrorMessage: string | undefined;
     contextState?: ResolvedContextState;
+    attachedRules: RulesetDefinition[];
+    missingAttachedRuleKeys: string[];
+    attachedSkills: SkillfileDefinition[];
+    missingAttachedSkillKeys: string[];
     canCompactContext?: boolean;
     isCompactingContext?: boolean;
     executionEnvironmentPanel?: ReactNode;

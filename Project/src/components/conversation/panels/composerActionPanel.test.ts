@@ -1,6 +1,51 @@
-import { createElement } from 'react';
+import { createElement, type ComponentProps } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('@/web/trpc/client', () => ({
+    trpc: {
+        useUtils: () => ({
+            session: {
+                getAttachedSkills: { invalidate: vi.fn() },
+                getAttachedRules: { invalidate: vi.fn() },
+            },
+            registry: {
+                searchSkills: { invalidate: vi.fn() },
+                searchRules: { invalidate: vi.fn() },
+            },
+        }),
+        registry: {
+            searchSkills: {
+                useQuery: () => ({
+                    data: {
+                        skillfiles: [],
+                    },
+                }),
+            },
+            searchRules: {
+                useQuery: () => ({
+                    data: {
+                        rulesets: [],
+                    },
+                }),
+            },
+        },
+        session: {
+            setAttachedSkills: {
+                useMutation: () => ({
+                    isPending: false,
+                    mutateAsync: vi.fn(),
+                }),
+            },
+            setAttachedRules: {
+                useMutation: () => ({
+                    isPending: false,
+                    mutateAsync: vi.fn(),
+                }),
+            },
+        },
+    },
+}));
 
 import type { ModelPickerOption } from '@/web/components/modelSelection/modelCapabilities';
 import {
@@ -84,6 +129,15 @@ function createContextState(
     };
 }
 
+function createComposerActionPanelProps(
+    input: Omit<ComponentProps<typeof ComposerActionPanel>, 'profileId'>
+): ComponentProps<typeof ComposerActionPanel> {
+    return {
+        profileId: 'profile_default',
+        ...input,
+    };
+}
+
 describe('composer enter handling', () => {
     it('submits only on plain enter', () => {
         expect(
@@ -121,7 +175,7 @@ describe('composer enter handling', () => {
 
     it('disables reasoning selection when the active model does not support it', () => {
         const html = renderToStaticMarkup(
-            createElement(ComposerActionPanel, {
+            createElement(ComposerActionPanel, createComposerActionPanelProps({
                 pendingImages: [],
                 disabled: false,
                 isSubmitting: false,
@@ -152,7 +206,7 @@ describe('composer enter handling', () => {
                 onRemovePendingImage: () => {},
                 onRetryPendingImage: () => {},
                 onSubmitPrompt: () => {},
-            })
+            }))
         );
 
         expect(html).toContain('Reasoning');
@@ -163,7 +217,7 @@ describe('composer enter handling', () => {
 
     it('disables adjustable reasoning when Kilo does not advertise valid effort levels', () => {
         const html = renderToStaticMarkup(
-            createElement(ComposerActionPanel, {
+            createElement(ComposerActionPanel, createComposerActionPanelProps({
                 pendingImages: [],
                 disabled: false,
                 isSubmitting: false,
@@ -195,7 +249,7 @@ describe('composer enter handling', () => {
                 onRemovePendingImage: () => {},
                 onRetryPendingImage: () => {},
                 onSubmitPrompt: () => {},
-            })
+            }))
         );
 
         expect(html).toContain(
@@ -206,7 +260,7 @@ describe('composer enter handling', () => {
 
     it('disables adjustable reasoning when Kilo omits trusted effort metadata entirely', () => {
         const html = renderToStaticMarkup(
-            createElement(ComposerActionPanel, {
+            createElement(ComposerActionPanel, createComposerActionPanelProps({
                 pendingImages: [],
                 disabled: false,
                 isSubmitting: false,
@@ -237,7 +291,7 @@ describe('composer enter handling', () => {
                 onRemovePendingImage: () => {},
                 onRetryPendingImage: () => {},
                 onSubmitPrompt: () => {},
-            })
+            }))
         );
 
         expect(html).toContain(
@@ -248,7 +302,7 @@ describe('composer enter handling', () => {
 
     it('shows the selected model incompatibility reason inline', () => {
         const html = renderToStaticMarkup(
-            createElement(ComposerActionPanel, {
+            createElement(ComposerActionPanel, createComposerActionPanelProps({
                 pendingImages: [],
                 disabled: false,
                 isSubmitting: false,
@@ -283,7 +337,7 @@ describe('composer enter handling', () => {
                 onRemovePendingImage: () => {},
                 onRetryPendingImage: () => {},
                 onSubmitPrompt: () => {},
-            })
+            }))
         );
 
         expect(html).toContain('This mode requires native tool calling.');
@@ -293,7 +347,7 @@ describe('composer enter handling', () => {
         'shows live context usage details for %s',
         (topLevelTab) => {
             const html = renderToStaticMarkup(
-                createElement(ComposerActionPanel, {
+                createElement(ComposerActionPanel, createComposerActionPanelProps({
                     pendingImages: [],
                     disabled: false,
                     isSubmitting: false,
@@ -330,7 +384,7 @@ describe('composer enter handling', () => {
                     onRemovePendingImage: () => {},
                     onRetryPendingImage: () => {},
                     onSubmitPrompt: () => {},
-                })
+                }))
             );
 
             expect(html).toContain('40,000 used of 100,000 usable input tokens');
@@ -343,7 +397,7 @@ describe('composer enter handling', () => {
 
     it('keeps context disabled-state messaging focused on thread usage', () => {
         const html = renderToStaticMarkup(
-            createElement(ComposerActionPanel, {
+            createElement(ComposerActionPanel, createComposerActionPanelProps({
                 pendingImages: [],
                 disabled: false,
                 isSubmitting: false,
@@ -380,7 +434,7 @@ describe('composer enter handling', () => {
                 onRemovePendingImage: () => {},
                 onRetryPendingImage: () => {},
                 onSubmitPrompt: () => {},
-            })
+            }))
         );
 
         expect(html).toContain(

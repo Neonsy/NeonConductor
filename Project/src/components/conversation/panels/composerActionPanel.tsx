@@ -5,14 +5,24 @@ import {
     getImagePreviewStatusLabel,
     getPendingImagePreviewState,
 } from '@/web/components/conversation/messages/imagePreviewState';
+import { useComposerSlashCommands } from '@/web/components/conversation/hooks/useComposerSlashCommands';
 import type { ModelCompatibilityState, ModelPickerOption } from '@/web/components/modelSelection/modelCapabilities';
 import { ImageLightboxModal } from '@/web/components/conversation/panels/imageLightboxModal';
+import { ComposerSlashCommandPopup } from '@/web/components/conversation/panels/composerSlashCommandPopup';
+import { shouldInterceptSlashSubmit } from '@/web/components/conversation/panels/composerSlashCommands';
 import { ModelPicker } from '@/web/components/modelSelection/modelPicker';
 import { Button } from '@/web/components/ui/button';
 import { readRelatedTargetNode } from '@/web/lib/dom/readRelatedTargetNode';
 
 import type { ConversationModeOption } from '@/web/components/conversation/shell/workspace/helpers';
-import type { ResolvedContextState, RuntimeReasoningEffort, TopLevelTab } from '@/shared/contracts';
+import type {
+    EntityId,
+    ResolvedContextState,
+    RulesetDefinition,
+    RuntimeReasoningEffort,
+    SkillfileDefinition,
+    TopLevelTab,
+} from '@/shared/contracts';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 
 interface PendingImageView {
@@ -30,6 +40,7 @@ interface PendingImageView {
 }
 
 interface ComposerActionPanelProps {
+    profileId: string;
     pendingImages: PendingImageView[];
     disabled: boolean;
     controlsDisabled?: boolean;
@@ -59,6 +70,13 @@ interface ComposerActionPanelProps {
     modelOptions: ModelPickerOption[];
     runErrorMessage: string | undefined;
     contextState?: ResolvedContextState;
+    selectedSessionId?: EntityId<'sess'>;
+    workspaceFingerprint?: string;
+    sandboxId?: EntityId<'sb'>;
+    attachedRules?: RulesetDefinition[];
+    missingAttachedRuleKeys?: string[];
+    attachedSkills?: SkillfileDefinition[];
+    missingAttachedSkillKeys?: string[];
     canCompactContext?: boolean;
     isCompactingContext?: boolean;
     promptResetKey?: number;
@@ -147,6 +165,7 @@ const reasoningEffortOptions: Array<{ value: RuntimeReasoningEffort; label: stri
 ];
 
 export function ComposerActionPanel({
+    profileId,
     pendingImages,
     disabled,
     controlsDisabled,
@@ -172,6 +191,13 @@ export function ComposerActionPanel({
     modelOptions,
     runErrorMessage,
     contextState,
+    selectedSessionId,
+    workspaceFingerprint,
+    sandboxId,
+    attachedRules = [],
+    missingAttachedRuleKeys = [],
+    attachedSkills = [],
+    missingAttachedSkillKeys = [],
     canCompactContext = false,
     isCompactingContext = false,
     promptResetKey,
@@ -251,6 +277,19 @@ export function ComposerActionPanel({
     const compactConnectionLabel = selectedProviderStatus
         ? `${selectedProviderStatus.label} · ${selectedProviderStatus.authState.replace('_', ' ')}`
         : undefined;
+    const slashCommands = useComposerSlashCommands({
+        draftPrompt,
+        profileId,
+        ...(selectedSessionId ? { selectedSessionId } : {}),
+        topLevelTab,
+        modeKey: activeModeKey,
+        ...(workspaceFingerprint ? { workspaceFingerprint } : {}),
+        ...(sandboxId ? { sandboxId } : {}),
+        attachedRules,
+        missingAttachedRuleKeys,
+        attachedSkills,
+        missingAttachedSkillKeys,
+    });
     const attachmentStatusMessage = hasUnsupportedPendingImages
         ? (imageAttachmentBlockedReason ?? 'Select a vision-capable model to send attached images.')
         : selectedModelCompatibilityState === 'incompatible' && selectedModelCompatibilityReason
@@ -325,7 +364,22 @@ export function ComposerActionPanel({
                 }}
                 onSubmit={(event) => {
                     event.preventDefault();
-                    onSubmitPrompt(draftPrompt);
+                    void slashCommands.acceptHighlighted().then((slashResult) => {
+                        if (!slashResult.handled) {
+                            onSubmitPrompt(draftPrompt);
+                            return;
+                        }
+
+                        if (slashResult.clearDraft) {
+                            setDraftPrompt('');
+                            promptTextareaRef.current?.focus();
+                            return;
+                        }
+                        if (slashResult.nextDraft !== undefined) {
+                            setDraftPrompt(slashResult.nextDraft);
+                            promptTextareaRef.current?.focus();
+                        }
+                    });
                 }}>
                 <input
                     ref={fileInputRef}
@@ -453,6 +507,7 @@ export function ComposerActionPanel({
                     className={`border-border bg-card/30 relative overflow-hidden rounded-2xl border transition ${
                         isDragActive ? 'border-primary bg-primary/10 shadow-[0_0_0_1px_hsl(var(--primary)/0.25)]' : ''
                     }`}>
+                    <ComposerSlashCommandPopup state={slashCommands.popupState} />
                     {compactConnectionLabel || routingBadge ? (
                         <div className='border-border flex flex-wrap items-center gap-2 border-b px-4 py-3'>
                             {compactConnectionLabel ? (
@@ -602,7 +657,45 @@ export function ComposerActionPanel({
                             }
                         }}
                         onKeyDown={(event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+                            if (slashCommands.hasVisiblePopup) {
+                                if (event.key === 'ArrowDown') {
+                                    event.preventDefault();
+                                    slashCommands.moveHighlight('next');
+                                    return;
+                                }
+                                if (event.key === 'ArrowUp') {
+                                    event.preventDefault();
+                                    slashCommands.moveHighlight('previous');
+                                    return;
+                                }
+                                if (event.key === 'Escape') {
+                                    event.preventDefault();
+                                    slashCommands.dismiss();
+                                    return;
+                                }
+                            }
+
                             if (!shouldSubmitComposerOnEnter(event)) {
+                                return;
+                            }
+
+                            if (shouldInterceptSlashSubmit({ popupState: slashCommands.popupState })) {
+                                event.preventDefault();
+                                void slashCommands.acceptHighlighted().then((slashResult) => {
+                                    if (!slashResult.handled) {
+                                        return;
+                                    }
+
+                                    if (slashResult.clearDraft) {
+                                        setDraftPrompt('');
+                                        promptTextareaRef.current?.focus();
+                                        return;
+                                    }
+                                    if (slashResult.nextDraft !== undefined) {
+                                        setDraftPrompt(slashResult.nextDraft);
+                                        promptTextareaRef.current?.focus();
+                                    }
+                                });
                                 return;
                             }
 

@@ -1,5 +1,6 @@
 import { ComposerActionPanel } from '@/web/components/conversation/panels/composerActionPanel';
 import { MessageFlowPanel } from '@/web/components/conversation/panels/messageFlowPanel';
+import { isEntityId } from '@/web/components/conversation/shell/workspace/helpers';
 
 import type { SessionWorkspacePanelProps } from '@/web/components/conversation/sessions/workspace/workspacePanelModel';
 
@@ -8,6 +9,8 @@ interface WorkspacePrimaryColumnProps {
     profiles: SessionWorkspacePanelProps['profiles'];
     selectedProfileId: SessionWorkspacePanelProps['selectedProfileId'];
     selectedSessionId: SessionWorkspacePanelProps['selectedSessionId'];
+    selectedWorkspaceFingerprint: SessionWorkspacePanelProps['selectedWorkspaceFingerprint'];
+    selectedSandboxId: SessionWorkspacePanelProps['selectedSandboxId'];
     messages: SessionWorkspacePanelProps['messages'];
     partsByMessageId: SessionWorkspacePanelProps['partsByMessageId'];
     runs: SessionWorkspacePanelProps['runs'];
@@ -32,6 +35,10 @@ interface WorkspacePrimaryColumnProps {
     modelOptions: SessionWorkspacePanelProps['modelOptions'];
     runErrorMessage: SessionWorkspacePanelProps['runErrorMessage'];
     contextState: SessionWorkspacePanelProps['contextState'];
+    attachedRules: SessionWorkspacePanelProps['attachedRules'];
+    missingAttachedRuleKeys: SessionWorkspacePanelProps['missingAttachedRuleKeys'];
+    attachedSkills: SessionWorkspacePanelProps['attachedSkills'];
+    missingAttachedSkillKeys: SessionWorkspacePanelProps['missingAttachedSkillKeys'];
     canCompactContext: SessionWorkspacePanelProps['canCompactContext'];
     isCompactingContext: SessionWorkspacePanelProps['isCompactingContext'];
     promptResetKey: SessionWorkspacePanelProps['promptResetKey'];
@@ -58,6 +65,8 @@ export function WorkspacePrimaryColumn({
     profiles,
     selectedProfileId,
     selectedSessionId,
+    selectedWorkspaceFingerprint,
+    selectedSandboxId,
     messages,
     partsByMessageId,
     runs,
@@ -82,6 +91,10 @@ export function WorkspacePrimaryColumn({
     modelOptions,
     runErrorMessage,
     contextState,
+    attachedRules,
+    missingAttachedRuleKeys,
+    attachedSkills,
+    missingAttachedSkillKeys,
     canCompactContext,
     isCompactingContext,
     promptResetKey,
@@ -102,6 +115,8 @@ export function WorkspacePrimaryColumn({
     onEditMessage,
     onBranchFromMessage,
 }: WorkspacePrimaryColumnProps) {
+    const validatedSelectedSessionId = isEntityId(selectedSessionId, 'sess') ? selectedSessionId : undefined;
+
     return (
         <div className='flex min-h-0 min-w-0 flex-col overflow-hidden'>
             <div className='flex min-h-0 flex-1 flex-col gap-4 overflow-hidden px-4 py-4'>
@@ -111,7 +126,7 @@ export function WorkspacePrimaryColumn({
                         messages={messages}
                         partsByMessageId={partsByMessageId}
                         runs={runs}
-                        {...(selectedSessionId ? { selectedSessionId } : {})}
+                        {...(validatedSelectedSessionId ? { selectedSessionId: validatedSelectedSessionId } : {})}
                         {...(optimisticUserMessage ? { optimisticUserMessage } : {})}
                         {...(onEditMessage ? { onEditMessage } : {})}
                         {...(onBranchFromMessage ? { onBranchFromMessage } : {})}
@@ -120,6 +135,7 @@ export function WorkspacePrimaryColumn({
 
                 <div className='border-border/70 bg-background/85 shrink-0 rounded-[28px] border p-4 shadow-sm'>
                     <ComposerActionPanel
+                        profileId={profileId}
                         pendingImages={pendingImages}
                         disabled={false}
                         isSubmitting={isStartingRun}
@@ -143,6 +159,13 @@ export function WorkspacePrimaryColumn({
                         modelOptions={modelOptions}
                         runErrorMessage={runErrorMessage}
                         {...(contextState ? { contextState } : {})}
+                        {...(validatedSelectedSessionId ? { selectedSessionId: validatedSelectedSessionId } : {})}
+                        {...(selectedWorkspaceFingerprint ? { workspaceFingerprint: selectedWorkspaceFingerprint } : {})}
+                        {...(selectedSandboxId ? { sandboxId: selectedSandboxId } : {})}
+                        attachedRules={attachedRules}
+                        missingAttachedRuleKeys={missingAttachedRuleKeys}
+                        attachedSkills={attachedSkills}
+                        missingAttachedSkillKeys={missingAttachedSkillKeys}
                         {...(canCompactContext !== undefined ? { canCompactContext } : {})}
                         {...(isCompactingContext !== undefined ? { isCompactingContext } : {})}
                         {...(promptResetKey !== undefined ? { promptResetKey } : {})}

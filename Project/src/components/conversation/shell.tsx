@@ -928,6 +928,12 @@ export function ConversationShell({
             partsByMessageId: shellViewModel.sessionRunSelection.partsByMessageId,
             ...(selectedSessionId ? { selectedSessionId } : {}),
             ...(selectedRunId ? { selectedRunId } : {}),
+            ...(shellViewModel.selectedThread?.workspaceFingerprint
+                ? { selectedWorkspaceFingerprint: shellViewModel.selectedThread.workspaceFingerprint }
+                : {}),
+            ...(shellViewModel.effectiveSelectedSandboxId
+                ? { selectedSandboxId: shellViewModel.effectiveSelectedSandboxId }
+                : {}),
             ...(composer.optimisticUserMessage ? { optimisticUserMessage: composer.optimisticUserMessage } : {}),
             executionPreset: queries.shellBootstrapQuery.data?.executionPreset ?? 'standard',
             workspaceScope: shellViewModel.workspaceScope,
@@ -958,6 +964,10 @@ export function ConversationShell({
             ...(selectedModelCompatibilityState ? { selectedModelCompatibilityState } : {}),
             ...(selectedModelCompatibilityReason ? { selectedModelCompatibilityReason } : {}),
             runErrorMessage: composer.runSubmitError,
+            attachedRules: shellViewModel.attachedRules,
+            missingAttachedRuleKeys: shellViewModel.missingAttachedRuleKeys,
+            attachedSkills: shellViewModel.attachedSkills,
+            missingAttachedSkillKeys: shellViewModel.missingAttachedSkillKeys,
             controlsDisabled: false,
             submitDisabled: !selectedSessionId,
             ...(contextStateQuery.data ? { contextState: contextStateQuery.data } : {}),

@@ -19,6 +19,8 @@ export function SessionWorkspacePanel({
     partsByMessageId,
     selectedSessionId,
     selectedRunId,
+    selectedWorkspaceFingerprint,
+    selectedSandboxId,
     optimisticUserMessage,
     executionPreset,
     workspaceScope,
@@ -52,6 +54,10 @@ export function SessionWorkspacePanel({
     modelOptions,
     runErrorMessage,
     contextState,
+    attachedRules,
+    missingAttachedRuleKeys,
+    attachedSkills,
+    missingAttachedSkillKeys,
     canCompactContext,
     isCompactingContext,
     executionEnvironmentPanel,
@@ -211,6 +217,8 @@ export function SessionWorkspacePanel({
                 profiles={profiles}
                 selectedProfileId={selectedProfileId}
                 selectedSessionId={selectedSessionId}
+                selectedWorkspaceFingerprint={selectedWorkspaceFingerprint}
+                selectedSandboxId={selectedSandboxId}
                 messages={messages}
                 partsByMessageId={partsByMessageId}
                 runs={runs}
@@ -235,6 +243,10 @@ export function SessionWorkspacePanel({
                 modelOptions={modelOptions}
                 runErrorMessage={runErrorMessage}
                 contextState={contextState}
+                attachedRules={attachedRules}
+                missingAttachedRuleKeys={missingAttachedRuleKeys}
+                attachedSkills={attachedSkills}
+                missingAttachedSkillKeys={missingAttachedSkillKeys}
                 canCompactContext={canCompactContext}
                 isCompactingContext={isCompactingContext}
                 promptResetKey={promptResetKey}
