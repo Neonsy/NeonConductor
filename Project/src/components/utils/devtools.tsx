@@ -1,6 +1,6 @@
-import { aiDevtoolsPlugin } from '@tanstack/react-ai-devtools';
+import { AiDevtoolsPanel } from '@tanstack/react-ai-devtools';
 import { TanStackDevtools } from '@tanstack/react-devtools';
-import { formDevtoolsPlugin } from '@tanstack/react-form-devtools';
+import { FormDevtoolsPanel } from '@tanstack/react-form-devtools';
 import { ReactQueryDevtoolsPanel } from '@tanstack/react-query-devtools';
 import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools';
 
@@ -22,8 +22,16 @@ export default function DevTools({ router }: DevToolsProps) {
                     name: 'TanStack Query',
                     render: <ReactQueryDevtoolsPanel />,
                 },
-                aiDevtoolsPlugin(),
-                formDevtoolsPlugin(),
+                {
+                    defaultOpen: true,
+                    id: 'tanstack-ai',
+                    name: 'TanStack AI',
+                    render: <AiDevtoolsPanel />,
+                },
+                {
+                    name: 'TanStack Form',
+                    render: <FormDevtoolsPanel />,
+                },
             ]}
             eventBusConfig={{
                 connectToServerBus: true,

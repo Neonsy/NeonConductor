@@ -7,12 +7,68 @@ updates:
     open-pull-requests-limit: 0
     target-branch: "dev"
     groups:
-      minor-and-patch:
-        update-types:
-          - "minor"
-          - "patch"
+      tanstack:
+        patterns:
+          - "@tanstack/*"
+      trpc:
+        patterns:
+          - "@trpc/*"
+      react-stack:
+        patterns:
+          - "react"
+          - "react-dom"
+          - "@types/react"
+          - "@types/react-dom"
+      electron-build:
+        patterns:
+          - "electron"
+          - "electron-builder"
+          - "electron-builder-squirrel-windows"
+          - "electron-updater"
+          - "vite-plugin-electron"
+      lint-format:
+        patterns:
+          - "eslint"
+          - "eslint-*"
+          - "@eslint/*"
+          - "@typescript-eslint/*"
+          - "typescript-eslint"
+          - "prettier"
+          - "prettier-*"
+      test-tooling:
+        patterns:
+          - "vitest"
+          - "@vitest/*"
+      production-dependencies:
+        dependency-type: "production"
+        exclude-patterns:
+          - "@tanstack/*"
+          - "@trpc/*"
+          - "react"
+          - "react-dom"
+      development-dependencies:
+        dependency-type: "development"
+        exclude-patterns:
+          - "@tanstack/*"
+          - "@trpc/*"
+          - "@types/react"
+          - "@types/react-dom"
+          - "electron"
+          - "electron-builder"
+          - "electron-builder-squirrel-windows"
+          - "electron-updater"
+          - "vite-plugin-electron"
+          - "eslint"
+          - "eslint-*"
+          - "@eslint/*"
+          - "@typescript-eslint/*"
+          - "typescript-eslint"
+          - "prettier"
+          - "prettier-*"
+          - "vitest"
+          - "@vitest/*"
     ignore:
+      - dependency-name: "evlog"
       - dependency-name: "*"
         update-types:
           - "version-update:semver-major"
-

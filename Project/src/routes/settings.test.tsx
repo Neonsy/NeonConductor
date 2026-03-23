@@ -1,6 +1,9 @@
-import type { ReactElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { Route } from '@/web/routes/settings';
+
+import type { ReactElement } from 'react';
 
 const { navigateMock, preloadRouteMock, prefetchSettingsRouteDataMock } = vi.hoisted(() => ({
     navigateMock: vi.fn(),
@@ -46,8 +49,6 @@ vi.mock('@/web/components/settings/settingsWorkspace', () => ({
     },
 }));
 
-import { Route } from '@/web/routes/settings';
-
 function createRouteController(overrides: Record<string, unknown> = {}) {
     return {
         controller: {
@@ -71,8 +72,13 @@ describe('settings route', () => {
 
     it('prewarms the default settings data through the route loader', async () => {
         const trpcUtils = { provider: 'utils' };
+        const routeLoader = Route.options.loader;
 
-        await Route.options.loader?.({
+        if (typeof routeLoader !== 'function') {
+            throw new Error('Expected the settings route loader to be callable.');
+        }
+
+        await routeLoader({
             context: {
                 trpcUtils,
             },

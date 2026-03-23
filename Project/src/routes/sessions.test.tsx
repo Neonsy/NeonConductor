@@ -1,6 +1,9 @@
-import type { ReactElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { Route } from '@/web/routes/sessions';
+
+import type { ReactElement } from 'react';
 
 const { startWorkspaceBootPrefetchMock } = vi.hoisted(() => ({
     startWorkspaceBootPrefetchMock: vi.fn(),
@@ -49,8 +52,6 @@ vi.mock('@/web/components/conversation/shell', () => ({
     },
 }));
 
-import { Route } from '@/web/routes/sessions';
-
 function createRouteController(overrides: Record<string, unknown> = {}) {
     return {
         controller: {
@@ -59,10 +60,10 @@ function createRouteController(overrides: Record<string, unknown> = {}) {
             topLevelTab: 'chat',
             activeModeKey: 'chat',
             modes: [],
-            selectMode: vi.fn(async () => undefined),
+            selectMode: vi.fn(() => Promise.resolve(undefined)),
             setTopLevelTab: vi.fn(),
             setCurrentWorkspaceFingerprint: vi.fn(),
-            selectProfile: vi.fn(async () => undefined),
+            selectProfile: vi.fn(() => Promise.resolve(undefined)),
             ...overrides,
         },
         onConversationShellBootReadinessChange: vi.fn(),
@@ -78,8 +79,13 @@ describe('sessions route', () => {
 
     it('prewarms the existing workspace boot data through the route loader', async () => {
         const trpcUtils = { runtime: 'utils' };
+        const routeLoader = Route.options.loader;
 
-        await Route.options.loader?.({
+        if (typeof routeLoader !== 'function') {
+            throw new Error('Expected the sessions route loader to be callable.');
+        }
+
+        await routeLoader({
             context: {
                 trpcUtils,
             },

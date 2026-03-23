@@ -1,10 +1,9 @@
-import { builtinModules } from 'node:module';
-
 import babel from '@rolldown/plugin-babel';
 import tailwindcss from '@tailwindcss/vite';
 import { devtools } from '@tanstack/devtools-vite';
 import { tanstackRouter } from '@tanstack/router-plugin/vite';
 import react, { reactCompilerPreset } from '@vitejs/plugin-react';
+import { builtinModules } from 'node:module';
 import { defineConfig } from 'vite';
 import electron from 'vite-plugin-electron';
 
