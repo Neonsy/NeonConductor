@@ -1,5 +1,6 @@
 import type { TopLevelTab } from '@/app/backend/runtime/contracts/enums';
 import type { ModePromptDefinition } from '@/app/backend/runtime/contracts/types/mode';
+import type { ToolCapability } from '@/shared/contracts';
 import type { ProfileInput } from '@/app/backend/runtime/contracts/types/common';
 
 export interface FileBackedCustomModeSettingsItem {
@@ -8,7 +9,8 @@ export interface FileBackedCustomModeSettingsItem {
     label: string;
     description?: string;
     whenToUse?: string;
-    groups?: string[];
+    tags?: string[];
+    toolCapabilities?: ToolCapability[];
 }
 
 export interface FileBackedCustomModeSettingsByScope {
@@ -83,7 +85,8 @@ export interface PromptLayerCustomModePayload {
     roleDefinition?: string;
     customInstructions?: string;
     whenToUse?: string;
-    groups?: string[];
+    tags?: string[];
+    toolCapabilities?: ToolCapability[];
 }
 
 export interface PromptLayerEditableCustomModePayload {
@@ -92,7 +95,8 @@ export interface PromptLayerEditableCustomModePayload {
     roleDefinition?: string;
     customInstructions?: string;
     whenToUse?: string;
-    groups?: string[];
+    tags?: string[];
+    toolCapabilities?: ToolCapability[];
 }
 
 export interface PromptLayerCustomModeRecord {
@@ -105,7 +109,8 @@ export interface PromptLayerCustomModeRecord {
     roleDefinition?: string;
     customInstructions?: string;
     whenToUse?: string;
-    groups?: string[];
+    tags?: string[];
+    toolCapabilities?: ToolCapability[];
 }
 
 export interface PromptLayerGetCustomModeInput extends ProfileInput {

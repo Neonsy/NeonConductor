@@ -11,18 +11,20 @@ import {
     type PromptLayerCustomModeRecord,
     type PromptLayerExportCustomModeResult,
     type PromptLayerSettings,
+    type ToolCapability,
     type TopLevelTab,
 } from '@/app/backend/runtime/contracts';
 import { buildDiscoveredAssets, replaceDiscoveredModes } from '@/app/backend/runtime/services/registry/discovery';
 import { resolveRegistryPaths } from '@/app/backend/runtime/services/registry/filesystem';
 
 import {
-    buildPortableModePayload,
+    buildCanonicalCustomModePayload,
     deletePortableModeFile,
     fileExists,
     parsePortableCustomModeJson,
-    renderPortableModeMarkdown,
+    renderCanonicalModeMarkdown,
     resolveCustomModeDirectory,
+    toCanonicalCustomModePayload,
     toPortableModePayload,
     writePortableModeFile,
 } from '@/app/backend/runtime/services/promptLayers/customModePortability';
@@ -92,7 +94,8 @@ async function readFileBackedCustomModes(input: {
             label: mode.label,
             ...(mode.description ? { description: mode.description } : {}),
             ...(mode.whenToUse ? { whenToUse: mode.whenToUse } : {}),
-            ...(mode.groups ? { groups: mode.groups } : {}),
+            ...(mode.tags ? { tags: mode.tags } : {}),
+            ...(mode.executionPolicy.toolCapabilities ? { toolCapabilities: mode.executionPolicy.toolCapabilities } : {}),
         };
         if (mode.scope === 'workspace') {
             workspaceModes[mode.topLevelTab].push(item);
@@ -164,27 +167,30 @@ function toPromptLayerCustomModeRecord(mode: ModeDefinition): PromptLayerCustomM
         ...(mode.prompt.roleDefinition ? { roleDefinition: mode.prompt.roleDefinition } : {}),
         ...(mode.prompt.customInstructions ? { customInstructions: mode.prompt.customInstructions } : {}),
         ...(mode.whenToUse ? { whenToUse: mode.whenToUse } : {}),
-        ...(mode.groups ? { groups: mode.groups } : {}),
+        ...(mode.tags ? { tags: mode.tags } : {}),
+        ...(mode.executionPolicy.toolCapabilities ? { toolCapabilities: mode.executionPolicy.toolCapabilities } : {}),
     };
 }
 
-function buildEditablePortablePayload(input: {
+function buildEditableCustomModePayload(input: {
     slug: string;
     name: string;
     description?: string;
     roleDefinition?: string;
     customInstructions?: string;
     whenToUse?: string;
-    groups?: string[];
+    tags?: string[];
+    toolCapabilities?: ToolCapability[];
 }): PromptLayerCustomModePayload {
-    return buildPortableModePayload({
+    return buildCanonicalCustomModePayload({
         slug: input.slug,
         name: input.name,
         ...(input.description ? { description: input.description } : {}),
         ...(input.roleDefinition ? { roleDefinition: input.roleDefinition } : {}),
         ...(input.customInstructions ? { customInstructions: input.customInstructions } : {}),
         ...(input.whenToUse ? { whenToUse: input.whenToUse } : {}),
-        ...(input.groups ? { groups: input.groups } : {}),
+        ...(input.tags ? { tags: input.tags } : {}),
+        ...(input.toolCapabilities ? { toolCapabilities: input.toolCapabilities } : {}),
     });
 }
 
@@ -415,8 +421,8 @@ export async function createCustomMode(input: {
     workspaceFingerprint?: string;
     mode: PromptLayerCustomModePayload;
 }): Promise<PromptLayerSettings> {
-    const payload = buildPortableModePayload(input.mode);
-    const { modeKey, fileContent } = renderPortableModeMarkdown({
+    const payload = buildCanonicalCustomModePayload(input.mode);
+    const { modeKey, fileContent } = renderCanonicalModeMarkdown({
         topLevelTab: input.topLevelTab,
         payload,
     });
@@ -463,7 +469,8 @@ export async function updateCustomMode(input: {
         roleDefinition?: string;
         customInstructions?: string;
         whenToUse?: string;
-        groups?: string[];
+        tags?: string[];
+        toolCapabilities?: ToolCapability[];
     };
 }): Promise<PromptLayerSettings> {
     const existingMode = await findFileBackedCustomMode(input);
@@ -474,16 +481,17 @@ export async function updateCustomMode(input: {
         throw new Error(`File-backed custom mode "${input.topLevelTab}:${input.modeKey}" has no origin path.`);
     }
 
-    const payload = buildEditablePortablePayload({
+    const payload = buildEditableCustomModePayload({
         slug: existingMode.modeKey,
         name: input.mode.name,
         ...(input.mode.description ? { description: input.mode.description } : {}),
         ...(input.mode.roleDefinition ? { roleDefinition: input.mode.roleDefinition } : {}),
         ...(input.mode.customInstructions ? { customInstructions: input.mode.customInstructions } : {}),
         ...(input.mode.whenToUse ? { whenToUse: input.mode.whenToUse } : {}),
-        ...(input.mode.groups ? { groups: input.mode.groups } : {}),
+        ...(input.mode.tags ? { tags: input.mode.tags } : {}),
+        ...(input.mode.toolCapabilities ? { toolCapabilities: input.mode.toolCapabilities } : {}),
     });
-    const { fileContent } = renderPortableModeMarkdown({
+    const { fileContent } = renderCanonicalModeMarkdown({
         topLevelTab: existingMode.topLevelTab,
         payload,
     });
@@ -542,8 +550,9 @@ export async function importCustomMode(input: {
     jsonText: string;
     overwrite: boolean;
 }): Promise<PromptLayerSettings> {
-    const payload = parsePortableCustomModeJson(input.jsonText);
-    const { modeKey, fileContent } = renderPortableModeMarkdown({
+    const portablePayload = parsePortableCustomModeJson(input.jsonText);
+    const payload = toCanonicalCustomModePayload(portablePayload);
+    const { modeKey, fileContent } = renderCanonicalModeMarkdown({
         topLevelTab: input.topLevelTab,
         payload,
     });

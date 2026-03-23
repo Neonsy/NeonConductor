@@ -51,17 +51,17 @@ export function normalizeModePromptDefinition(value: unknown): ModePromptDefinit
     };
 }
 
-export function normalizeModeMetadata(value: unknown): { whenToUse?: string; groups?: string[] } {
+export function normalizeModeMetadata(value: unknown): { whenToUse?: string; tags?: string[] } {
     if (!isModePromptRecord(value)) {
         return {};
     }
 
     const whenToUse = readPromptText(value['whenToUse']);
-    const groups = readPromptTextArray(value['groups']);
+    const tags = readPromptTextArray(value['tags']);
 
     return {
         ...(whenToUse ? { whenToUse } : {}),
-        ...(groups ? { groups } : {}),
+        ...(tags ? { tags } : {}),
     };
 }
 
@@ -104,7 +104,6 @@ export interface ModeDefinition {
     originPath?: string;
     description?: string;
     whenToUse?: string;
-    groups?: string[];
     tags?: string[];
     enabled: boolean;
     precedence: number;

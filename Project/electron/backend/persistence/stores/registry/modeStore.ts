@@ -44,12 +44,17 @@ function parseTags(value: string): string[] | undefined {
     return parsed.length > 0 ? parsed : undefined;
 }
 
-function parseGroups(value: string): string[] | undefined {
+function parseLegacyGroupAlias(value: string): string[] | undefined {
     const parsed = parseJsonValue(value, [], isJsonUnknownArray)
         .filter(isJsonString)
         .map((item) => item.trim())
         .filter((item) => item.length > 0);
     return parsed.length > 0 ? Array.from(new Set(parsed)) : undefined;
+}
+
+function mergeTags(values: Array<string[] | undefined>): string[] | undefined {
+    const mergedTags = values.flatMap((value) => value ?? []);
+    return mergedTags.length > 0 ? Array.from(new Set(mergedTags)) : undefined;
 }
 
 function mapModeDefinition(row: {
@@ -75,11 +80,10 @@ function mapModeDefinition(row: {
     created_at: string;
     updated_at: string;
 }): ModeDefinitionRecord {
-    const tags = parseTags(row.tags_json);
-    const groups = parseGroups(row.groups_json);
+    const tags = mergeTags([parseTags(row.tags_json), parseLegacyGroupAlias(row.groups_json)]);
     const metadata = normalizeModeMetadata({
         whenToUse: row.when_to_use,
-        groups,
+        ...(tags ? { tags } : {}),
     });
     return {
         id: row.id,

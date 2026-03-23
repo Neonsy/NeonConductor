@@ -110,17 +110,15 @@ interface DiscoveredModeInput {
     originPath: string;
     description?: string;
     whenToUse?: string;
-    groups?: string[];
     tags?: string[];
     enabled: boolean;
     precedence: number;
 }
 
-interface DiscoveredModeDraft extends Omit<DiscoveredModeInput, 'workspaceFingerprint' | 'description' | 'whenToUse' | 'groups' | 'tags'> {
+interface DiscoveredModeDraft extends Omit<DiscoveredModeInput, 'workspaceFingerprint' | 'description' | 'whenToUse' | 'tags'> {
     workspaceFingerprint?: string | undefined;
     description?: string | undefined;
     whenToUse?: string | undefined;
-    groups?: string[] | undefined;
     tags?: string[] | undefined;
 }
 
@@ -196,11 +194,15 @@ function buildDiscoveredMode(input: DiscoveredModeDraft): DiscoveredModeInput {
         originPath: input.originPath,
         ...(input.description ? { description: input.description } : {}),
         ...(input.whenToUse ? { whenToUse: input.whenToUse } : {}),
-        ...(input.groups ? { groups: input.groups } : {}),
         ...(input.tags ? { tags: input.tags } : {}),
         enabled: input.enabled,
         precedence: input.precedence,
     };
+}
+
+function mergeTags(values: Array<string[] | undefined>): string[] | undefined {
+    const mergedTags = values.flatMap((value) => value ?? []);
+    return mergedTags.length > 0 ? Array.from(new Set(mergedTags)) : undefined;
 }
 
 function buildDiscoveredAsset(input: DiscoveredAssetDraft): DiscoveredAssetInput {
@@ -285,7 +287,7 @@ export async function replaceDiscoveredModes(input: {
                 origin_path: mode.originPath,
                 description: mode.description ?? null,
                 when_to_use: mode.whenToUse ?? null,
-                groups_json: JSON.stringify(mode.groups ?? []),
+                groups_json: JSON.stringify([]),
                 tags_json: JSON.stringify(mode.tags ?? []),
                 enabled: mode.enabled ? 1 : 0,
                 precedence: mode.precedence,
@@ -461,10 +463,12 @@ export async function buildDiscoveredAssets(input: {
         if (rawWhenToUse !== undefined && !parsedWhenToUse) {
             return [];
         }
-        const parsedGroups = readOptionalStringList(file.parsed.attributes['groups']);
-        if (parsedGroups === null) {
+        const parsedLegacyGroups = readOptionalStringList(file.parsed.attributes['groups']);
+        if (parsedLegacyGroups === null) {
             return [];
         }
+        const parsedTags = readTags(file.parsed.attributes['tags']);
+        const mergedTags = mergeTags([parsedTags, parsedLegacyGroups ?? undefined]);
         const topLevelTab = parsedTopLevelTab ?? 'agent';
 
         const modeKey = slugifyAssetKey(readString(file.parsed.attributes['modeKey']) ?? file.relativePath).replace(
@@ -506,8 +510,7 @@ export async function buildDiscoveredAssets(input: {
                     ? { description: readString(file.parsed.attributes['description']) }
                     : {}),
                 ...(parsedWhenToUse ? { whenToUse: parsedWhenToUse } : {}),
-                ...(parsedGroups ? { groups: parsedGroups } : {}),
-                ...(readTags(file.parsed.attributes['tags']) ? { tags: readTags(file.parsed.attributes['tags']) } : {}),
+                ...(mergedTags ? { tags: mergedTags } : {}),
                 enabled: readBoolean(file.parsed.attributes['enabled']) ?? true,
                 precedence: readNumber(file.parsed.attributes['precedence']) ?? 0,
             }),

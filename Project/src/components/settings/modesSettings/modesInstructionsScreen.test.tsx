@@ -61,7 +61,8 @@ vi.mock('@/web/components/settings/modesSettings/useModesInstructionsSettingsCon
                                     label: 'Global Chat Review',
                                     description: 'Global chat review mode',
                                     whenToUse: 'Use when a conversation needs a strict review pass.',
-                                    groups: ['quality', 'review'],
+                                    tags: ['quality', 'review'],
+                                    toolCapabilities: ['filesystem_read', 'shell'],
                                 },
                             ],
                             agent: [],
@@ -77,7 +78,7 @@ vi.mock('@/web/components/settings/modesSettings/useModesInstructionsSettingsCon
                                     label: 'Workspace Orchestrator',
                                     description: 'Workspace orchestrator mode',
                                     whenToUse: 'Use when a workspace needs coordination.',
-                                    groups: ['coordination'],
+                                    toolCapabilities: ['filesystem_read', 'filesystem_write'],
                                 },
                             ],
                         },
@@ -164,7 +165,8 @@ vi.mock('@/web/components/settings/modesSettings/useModesInstructionsSettingsCon
                         label: 'Global Chat Review',
                         description: 'Global chat review mode',
                         whenToUse: 'Use when a conversation needs a strict review pass.',
-                        groups: ['quality', 'review'],
+                        tags: ['quality', 'review'],
+                        toolCapabilities: ['filesystem_read', 'shell'],
                     },
                 ],
                 agent: [],
@@ -180,7 +182,7 @@ vi.mock('@/web/components/settings/modesSettings/useModesInstructionsSettingsCon
                         label: 'Workspace Orchestrator',
                         description: 'Workspace orchestrator mode',
                         whenToUse: 'Use when a workspace needs coordination.',
-                        groups: ['coordination'],
+                        toolCapabilities: ['filesystem_read', 'filesystem_write'],
                     },
                 ],
             },
@@ -196,7 +198,8 @@ vi.mock('@/web/components/settings/modesSettings/useModesInstructionsSettingsCon
                     roleDefinition: 'Act as a precise reviewer.',
                     customInstructions: 'Review the active conversation carefully.',
                     whenToUse: 'Use when a conversation needs a strict review pass.',
-                    groupsText: 'quality, review',
+                    tagsText: 'quality, review',
+                    selectedToolCapabilities: ['filesystem_read', 'shell'],
                     deleteConfirmed: false,
                 },
                 isLoading: false,
@@ -210,6 +213,7 @@ vi.mock('@/web/components/settings/modesSettings/useModesInstructionsSettingsCon
                 setScope: vi.fn(),
                 setTopLevelTab: vi.fn(),
                 setField: vi.fn(),
+                toggleToolCapability: vi.fn(),
                 setDeleteConfirmed: vi.fn(),
                 save: vi.fn(),
                 deleteMode: vi.fn(),
@@ -266,6 +270,8 @@ describe('modes instructions screen', () => {
         expect(html).toContain('Workspace Orchestrator');
         expect(html).toContain('Use when a conversation needs a strict review pass.');
         expect(html).toContain('quality');
+        expect(html).toContain('Filesystem Read');
+        expect(html).toContain('Shell');
         expect(html).toContain('Delete This Mode');
         expect(html).toContain('Edit');
         expect(html).toContain('Delete');

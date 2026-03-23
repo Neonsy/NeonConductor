@@ -6,6 +6,7 @@ import { trpc } from '@/web/trpc/client';
 import type {
     BuiltInModePromptSettingsItem,
     FileBackedCustomModeSettingsItem,
+    ToolCapability,
     TopLevelTab,
 } from '@/shared/contracts';
 
@@ -24,7 +25,8 @@ interface CustomModeEditorDraftBase {
     roleDefinition: string;
     customInstructions: string;
     whenToUse: string;
-    groupsText: string;
+    tagsText: string;
+    selectedToolCapabilities: ToolCapability[];
     deleteConfirmed: boolean;
 }
 
@@ -66,12 +68,18 @@ function normalizeOptionalText(value: string): string | undefined {
     return normalized.length > 0 ? normalized : undefined;
 }
 
-function parseGroupsText(value: string): string[] | undefined {
-    const groups = value
+function parseListText(value: string): string[] | undefined {
+    const items = value
         .split(/[\n,]/)
-        .map((group) => group.trim())
-        .filter((group) => group.length > 0);
-    return groups.length > 0 ? Array.from(new Set(groups)) : undefined;
+        .map((item) => item.trim())
+        .filter((item) => item.length > 0);
+    return items.length > 0 ? Array.from(new Set(items)) : undefined;
+}
+
+function toggleToolCapability(value: ToolCapability[], capability: ToolCapability): ToolCapability[] {
+    return value.includes(capability)
+        ? value.filter((candidate) => candidate !== capability)
+        : [...value, capability];
 }
 
 function createEmptyCustomModeEditorDraft(scope: CustomModeScope): CreateCustomModeEditorDraft {
@@ -85,7 +93,8 @@ function createEmptyCustomModeEditorDraft(scope: CustomModeScope): CreateCustomM
         roleDefinition: '',
         customInstructions: '',
         whenToUse: '',
-        groupsText: '',
+        tagsText: '',
+        selectedToolCapabilities: [],
         deleteConfirmed: false,
     };
 }
@@ -402,7 +411,8 @@ export function useModesInstructionsSettingsController(input: {
                 roleDefinition: result.mode.roleDefinition ?? '',
                 customInstructions: result.mode.customInstructions ?? '',
                 whenToUse: result.mode.whenToUse ?? '',
-                groupsText: result.mode.groups?.join(', ') ?? '',
+                tagsText: result.mode.tags?.join(', ') ?? '',
+                selectedToolCapabilities: result.mode.toolCapabilities ?? [],
                 deleteConfirmed: false,
             });
         } catch (error) {
@@ -617,7 +627,7 @@ export function useModesInstructionsSettingsController(input: {
                         | 'roleDefinition'
                         | 'customInstructions'
                         | 'whenToUse'
-                        | 'groupsText',
+                        | 'tagsText',
                     value: string
                 ) => {
                     setCustomModeEditorDraft((currentDraft) =>
@@ -625,6 +635,20 @@ export function useModesInstructionsSettingsController(input: {
                             ? {
                                   ...currentDraft,
                                   [field]: value,
+                              }
+                            : currentDraft
+                    );
+                    clearFeedback();
+                },
+                toggleToolCapability: (capability: ToolCapability) => {
+                    setCustomModeEditorDraft((currentDraft) =>
+                        currentDraft
+                            ? {
+                                  ...currentDraft,
+                                  selectedToolCapabilities: toggleToolCapability(
+                                      currentDraft.selectedToolCapabilities,
+                                      capability
+                                  ),
                               }
                             : currentDraft
                     );
@@ -646,11 +670,15 @@ export function useModesInstructionsSettingsController(input: {
                         return;
                     }
 
-                    const groups = parseGroupsText(customModeEditorDraft.groupsText);
+                    const tags = parseListText(customModeEditorDraft.tagsText);
                     const description = normalizeOptionalText(customModeEditorDraft.description);
                     const roleDefinition = normalizeOptionalText(customModeEditorDraft.roleDefinition);
                     const customInstructions = normalizeOptionalText(customModeEditorDraft.customInstructions);
                     const whenToUse = normalizeOptionalText(customModeEditorDraft.whenToUse);
+                    const toolCapabilities =
+                        customModeEditorDraft.selectedToolCapabilities.length > 0
+                            ? customModeEditorDraft.selectedToolCapabilities
+                            : undefined;
                     if (customModeEditorDraft.kind === 'create') {
                         await createCustomModeMutation.mutateAsync({
                             profileId,
@@ -666,7 +694,8 @@ export function useModesInstructionsSettingsController(input: {
                                 ...(roleDefinition ? { roleDefinition } : {}),
                                 ...(customInstructions ? { customInstructions } : {}),
                                 ...(whenToUse ? { whenToUse } : {}),
-                                ...(groups ? { groups } : {}),
+                                ...(tags ? { tags } : {}),
+                                ...(toolCapabilities ? { toolCapabilities } : {}),
                             },
                         });
                         return;
@@ -686,7 +715,8 @@ export function useModesInstructionsSettingsController(input: {
                             ...(roleDefinition ? { roleDefinition } : {}),
                             ...(customInstructions ? { customInstructions } : {}),
                             ...(whenToUse ? { whenToUse } : {}),
-                            ...(groups ? { groups } : {}),
+                            ...(tags ? { tags } : {}),
+                            ...(toolCapabilities ? { toolCapabilities } : {}),
                         },
                     });
                 },

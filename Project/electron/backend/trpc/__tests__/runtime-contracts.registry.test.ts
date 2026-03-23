@@ -256,7 +256,7 @@ tags:
             'Prefer workspace-specific constraints.'
         );
         expect(resolvedWorkspaceReviewMode?.whenToUse).toBe('Use when the workspace has stricter local constraints.');
-        expect(resolvedWorkspaceReviewMode?.groups).toEqual(['review', 'workspace']);
+        expect(resolvedWorkspaceReviewMode?.tags).toEqual(['review', 'workspace']);
         expect(
             resolvedWorkspace.resolved.modes.find(
                 (mode) => mode.topLevelTab === 'orchestrator' && mode.modeKey === 'workspace-orchestrator'

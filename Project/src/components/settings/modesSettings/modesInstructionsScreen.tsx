@@ -2,7 +2,7 @@ import { SettingsFeedbackBanner } from '@/web/components/settings/shared/setting
 import { Button } from '@/web/components/ui/button';
 import { useModesInstructionsSettingsController } from '@/web/components/settings/modesSettings/useModesInstructionsSettingsController';
 
-import { topLevelTabs, type TopLevelTab } from '@/shared/contracts';
+import { toolCapabilities, topLevelTabs, type ToolCapability, type TopLevelTab } from '@/shared/contracts';
 
 function PromptInstructionsHeader() {
     return (
@@ -173,6 +173,13 @@ function formatTopLevelLabel(topLevelTab: TopLevelTab): string {
 
 function formatBuiltInModeDescription(topLevelTab: TopLevelTab, label: string): string {
     return `This shipped ${label.toLowerCase()} prompt runs inside ${formatTopLevelLabel(topLevelTab).toLowerCase()} after top-level instructions and before rules or attached skills.`;
+}
+
+function formatToolCapabilityLabel(toolCapability: ToolCapability): string {
+    return toolCapability
+        .split('_')
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' ');
 }
 
 function CustomModeEditorSection(input: {
@@ -346,21 +353,44 @@ function CustomModeEditorSection(input: {
 
             <label className='space-y-2'>
                 <span className='text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase'>
-                    Groups
+                    Tags
                 </span>
                 <textarea
-                    value={draft.groupsText}
+                    value={draft.tagsText}
                     onChange={(event) => {
-                        input.editor.setField('groupsText', event.target.value);
+                        input.editor.setField('tagsText', event.target.value);
                     }}
                     className='border-border bg-background min-h-20 w-full rounded-2xl border px-4 py-3 text-sm leading-6'
                     spellCheck={false}
                     placeholder='quality, review'
                 />
                 <p className='text-muted-foreground text-xs leading-5'>
-                    Separate groups with commas or new lines.
+                    Separate tags with commas or new lines.
                 </p>
             </label>
+
+            <div className='space-y-2'>
+                <span className='text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase'>
+                    Tool Capabilities
+                </span>
+                <div className='grid gap-3 md:grid-cols-2'>
+                    {toolCapabilities.map((toolCapability) => (
+                        <label
+                            key={toolCapability}
+                            className='border-border bg-background flex items-start gap-3 rounded-2xl border px-4 py-3 text-sm'>
+                            <input
+                                type='checkbox'
+                                className='mt-1'
+                                checked={draft.selectedToolCapabilities.includes(toolCapability)}
+                                onChange={() => {
+                                    input.editor.toggleToolCapability(toolCapability);
+                                }}
+                            />
+                            <span className='leading-6'>{formatToolCapabilityLabel(toolCapability)}</span>
+                        </label>
+                    ))}
+                </div>
+            </div>
 
             <div className='grid gap-4 xl:grid-cols-2'>
                 <label className='space-y-2'>
@@ -501,13 +531,24 @@ function FileBackedModeInventorySection(input: {
                                                 {mode.whenToUse}
                                             </p>
                                         ) : null}
-                                        {mode.groups && mode.groups.length > 0 ? (
+                                        {mode.tags && mode.tags.length > 0 ? (
                                             <div className='flex flex-wrap gap-2 pt-1'>
-                                                {mode.groups.map((group) => (
+                                                {mode.tags.map((tag) => (
                                                     <span
-                                                        key={`${mode.modeKey}:${group}`}
+                                                        key={`${mode.modeKey}:tag:${tag}`}
                                                         className='border-border/70 bg-background/80 rounded-full border px-3 py-1 text-[11px] font-medium'>
-                                                        {group}
+                                                        {tag}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        ) : null}
+                                        {mode.toolCapabilities && mode.toolCapabilities.length > 0 ? (
+                                            <div className='flex flex-wrap gap-2 pt-1'>
+                                                {mode.toolCapabilities.map((toolCapability) => (
+                                                    <span
+                                                        key={`${mode.modeKey}:tool:${toolCapability}`}
+                                                        className='border-border/70 bg-background/80 rounded-full border px-3 py-1 text-[11px] font-medium'>
+                                                        {formatToolCapabilityLabel(toolCapability)}
                                                     </span>
                                                 ))}
                                             </div>
@@ -723,7 +764,8 @@ export function ModesInstructionsScreen(input: {
                             <p className='text-muted-foreground text-sm leading-6'>
                                 Supported fields: <code>slug</code>, <code>name</code>, <code>description</code>,{' '}
                                 <code>roleDefinition</code>, <code>customInstructions</code>, <code>whenToUse</code>,
-                                and <code>groups</code>.
+                                and <code>groups</code>. Portable <code>groups</code> map into Neon tool
+                                capabilities during import.
                             </p>
                         </div>
 
@@ -791,7 +833,7 @@ export function ModesInstructionsScreen(input: {
                                 }}
                                 className='border-border bg-background min-h-64 w-full rounded-2xl border px-4 py-3 font-mono text-sm leading-6'
                                 spellCheck={false}
-                                placeholder='{\n  "slug": "review",\n  "name": "Review",\n  "description": "Workspace review mode",\n  "roleDefinition": "Act as a precise reviewer.",\n  "customInstructions": "Review the workspace carefully.",\n  "whenToUse": "Use when a change needs a strict review pass.",\n  "groups": ["quality", "review"]\n}'
+                                placeholder='{\n  "slug": "review",\n  "name": "Review",\n  "description": "Workspace review mode",\n  "roleDefinition": "Act as a precise reviewer.",\n  "customInstructions": "Review the workspace carefully.",\n  "whenToUse": "Use when a change needs a strict review pass.",\n  "groups": ["read", "command"]\n}'
                             />
                         </label>
 

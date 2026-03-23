@@ -298,7 +298,8 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
             roleDefinition?: string;
             customInstructions?: string;
             whenToUse?: string;
-            groups?: string[];
+            tags?: string[];
+            toolCapabilities?: Array<'filesystem_read' | 'filesystem_write' | 'shell' | 'git'>;
         };
     }>();
     expectTypeOf<Inputs['prompt']['updateCustomMode']>().toExtend<{
@@ -313,7 +314,8 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
             roleDefinition?: string;
             customInstructions?: string;
             whenToUse?: string;
-            groups?: string[];
+            tags?: string[];
+            toolCapabilities?: Array<'filesystem_read' | 'filesystem_write' | 'shell' | 'git'>;
         };
     }>();
     expectTypeOf<Inputs['prompt']['deleteCustomMode']>().toExtend<{
@@ -756,7 +758,8 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
                         label: string;
                         description?: string;
                         whenToUse?: string;
-                        groups?: string[];
+                        tags?: string[];
+                        toolCapabilities?: Array<'filesystem_read' | 'filesystem_write' | 'shell' | 'git'>;
                     }>
                 >;
                 workspace?: Record<
@@ -767,7 +770,8 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
                         label: string;
                         description?: string;
                         whenToUse?: string;
-                        groups?: string[];
+                        tags?: string[];
+                        toolCapabilities?: Array<'filesystem_read' | 'filesystem_write' | 'shell' | 'git'>;
                     }>
                 >;
             };
@@ -789,7 +793,8 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
             roleDefinition?: string;
             customInstructions?: string;
             whenToUse?: string;
-            groups?: string[];
+            tags?: string[];
+            toolCapabilities?: Array<'filesystem_read' | 'filesystem_write' | 'shell' | 'git'>;
         };
     }>();
     expectTypeOf<Outputs['session']['getAttachedSkills']>().toExtend<{

@@ -1,4 +1,4 @@
-import { topLevelTabs } from '@/app/backend/runtime/contracts/enums';
+import { toolCapabilities as knownToolCapabilities, topLevelTabs, type ToolCapability } from '@/app/backend/runtime/contracts/enums';
 import {
     createParser,
     readBoolean,
@@ -73,15 +73,31 @@ function readOptionalInstructionText(value: unknown, field: string): string | un
     return normalized.length > 0 ? normalized : undefined;
 }
 
-function readOptionalGroups(value: unknown, field: string): string[] | undefined {
+function readOptionalStringList(value: unknown, field: string): string[] | undefined {
     if (value === undefined) {
         return undefined;
     }
 
-    const groups = readStringArray(value, field)
-        .map((group) => group.trim())
-        .filter((group) => group.length > 0);
-    return groups.length > 0 ? Array.from(new Set(groups)) : undefined;
+    const values = readStringArray(value, field)
+        .map((item) => item.trim())
+        .filter((item) => item.length > 0);
+    return values.length > 0 ? Array.from(new Set(values)) : undefined;
+}
+
+function readOptionalToolCapabilities(value: unknown, field: string): ToolCapability[] | undefined {
+    if (value === undefined) {
+        return undefined;
+    }
+
+    const capabilities = readStringArray(value, field).map((capability) => capability.trim());
+    const invalidCapability = capabilities.find(
+        (capability) => !knownToolCapabilities.includes(capability as ToolCapability)
+    );
+    if (invalidCapability) {
+        throw new Error(`Invalid "${field}": expected only ${knownToolCapabilities.join(', ')}.`);
+    }
+
+    return capabilities.length > 0 ? Array.from(new Set(capabilities as ToolCapability[])) : undefined;
 }
 
 function parsePromptLayerCustomModePayload(
@@ -93,7 +109,8 @@ function parsePromptLayerCustomModePayload(
     const roleDefinition = readOptionalInstructionText(source.roleDefinition, `${field}.roleDefinition`);
     const customInstructions = readOptionalInstructionText(source.customInstructions, `${field}.customInstructions`);
     const whenToUse = readOptionalInstructionText(source.whenToUse, `${field}.whenToUse`);
-    const groups = readOptionalGroups(source.groups, `${field}.groups`);
+    const tags = readOptionalStringList(source.tags, `${field}.tags`);
+    const toolCapabilities = readOptionalToolCapabilities(source.toolCapabilities, `${field}.toolCapabilities`);
 
     return {
         slug: readString(source.slug, `${field}.slug`),
@@ -102,7 +119,8 @@ function parsePromptLayerCustomModePayload(
         ...(roleDefinition ? { roleDefinition } : {}),
         ...(customInstructions ? { customInstructions } : {}),
         ...(whenToUse ? { whenToUse } : {}),
-        ...(groups ? { groups } : {}),
+        ...(tags ? { tags } : {}),
+        ...(toolCapabilities ? { toolCapabilities } : {}),
     };
 }
 
@@ -115,7 +133,8 @@ function parsePromptLayerEditableCustomModePayload(
     const roleDefinition = readOptionalInstructionText(source.roleDefinition, `${field}.roleDefinition`);
     const customInstructions = readOptionalInstructionText(source.customInstructions, `${field}.customInstructions`);
     const whenToUse = readOptionalInstructionText(source.whenToUse, `${field}.whenToUse`);
-    const groups = readOptionalGroups(source.groups, `${field}.groups`);
+    const tags = readOptionalStringList(source.tags, `${field}.tags`);
+    const toolCapabilities = readOptionalToolCapabilities(source.toolCapabilities, `${field}.toolCapabilities`);
 
     return {
         name: readString(source.name, `${field}.name`),
@@ -123,7 +142,8 @@ function parsePromptLayerEditableCustomModePayload(
         ...(roleDefinition ? { roleDefinition } : {}),
         ...(customInstructions ? { customInstructions } : {}),
         ...(whenToUse ? { whenToUse } : {}),
-        ...(groups ? { groups } : {}),
+        ...(tags ? { tags } : {}),
+        ...(toolCapabilities ? { toolCapabilities } : {}),
     };
 }
 
