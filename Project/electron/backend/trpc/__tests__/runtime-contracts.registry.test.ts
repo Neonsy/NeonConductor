@@ -50,6 +50,20 @@ tags:
             'utf8'
         );
         writeFileSync(
+            path.join(globalAssetsRoot, 'modes', 'chat.md'),
+            `---
+topLevelTab: chat
+modeKey: chat
+label: Global Chat
+description: Global chat mode override
+---
+# Global Chat Mode
+
+- Keep the conversation broad and lightweight.
+`,
+            'utf8'
+        );
+        writeFileSync(
             path.join(globalAssetsRoot, 'rules', 'coding-rules.md'),
             `---
 key: coding_rules
@@ -123,7 +137,22 @@ tags:
             `---
 topLevelTab: orchestrator
 modeKey: workspace-orchestrator
-label: Invalid Workspace Orchestrator
+label: Workspace Orchestrator
+description: Workspace orchestrator override
+precedence: 5
+---
+# Workspace Orchestrator
+
+- Coordinate work from the workspace root first.
+`,
+            'utf8'
+        );
+        writeFileSync(
+            path.join(workspaceAssetsRoot, 'modes', 'invalid.md'),
+            `---
+topLevelTab: shared
+modeKey: invalid-shared
+label: Invalid Shared Mode
 ---
 # Invalid
 
@@ -164,7 +193,7 @@ tags:
         );
 
         const globalRefresh = await caller.registry.refresh({ profileId });
-        expect(globalRefresh.refreshed.global.modes).toBe(1);
+        expect(globalRefresh.refreshed.global.modes).toBe(2);
         expect(globalRefresh.refreshed.global.rulesets).toBe(1);
         expect(globalRefresh.refreshed.global.skillfiles).toBe(1);
 
@@ -172,7 +201,7 @@ tags:
             profileId,
             workspaceFingerprint,
         });
-        expect(workspaceRefresh.refreshed.workspace?.modes).toBe(1);
+        expect(workspaceRefresh.refreshed.workspace?.modes).toBe(2);
         expect(workspaceRefresh.refreshed.workspace?.rulesets).toBe(1);
         expect(workspaceRefresh.refreshed.workspace?.skillfiles).toBe(1);
 
@@ -181,6 +210,9 @@ tags:
             resolvedGlobal.resolved.modes.find((mode) => mode.topLevelTab === 'agent' && mode.modeKey === 'review')
                 ?.label
         ).toBe('Global Review');
+        expect(
+            resolvedGlobal.resolved.modes.find((mode) => mode.topLevelTab === 'chat' && mode.modeKey === 'chat')?.label
+        ).toBe('Global Chat');
         expect(resolvedGlobal.resolved.skillfiles.some((skillfile) => skillfile.name === 'Workspace Search')).toBe(
             false
         );
@@ -199,7 +231,12 @@ tags:
         expect(resolvedWorkspaceReviewMode?.prompt.customInstructions).toContain(
             'Prefer workspace-specific constraints.'
         );
-        expect(resolvedWorkspace.resolved.modes.some((mode) => mode.modeKey === 'workspace-orchestrator')).toBe(false);
+        expect(
+            resolvedWorkspace.resolved.modes.find(
+                (mode) => mode.topLevelTab === 'orchestrator' && mode.modeKey === 'workspace-orchestrator'
+            )?.label
+        ).toBe('Workspace Orchestrator');
+        expect(resolvedWorkspace.resolved.modes.some((mode) => mode.modeKey === 'invalid-shared')).toBe(false);
         expect(resolvedWorkspace.resolved.rulesets.find((ruleset) => ruleset.assetKey === 'coding_rules')?.name).toBe(
             'Workspace Rules'
         );
@@ -222,6 +259,20 @@ tags:
         expect(workspaceModes.modes.some((mode) => mode.modeKey === 'review' && mode.label === 'Workspace Review')).toBe(
             true
         );
+        const chatModes = await caller.mode.list({
+            profileId,
+            topLevelTab: 'chat',
+            workspaceFingerprint,
+        });
+        expect(chatModes.modes.find((mode) => mode.modeKey === 'chat')?.label).toBe('Global Chat');
+        const orchestratorModes = await caller.mode.list({
+            profileId,
+            topLevelTab: 'orchestrator',
+            workspaceFingerprint,
+        });
+        expect(orchestratorModes.modes.find((mode) => mode.modeKey === 'workspace-orchestrator')?.label).toBe(
+            'Workspace Orchestrator'
+        );
 
         const activated = await caller.mode.setActive({
             profileId,
@@ -242,6 +293,44 @@ tags:
         expect(activeMode.activeMode.modeKey).toBe('review');
         expect(activeMode.activeMode.label).toBe('Workspace Review');
 
+        const chatActivated = await caller.mode.setActive({
+            profileId,
+            topLevelTab: 'chat',
+            workspaceFingerprint,
+            modeKey: 'chat',
+        });
+        expect(chatActivated.updated).toBe(true);
+        if (!chatActivated.updated) {
+            throw new Error('Expected global chat mode activation to succeed.');
+        }
+
+        const orchestratorActivated = await caller.mode.setActive({
+            profileId,
+            topLevelTab: 'orchestrator',
+            workspaceFingerprint,
+            modeKey: 'workspace-orchestrator',
+        });
+        expect(orchestratorActivated.updated).toBe(true);
+        if (!orchestratorActivated.updated) {
+            throw new Error('Expected workspace orchestrator mode activation to succeed.');
+        }
+
+        const chatActiveMode = await caller.mode.getActive({
+            profileId,
+            topLevelTab: 'chat',
+            workspaceFingerprint,
+        });
+        expect(chatActiveMode.activeMode.modeKey).toBe('chat');
+        expect(chatActiveMode.activeMode.label).toBe('Global Chat');
+
+        const orchestratorActiveMode = await caller.mode.getActive({
+            profileId,
+            topLevelTab: 'orchestrator',
+            workspaceFingerprint,
+        });
+        expect(orchestratorActiveMode.activeMode.modeKey).toBe('workspace-orchestrator');
+        expect(orchestratorActiveMode.activeMode.label).toBe('Workspace Orchestrator');
+
         rmSync(path.join(workspaceAssetsRoot, 'skills', 'repo-search.md'));
         const prunedRefresh = await caller.registry.refresh({
             profileId,
@@ -256,6 +345,133 @@ tags:
         expect(
             prunedResolved.resolved.skillfiles.find((skillfile) => skillfile.assetKey === 'repo_search')?.name
         ).toBe('Repo Search');
+    });
+
+    it('refreshing discovered non-agent modes does not delete built-ins, prompt overrides, or unrelated active settings', async () => {
+        const caller = createCaller();
+        const workspaceFingerprint = 'wsf_registry_non_agent_refresh';
+
+        await caller.prompt.setBuiltInModePrompt({
+            profileId,
+            topLevelTab: 'chat',
+            modeKey: 'chat',
+            roleDefinition: 'Built-in chat role override',
+            customInstructions: 'Built-in chat custom override',
+        });
+
+        const globalRegistry = await caller.registry.listResolved({ profileId });
+        const globalAssetsRoot = globalRegistry.paths.globalAssetsRoot;
+        rmSync(globalAssetsRoot, { recursive: true, force: true });
+        mkdirSync(path.join(globalAssetsRoot, 'modes'), { recursive: true });
+        writeFileSync(
+            path.join(globalAssetsRoot, 'modes', 'chat.md'),
+            `---
+topLevelTab: chat
+modeKey: chat
+label: Global File Chat
+precedence: 5
+---
+# Global File Chat
+
+- Override the built-in chat mode from the global registry.
+`,
+            'utf8'
+        );
+
+        await createSessionInScope(caller, profileId, {
+            scope: 'workspace',
+            workspaceFingerprint,
+            title: 'Registry refresh state guard',
+            kind: 'local',
+            topLevelTab: 'agent',
+        });
+
+        const workspaceRoots = await caller.runtime.listWorkspaceRoots({ profileId });
+        const workspaceRoot = workspaceRoots.workspaceRoots.find((root) => root.fingerprint === workspaceFingerprint);
+        if (!workspaceRoot) {
+            throw new Error('Expected workspace root for non-agent refresh guard test.');
+        }
+
+        const workspaceAssetsRoot = path.join(workspaceRoot.absolutePath, '.neonconductor');
+        mkdirSync(path.join(workspaceAssetsRoot, 'modes'), { recursive: true });
+        writeFileSync(
+            path.join(workspaceAssetsRoot, 'modes', 'orchestrate.md'),
+            `---
+topLevelTab: orchestrator
+modeKey: orchestrate
+label: Workspace File Orchestrate
+precedence: 5
+---
+# Workspace File Orchestrate
+
+- Override the built-in orchestrate mode from the workspace registry.
+`,
+            'utf8'
+        );
+
+        await caller.registry.refresh({ profileId });
+        await caller.registry.refresh({ profileId, workspaceFingerprint });
+
+        const chatActivated = await caller.mode.setActive({
+            profileId,
+            topLevelTab: 'chat',
+            modeKey: 'chat',
+        });
+        expect(chatActivated.updated).toBe(true);
+        if (!chatActivated.updated) {
+            throw new Error('Expected custom chat mode activation to succeed.');
+        }
+
+        const orchestratorActivated = await caller.mode.setActive({
+            profileId,
+            topLevelTab: 'orchestrator',
+            workspaceFingerprint,
+            modeKey: 'orchestrate',
+        });
+        expect(orchestratorActivated.updated).toBe(true);
+        if (!orchestratorActivated.updated) {
+            throw new Error('Expected custom orchestrator mode activation to succeed.');
+        }
+
+        rmSync(path.join(workspaceAssetsRoot, 'modes', 'orchestrate.md'));
+        await caller.registry.refresh({ profileId, workspaceFingerprint });
+
+        const builtInChat = await caller.mode.getActive({
+            profileId,
+            topLevelTab: 'chat',
+        });
+        expect(builtInChat.activeMode.modeKey).toBe('chat');
+        expect(builtInChat.activeMode.label).toBe('Global File Chat');
+        expect(builtInChat.activeMode.prompt).toEqual({
+            customInstructions: '# Global File Chat\n\n- Override the built-in chat mode from the global registry.',
+        });
+
+        const promptSettings = await caller.prompt.getSettings({ profileId });
+        expect(promptSettings.settings.builtInModes.chat.find((mode) => mode.modeKey === 'chat')).toEqual({
+            topLevelTab: 'chat',
+            modeKey: 'chat',
+            label: 'Chat',
+            prompt: {
+                roleDefinition: 'Built-in chat role override',
+                customInstructions: 'Built-in chat custom override',
+            },
+            hasOverride: true,
+        });
+
+        const orchestratorAfterPrune = await caller.mode.getActive({
+            profileId,
+            topLevelTab: 'orchestrator',
+            workspaceFingerprint,
+        });
+        expect(orchestratorAfterPrune.activeMode.modeKey).toBe('orchestrate');
+        expect(orchestratorAfterPrune.activeMode.label).toBe('Orchestrator Orchestrate');
+
+        const agentAfterPrune = await caller.mode.getActive({
+            profileId,
+            topLevelTab: 'agent',
+            workspaceFingerprint,
+        });
+        expect(agentAfterPrune.activeMode.modeKey).toBe('code');
     });
 
 

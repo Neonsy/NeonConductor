@@ -75,7 +75,7 @@ function mapModePrompt(bodyMarkdown: string): ModePromptDefinition {
 }
 
 interface DiscoveredModeInput {
-    topLevelTab: 'agent';
+    topLevelTab: TopLevelTab;
     modeKey: string;
     label: string;
     assetKey: string;
@@ -421,10 +421,12 @@ export async function buildDiscoveredAssets(input: {
     const skillFiles = skillFileGroups.flat();
 
     const modes = modeFiles.flatMap<DiscoveredModeInput>((file) => {
-        const topLevelTab = readTopLevelTab(file.parsed.attributes['topLevelTab']) ?? 'agent';
-        if (topLevelTab !== 'agent') {
+        const rawTopLevelTab = file.parsed.attributes['topLevelTab'];
+        const parsedTopLevelTab = readTopLevelTab(rawTopLevelTab);
+        if (rawTopLevelTab !== undefined && !parsedTopLevelTab) {
             return [];
         }
+        const topLevelTab = parsedTopLevelTab ?? 'agent';
 
         const modeKey = slugifyAssetKey(readString(file.parsed.attributes['modeKey']) ?? file.relativePath).replace(
             /\//g,

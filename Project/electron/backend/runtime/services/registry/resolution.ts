@@ -78,9 +78,6 @@ export function resolveModeDefinitions(input: {
         if (mode.scope === 'workspace') {
             return mode.workspaceFingerprint === input.workspaceFingerprint;
         }
-        if (mode.scope === 'global' || mode.scope === 'session') {
-            return input.topLevelTab === 'agent';
-        }
         return true;
     });
 

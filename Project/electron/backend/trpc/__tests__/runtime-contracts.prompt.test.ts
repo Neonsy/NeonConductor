@@ -161,38 +161,59 @@ describe('runtime contracts: prompt layers', () => {
         const { sqlite } = getPersistence();
         const now = new Date().toISOString();
 
-        sqlite
-            .prepare(
-                `
-                    INSERT INTO mode_definitions (
-                        id, profile_id, top_level_tab, mode_key, label, asset_key, prompt_json,
-                        execution_policy_json, source, source_kind, scope, workspace_fingerprint,
-                        origin_path, description, tags_json, enabled, precedence, created_at, updated_at
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                `
-            )
-            .run(
-                'mode_custom_agent_code',
-                profileId,
-                'agent',
-                'code',
-                'Custom Agent Code',
-                'custom_agent_code',
-                JSON.stringify({ customInstructions: 'Workspace-owned custom code mode.' }),
-                JSON.stringify({ toolCapabilities: ['filesystem_read'] }),
-                'user',
-                'global_file',
-                'global',
-                null,
-                'C:/registry/modes/code.md',
-                'Custom code mode',
-                '[]',
-                1,
-                10,
-                now,
-                now
-            );
+        const insertCustomMode = sqlite.prepare(
+            `
+                INSERT INTO mode_definitions (
+                    id, profile_id, top_level_tab, mode_key, label, asset_key, prompt_json,
+                    execution_policy_json, source, source_kind, scope, workspace_fingerprint,
+                    origin_path, description, tags_json, enabled, precedence, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `
+        );
+
+        insertCustomMode.run(
+            'mode_custom_agent_code',
+            profileId,
+            'agent',
+            'code',
+            'Custom Agent Code',
+            'custom_agent_code',
+            JSON.stringify({ customInstructions: 'Workspace-owned custom code mode.' }),
+            JSON.stringify({ toolCapabilities: ['filesystem_read'] }),
+            'user',
+            'global_file',
+            'global',
+            null,
+            'C:/registry/modes/code.md',
+            'Custom code mode',
+            '[]',
+            1,
+            10,
+            now,
+            now
+        );
+        insertCustomMode.run(
+            'mode_custom_chat_chat',
+            profileId,
+            'chat',
+            'chat',
+            'Custom Chat',
+            'custom_chat_chat',
+            JSON.stringify({ customInstructions: 'Custom chat mode instructions.' }),
+            JSON.stringify({}),
+            'user',
+            'global_file',
+            'global',
+            null,
+            'C:/registry/modes/chat.md',
+            'Custom chat mode',
+            '[]',
+            1,
+            10,
+            now,
+            now
+        );
 
         await caller.prompt.setBuiltInModePrompt({
             profileId,
@@ -201,16 +222,36 @@ describe('runtime contracts: prompt layers', () => {
             roleDefinition: 'Built-in role override',
             customInstructions: 'Built-in custom override',
         });
+        await caller.prompt.setBuiltInModePrompt({
+            profileId,
+            topLevelTab: 'chat',
+            modeKey: 'chat',
+            roleDefinition: 'Built-in chat role override',
+            customInstructions: 'Built-in chat custom override',
+        });
 
-        const modes = await caller.mode.list({
+        const agentModes = await caller.mode.list({
             profileId,
             topLevelTab: 'agent',
         });
-        expect(modes.modes.find((mode) => mode.modeKey === 'code')).toEqual(
+        expect(agentModes.modes.find((mode) => mode.modeKey === 'code')).toEqual(
             expect.objectContaining({
                 label: 'Custom Agent Code',
                 prompt: {
                     customInstructions: 'Workspace-owned custom code mode.',
+                },
+            })
+        );
+
+        const chatModes = await caller.mode.list({
+            profileId,
+            topLevelTab: 'chat',
+        });
+        expect(chatModes.modes.find((mode) => mode.modeKey === 'chat')).toEqual(
+            expect.objectContaining({
+                label: 'Custom Chat',
+                prompt: {
+                    customInstructions: 'Custom chat mode instructions.',
                 },
             })
         );
