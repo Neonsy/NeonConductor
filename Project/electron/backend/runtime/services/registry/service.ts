@@ -1,4 +1,4 @@
-import { modeStore, rulesetStore, settingsStore, skillfileStore } from '@/app/backend/persistence/stores';
+import { builtInModePromptOverrideStore, modeStore, rulesetStore, settingsStore, skillfileStore } from '@/app/backend/persistence/stores';
 import type {
     ModeDefinitionRecord,
     RulesetDefinitionRecord,
@@ -15,6 +15,39 @@ import {
     resolveModeDefinitions,
 } from '@/app/backend/runtime/services/registry/resolution';
 import type { RegistryListResolvedResult, RegistryRefreshResult } from '@/app/backend/runtime/services/registry/types';
+
+function isBuiltInMode(mode: Pick<ModeDefinitionRecord, 'scope' | 'sourceKind'>): boolean {
+    return mode.scope === 'system' && mode.sourceKind === 'system_seed';
+}
+
+async function applyBuiltInModePromptOverrides(input: {
+    profileId: string;
+    modes: ModeDefinitionRecord[];
+}): Promise<ModeDefinitionRecord[]> {
+    const overrides = await builtInModePromptOverrideStore.listByProfile(input.profileId);
+    const overrideByKey = new Map(
+        overrides.map((override) => [`${override.topLevelTab}:${override.modeKey}`, override] as const)
+    );
+
+    return input.modes.map((mode) => {
+        if (!isBuiltInMode(mode)) {
+            return mode;
+        }
+
+        const override = overrideByKey.get(`${mode.topLevelTab}:${mode.modeKey}`);
+        if (!override) {
+            return mode;
+        }
+
+        return {
+            ...mode,
+            prompt: {
+                ...mode.prompt,
+                ...override.prompt,
+            },
+        };
+    });
+}
 
 function buildDiscoveredRegistryView(input: {
     modes: ModeDefinitionRecord[];
@@ -364,9 +397,13 @@ export async function resolveModesForTab(input: {
     workspaceFingerprint?: string;
 }): Promise<ModeDefinitionRecord[]> {
     const allModes = await modeStore.listByProfile(input.profileId);
-    return resolveModeDefinitions({
+    const resolvedModes = resolveModeDefinitions({
         modes: allModes,
         topLevelTab: input.topLevelTab,
         ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
+    });
+    return applyBuiltInModePromptOverrides({
+        profileId: input.profileId,
+        modes: resolvedModes,
     });
 }

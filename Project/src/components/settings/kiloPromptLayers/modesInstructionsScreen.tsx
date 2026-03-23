@@ -81,12 +81,98 @@ function PromptLayerCard(input: {
     );
 }
 
+function BuiltInModePromptCard(input: {
+    title: string;
+    description: string;
+    roleDefinition: string;
+    customInstructions: string;
+    hasOverride: boolean;
+    isSaving: boolean;
+    warning: string;
+    onRoleDefinitionChange: (value: string) => void;
+    onCustomInstructionsChange: (value: string) => void;
+    onSave: () => Promise<unknown>;
+    onReset: () => Promise<unknown>;
+}) {
+    return (
+        <section className='border-border/70 bg-card/50 space-y-4 rounded-[24px] border p-5'>
+            <div className='flex flex-wrap items-start justify-between gap-3'>
+                <div className='space-y-1'>
+                    <h5 className='text-sm font-semibold'>{input.title}</h5>
+                    <p className='text-muted-foreground text-sm leading-6'>{input.description}</p>
+                </div>
+                <div className='border-border/70 bg-background/80 rounded-full border px-3 py-1 text-[11px] font-medium'>
+                    {input.hasOverride ? 'Override active' : 'Using shipped defaults'}
+                </div>
+            </div>
+
+            <div className='border-amber-500/30 bg-amber-500/10 text-amber-900 dark:text-amber-100 rounded-2xl border px-3 py-2 text-sm'>
+                {input.warning}
+            </div>
+
+            <label className='space-y-2'>
+                <span className='text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase'>
+                    Role Definition
+                </span>
+                <textarea
+                    value={input.roleDefinition}
+                    onChange={(event) => {
+                        input.onRoleDefinitionChange(event.target.value);
+                    }}
+                    className='border-border bg-background min-h-28 w-full rounded-2xl border px-4 py-3 text-sm leading-6'
+                    spellCheck={false}
+                />
+            </label>
+
+            <label className='space-y-2'>
+                <span className='text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase'>
+                    Custom Instructions
+                </span>
+                <textarea
+                    value={input.customInstructions}
+                    onChange={(event) => {
+                        input.onCustomInstructionsChange(event.target.value);
+                    }}
+                    className='border-border bg-background min-h-36 w-full rounded-2xl border px-4 py-3 text-sm leading-6'
+                    spellCheck={false}
+                />
+            </label>
+
+            <div className='flex flex-wrap gap-2'>
+                <Button
+                    type='button'
+                    size='sm'
+                    disabled={input.isSaving}
+                    onClick={() => {
+                        void input.onSave();
+                    }}>
+                    {input.isSaving ? 'Saving…' : 'Save'}
+                </Button>
+                <Button
+                    type='button'
+                    size='sm'
+                    variant='outline'
+                    disabled={input.isSaving}
+                    onClick={() => {
+                        void input.onReset();
+                    }}>
+                    Reset
+                </Button>
+            </div>
+        </section>
+    );
+}
+
 function formatTopLevelLabel(topLevelTab: TopLevelTab): string {
     return topLevelTab === 'chat'
         ? 'Chat'
         : topLevelTab === 'agent'
           ? 'Agent'
           : 'Orchestrator';
+}
+
+function formatBuiltInModeDescription(topLevelTab: TopLevelTab, label: string): string {
+    return `This shipped ${label.toLowerCase()} prompt runs inside ${formatTopLevelLabel(topLevelTab).toLowerCase()} after top-level instructions and before rules or attached skills.`;
 }
 
 export function KiloModesInstructionsScreen({ profileId }: { profileId: string }) {
@@ -149,6 +235,67 @@ export function KiloModesInstructionsScreen({ profileId }: { profileId: string }
                         />
                     ))}
                 </div>
+            </div>
+
+            <div className='space-y-4'>
+                <div className='space-y-1'>
+                    <h5 className='text-sm font-semibold'>Built-In Mode Prompts</h5>
+                    <p className='text-muted-foreground text-sm leading-6'>
+                        These prompts define shipped mode-specific behavior under each run family. Editing them can make
+                        the app behave unexpectedly.
+                    </p>
+                </div>
+
+                {topLevelTabs.map((topLevelTab) => {
+                    const items = controller.builtInModes.getItems(topLevelTab);
+                    if (items.length === 0) {
+                        return null;
+                    }
+
+                    return (
+                        <div key={topLevelTab} className='space-y-3'>
+                            <div className='space-y-1'>
+                                <h6 className='text-sm font-semibold'>{formatTopLevelLabel(topLevelTab)} Modes</h6>
+                                <p className='text-muted-foreground text-sm leading-6'>
+                                    Reset any edited built-in mode to restore the shipped default prompt for that mode.
+                                </p>
+                            </div>
+
+                            <div className='grid gap-5 xl:grid-cols-2'>
+                                {items.map((mode) => (
+                                    <BuiltInModePromptCard
+                                        key={`${mode.topLevelTab}:${mode.modeKey}`}
+                                        title={mode.label}
+                                        description={formatBuiltInModeDescription(topLevelTab, mode.label)}
+                                        roleDefinition={mode.prompt.roleDefinition ?? ''}
+                                        customInstructions={mode.prompt.customInstructions ?? ''}
+                                        hasOverride={mode.hasOverride}
+                                        isSaving={controller.builtInModes.isSaving}
+                                        warning={`Editing the built-in ${mode.label.toLowerCase()} prompt can make the app behave unexpectedly. Reset restores the shipped behavior.`}
+                                        onRoleDefinitionChange={(value) => {
+                                            controller.builtInModes.setPromptField(
+                                                topLevelTab,
+                                                mode.modeKey,
+                                                'roleDefinition',
+                                                value
+                                            );
+                                        }}
+                                        onCustomInstructionsChange={(value) => {
+                                            controller.builtInModes.setPromptField(
+                                                topLevelTab,
+                                                mode.modeKey,
+                                                'customInstructions',
+                                                value
+                                            );
+                                        }}
+                                        onSave={() => controller.builtInModes.save(topLevelTab, mode.modeKey)}
+                                        onReset={() => controller.builtInModes.reset(topLevelTab, mode.modeKey)}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+                    );
+                })}
             </div>
         </div>
     );

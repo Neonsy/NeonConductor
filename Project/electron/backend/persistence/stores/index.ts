@@ -5,6 +5,7 @@ export { checkpointSnapshotStore } from '@/app/backend/persistence/stores/runtim
 export { appComposerMediaSettingsStore } from '@/app/backend/persistence/stores/runtime/appComposerMediaSettingsStore';
 export { appContextSettingsStore } from '@/app/backend/persistence/stores/runtime/appContextSettingsStore';
 export { appPromptLayerSettingsStore } from '@/app/backend/persistence/stores/runtime/appPromptLayerSettingsStore';
+export { builtInModePromptOverrideStore } from '@/app/backend/persistence/stores/runtime/builtInModePromptOverrideStore';
 export { conversationStore } from '@/app/backend/persistence/stores/conversation/conversationStore';
 export { diffStore } from '@/app/backend/persistence/stores/runtime/diffStore';
 export { kiloRoutingPreferenceStore } from '@/app/backend/persistence/stores/provider/kiloRoutingPreferenceStore';

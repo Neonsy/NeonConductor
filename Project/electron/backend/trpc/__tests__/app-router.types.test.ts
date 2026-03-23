@@ -259,6 +259,18 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
         topLevelTab: 'chat' | 'agent' | 'orchestrator';
         value: string;
     }>();
+    expectTypeOf<Inputs['prompt']['setBuiltInModePrompt']>().toExtend<{
+        profileId: string;
+        topLevelTab: 'chat' | 'agent' | 'orchestrator';
+        modeKey: string;
+        roleDefinition: string;
+        customInstructions: string;
+    }>();
+    expectTypeOf<Inputs['prompt']['resetBuiltInModePrompt']>().toExtend<{
+        profileId: string;
+        topLevelTab: 'chat' | 'agent' | 'orchestrator';
+        modeKey: string;
+    }>();
 
     expectTypeOf<Inputs['session']['list']>().toExtend<{
         profileId: string;
@@ -661,6 +673,19 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
             appGlobalInstructions: string;
             profileGlobalInstructions: string;
             topLevelInstructions: Record<'chat' | 'agent' | 'orchestrator', string>;
+            builtInModes: Record<
+                'chat' | 'agent' | 'orchestrator',
+                Array<{
+                    topLevelTab: 'chat' | 'agent' | 'orchestrator';
+                    modeKey: string;
+                    label: string;
+                    prompt: {
+                        roleDefinition?: string;
+                        customInstructions?: string;
+                    };
+                    hasOverride: boolean;
+                }>
+            >;
         };
     }>();
     expectTypeOf<Outputs['session']['getAttachedSkills']>().toExtend<{

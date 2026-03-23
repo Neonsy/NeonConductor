@@ -4,12 +4,15 @@ import {
     readEnumValue,
     readObject,
     readProfileId,
+    readString,
 } from '@/app/backend/runtime/contracts/parsers/helpers';
 import type {
     PromptLayerGetSettingsInput,
+    PromptLayerResetBuiltInModePromptInput,
     PromptLayerResetAppGlobalInstructionsInput,
     PromptLayerResetProfileGlobalInstructionsInput,
     PromptLayerResetTopLevelInstructionsInput,
+    PromptLayerSetBuiltInModePromptInput,
     PromptLayerSetAppGlobalInstructionsInput,
     PromptLayerSetProfileGlobalInstructionsInput,
     PromptLayerSetTopLevelInstructionsInput,
@@ -90,6 +93,30 @@ export function parsePromptLayerResetTopLevelInstructionsInput(
     };
 }
 
+export function parsePromptLayerSetBuiltInModePromptInput(input: unknown): PromptLayerSetBuiltInModePromptInput {
+    const source = readObject(input, 'input');
+
+    return {
+        profileId: readProfileId(source),
+        topLevelTab: readEnumValue(source.topLevelTab, 'topLevelTab', topLevelTabs),
+        modeKey: readString(source.modeKey, 'modeKey'),
+        roleDefinition: readInstructionValue(source.roleDefinition, 'roleDefinition'),
+        customInstructions: readInstructionValue(source.customInstructions, 'customInstructions'),
+    };
+}
+
+export function parsePromptLayerResetBuiltInModePromptInput(
+    input: unknown
+): PromptLayerResetBuiltInModePromptInput {
+    const source = readObject(input, 'input');
+
+    return {
+        profileId: readProfileId(source),
+        topLevelTab: readEnumValue(source.topLevelTab, 'topLevelTab', topLevelTabs),
+        modeKey: readString(source.modeKey, 'modeKey'),
+    };
+}
+
 export const promptLayerGetSettingsInputSchema = createParser(parsePromptLayerGetSettingsInput);
 export const promptLayerSetAppGlobalInstructionsInputSchema = createParser(parsePromptLayerSetAppGlobalInstructionsInput);
 export const promptLayerResetAppGlobalInstructionsInputSchema = createParser(
@@ -106,4 +133,8 @@ export const promptLayerSetTopLevelInstructionsInputSchema = createParser(
 );
 export const promptLayerResetTopLevelInstructionsInputSchema = createParser(
     parsePromptLayerResetTopLevelInstructionsInput
+);
+export const promptLayerSetBuiltInModePromptInputSchema = createParser(parsePromptLayerSetBuiltInModePromptInput);
+export const promptLayerResetBuiltInModePromptInputSchema = createParser(
+    parsePromptLayerResetBuiltInModePromptInput
 );

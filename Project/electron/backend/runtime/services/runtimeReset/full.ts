@@ -9,6 +9,7 @@ async function resolveFullCounts(db: RuntimeResetDatabase): Promise<RuntimeReset
         settings,
         appContextSettings,
         appPromptLayerSettings,
+        builtInModePromptOverrides,
         profileContextSettings,
         sessionContextCompactions,
         modelLimitOverrides,
@@ -47,6 +48,10 @@ async function resolveFullCounts(db: RuntimeResetDatabase): Promise<RuntimeReset
         db
             .selectFrom('app_prompt_layer_settings')
             .select((eb) => eb.fn.count<number>('id').as('count'))
+            .executeTakeFirst(),
+        db
+            .selectFrom('built_in_mode_prompt_overrides')
+            .select((eb) => eb.fn.count<number>('mode_key').as('count'))
             .executeTakeFirst(),
         db.selectFrom('profile_context_settings').select((eb) => eb.fn.count<number>('profile_id').as('count')).executeTakeFirst(),
         db.selectFrom('session_context_compactions').select((eb) => eb.fn.count<number>('session_id').as('count')).executeTakeFirst(),
@@ -110,6 +115,7 @@ async function resolveFullCounts(db: RuntimeResetDatabase): Promise<RuntimeReset
         settings: settings?.count ?? 0,
         appContextSettings: appContextSettings?.count ?? 0,
         appPromptLayerSettings: appPromptLayerSettings?.count ?? 0,
+        builtInModePromptOverrides: builtInModePromptOverrides?.count ?? 0,
         profileContextSettings: profileContextSettings?.count ?? 0,
         sessionContextCompactions: sessionContextCompactions?.count ?? 0,
         modelLimitOverrides: modelLimitOverrides?.count ?? 0,
@@ -157,6 +163,7 @@ async function applyFullReset(db: RuntimeResetDatabase): Promise<void> {
     await db.deleteFrom('session_context_compactions').execute();
     await db.deleteFrom('app_context_settings').execute();
     await db.deleteFrom('app_prompt_layer_settings').execute();
+    await db.deleteFrom('built_in_mode_prompt_overrides').execute();
     await db.deleteFrom('model_limit_overrides').execute();
     await db.deleteFrom('mode_definitions').execute();
     await db.deleteFrom('rulesets').execute();

@@ -94,6 +94,7 @@ export interface RuntimeResetCounts {
     settings: number;
     appContextSettings: number;
     appPromptLayerSettings: number;
+    builtInModePromptOverrides: number;
     profileContextSettings: number;
     sessionContextCompactions: number;
     modelLimitOverrides: number;

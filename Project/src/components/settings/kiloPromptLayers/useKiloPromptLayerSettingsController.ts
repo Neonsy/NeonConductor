@@ -3,9 +3,12 @@ import { useState } from 'react';
 import { PROGRESSIVE_QUERY_OPTIONS } from '@/web/lib/query/progressiveQueryOptions';
 import { trpc } from '@/web/trpc/client';
 
-import type { TopLevelTab } from '@/shared/contracts';
+import type { BuiltInModePromptSettingsItem, TopLevelTab } from '@/shared/contracts';
 
 type TopLevelDraftState = Partial<Record<TopLevelTab, { profileId: string; value: string }>>;
+type BuiltInModeDraftState = Partial<
+    Record<string, { profileId: string; roleDefinition: string; customInstructions: string }>
+>;
 
 function resolveTopLevelDraftValue(input: {
     profileId: string;
@@ -30,6 +33,7 @@ export function useKiloPromptLayerSettingsController(profileId: string) {
         undefined
     );
     const [topLevelDrafts, setTopLevelDrafts] = useState<TopLevelDraftState>({});
+    const [builtInModeDrafts, setBuiltInModeDrafts] = useState<BuiltInModeDraftState>({});
 
     const settingsQuery = trpc.prompt.getSettings.useQuery({ profileId }, PROGRESSIVE_QUERY_OPTIONS);
 
@@ -37,8 +41,35 @@ export function useKiloPromptLayerSettingsController(profileId: string) {
         appGlobalInstructions: string;
         profileGlobalInstructions: string;
         topLevelInstructions: Record<TopLevelTab, string>;
+        builtInModes: Record<TopLevelTab, BuiltInModePromptSettingsItem[]>;
     }) {
         utils.prompt.getSettings.setData({ profileId }, { settings });
+    }
+
+    function getBuiltInModeDraftKey(topLevelTab: TopLevelTab, modeKey: string): string {
+        return `${topLevelTab}:${modeKey}`;
+    }
+
+    function resolveBuiltInModePrompt(input: {
+        topLevelTab: TopLevelTab;
+        modeKey: string;
+        persistedPrompt: {
+            roleDefinition?: string;
+            customInstructions?: string;
+        };
+    }): { roleDefinition: string; customInstructions: string } {
+        const draft = builtInModeDrafts[getBuiltInModeDraftKey(input.topLevelTab, input.modeKey)];
+        if (draft?.profileId === profileId) {
+            return {
+                roleDefinition: draft.roleDefinition,
+                customInstructions: draft.customInstructions,
+            };
+        }
+
+        return {
+            roleDefinition: input.persistedPrompt.roleDefinition ?? '',
+            customInstructions: input.persistedPrompt.customInstructions ?? '',
+        };
     }
 
     const setAppGlobalInstructionsMutation = trpc.prompt.setAppGlobalInstructions.useMutation({
@@ -118,6 +149,38 @@ export function useKiloPromptLayerSettingsController(profileId: string) {
             }));
             setFeedbackTone('success');
             setFeedbackMessage(`Reset ${variables.topLevelTab} instructions.`);
+        },
+        onError: (error) => {
+            setFeedbackTone('error');
+            setFeedbackMessage(error.message);
+        },
+    });
+
+    const setBuiltInModePromptMutation = trpc.prompt.setBuiltInModePrompt.useMutation({
+        onSuccess: ({ settings }, variables) => {
+            applySettings(settings);
+            setBuiltInModeDrafts((currentDrafts) => ({
+                ...currentDrafts,
+                [getBuiltInModeDraftKey(variables.topLevelTab, variables.modeKey)]: undefined,
+            }));
+            setFeedbackTone('success');
+            setFeedbackMessage(`Saved built-in ${variables.topLevelTab}:${variables.modeKey} mode prompt.`);
+        },
+        onError: (error) => {
+            setFeedbackTone('error');
+            setFeedbackMessage(error.message);
+        },
+    });
+
+    const resetBuiltInModePromptMutation = trpc.prompt.resetBuiltInModePrompt.useMutation({
+        onSuccess: ({ settings }, variables) => {
+            applySettings(settings);
+            setBuiltInModeDrafts((currentDrafts) => ({
+                ...currentDrafts,
+                [getBuiltInModeDraftKey(variables.topLevelTab, variables.modeKey)]: undefined,
+            }));
+            setFeedbackTone('success');
+            setFeedbackMessage(`Reset built-in ${variables.topLevelTab}:${variables.modeKey} mode prompt.`);
         },
         onError: (error) => {
             setFeedbackTone('error');
@@ -214,6 +277,70 @@ export function useKiloPromptLayerSettingsController(profileId: string) {
                 await resetTopLevelInstructionsMutation.mutateAsync({
                     profileId,
                     topLevelTab,
+                });
+            },
+        },
+        builtInModes: {
+            isSaving:
+                setBuiltInModePromptMutation.isPending || resetBuiltInModePromptMutation.isPending,
+            getItems: (topLevelTab: TopLevelTab) =>
+                (persistedSettings?.builtInModes[topLevelTab] ?? []).map((mode) => ({
+                    ...mode,
+                    prompt: resolveBuiltInModePrompt({
+                        topLevelTab,
+                        modeKey: mode.modeKey,
+                        persistedPrompt: mode.prompt,
+                    }),
+                })),
+            setPromptField: (
+                topLevelTab: TopLevelTab,
+                modeKey: string,
+                field: 'roleDefinition' | 'customInstructions',
+                value: string
+            ) => {
+                const draftKey = getBuiltInModeDraftKey(topLevelTab, modeKey);
+                const persistedMode = (persistedSettings?.builtInModes[topLevelTab] ?? []).find(
+                    (candidate) => candidate.modeKey === modeKey
+                );
+                const currentPrompt = resolveBuiltInModePrompt({
+                    topLevelTab,
+                    modeKey,
+                    persistedPrompt: persistedMode?.prompt ?? {},
+                });
+                setBuiltInModeDrafts((currentDrafts) => ({
+                    ...currentDrafts,
+                    [draftKey]: {
+                        profileId,
+                        roleDefinition:
+                            field === 'roleDefinition' ? value : currentPrompt.roleDefinition,
+                        customInstructions:
+                            field === 'customInstructions' ? value : currentPrompt.customInstructions,
+                    },
+                }));
+                clearFeedback();
+            },
+            save: async (topLevelTab: TopLevelTab, modeKey: string) => {
+                const persistedMode = (persistedSettings?.builtInModes[topLevelTab] ?? []).find(
+                    (candidate) => candidate.modeKey === modeKey
+                );
+                const prompt = resolveBuiltInModePrompt({
+                    topLevelTab,
+                    modeKey,
+                    persistedPrompt: persistedMode?.prompt ?? {},
+                });
+                await setBuiltInModePromptMutation.mutateAsync({
+                    profileId,
+                    topLevelTab,
+                    modeKey,
+                    roleDefinition: prompt.roleDefinition,
+                    customInstructions: prompt.customInstructions,
+                });
+            },
+            reset: async (topLevelTab: TopLevelTab, modeKey: string) => {
+                await resetBuiltInModePromptMutation.mutateAsync({
+                    profileId,
+                    topLevelTab,
+                    modeKey,
                 });
             },
         },

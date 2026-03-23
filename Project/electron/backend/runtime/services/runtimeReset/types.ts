@@ -9,6 +9,7 @@ export const EMPTY_COUNTS: RuntimeResetCounts = {
     settings: 0,
     appContextSettings: 0,
     appPromptLayerSettings: 0,
+    builtInModePromptOverrides: 0,
     profileContextSettings: 0,
     sessionContextCompactions: 0,
     modelLimitOverrides: 0,

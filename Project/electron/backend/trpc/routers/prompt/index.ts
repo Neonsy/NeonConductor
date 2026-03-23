@@ -1,17 +1,21 @@
 import {
     promptLayerGetSettingsInputSchema,
+    promptLayerResetBuiltInModePromptInputSchema,
     promptLayerResetAppGlobalInstructionsInputSchema,
     promptLayerResetProfileGlobalInstructionsInputSchema,
     promptLayerResetTopLevelInstructionsInputSchema,
+    promptLayerSetBuiltInModePromptInputSchema,
     promptLayerSetAppGlobalInstructionsInputSchema,
     promptLayerSetProfileGlobalInstructionsInputSchema,
     promptLayerSetTopLevelInstructionsInputSchema,
 } from '@/app/backend/runtime/contracts';
 import {
     getPromptLayerSettings,
+    resetBuiltInModePrompt,
     resetAppGlobalInstructions,
     resetProfileGlobalInstructions,
     resetTopLevelInstructions,
+    setBuiltInModePrompt,
     setAppGlobalInstructions,
     setProfileGlobalInstructions,
     setTopLevelInstructions,
@@ -64,6 +68,20 @@ export const promptRouter = router({
         .mutation(async ({ input }) => {
             return {
                 settings: await resetTopLevelInstructions(input),
+            };
+        }),
+    setBuiltInModePrompt: publicProcedure
+        .input(promptLayerSetBuiltInModePromptInputSchema)
+        .mutation(async ({ input }) => {
+            return {
+                settings: await setBuiltInModePrompt(input),
+            };
+        }),
+    resetBuiltInModePrompt: publicProcedure
+        .input(promptLayerResetBuiltInModePromptInputSchema)
+        .mutation(async ({ input }) => {
+            return {
+                settings: await resetBuiltInModePrompt(input),
             };
         }),
 });

@@ -218,6 +218,14 @@ export interface AppPromptLayerSettingsTable {
     updated_at: string;
 }
 
+export interface BuiltInModePromptOverridesTable {
+    profile_id: string;
+    top_level_tab: string;
+    mode_key: string;
+    prompt_json: string;
+    updated_at: string;
+}
+
 export interface AppComposerMediaSettingsTable {
     id: string;
     max_image_attachments_per_message: number;
@@ -764,6 +772,7 @@ export interface DatabaseSchema {
     settings: SettingsTable;
     app_context_settings: AppContextSettingsTable;
     app_prompt_layer_settings: AppPromptLayerSettingsTable;
+    built_in_mode_prompt_overrides: BuiltInModePromptOverridesTable;
     app_composer_media_settings: AppComposerMediaSettingsTable;
     profile_context_settings: ProfileContextSettingsTable;
     session_context_compactions: SessionContextCompactionsTable;

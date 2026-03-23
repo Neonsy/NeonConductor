@@ -19,6 +19,7 @@ import type {
     KiloAccountContext,
     MarketplacePackage,
     ModeDefinition,
+    ModePromptDefinition,
     OpenAIExecutionMode,
     ProviderAuthFlowStatus,
     ProviderAuthFlowType,
@@ -256,6 +257,14 @@ export type AppContextSettingsRecord = ContextGlobalSettings;
 
 export interface AppPromptLayerSettingsRecord {
     globalInstructions: string;
+    updatedAt: string;
+}
+
+export interface BuiltInModePromptOverrideRecord {
+    profileId: string;
+    topLevelTab: TopLevelTab;
+    modeKey: string;
+    prompt: ModePromptDefinition;
     updatedAt: string;
 }
 

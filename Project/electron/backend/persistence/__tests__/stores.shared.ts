@@ -4,6 +4,7 @@ import { getDefaultProfileId, getPersistence, resetPersistenceForTests } from '@
 import {
     accountSnapshotStore,
     appPromptLayerSettingsStore,
+    builtInModePromptOverrideStore,
     checkpointStore,
     conversationStore,
     diffStore,
@@ -39,6 +40,7 @@ export const persistenceStoreProfileId = getDefaultProfileId();
 export {
     accountSnapshotStore,
     appPromptLayerSettingsStore,
+    builtInModePromptOverrideStore,
     checkpointStore,
     conversationStore,
     diffStore,

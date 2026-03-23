@@ -5,6 +5,7 @@ import {
     registerPersistenceStoreHooks,
     accountSnapshotStore,
     appPromptLayerSettingsStore,
+    builtInModePromptOverrideStore,
     conversationStore,
     getDefaultProfileId,
     marketplaceStore,
@@ -32,6 +33,37 @@ describe('persistence stores: runtime domain', () => {
 
         const persisted = await appPromptLayerSettingsStore.get();
         expect(persisted.globalInstructions).toBe('Global instructions');
+    });
+
+    it('supports built-in mode prompt override persistence', async () => {
+        const profileId = getDefaultProfileId();
+
+        const initial = await builtInModePromptOverrideStore.listByProfile(profileId);
+        expect(initial).toEqual([]);
+
+        const saved = await builtInModePromptOverrideStore.setPrompt({
+            profileId,
+            topLevelTab: 'agent',
+            modeKey: 'code',
+            prompt: {
+                roleDefinition: 'Override role',
+                customInstructions: 'Override instructions',
+            },
+        });
+        expect(saved.prompt).toEqual({
+            roleDefinition: 'Override role',
+            customInstructions: 'Override instructions',
+        });
+
+        const persisted = await builtInModePromptOverrideStore.getByProfileTabMode(profileId, 'agent', 'code');
+        expect(persisted?.prompt).toEqual({
+            roleDefinition: 'Override role',
+            customInstructions: 'Override instructions',
+        });
+
+        await builtInModePromptOverrideStore.delete(profileId, 'agent', 'code');
+        const removed = await builtInModePromptOverrideStore.getByProfileTabMode(profileId, 'agent', 'code');
+        expect(removed).toBeNull();
     });
 
     it('supports permission store decision transitions', async () => {

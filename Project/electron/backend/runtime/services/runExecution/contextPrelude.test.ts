@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getDefaultProfileId, getPersistence, resetPersistenceForTests } from '@/app/backend/persistence/db';
 import {
+    builtInModePromptOverrideStore,
     conversationStore,
     sessionAttachedRuleStore,
     sessionAttachedSkillStore,
@@ -12,6 +13,7 @@ import {
 } from '@/app/backend/persistence/stores';
 import { buildSessionSystemPrelude } from '@/app/backend/runtime/services/runExecution/contextPrelude';
 import { appPromptLayerSettingsStore } from '@/app/backend/persistence/stores/runtime/appPromptLayerSettingsStore';
+import { resolveActiveMode } from '@/app/backend/runtime/services/mode/activeMode';
 
 describe('buildSessionSystemPrelude', () => {
     beforeEach(() => {
@@ -122,6 +124,15 @@ describe('buildSessionSystemPrelude', () => {
             appPromptLayerSettingsStore.setGlobalInstructions('App layer'),
             settingsStore.setString(profileId, 'prompt_layer.profile_global_instructions', 'Profile layer'),
             settingsStore.setString(profileId, 'prompt_layer.top_level.chat', 'Chat layer'),
+            builtInModePromptOverrideStore.setPrompt({
+                profileId,
+                topLevelTab: 'chat',
+                modeKey: 'chat',
+                prompt: {
+                    roleDefinition: 'Role layer',
+                    customInstructions: 'Mode layer',
+                },
+            }),
         ]);
 
         const { sqlite } = getPersistence();
@@ -191,6 +202,16 @@ describe('buildSessionSystemPrelude', () => {
         expect(attachedRule.length).toBe(1);
         expect(attachedSkill.length).toBe(1);
 
+        const activeModeResult = await resolveActiveMode({
+            profileId,
+            topLevelTab: 'chat',
+            workspaceFingerprint: workspaceRoot.fingerprint,
+        });
+        expect(activeModeResult.isOk()).toBe(true);
+        if (activeModeResult.isErr()) {
+            throw new Error(activeModeResult.error.message);
+        }
+
         const result = await buildSessionSystemPrelude({
             profileId,
             sessionId: session.session.id,
@@ -198,27 +219,7 @@ describe('buildSessionSystemPrelude', () => {
             topLevelTab: 'chat',
             workspaceFingerprint: workspaceRoot.fingerprint,
             resolvedMode: {
-                mode: {
-                    id: 'mode_profile_local_default_chat_chat',
-                    profileId,
-                    topLevelTab: 'chat',
-                    modeKey: 'chat',
-                    label: 'Chat',
-                    prompt: {
-                        roleDefinition: 'Role layer',
-                        customInstructions: 'Mode layer',
-                    },
-                    executionPolicy: {},
-                    source: 'system',
-                    enabled: true,
-                    createdAt: new Date().toISOString(),
-                    updatedAt: new Date().toISOString(),
-                    assetKey: 'chat',
-                    sourceKind: 'system_seed',
-                    scope: 'system',
-                    tags: [],
-                    precedence: 0,
-                },
+                mode: activeModeResult.value.activeMode,
             },
         });
 

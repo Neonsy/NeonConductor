@@ -20,6 +20,38 @@ vi.mock('@/web/components/settings/kiloPromptLayers/useKiloPromptLayerSettingsCo
                         agent: '',
                         orchestrator: '',
                     },
+                    builtInModes: {
+                        chat: [
+                            {
+                                topLevelTab: 'chat',
+                                modeKey: 'chat',
+                                label: 'Chat',
+                                prompt: {},
+                                hasOverride: false,
+                            },
+                        ],
+                        agent: [
+                            {
+                                topLevelTab: 'agent',
+                                modeKey: 'code',
+                                label: 'Agent Code',
+                                prompt: {
+                                    roleDefinition: '',
+                                    customInstructions: '',
+                                },
+                                hasOverride: false,
+                            },
+                        ],
+                        orchestrator: [
+                            {
+                                topLevelTab: 'orchestrator',
+                                modeKey: 'orchestrate',
+                                label: 'Orchestrator Orchestrate',
+                                prompt: {},
+                                hasOverride: false,
+                            },
+                        ],
+                    },
                 },
             },
         },
@@ -44,13 +76,58 @@ vi.mock('@/web/components/settings/kiloPromptLayers/useKiloPromptLayerSettingsCo
             save: vi.fn(),
             reset: vi.fn(),
         },
+        builtInModes: {
+            isSaving: false,
+            getItems: (topLevelTab: 'chat' | 'agent' | 'orchestrator') =>
+                topLevelTab === 'chat'
+                    ? [
+                          {
+                              topLevelTab: 'chat',
+                              modeKey: 'chat',
+                              label: 'Chat',
+                              prompt: {
+                                  roleDefinition: '',
+                                  customInstructions: '',
+                              },
+                              hasOverride: false,
+                          },
+                      ]
+                    : topLevelTab === 'agent'
+                      ? [
+                            {
+                                topLevelTab: 'agent',
+                                modeKey: 'code',
+                                label: 'Agent Code',
+                                prompt: {
+                                    roleDefinition: '',
+                                    customInstructions: '',
+                                },
+                                hasOverride: false,
+                            },
+                        ]
+                      : [
+                            {
+                                topLevelTab: 'orchestrator',
+                                modeKey: 'orchestrate',
+                                label: 'Orchestrator Orchestrate',
+                                prompt: {
+                                    roleDefinition: '',
+                                    customInstructions: '',
+                                },
+                                hasOverride: false,
+                            },
+                        ],
+            setPromptField: vi.fn(),
+            save: vi.fn(),
+            reset: vi.fn(),
+        },
     }),
 }));
 
 import { KiloModesInstructionsScreen } from '@/web/components/settings/kiloPromptLayers/modesInstructionsScreen';
 
 describe('kilo modes and instructions screen', () => {
-    it('renders editable app, profile, and built-in top-level instruction sections with warning copy', () => {
+    it('renders editable app, profile, top-level, and built-in mode prompt sections with warning copy', () => {
         const html = renderToStaticMarkup(createElement(KiloModesInstructionsScreen, { profileId: 'profile_default' }));
 
         expect(html).toContain('Modes &amp; Instructions');
@@ -60,6 +137,12 @@ describe('kilo modes and instructions screen', () => {
         expect(html).toContain('Agent Instructions');
         expect(html).toContain('Orchestrator Instructions');
         expect(html).toContain('Editing built-in chat instructions can make the app behave differently');
+        expect(html).toContain('Built-In Mode Prompts');
+        expect(html).toContain('Agent Code');
+        expect(html).toContain('Orchestrator Orchestrate');
+        expect(html).toContain('Editing the built-in agent code prompt can make the app behave unexpectedly');
+        expect(html).toContain('Role Definition');
+        expect(html).toContain('Custom Instructions');
         expect(html).toContain('Reset');
         expect(html).toContain('Save');
     });

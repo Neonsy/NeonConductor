@@ -46,6 +46,15 @@ CREATE TABLE app_prompt_layer_settings (
     updated_at TEXT NOT NULL
 );
 
+CREATE TABLE built_in_mode_prompt_overrides (
+    profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    top_level_tab TEXT NOT NULL,
+    mode_key TEXT NOT NULL,
+    prompt_json TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (profile_id, top_level_tab, mode_key)
+);
+
 CREATE TABLE app_composer_media_settings (
     id TEXT PRIMARY KEY,
     max_image_attachments_per_message INTEGER NOT NULL,
