@@ -13,6 +13,31 @@ type TopLevelDraftState = Partial<Record<TopLevelTab, { profileId: string; value
 type BuiltInModeDraftState = Partial<
     Record<string, { profileId: string; roleDefinition: string; customInstructions: string }>
 >;
+type CustomModeScope = 'global' | 'workspace';
+
+interface CustomModeEditorDraftBase {
+    scope: CustomModeScope;
+    topLevelTab: TopLevelTab;
+    slug: string;
+    name: string;
+    description: string;
+    roleDefinition: string;
+    customInstructions: string;
+    whenToUse: string;
+    groupsText: string;
+    deleteConfirmed: boolean;
+}
+
+interface CreateCustomModeEditorDraft extends CustomModeEditorDraftBase {
+    kind: 'create';
+}
+
+interface EditCustomModeEditorDraft extends CustomModeEditorDraftBase {
+    kind: 'edit';
+    modeKey: string;
+}
+
+type CustomModeEditorDraft = CreateCustomModeEditorDraft | EditCustomModeEditorDraft;
 
 function resolveTopLevelDraftValue(input: {
     profileId: string;
@@ -33,6 +58,35 @@ function emptyModeItems(): Record<TopLevelTab, FileBackedCustomModeSettingsItem[
         chat: [],
         agent: [],
         orchestrator: [],
+    };
+}
+
+function normalizeOptionalText(value: string): string | undefined {
+    const normalized = value.trim();
+    return normalized.length > 0 ? normalized : undefined;
+}
+
+function parseGroupsText(value: string): string[] | undefined {
+    const groups = value
+        .split(/[\n,]/)
+        .map((group) => group.trim())
+        .filter((group) => group.length > 0);
+    return groups.length > 0 ? Array.from(new Set(groups)) : undefined;
+}
+
+function createEmptyCustomModeEditorDraft(scope: CustomModeScope): CreateCustomModeEditorDraft {
+    return {
+        kind: 'create',
+        scope,
+        topLevelTab: 'chat',
+        slug: '',
+        name: '',
+        description: '',
+        roleDefinition: '',
+        customInstructions: '',
+        whenToUse: '',
+        groupsText: '',
+        deleteConfirmed: false,
     };
 }
 
@@ -57,6 +111,8 @@ export function useModesInstructionsSettingsController(input: {
     const [allowOverwrite, setAllowOverwrite] = useState(false);
     const [exportJsonText, setExportJsonText] = useState('');
     const [selectedExportLabel, setSelectedExportLabel] = useState<string | undefined>(undefined);
+    const [customModeEditorDraft, setCustomModeEditorDraft] = useState<CustomModeEditorDraft | undefined>(undefined);
+    const [isLoadingCustomModeEditor, setIsLoadingCustomModeEditor] = useState(false);
 
     const settingsQueryInput = {
         profileId,
@@ -106,6 +162,11 @@ export function useModesInstructionsSettingsController(input: {
     function clearFeedback(): void {
         setFeedbackMessage(undefined);
         setFeedbackTone('info');
+    }
+
+    function clearExportSelection(): void {
+        setExportJsonText('');
+        setSelectedExportLabel(undefined);
     }
 
     const setAppGlobalInstructionsMutation = trpc.prompt.setAppGlobalInstructions.useMutation({
@@ -251,6 +312,48 @@ export function useModesInstructionsSettingsController(input: {
         },
     });
 
+    const createCustomModeMutation = trpc.prompt.createCustomMode.useMutation({
+        onSuccess: ({ settings }) => {
+            applySettings(settings);
+            setCustomModeEditorDraft(undefined);
+            clearExportSelection();
+            setFeedbackTone('success');
+            setFeedbackMessage('Created file-backed custom mode.');
+        },
+        onError: (error) => {
+            setFeedbackTone('error');
+            setFeedbackMessage(error.message);
+        },
+    });
+
+    const updateCustomModeMutation = trpc.prompt.updateCustomMode.useMutation({
+        onSuccess: ({ settings }) => {
+            applySettings(settings);
+            setCustomModeEditorDraft(undefined);
+            clearExportSelection();
+            setFeedbackTone('success');
+            setFeedbackMessage('Updated file-backed custom mode.');
+        },
+        onError: (error) => {
+            setFeedbackTone('error');
+            setFeedbackMessage(error.message);
+        },
+    });
+
+    const deleteCustomModeMutation = trpc.prompt.deleteCustomMode.useMutation({
+        onSuccess: ({ settings }) => {
+            applySettings(settings);
+            setCustomModeEditorDraft(undefined);
+            clearExportSelection();
+            setFeedbackTone('success');
+            setFeedbackMessage('Deleted file-backed custom mode.');
+        },
+        onError: (error) => {
+            setFeedbackTone('error');
+            setFeedbackMessage(error.message);
+        },
+    });
+
     const persistedSettings = settingsQuery.data?.settings;
     const appGlobalInstructions = appGlobalDraft ?? persistedSettings?.appGlobalInstructions ?? '';
     const profileGlobalInstructions =
@@ -271,6 +374,43 @@ export function useModesInstructionsSettingsController(input: {
         await navigator.clipboard.writeText(exportJsonText);
         setFeedbackTone('success');
         setFeedbackMessage('Copied custom mode JSON.');
+    }
+
+    async function loadCustomModeEditor(input: {
+        scope: CustomModeScope;
+        topLevelTab: TopLevelTab;
+        modeKey: string;
+    }): Promise<void> {
+        setIsLoadingCustomModeEditor(true);
+        clearFeedback();
+        try {
+            const result = await utils.prompt.getCustomMode.fetch({
+                profileId,
+                topLevelTab: input.topLevelTab,
+                modeKey: input.modeKey,
+                scope: input.scope,
+                ...(input.scope === 'workspace' && workspaceFingerprint ? { workspaceFingerprint } : {}),
+            });
+            setCustomModeEditorDraft({
+                kind: 'edit',
+                scope: result.mode.scope,
+                topLevelTab: result.mode.topLevelTab,
+                modeKey: result.mode.modeKey,
+                slug: result.mode.slug,
+                name: result.mode.name,
+                description: result.mode.description ?? '',
+                roleDefinition: result.mode.roleDefinition ?? '',
+                customInstructions: result.mode.customInstructions ?? '',
+                whenToUse: result.mode.whenToUse ?? '',
+                groupsText: result.mode.groups?.join(', ') ?? '',
+                deleteConfirmed: false,
+            });
+        } catch (error) {
+            setFeedbackTone('error');
+            setFeedbackMessage((error as Error).message);
+        } finally {
+            setIsLoadingCustomModeEditor(false);
+        }
     }
 
     return {
@@ -424,6 +564,149 @@ export function useModesInstructionsSettingsController(input: {
         customModes: {
             global: persistedSettings?.fileBackedCustomModes.global ?? emptyModeItems(),
             workspace: persistedSettings?.fileBackedCustomModes.workspace ?? emptyModeItems(),
+            editor: {
+                draft: customModeEditorDraft,
+                isLoading: isLoadingCustomModeEditor,
+                isSaving:
+                    createCustomModeMutation.isPending ||
+                    updateCustomModeMutation.isPending ||
+                    deleteCustomModeMutation.isPending,
+                hasWorkspaceScope: Boolean(workspaceFingerprint),
+                selectedWorkspaceLabel,
+                openCreate: (scope: CustomModeScope) => {
+                    setCustomModeEditorDraft(createEmptyCustomModeEditorDraft(scope));
+                    clearFeedback();
+                },
+                openEdit: async (scope: CustomModeScope, topLevelTab: TopLevelTab, modeKey: string) => {
+                    await loadCustomModeEditor({ scope, topLevelTab, modeKey });
+                },
+                openDelete: async (scope: CustomModeScope, topLevelTab: TopLevelTab, modeKey: string) => {
+                    await loadCustomModeEditor({ scope, topLevelTab, modeKey });
+                },
+                close: () => {
+                    setCustomModeEditorDraft(undefined);
+                    clearFeedback();
+                },
+                setScope: (scope: CustomModeScope) => {
+                    setCustomModeEditorDraft((currentDraft) =>
+                        currentDraft?.kind === 'create'
+                            ? {
+                                  ...currentDraft,
+                                  scope,
+                              }
+                            : currentDraft
+                    );
+                    clearFeedback();
+                },
+                setTopLevelTab: (topLevelTab: TopLevelTab) => {
+                    setCustomModeEditorDraft((currentDraft) =>
+                        currentDraft?.kind === 'create'
+                            ? {
+                                  ...currentDraft,
+                                  topLevelTab,
+                              }
+                            : currentDraft
+                    );
+                    clearFeedback();
+                },
+                setField: (
+                    field:
+                        | 'slug'
+                        | 'name'
+                        | 'description'
+                        | 'roleDefinition'
+                        | 'customInstructions'
+                        | 'whenToUse'
+                        | 'groupsText',
+                    value: string
+                ) => {
+                    setCustomModeEditorDraft((currentDraft) =>
+                        currentDraft
+                            ? {
+                                  ...currentDraft,
+                                  [field]: value,
+                              }
+                            : currentDraft
+                    );
+                    clearFeedback();
+                },
+                setDeleteConfirmed: (value: boolean) => {
+                    setCustomModeEditorDraft((currentDraft) =>
+                        currentDraft
+                            ? {
+                                  ...currentDraft,
+                                  deleteConfirmed: value,
+                              }
+                            : currentDraft
+                    );
+                    clearFeedback();
+                },
+                save: async () => {
+                    if (!customModeEditorDraft) {
+                        return;
+                    }
+
+                    const groups = parseGroupsText(customModeEditorDraft.groupsText);
+                    const description = normalizeOptionalText(customModeEditorDraft.description);
+                    const roleDefinition = normalizeOptionalText(customModeEditorDraft.roleDefinition);
+                    const customInstructions = normalizeOptionalText(customModeEditorDraft.customInstructions);
+                    const whenToUse = normalizeOptionalText(customModeEditorDraft.whenToUse);
+                    if (customModeEditorDraft.kind === 'create') {
+                        await createCustomModeMutation.mutateAsync({
+                            profileId,
+                            topLevelTab: customModeEditorDraft.topLevelTab,
+                            scope: customModeEditorDraft.scope,
+                            ...(customModeEditorDraft.scope === 'workspace' && workspaceFingerprint
+                                ? { workspaceFingerprint }
+                                : {}),
+                            mode: {
+                                slug: customModeEditorDraft.slug,
+                                name: customModeEditorDraft.name,
+                                ...(description ? { description } : {}),
+                                ...(roleDefinition ? { roleDefinition } : {}),
+                                ...(customInstructions ? { customInstructions } : {}),
+                                ...(whenToUse ? { whenToUse } : {}),
+                                ...(groups ? { groups } : {}),
+                            },
+                        });
+                        return;
+                    }
+
+                    await updateCustomModeMutation.mutateAsync({
+                        profileId,
+                        topLevelTab: customModeEditorDraft.topLevelTab,
+                        modeKey: customModeEditorDraft.modeKey,
+                        scope: customModeEditorDraft.scope,
+                        ...(customModeEditorDraft.scope === 'workspace' && workspaceFingerprint
+                            ? { workspaceFingerprint }
+                            : {}),
+                        mode: {
+                            name: customModeEditorDraft.name,
+                            ...(description ? { description } : {}),
+                            ...(roleDefinition ? { roleDefinition } : {}),
+                            ...(customInstructions ? { customInstructions } : {}),
+                            ...(whenToUse ? { whenToUse } : {}),
+                            ...(groups ? { groups } : {}),
+                        },
+                    });
+                },
+                deleteMode: async () => {
+                    if (!customModeEditorDraft || customModeEditorDraft.kind !== 'edit') {
+                        return;
+                    }
+
+                    await deleteCustomModeMutation.mutateAsync({
+                        profileId,
+                        topLevelTab: customModeEditorDraft.topLevelTab,
+                        modeKey: customModeEditorDraft.modeKey,
+                        scope: customModeEditorDraft.scope,
+                        ...(customModeEditorDraft.scope === 'workspace' && workspaceFingerprint
+                            ? { workspaceFingerprint }
+                            : {}),
+                        confirm: customModeEditorDraft.deleteConfirmed,
+                    });
+                },
+            },
             importDraft: {
                 jsonText: importJsonText,
                 scope: importScope,

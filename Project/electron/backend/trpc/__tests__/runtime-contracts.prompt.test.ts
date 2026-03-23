@@ -417,6 +417,196 @@ describe('runtime contracts: prompt layers', () => {
         ).toBe('Workspace Orchestrator');
     });
 
+    it('creates, edits, and deletes file-backed custom modes without mutating unrelated state', async () => {
+        const caller = createCaller();
+        const globalRegistry = await caller.registry.listResolved({ profileId });
+        const globalModesRoot = path.join(globalRegistry.paths.globalAssetsRoot, 'modes');
+        rmSync(globalModesRoot, { recursive: true, force: true });
+        mkdirSync(globalModesRoot, { recursive: true });
+
+        await caller.prompt.setBuiltInModePrompt({
+            profileId,
+            topLevelTab: 'chat',
+            modeKey: 'chat',
+            roleDefinition: 'Built-in chat role override',
+            customInstructions: 'Built-in chat custom override',
+        });
+
+        const created = await caller.prompt.createCustomMode({
+            profileId,
+            topLevelTab: 'chat',
+            scope: 'global',
+            mode: {
+                slug: 'review',
+                name: 'Review',
+                description: 'Global review mode',
+                roleDefinition: 'Act as a careful reviewer.',
+                customInstructions: 'Review the conversation carefully.',
+                whenToUse: 'Use when a conversation needs a careful review pass.',
+                groups: ['quality', 'review'],
+            },
+        });
+        expect(created.settings.fileBackedCustomModes.global.chat).toEqual([
+            {
+                topLevelTab: 'chat',
+                modeKey: 'review',
+                label: 'Review',
+                description: 'Global review mode',
+                whenToUse: 'Use when a conversation needs a careful review pass.',
+                groups: ['quality', 'review'],
+            },
+        ]);
+        expect(created.settings.builtInModes.chat.find((mode) => mode.modeKey === 'chat')?.prompt).toEqual({
+            roleDefinition: 'Built-in chat role override',
+            customInstructions: 'Built-in chat custom override',
+        });
+
+        const modeFile = path.join(globalModesRoot, 'chat-review.md');
+        const initialMarkdown = readFileSync(modeFile, 'utf8');
+        expect(initialMarkdown).toContain('label: "Review"');
+
+        const loaded = await caller.prompt.getCustomMode({
+            profileId,
+            topLevelTab: 'chat',
+            modeKey: 'review',
+            scope: 'global',
+        });
+        expect(loaded.mode).toEqual({
+            scope: 'global',
+            topLevelTab: 'chat',
+            modeKey: 'review',
+            slug: 'review',
+            name: 'Review',
+            description: 'Global review mode',
+            roleDefinition: 'Act as a careful reviewer.',
+            customInstructions: 'Review the conversation carefully.',
+            whenToUse: 'Use when a conversation needs a careful review pass.',
+            groups: ['quality', 'review'],
+        });
+
+        await expect(
+            caller.prompt.createCustomMode({
+                profileId,
+                topLevelTab: 'chat',
+                scope: 'global',
+                mode: {
+                    slug: 'review',
+                    name: 'Duplicate Review',
+                },
+            })
+        ).rejects.toThrow('already exists');
+        expect(readFileSync(modeFile, 'utf8')).toBe(initialMarkdown);
+
+        const updated = await caller.prompt.updateCustomMode({
+            profileId,
+            topLevelTab: 'chat',
+            modeKey: 'review',
+            scope: 'global',
+            mode: {
+                name: 'Review Updated',
+                description: 'Updated global review mode',
+                roleDefinition: 'Act as a stricter reviewer.',
+                customInstructions: 'Review the conversation with stricter criteria.',
+                whenToUse: 'Use when a conversation needs a stricter review pass.',
+                groups: ['quality', 'strict'],
+            },
+        });
+        expect(updated.settings.fileBackedCustomModes.global.chat).toEqual([
+            {
+                topLevelTab: 'chat',
+                modeKey: 'review',
+                label: 'Review Updated',
+                description: 'Updated global review mode',
+                whenToUse: 'Use when a conversation needs a stricter review pass.',
+                groups: ['quality', 'strict'],
+            },
+        ]);
+        const updatedMarkdown = readFileSync(modeFile, 'utf8');
+        expect(updatedMarkdown).toContain('label: "Review Updated"');
+        expect(updatedMarkdown).toContain('whenToUse: "Use when a conversation needs a stricter review pass."');
+
+        const activated = await caller.mode.setActive({
+            profileId,
+            topLevelTab: 'chat',
+            modeKey: 'review',
+        });
+        expect(activated.updated).toBe(true);
+
+        await expect(
+            caller.prompt.deleteCustomMode({
+                profileId,
+                topLevelTab: 'chat',
+                modeKey: 'review',
+                scope: 'global',
+                confirm: false,
+            })
+        ).rejects.toThrow('explicit confirmation');
+        expect(readFileSync(modeFile, 'utf8')).toBe(updatedMarkdown);
+
+        const deleted = await caller.prompt.deleteCustomMode({
+            profileId,
+            topLevelTab: 'chat',
+            modeKey: 'review',
+            scope: 'global',
+            confirm: true,
+        });
+        expect(deleted.settings.fileBackedCustomModes.global.chat).toEqual([]);
+        expect(() => readFileSync(modeFile, 'utf8')).toThrow();
+
+        const activeAfterDelete = await caller.mode.getActive({
+            profileId,
+            topLevelTab: 'chat',
+        });
+        expect(activeAfterDelete.activeMode.modeKey).toBe('chat');
+        expect(activeAfterDelete.activeMode.label).toBe('Chat');
+        expect(activeAfterDelete.activeMode.prompt).toEqual({
+            roleDefinition: 'Built-in chat role override',
+            customInstructions: 'Built-in chat custom override',
+        });
+    });
+
+    it('creates workspace file-backed custom modes in the workspace registry root', async () => {
+        const caller = createCaller();
+        const workspaceFingerprint = 'wsf_prompt_custom_mode_crud';
+
+        await createSessionInScope(caller, profileId, {
+            scope: 'workspace',
+            workspaceFingerprint,
+            title: 'Prompt mode workspace crud',
+            kind: 'local',
+            topLevelTab: 'agent',
+        });
+        const workspaceRegistry = await caller.registry.listResolved({
+            profileId,
+            workspaceFingerprint,
+        });
+        const workspaceModesRoot = path.join(workspaceRegistry.paths.workspaceAssetsRoot!, 'modes');
+        rmSync(workspaceModesRoot, { recursive: true, force: true });
+        mkdirSync(workspaceModesRoot, { recursive: true });
+
+        const created = await caller.prompt.createCustomMode({
+            profileId,
+            topLevelTab: 'agent',
+            scope: 'workspace',
+            workspaceFingerprint,
+            mode: {
+                slug: 'workspace-review',
+                name: 'Workspace Review',
+                customInstructions: 'Review the active workspace first.',
+            },
+        });
+        expect(created.settings.fileBackedCustomModes.workspace?.agent).toEqual([
+            {
+                topLevelTab: 'agent',
+                modeKey: 'workspace-review',
+                label: 'Workspace Review',
+            },
+        ]);
+
+        const workspaceModeFile = path.join(workspaceModesRoot, 'agent-workspace-review.md');
+        expect(readFileSync(workspaceModeFile, 'utf8')).toContain('Review the active workspace first.');
+    });
+
     it('fails closed on unsupported fields and overwrite without explicit confirmation', async () => {
         const caller = createCaller();
         const globalRegistry = await caller.registry.listResolved({ profileId });

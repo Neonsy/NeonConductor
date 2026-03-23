@@ -76,6 +76,68 @@ export interface PromptLayerExportCustomModeInput extends ProfileInput {
     workspaceFingerprint?: string;
 }
 
+export interface PromptLayerCustomModePayload {
+    slug: string;
+    name: string;
+    description?: string;
+    roleDefinition?: string;
+    customInstructions?: string;
+    whenToUse?: string;
+    groups?: string[];
+}
+
+export interface PromptLayerEditableCustomModePayload {
+    name: string;
+    description?: string;
+    roleDefinition?: string;
+    customInstructions?: string;
+    whenToUse?: string;
+    groups?: string[];
+}
+
+export interface PromptLayerCustomModeRecord {
+    scope: 'global' | 'workspace';
+    topLevelTab: TopLevelTab;
+    modeKey: string;
+    slug: string;
+    name: string;
+    description?: string;
+    roleDefinition?: string;
+    customInstructions?: string;
+    whenToUse?: string;
+    groups?: string[];
+}
+
+export interface PromptLayerGetCustomModeInput extends ProfileInput {
+    topLevelTab: TopLevelTab;
+    modeKey: string;
+    scope: 'global' | 'workspace';
+    workspaceFingerprint?: string;
+}
+
+export interface PromptLayerCreateCustomModeInput extends ProfileInput {
+    topLevelTab: TopLevelTab;
+    scope: 'global' | 'workspace';
+    workspaceFingerprint?: string;
+    mode: PromptLayerCustomModePayload;
+}
+
+export interface PromptLayerUpdateCustomModeInput extends ProfileInput {
+    topLevelTab: TopLevelTab;
+    modeKey: string;
+    scope: 'global' | 'workspace';
+    workspaceFingerprint?: string;
+    mode: PromptLayerEditableCustomModePayload;
+}
+
+export interface PromptLayerDeleteCustomModeInput extends ProfileInput {
+    topLevelTab: TopLevelTab;
+    modeKey: string;
+    scope: 'global' | 'workspace';
+    workspaceFingerprint?: string;
+    confirm: boolean;
+}
+
 export interface PromptLayerImportCustomModeInput extends ProfileInput {
     topLevelTab: TopLevelTab;
     scope: 'global' | 'workspace';

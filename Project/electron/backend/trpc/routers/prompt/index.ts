@@ -1,5 +1,8 @@
 import {
+    promptLayerCreateCustomModeInputSchema,
+    promptLayerDeleteCustomModeInputSchema,
     promptLayerExportCustomModeInputSchema,
+    promptLayerGetCustomModeInputSchema,
     promptLayerGetSettingsInputSchema,
     promptLayerImportCustomModeInputSchema,
     promptLayerResetBuiltInModePromptInputSchema,
@@ -10,9 +13,13 @@ import {
     promptLayerSetAppGlobalInstructionsInputSchema,
     promptLayerSetProfileGlobalInstructionsInputSchema,
     promptLayerSetTopLevelInstructionsInputSchema,
+    promptLayerUpdateCustomModeInputSchema,
 } from '@/app/backend/runtime/contracts';
 import {
+    createCustomMode,
+    deleteCustomMode,
     exportCustomMode,
+    getCustomMode,
     getPromptLayerSettings,
     importCustomMode,
     resetBuiltInModePrompt,
@@ -23,6 +30,7 @@ import {
     setAppGlobalInstructions,
     setProfileGlobalInstructions,
     setTopLevelInstructions,
+    updateCustomMode,
 } from '@/app/backend/runtime/services/promptLayers/service';
 import { publicProcedure, router } from '@/app/backend/trpc/init';
 
@@ -88,6 +96,24 @@ export const promptRouter = router({
                 settings: await resetBuiltInModePrompt(input),
             };
         }),
+    getCustomMode: publicProcedure.input(promptLayerGetCustomModeInputSchema).query(async ({ input }) => {
+        return getCustomMode(input);
+    }),
+    createCustomMode: publicProcedure.input(promptLayerCreateCustomModeInputSchema).mutation(async ({ input }) => {
+        return {
+            settings: await createCustomMode(input),
+        };
+    }),
+    updateCustomMode: publicProcedure.input(promptLayerUpdateCustomModeInputSchema).mutation(async ({ input }) => {
+        return {
+            settings: await updateCustomMode(input),
+        };
+    }),
+    deleteCustomMode: publicProcedure.input(promptLayerDeleteCustomModeInputSchema).mutation(async ({ input }) => {
+        return {
+            settings: await deleteCustomMode(input),
+        };
+    }),
     exportCustomMode: publicProcedure.input(promptLayerExportCustomModeInputSchema).mutation(async ({ input }) => {
         return exportCustomMode(input);
     }),

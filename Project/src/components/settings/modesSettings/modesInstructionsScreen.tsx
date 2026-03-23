@@ -175,11 +175,277 @@ function formatBuiltInModeDescription(topLevelTab: TopLevelTab, label: string): 
     return `This shipped ${label.toLowerCase()} prompt runs inside ${formatTopLevelLabel(topLevelTab).toLowerCase()} after top-level instructions and before rules or attached skills.`;
 }
 
+function CustomModeEditorSection(input: {
+    editor: ReturnType<typeof useModesInstructionsSettingsController>['customModes']['editor'];
+}) {
+    if (input.editor.isLoading && !input.editor.draft) {
+        return (
+            <section className='border-border/70 bg-card/50 rounded-[24px] border p-5'>
+                <p className='text-sm font-semibold'>Loading custom mode…</p>
+            </section>
+        );
+    }
+
+    const draft = input.editor.draft;
+    if (!draft) {
+        return null;
+    }
+
+    return (
+        <section className='border-border/70 bg-card/50 space-y-4 rounded-[24px] border p-5'>
+            <div className='flex flex-wrap items-start justify-between gap-3'>
+                <div className='space-y-1'>
+                    <h6 className='text-sm font-semibold'>
+                        {draft.kind === 'create' ? 'Create File-Backed Custom Mode' : 'Edit File-Backed Custom Mode'}
+                    </h6>
+                    <p className='text-muted-foreground text-sm leading-6'>
+                        {draft.kind === 'create'
+                            ? 'Create a file-backed custom mode in the selected registry root.'
+                            : 'Edit the existing file-backed mode in place. Scope, tab, and slug stay immutable after creation.'}
+                    </p>
+                </div>
+
+                <div className='flex flex-wrap gap-2'>
+                    <Button
+                        type='button'
+                        size='sm'
+                        variant='outline'
+                        disabled={input.editor.isSaving}
+                        onClick={input.editor.close}>
+                        Cancel
+                    </Button>
+                    <Button
+                        type='button'
+                        size='sm'
+                        disabled={
+                            input.editor.isSaving || (draft.scope === 'workspace' && !input.editor.hasWorkspaceScope)
+                        }
+                        onClick={() => {
+                            void input.editor.save();
+                        }}>
+                        {input.editor.isSaving
+                            ? draft.kind === 'create'
+                                ? 'Creating…'
+                                : 'Saving…'
+                            : draft.kind === 'create'
+                              ? 'Create Mode'
+                              : 'Save Mode'}
+                    </Button>
+                </div>
+            </div>
+
+            <div className='grid gap-4 md:grid-cols-2'>
+                <label className='space-y-2'>
+                    <span className='text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase'>
+                        Scope
+                    </span>
+                    {draft.kind === 'create' ? (
+                        <select
+                            className='border-border bg-background h-11 w-full rounded-2xl border px-3 text-sm'
+                            value={draft.scope}
+                            onChange={(event) => {
+                                input.editor.setScope(event.target.value as 'global' | 'workspace');
+                            }}>
+                            <option value='global'>Global</option>
+                            <option value='workspace' disabled={!input.editor.hasWorkspaceScope}>
+                                Workspace
+                            </option>
+                        </select>
+                    ) : (
+                        <input
+                            readOnly
+                            className='border-border bg-background h-11 w-full rounded-2xl border px-3 text-sm'
+                            value={draft.scope === 'global' ? 'Global' : 'Workspace'}
+                        />
+                    )}
+                </label>
+
+                <label className='space-y-2'>
+                    <span className='text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase'>
+                        Top-Level Tab
+                    </span>
+                    {draft.kind === 'create' ? (
+                        <select
+                            className='border-border bg-background h-11 w-full rounded-2xl border px-3 text-sm'
+                            value={draft.topLevelTab}
+                            onChange={(event) => {
+                                input.editor.setTopLevelTab(event.target.value as TopLevelTab);
+                            }}>
+                            {topLevelTabs.map((topLevelTab) => (
+                                <option key={topLevelTab} value={topLevelTab}>
+                                    {formatTopLevelLabel(topLevelTab)}
+                                </option>
+                            ))}
+                        </select>
+                    ) : (
+                        <input
+                            readOnly
+                            className='border-border bg-background h-11 w-full rounded-2xl border px-3 text-sm'
+                            value={formatTopLevelLabel(draft.topLevelTab)}
+                        />
+                    )}
+                </label>
+            </div>
+
+            <div className='grid gap-4 md:grid-cols-2'>
+                <label className='space-y-2'>
+                    <span className='text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase'>
+                        Slug
+                    </span>
+                    <input
+                        readOnly={draft.kind === 'edit'}
+                        className='border-border bg-background h-11 w-full rounded-2xl border px-3 text-sm'
+                        value={draft.slug}
+                        onChange={(event) => {
+                            input.editor.setField('slug', event.target.value);
+                        }}
+                    />
+                </label>
+
+                <label className='space-y-2'>
+                    <span className='text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase'>
+                        Name
+                    </span>
+                    <input
+                        className='border-border bg-background h-11 w-full rounded-2xl border px-3 text-sm'
+                        value={draft.name}
+                        onChange={(event) => {
+                            input.editor.setField('name', event.target.value);
+                        }}
+                    />
+                </label>
+            </div>
+
+            <label className='space-y-2'>
+                <span className='text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase'>
+                    Description
+                </span>
+                <textarea
+                    value={draft.description}
+                    onChange={(event) => {
+                        input.editor.setField('description', event.target.value);
+                    }}
+                    className='border-border bg-background min-h-24 w-full rounded-2xl border px-4 py-3 text-sm leading-6'
+                    spellCheck={false}
+                />
+            </label>
+
+            <label className='space-y-2'>
+                <span className='text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase'>
+                    When To Use
+                </span>
+                <textarea
+                    value={draft.whenToUse}
+                    onChange={(event) => {
+                        input.editor.setField('whenToUse', event.target.value);
+                    }}
+                    className='border-border bg-background min-h-24 w-full rounded-2xl border px-4 py-3 text-sm leading-6'
+                    spellCheck={false}
+                />
+            </label>
+
+            <label className='space-y-2'>
+                <span className='text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase'>
+                    Groups
+                </span>
+                <textarea
+                    value={draft.groupsText}
+                    onChange={(event) => {
+                        input.editor.setField('groupsText', event.target.value);
+                    }}
+                    className='border-border bg-background min-h-20 w-full rounded-2xl border px-4 py-3 text-sm leading-6'
+                    spellCheck={false}
+                    placeholder='quality, review'
+                />
+                <p className='text-muted-foreground text-xs leading-5'>
+                    Separate groups with commas or new lines.
+                </p>
+            </label>
+
+            <div className='grid gap-4 xl:grid-cols-2'>
+                <label className='space-y-2'>
+                    <span className='text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase'>
+                        Role Definition
+                    </span>
+                    <textarea
+                        value={draft.roleDefinition}
+                        onChange={(event) => {
+                            input.editor.setField('roleDefinition', event.target.value);
+                        }}
+                        className='border-border bg-background min-h-32 w-full rounded-2xl border px-4 py-3 text-sm leading-6'
+                        spellCheck={false}
+                    />
+                </label>
+
+                <label className='space-y-2'>
+                    <span className='text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase'>
+                        Custom Instructions
+                    </span>
+                    <textarea
+                        value={draft.customInstructions}
+                        onChange={(event) => {
+                            input.editor.setField('customInstructions', event.target.value);
+                        }}
+                        className='border-border bg-background min-h-32 w-full rounded-2xl border px-4 py-3 text-sm leading-6'
+                        spellCheck={false}
+                    />
+                </label>
+            </div>
+
+            <div className='border-border/70 bg-background/60 rounded-2xl border px-4 py-3 text-sm'>
+                {draft.scope === 'workspace' ? (
+                    <span>
+                        Workspace target: {input.editor.selectedWorkspaceLabel ?? 'Selected workspace'}
+                    </span>
+                ) : (
+                    <span>Target root: global <code>modes/</code></span>
+                )}
+            </div>
+
+            {draft.kind === 'edit' ? (
+                <div className='border-destructive/25 bg-destructive/5 space-y-3 rounded-2xl border px-4 py-4'>
+                    <p className='text-sm font-semibold'>Delete This Mode</p>
+                    <p className='text-muted-foreground text-sm leading-6'>
+                        This deletes the file-backed mode for {draft.scope} {formatTopLevelLabel(draft.topLevelTab)}:{' '}
+                        {draft.modeKey}.
+                    </p>
+                    <label className='flex items-start gap-3 text-sm'>
+                        <input
+                            type='checkbox'
+                            className='mt-1'
+                            checked={draft.deleteConfirmed}
+                            onChange={(event) => {
+                                input.editor.setDeleteConfirmed(event.target.checked);
+                            }}
+                        />
+                        <span className='text-muted-foreground leading-6'>
+                            I understand this will delete the file-backed custom mode and rely on normal fallback
+                            resolution afterward.
+                        </span>
+                    </label>
+                    <Button
+                        type='button'
+                        size='sm'
+                        variant='destructive'
+                        disabled={input.editor.isSaving || !draft.deleteConfirmed}
+                        onClick={() => {
+                            void input.editor.deleteMode();
+                        }}>
+                        {input.editor.isSaving ? 'Deleting…' : 'Delete Mode'}
+                    </Button>
+                </div>
+            ) : null}
+        </section>
+    );
+}
+
 function FileBackedModeInventorySection(input: {
     scope: 'global' | 'workspace';
     itemsByTab: ReturnType<typeof useModesInstructionsSettingsController>['customModes']['global'];
     isExporting: boolean;
     onExport: (scope: 'global' | 'workspace', topLevelTab: TopLevelTab, modeKey: string) => Promise<void>;
+    onEdit: (scope: 'global' | 'workspace', topLevelTab: TopLevelTab, modeKey: string) => Promise<void>;
+    onDelete: (scope: 'global' | 'workspace', topLevelTab: TopLevelTab, modeKey: string) => Promise<void>;
 }) {
     const hasItems = topLevelTabs.some((topLevelTab) => input.itemsByTab[topLevelTab].length > 0);
     if (!hasItems) {
@@ -249,6 +515,24 @@ function FileBackedModeInventorySection(input: {
                                     </div>
 
                                     <div className='flex flex-wrap gap-2'>
+                                        <Button
+                                            type='button'
+                                            size='sm'
+                                            variant='outline'
+                                            onClick={() => {
+                                                void input.onEdit(input.scope, mode.topLevelTab, mode.modeKey);
+                                            }}>
+                                            Edit
+                                        </Button>
+                                        <Button
+                                            type='button'
+                                            size='sm'
+                                            variant='outline'
+                                            onClick={() => {
+                                                void input.onDelete(input.scope, mode.topLevelTab, mode.modeKey);
+                                            }}>
+                                            Delete
+                                        </Button>
                                         <Button
                                             type='button'
                                             size='sm'
@@ -398,13 +682,39 @@ export function ModesInstructionsScreen(input: {
             </div>
 
             <div className='space-y-4'>
-                <div className='space-y-1'>
-                    <h5 className='text-sm font-semibold'>File-Backed Custom Modes</h5>
-                    <p className='text-muted-foreground text-sm leading-6'>
-                        Import and export a supported JSON subset for file-backed custom modes without creating a
-                        second source of truth outside the registry roots.
-                    </p>
+                <div className='flex flex-wrap items-start justify-between gap-3'>
+                    <div className='space-y-1'>
+                        <h5 className='text-sm font-semibold'>File-Backed Custom Modes</h5>
+                        <p className='text-muted-foreground text-sm leading-6'>
+                            Manage app-level file-backed custom modes while keeping the registry roots as the only
+                            source of truth.
+                        </p>
+                    </div>
+
+                    <div className='flex flex-wrap gap-2'>
+                        <Button
+                            type='button'
+                            size='sm'
+                            variant='outline'
+                            onClick={() => {
+                                controller.customModes.editor.openCreate('global');
+                            }}>
+                            Create Global Mode
+                        </Button>
+                        <Button
+                            type='button'
+                            size='sm'
+                            variant='outline'
+                            disabled={!controller.customModes.editor.hasWorkspaceScope}
+                            onClick={() => {
+                                controller.customModes.editor.openCreate('workspace');
+                            }}>
+                            Create Workspace Mode
+                        </Button>
+                    </div>
                 </div>
+
+                <CustomModeEditorSection editor={controller.customModes.editor} />
 
                 <div className='grid gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(340px,0.85fr)]'>
                     <section className='border-border/70 bg-card/50 space-y-4 rounded-[24px] border p-5'>
@@ -564,6 +874,8 @@ export function ModesInstructionsScreen(input: {
                     itemsByTab={controller.customModes.global}
                     isExporting={controller.customModes.isExporting}
                     onExport={controller.customModes.exportMode}
+                    onEdit={controller.customModes.editor.openEdit}
+                    onDelete={controller.customModes.editor.openDelete}
                 />
 
                 {controller.workspace.fingerprint ? (
@@ -572,6 +884,8 @@ export function ModesInstructionsScreen(input: {
                         itemsByTab={controller.customModes.workspace}
                         isExporting={controller.customModes.isExporting}
                         onExport={controller.customModes.exportMode}
+                        onEdit={controller.customModes.editor.openEdit}
+                        onDelete={controller.customModes.editor.openDelete}
                     />
                 ) : null}
             </div>

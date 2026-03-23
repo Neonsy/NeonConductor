@@ -7,19 +7,26 @@ import {
     readOptionalString,
     readProfileId,
     readString,
+    readStringArray,
 } from '@/app/backend/runtime/contracts/parsers/helpers';
 import type {
+    PromptLayerCreateCustomModeInput,
+    PromptLayerDeleteCustomModeInput,
+    PromptLayerEditableCustomModePayload,
     PromptLayerExportCustomModeInput,
+    PromptLayerGetCustomModeInput,
     PromptLayerGetSettingsInput,
     PromptLayerImportCustomModeInput,
     PromptLayerResetBuiltInModePromptInput,
     PromptLayerResetAppGlobalInstructionsInput,
     PromptLayerResetProfileGlobalInstructionsInput,
     PromptLayerResetTopLevelInstructionsInput,
+    PromptLayerCustomModePayload,
     PromptLayerSetBuiltInModePromptInput,
     PromptLayerSetAppGlobalInstructionsInput,
     PromptLayerSetProfileGlobalInstructionsInput,
     PromptLayerSetTopLevelInstructionsInput,
+    PromptLayerUpdateCustomModeInput,
     ProfileInput,
 } from '@/app/backend/runtime/contracts/types';
 
@@ -52,6 +59,72 @@ function readWorkspaceFingerprintForScope(source: Record<string, unknown>, scope
     }
 
     return workspaceFingerprint;
+}
+
+function readOptionalInstructionText(value: unknown, field: string): string | undefined {
+    if (value === undefined) {
+        return undefined;
+    }
+    if (typeof value !== 'string') {
+        throw new Error(`Invalid "${field}": expected string.`);
+    }
+
+    const normalized = value.trim();
+    return normalized.length > 0 ? normalized : undefined;
+}
+
+function readOptionalGroups(value: unknown, field: string): string[] | undefined {
+    if (value === undefined) {
+        return undefined;
+    }
+
+    const groups = readStringArray(value, field)
+        .map((group) => group.trim())
+        .filter((group) => group.length > 0);
+    return groups.length > 0 ? Array.from(new Set(groups)) : undefined;
+}
+
+function parsePromptLayerCustomModePayload(
+    value: unknown,
+    field: string
+): PromptLayerCustomModePayload {
+    const source = readObject(value, field);
+    const description = readOptionalInstructionText(source.description, `${field}.description`);
+    const roleDefinition = readOptionalInstructionText(source.roleDefinition, `${field}.roleDefinition`);
+    const customInstructions = readOptionalInstructionText(source.customInstructions, `${field}.customInstructions`);
+    const whenToUse = readOptionalInstructionText(source.whenToUse, `${field}.whenToUse`);
+    const groups = readOptionalGroups(source.groups, `${field}.groups`);
+
+    return {
+        slug: readString(source.slug, `${field}.slug`),
+        name: readString(source.name, `${field}.name`),
+        ...(description ? { description } : {}),
+        ...(roleDefinition ? { roleDefinition } : {}),
+        ...(customInstructions ? { customInstructions } : {}),
+        ...(whenToUse ? { whenToUse } : {}),
+        ...(groups ? { groups } : {}),
+    };
+}
+
+function parsePromptLayerEditableCustomModePayload(
+    value: unknown,
+    field: string
+): PromptLayerEditableCustomModePayload {
+    const source = readObject(value, field);
+    const description = readOptionalInstructionText(source.description, `${field}.description`);
+    const roleDefinition = readOptionalInstructionText(source.roleDefinition, `${field}.roleDefinition`);
+    const customInstructions = readOptionalInstructionText(source.customInstructions, `${field}.customInstructions`);
+    const whenToUse = readOptionalInstructionText(source.whenToUse, `${field}.whenToUse`);
+    const groups = readOptionalGroups(source.groups, `${field}.groups`);
+
+    return {
+        name: readString(source.name, `${field}.name`),
+        ...(description ? { description } : {}),
+        ...(roleDefinition ? { roleDefinition } : {}),
+        ...(customInstructions ? { customInstructions } : {}),
+        ...(whenToUse ? { whenToUse } : {}),
+        ...(groups ? { groups } : {}),
+    };
 }
 
 export function parsePromptLayerGetSettingsInput(input: unknown): PromptLayerGetSettingsInput {
@@ -157,6 +230,64 @@ export function parsePromptLayerExportCustomModeInput(input: unknown): PromptLay
     };
 }
 
+export function parsePromptLayerGetCustomModeInput(input: unknown): PromptLayerGetCustomModeInput {
+    const source = readObject(input, 'input');
+    const scope = readCustomModeScope(source.scope, 'scope');
+    const workspaceFingerprint = readWorkspaceFingerprintForScope(source, scope);
+
+    return {
+        profileId: readProfileId(source),
+        topLevelTab: readEnumValue(source.topLevelTab, 'topLevelTab', topLevelTabs),
+        modeKey: readString(source.modeKey, 'modeKey'),
+        scope,
+        ...(workspaceFingerprint ? { workspaceFingerprint } : {}),
+    };
+}
+
+export function parsePromptLayerCreateCustomModeInput(input: unknown): PromptLayerCreateCustomModeInput {
+    const source = readObject(input, 'input');
+    const scope = readCustomModeScope(source.scope, 'scope');
+    const workspaceFingerprint = readWorkspaceFingerprintForScope(source, scope);
+
+    return {
+        profileId: readProfileId(source),
+        topLevelTab: readEnumValue(source.topLevelTab, 'topLevelTab', topLevelTabs),
+        scope,
+        ...(workspaceFingerprint ? { workspaceFingerprint } : {}),
+        mode: parsePromptLayerCustomModePayload(source.mode, 'mode'),
+    };
+}
+
+export function parsePromptLayerUpdateCustomModeInput(input: unknown): PromptLayerUpdateCustomModeInput {
+    const source = readObject(input, 'input');
+    const scope = readCustomModeScope(source.scope, 'scope');
+    const workspaceFingerprint = readWorkspaceFingerprintForScope(source, scope);
+
+    return {
+        profileId: readProfileId(source),
+        topLevelTab: readEnumValue(source.topLevelTab, 'topLevelTab', topLevelTabs),
+        modeKey: readString(source.modeKey, 'modeKey'),
+        scope,
+        ...(workspaceFingerprint ? { workspaceFingerprint } : {}),
+        mode: parsePromptLayerEditableCustomModePayload(source.mode, 'mode'),
+    };
+}
+
+export function parsePromptLayerDeleteCustomModeInput(input: unknown): PromptLayerDeleteCustomModeInput {
+    const source = readObject(input, 'input');
+    const scope = readCustomModeScope(source.scope, 'scope');
+    const workspaceFingerprint = readWorkspaceFingerprintForScope(source, scope);
+
+    return {
+        profileId: readProfileId(source),
+        topLevelTab: readEnumValue(source.topLevelTab, 'topLevelTab', topLevelTabs),
+        modeKey: readString(source.modeKey, 'modeKey'),
+        scope,
+        ...(workspaceFingerprint ? { workspaceFingerprint } : {}),
+        confirm: readBoolean(source.confirm, 'confirm'),
+    };
+}
+
 export function parsePromptLayerImportCustomModeInput(input: unknown): PromptLayerImportCustomModeInput {
     const source = readObject(input, 'input');
     const scope = readCustomModeScope(source.scope, 'scope');
@@ -194,4 +325,8 @@ export const promptLayerResetBuiltInModePromptInputSchema = createParser(
     parsePromptLayerResetBuiltInModePromptInput
 );
 export const promptLayerExportCustomModeInputSchema = createParser(parsePromptLayerExportCustomModeInput);
+export const promptLayerGetCustomModeInputSchema = createParser(parsePromptLayerGetCustomModeInput);
+export const promptLayerCreateCustomModeInputSchema = createParser(parsePromptLayerCreateCustomModeInput);
+export const promptLayerUpdateCustomModeInputSchema = createParser(parsePromptLayerUpdateCustomModeInput);
+export const promptLayerDeleteCustomModeInputSchema = createParser(parsePromptLayerDeleteCustomModeInput);
 export const promptLayerImportCustomModeInputSchema = createParser(parsePromptLayerImportCustomModeInput);

@@ -279,6 +279,51 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
         scope: 'global' | 'workspace';
         workspaceFingerprint?: string;
     }>();
+    expectTypeOf<Inputs['prompt']['getCustomMode']>().toExtend<{
+        profileId: string;
+        topLevelTab: 'chat' | 'agent' | 'orchestrator';
+        modeKey: string;
+        scope: 'global' | 'workspace';
+        workspaceFingerprint?: string;
+    }>();
+    expectTypeOf<Inputs['prompt']['createCustomMode']>().toExtend<{
+        profileId: string;
+        topLevelTab: 'chat' | 'agent' | 'orchestrator';
+        scope: 'global' | 'workspace';
+        workspaceFingerprint?: string;
+        mode: {
+            slug: string;
+            name: string;
+            description?: string;
+            roleDefinition?: string;
+            customInstructions?: string;
+            whenToUse?: string;
+            groups?: string[];
+        };
+    }>();
+    expectTypeOf<Inputs['prompt']['updateCustomMode']>().toExtend<{
+        profileId: string;
+        topLevelTab: 'chat' | 'agent' | 'orchestrator';
+        modeKey: string;
+        scope: 'global' | 'workspace';
+        workspaceFingerprint?: string;
+        mode: {
+            name: string;
+            description?: string;
+            roleDefinition?: string;
+            customInstructions?: string;
+            whenToUse?: string;
+            groups?: string[];
+        };
+    }>();
+    expectTypeOf<Inputs['prompt']['deleteCustomMode']>().toExtend<{
+        profileId: string;
+        topLevelTab: 'chat' | 'agent' | 'orchestrator';
+        modeKey: string;
+        scope: 'global' | 'workspace';
+        workspaceFingerprint?: string;
+        confirm: boolean;
+    }>();
     expectTypeOf<Inputs['prompt']['importCustomMode']>().toExtend<{
         profileId: string;
         topLevelTab: 'chat' | 'agent' | 'orchestrator';
@@ -732,6 +777,20 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
         modeKey: string;
         scope: 'global' | 'workspace';
         jsonText: string;
+    }>();
+    expectTypeOf<Outputs['prompt']['getCustomMode']>().toExtend<{
+        mode: {
+            scope: 'global' | 'workspace';
+            topLevelTab: 'chat' | 'agent' | 'orchestrator';
+            modeKey: string;
+            slug: string;
+            name: string;
+            description?: string;
+            roleDefinition?: string;
+            customInstructions?: string;
+            whenToUse?: string;
+            groups?: string[];
+        };
     }>();
     expectTypeOf<Outputs['session']['getAttachedSkills']>().toExtend<{
         sessionId: string;

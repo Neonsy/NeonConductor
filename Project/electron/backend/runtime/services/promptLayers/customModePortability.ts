@@ -1,4 +1,4 @@
-import { access, mkdir, rename, writeFile } from 'node:fs/promises';
+import { access, mkdir, rename, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import type { ModeDefinitionRecord } from '@/app/backend/persistence/types';
@@ -14,6 +14,33 @@ export interface PortableCustomModePayload {
     customInstructions?: string;
     whenToUse?: string;
     groups?: string[];
+}
+
+function normalizePortableCustomModePayload(input: PortableCustomModePayload): PortableCustomModePayload {
+    const slug = readOptionalPortableString(input.slug, 'slug');
+    if (!slug) {
+        throw new Error('Invalid "slug": expected non-empty string.');
+    }
+    const name = readOptionalPortableString(input.name, 'name');
+    if (!name) {
+        throw new Error('Invalid "name": expected non-empty string.');
+    }
+
+    const description = readOptionalPortableString(input.description, 'description');
+    const roleDefinition = readOptionalPortableString(input.roleDefinition, 'roleDefinition');
+    const customInstructions = readOptionalPortableString(input.customInstructions, 'customInstructions');
+    const whenToUse = readOptionalPortableString(input.whenToUse, 'whenToUse');
+    const groups = readOptionalPortableStringArray(input.groups, 'groups');
+
+    return {
+        slug,
+        name,
+        ...(description ? { description } : {}),
+        ...(roleDefinition ? { roleDefinition } : {}),
+        ...(customInstructions ? { customInstructions } : {}),
+        ...(whenToUse ? { whenToUse } : {}),
+        ...(groups ? { groups } : {}),
+    };
 }
 
 const portableModeAllowedKeys = new Set([
@@ -80,34 +107,19 @@ export function parsePortableCustomModeJson(jsonText: string): PortableCustomMod
         }
     }
 
-    const slug = readOptionalPortableString(source.slug, 'slug');
-    if (!slug) {
-        throw new Error('Invalid "slug": expected non-empty string.');
-    }
-    const name = readOptionalPortableString(source.name, 'name');
-    if (!name) {
-        throw new Error('Invalid "name": expected non-empty string.');
-    }
-
-    const description = readOptionalPortableString(source.description, 'description');
-    const roleDefinition = readOptionalPortableString(source.roleDefinition, 'roleDefinition');
-    const customInstructions = readOptionalPortableString(source.customInstructions, 'customInstructions');
-    const whenToUse = readOptionalPortableString(source.whenToUse, 'whenToUse');
-    const groups = readOptionalPortableStringArray(source.groups, 'groups');
-
-    return {
-        slug,
-        name,
-        ...(description ? { description } : {}),
-        ...(roleDefinition ? { roleDefinition } : {}),
-        ...(customInstructions ? { customInstructions } : {}),
-        ...(whenToUse ? { whenToUse } : {}),
-        ...(groups ? { groups } : {}),
-    };
+    return normalizePortableCustomModePayload({
+        slug: source.slug as string,
+        name: source.name as string,
+        ...(typeof source.description === 'string' ? { description: source.description } : {}),
+        ...(typeof source.roleDefinition === 'string' ? { roleDefinition: source.roleDefinition } : {}),
+        ...(typeof source.customInstructions === 'string' ? { customInstructions: source.customInstructions } : {}),
+        ...(typeof source.whenToUse === 'string' ? { whenToUse: source.whenToUse } : {}),
+        ...(Array.isArray(source.groups) ? { groups: source.groups as string[] } : {}),
+    });
 }
 
 export function toPortableModePayload(mode: ModeDefinitionRecord): PortableCustomModePayload {
-    return {
+    return normalizePortableCustomModePayload({
         slug: mode.modeKey,
         name: mode.label,
         ...(mode.description ? { description: mode.description } : {}),
@@ -115,7 +127,11 @@ export function toPortableModePayload(mode: ModeDefinitionRecord): PortableCusto
         ...(mode.prompt.customInstructions ? { customInstructions: mode.prompt.customInstructions } : {}),
         ...(mode.whenToUse ? { whenToUse: mode.whenToUse } : {}),
         ...(mode.groups ? { groups: mode.groups } : {}),
-    };
+    });
+}
+
+export function buildPortableModePayload(input: PortableCustomModePayload): PortableCustomModePayload {
+    return normalizePortableCustomModePayload(input);
 }
 
 function stringifyFrontmatterValue(value: string): string {
@@ -126,7 +142,8 @@ export function renderPortableModeMarkdown(input: {
     topLevelTab: TopLevelTab;
     payload: PortableCustomModePayload;
 }): { modeKey: string; fileContent: string } {
-    const modeKey = slugifyAssetKey(input.payload.slug).replace(/\//g, '_');
+    const payload = normalizePortableCustomModePayload(input.payload);
+    const modeKey = slugifyAssetKey(payload.slug).replace(/\//g, '_');
     if (modeKey.length === 0) {
         throw new Error('Invalid "slug": could not derive a file-backed mode key.');
     }
@@ -135,18 +152,18 @@ export function renderPortableModeMarkdown(input: {
         '---',
         `topLevelTab: ${input.topLevelTab}`,
         `modeKey: ${modeKey}`,
-        `label: ${stringifyFrontmatterValue(input.payload.name)}`,
-        ...(input.payload.description
-            ? [`description: ${stringifyFrontmatterValue(input.payload.description)}`]
+        `label: ${stringifyFrontmatterValue(payload.name)}`,
+        ...(payload.description
+            ? [`description: ${stringifyFrontmatterValue(payload.description)}`]
             : []),
-        ...(input.payload.whenToUse ? [`whenToUse: ${stringifyFrontmatterValue(input.payload.whenToUse)}`] : []),
-        ...(input.payload.groups ? ['groups:', ...input.payload.groups.map((group) => `  - ${stringifyFrontmatterValue(group)}`)] : []),
-        ...(input.payload.roleDefinition
-            ? [`roleDefinition: ${stringifyFrontmatterValue(input.payload.roleDefinition)}`]
+        ...(payload.whenToUse ? [`whenToUse: ${stringifyFrontmatterValue(payload.whenToUse)}`] : []),
+        ...(payload.groups ? ['groups:', ...payload.groups.map((group) => `  - ${stringifyFrontmatterValue(group)}`)] : []),
+        ...(payload.roleDefinition
+            ? [`roleDefinition: ${stringifyFrontmatterValue(payload.roleDefinition)}`]
             : []),
         '---',
     ];
-    const body = input.payload.customInstructions?.replace(/\r\n?/g, '\n').trim() ?? '';
+    const body = payload.customInstructions?.replace(/\r\n?/g, '\n').trim() ?? '';
 
     return {
         modeKey,
@@ -188,6 +205,10 @@ export async function writePortableModeFile(input: {
     const tempPath = `${input.absolutePath}.tmp`;
     await writeFile(tempPath, input.fileContent, 'utf8');
     await rename(tempPath, input.absolutePath);
+}
+
+export async function deletePortableModeFile(absolutePath: string): Promise<void> {
+    await unlink(absolutePath);
 }
 
 export async function fileExists(absolutePath: string): Promise<boolean> {

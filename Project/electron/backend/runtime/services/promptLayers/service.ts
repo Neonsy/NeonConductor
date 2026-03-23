@@ -7,6 +7,8 @@ import {
     topLevelTabs,
     type BuiltInModePromptSettingsItem,
     type ModeDefinition,
+    type PromptLayerCustomModePayload,
+    type PromptLayerCustomModeRecord,
     type PromptLayerExportCustomModeResult,
     type PromptLayerSettings,
     type TopLevelTab,
@@ -15,6 +17,8 @@ import { buildDiscoveredAssets, replaceDiscoveredModes } from '@/app/backend/run
 import { resolveRegistryPaths } from '@/app/backend/runtime/services/registry/filesystem';
 
 import {
+    buildPortableModePayload,
+    deletePortableModeFile,
     fileExists,
     parsePortableCustomModeJson,
     renderPortableModeMarkdown,
@@ -147,6 +151,41 @@ async function findFileBackedCustomMode(input: {
             mode.sourceKind === (input.scope === 'global' ? 'global_file' : 'workspace_file') &&
             (input.scope !== 'workspace' || mode.workspaceFingerprint === input.workspaceFingerprint)
     );
+}
+
+function toPromptLayerCustomModeRecord(mode: ModeDefinition): PromptLayerCustomModeRecord {
+    return {
+        scope: mode.scope === 'workspace' ? 'workspace' : 'global',
+        topLevelTab: mode.topLevelTab,
+        modeKey: mode.modeKey,
+        slug: mode.modeKey,
+        name: mode.label,
+        ...(mode.description ? { description: mode.description } : {}),
+        ...(mode.prompt.roleDefinition ? { roleDefinition: mode.prompt.roleDefinition } : {}),
+        ...(mode.prompt.customInstructions ? { customInstructions: mode.prompt.customInstructions } : {}),
+        ...(mode.whenToUse ? { whenToUse: mode.whenToUse } : {}),
+        ...(mode.groups ? { groups: mode.groups } : {}),
+    };
+}
+
+function buildEditablePortablePayload(input: {
+    slug: string;
+    name: string;
+    description?: string;
+    roleDefinition?: string;
+    customInstructions?: string;
+    whenToUse?: string;
+    groups?: string[];
+}): PromptLayerCustomModePayload {
+    return buildPortableModePayload({
+        slug: input.slug,
+        name: input.name,
+        ...(input.description ? { description: input.description } : {}),
+        ...(input.roleDefinition ? { roleDefinition: input.roleDefinition } : {}),
+        ...(input.customInstructions ? { customInstructions: input.customInstructions } : {}),
+        ...(input.whenToUse ? { whenToUse: input.whenToUse } : {}),
+        ...(input.groups ? { groups: input.groups } : {}),
+    });
 }
 
 async function refreshDiscoveredModesForScope(input: {
@@ -350,6 +389,149 @@ export async function exportCustomMode(input: {
         scope: input.scope,
         jsonText: JSON.stringify(toPortableModePayload(mode), null, 2),
     };
+}
+
+export async function getCustomMode(input: {
+    profileId: string;
+    topLevelTab: TopLevelTab;
+    modeKey: string;
+    scope: 'global' | 'workspace';
+    workspaceFingerprint?: string;
+}): Promise<{ mode: PromptLayerCustomModeRecord }> {
+    const mode = await findFileBackedCustomMode(input);
+    if (!mode) {
+        throw new Error(`File-backed custom mode "${input.topLevelTab}:${input.modeKey}" was not found.`);
+    }
+
+    return {
+        mode: toPromptLayerCustomModeRecord(mode),
+    };
+}
+
+export async function createCustomMode(input: {
+    profileId: string;
+    topLevelTab: TopLevelTab;
+    scope: 'global' | 'workspace';
+    workspaceFingerprint?: string;
+    mode: PromptLayerCustomModePayload;
+}): Promise<PromptLayerSettings> {
+    const payload = buildPortableModePayload(input.mode);
+    const { modeKey, fileContent } = renderPortableModeMarkdown({
+        topLevelTab: input.topLevelTab,
+        payload,
+    });
+    const existingMode = await findFileBackedCustomMode({
+        profileId: input.profileId,
+        topLevelTab: input.topLevelTab,
+        modeKey,
+        scope: input.scope,
+        ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
+    });
+    const directory = await resolveCustomModeDirectory({
+        profileId: input.profileId,
+        scope: input.scope,
+        ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
+    });
+    const absolutePath = path.join(directory, `${input.topLevelTab}-${modeKey}.md`);
+    const exists = existingMode !== undefined || (await fileExists(absolutePath));
+    if (exists) {
+        throw new Error(`A ${input.scope} file-backed mode already exists for "${input.topLevelTab}:${modeKey}".`);
+    }
+
+    await writePortableModeFile({
+        absolutePath,
+        fileContent,
+    });
+    await refreshDiscoveredModesForScope({
+        profileId: input.profileId,
+        scope: input.scope,
+        ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
+    });
+
+    return getPromptLayerSettings(input.profileId, input.workspaceFingerprint);
+}
+
+export async function updateCustomMode(input: {
+    profileId: string;
+    topLevelTab: TopLevelTab;
+    modeKey: string;
+    scope: 'global' | 'workspace';
+    workspaceFingerprint?: string;
+    mode: {
+        name: string;
+        description?: string;
+        roleDefinition?: string;
+        customInstructions?: string;
+        whenToUse?: string;
+        groups?: string[];
+    };
+}): Promise<PromptLayerSettings> {
+    const existingMode = await findFileBackedCustomMode(input);
+    if (!existingMode) {
+        throw new Error(`File-backed custom mode "${input.topLevelTab}:${input.modeKey}" was not found.`);
+    }
+    if (!existingMode.originPath) {
+        throw new Error(`File-backed custom mode "${input.topLevelTab}:${input.modeKey}" has no origin path.`);
+    }
+
+    const payload = buildEditablePortablePayload({
+        slug: existingMode.modeKey,
+        name: input.mode.name,
+        ...(input.mode.description ? { description: input.mode.description } : {}),
+        ...(input.mode.roleDefinition ? { roleDefinition: input.mode.roleDefinition } : {}),
+        ...(input.mode.customInstructions ? { customInstructions: input.mode.customInstructions } : {}),
+        ...(input.mode.whenToUse ? { whenToUse: input.mode.whenToUse } : {}),
+        ...(input.mode.groups ? { groups: input.mode.groups } : {}),
+    });
+    const { fileContent } = renderPortableModeMarkdown({
+        topLevelTab: existingMode.topLevelTab,
+        payload,
+    });
+
+    await writePortableModeFile({
+        absolutePath: existingMode.originPath,
+        fileContent,
+    });
+    await refreshDiscoveredModesForScope({
+        profileId: input.profileId,
+        scope: input.scope,
+        ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
+    });
+
+    return getPromptLayerSettings(input.profileId, input.workspaceFingerprint);
+}
+
+export async function deleteCustomMode(input: {
+    profileId: string;
+    topLevelTab: TopLevelTab;
+    modeKey: string;
+    scope: 'global' | 'workspace';
+    workspaceFingerprint?: string;
+    confirm: boolean;
+}): Promise<PromptLayerSettings> {
+    if (!input.confirm) {
+        throw new Error('Deleting a file-backed custom mode requires explicit confirmation.');
+    }
+
+    const existingMode = await findFileBackedCustomMode(input);
+    if (!existingMode) {
+        throw new Error(`File-backed custom mode "${input.topLevelTab}:${input.modeKey}" was not found.`);
+    }
+    if (!existingMode.originPath) {
+        throw new Error(`File-backed custom mode "${input.topLevelTab}:${input.modeKey}" has no origin path.`);
+    }
+    if (!(await fileExists(existingMode.originPath))) {
+        throw new Error(`File-backed custom mode "${input.topLevelTab}:${input.modeKey}" file is missing.`);
+    }
+
+    await deletePortableModeFile(existingMode.originPath);
+    await refreshDiscoveredModesForScope({
+        profileId: input.profileId,
+        scope: input.scope,
+        ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
+    });
+
+    return getPromptLayerSettings(input.profileId, input.workspaceFingerprint);
 }
 
 export async function importCustomMode(input: {

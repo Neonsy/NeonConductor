@@ -184,6 +184,36 @@ vi.mock('@/web/components/settings/modesSettings/useModesInstructionsSettingsCon
                     },
                 ],
             },
+            editor: {
+                draft: {
+                    kind: 'edit',
+                    scope: 'global',
+                    topLevelTab: 'chat',
+                    modeKey: 'review',
+                    slug: 'review',
+                    name: 'Global Chat Review',
+                    description: 'Global chat review mode',
+                    roleDefinition: 'Act as a precise reviewer.',
+                    customInstructions: 'Review the active conversation carefully.',
+                    whenToUse: 'Use when a conversation needs a strict review pass.',
+                    groupsText: 'quality, review',
+                    deleteConfirmed: false,
+                },
+                isLoading: false,
+                isSaving: false,
+                hasWorkspaceScope: true,
+                selectedWorkspaceLabel: 'Workspace Root',
+                openCreate: vi.fn(),
+                openEdit: vi.fn(),
+                openDelete: vi.fn(),
+                close: vi.fn(),
+                setScope: vi.fn(),
+                setTopLevelTab: vi.fn(),
+                setField: vi.fn(),
+                setDeleteConfirmed: vi.fn(),
+                save: vi.fn(),
+                deleteMode: vi.fn(),
+            },
             importDraft: {
                 jsonText: '',
                 scope: 'global',
@@ -229,10 +259,16 @@ describe('modes instructions screen', () => {
         expect(html).toContain('Agent Code');
         expect(html).toContain('Import Portable Mode JSON');
         expect(html).toContain('Export Portable Mode JSON');
+        expect(html).toContain('Create Global Mode');
+        expect(html).toContain('Create Workspace Mode');
+        expect(html).toContain('Edit File-Backed Custom Mode');
         expect(html).toContain('Global Chat Review');
         expect(html).toContain('Workspace Orchestrator');
         expect(html).toContain('Use when a conversation needs a strict review pass.');
         expect(html).toContain('quality');
+        expect(html).toContain('Delete This Mode');
+        expect(html).toContain('Edit');
+        expect(html).toContain('Delete');
         expect(html).toContain('Import will write into the global');
         expect(html).toContain('Copy JSON');
     });
