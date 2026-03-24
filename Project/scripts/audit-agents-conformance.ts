@@ -1,165 +1,54 @@
-import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { scriptLog } from '@/scripts/logger';
 
-const SOURCE_FILE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs']);
-const SKIPPED_DIRECTORIES = new Set(['node_modules', 'dist', 'dist-electron', '.git', '.turbo', 'release']);
+import { annotateManualReviewCategories } from './audit/reviewManifest';
+import { buildAuditSummary, formatAuditWorklist } from './audit/reporting';
+import {
+    collectSourceFiles,
+    isElectronSourceFile,
+    isGeneratedSourceFile,
+    isParserSourceFile,
+    isPreloadSourceFile,
+    isRendererSourceFile,
+    isSizeReviewException,
+    isTestFile,
+} from './audit/sourceFiles';
+import {
+    collectAsyncOwnershipViolations,
+    collectCallSiteCastViolations,
+    collectPlaceholderQueryInputViolations,
+} from './audit/rules/astActionableRules';
+import type {
+    AgentsConformanceReport,
+    AuditCategoryReport,
+    AuditWorklistOptions,
+    AuditViolation,
+    ReviewedAuditViolation,
+} from './audit/types';
+
 const REVIEW_SOURCE_LINES = 500;
 const STRICT_REVIEW_SOURCE_LINES = 1000;
 const TEST_FRAMEWORK_IMPORT_PATTERNS = ["from 'vitest'", 'from "vitest"', "from 'jest'", 'from "jest"'];
 const BROAD_CAST_PATTERN = /\bas\s+[A-Z][A-Za-z0-9_<>,`'[\]|& ]+/;
 const INLINE_LINT_SUPPRESSION_PATTERN = /\beslint-disable(?:-next-line|-line)?\b/;
-const SOURCE_ROOT_DIRECTORIES = ['src', 'electron', 'scripts'];
 
-export interface AuditViolation {
-    path: string;
-    line: number;
-    message: string;
-}
-
-export interface AgentsConformanceReport {
-    handwrittenSourceFilesRequiringReview: AuditViolation[];
-    handwrittenSourceFilesRequiringStrictReview: AuditViolation[];
-    inlineLintSuppressions: AuditViolation[];
-    nonTestFrameworkImports: AuditViolation[];
-    forbiddenLayoutEffects: AuditViolation[];
-    rendererElectronImports: AuditViolation[];
-    nonPreloadElectronBridgeUsage: AuditViolation[];
-    insecureBrowserWindows: AuditViolation[];
-    nonBlockingReactMemoization: AuditViolation[];
-    nonBlockingSuspiciousEffects: AuditViolation[];
-    nonBlockingAsyncEffects: AuditViolation[];
-    nonBlockingBroadCasts: AuditViolation[];
-    nonBlockingThrows: AuditViolation[];
-}
-
-interface AuditSourceFile {
-    absolutePath: string;
-    relativePath: string;
-    content: string;
-    lineCount: number;
-}
-
-function normalizeRelativePath(rootDir: string, absolutePath: string): string {
-    return path.relative(rootDir, absolutePath).replaceAll('\\', '/');
-}
-
-function shouldSkipDirectory(name: string): boolean {
-    return SKIPPED_DIRECTORIES.has(name);
-}
-
-function isSourceFile(absolutePath: string): boolean {
-    return SOURCE_FILE_EXTENSIONS.has(path.extname(absolutePath));
-}
-
-function isTestFile(relativePath: string): boolean {
+function isAuditSupportFile(relativePath: string): boolean {
     return (
-        relativePath.includes('/__tests__/') ||
-        relativePath.endsWith('.test.ts') ||
-        relativePath.endsWith('.test.tsx') ||
-        relativePath.endsWith('.test.js') ||
-        relativePath.endsWith('.test.jsx') ||
-        relativePath.endsWith('.spec.ts') ||
-        relativePath.endsWith('.spec.tsx') ||
-        relativePath.endsWith('.spec.js') ||
-        relativePath.endsWith('.spec.jsx')
+        relativePath === 'scripts/audit-agents-conformance.ts' ||
+        relativePath === 'scripts/__tests__/audit-agents-conformance.test.ts' ||
+        relativePath.startsWith('scripts/audit/')
     );
-}
-
-function isGeneratedSourceFile(relativePath: string, content: string): boolean {
-    const fileName = path.basename(relativePath).toLowerCase();
-    return (
-        relativePath.includes('/__generated__/') ||
-        relativePath.includes('/generated/') ||
-        fileName.startsWith('generated') ||
-        fileName.includes('.gen.') ||
-        fileName.includes('.generated.') ||
-        content.includes('@generated')
-    );
-}
-
-function isCanonicalAlphaBaselineMigration(relativePath: string): boolean {
-    return relativePath === 'electron/backend/persistence/migrations/001_runtime_baseline.sql';
-}
-
-function isSizeReviewException(relativePath: string, content: string): boolean {
-    return isGeneratedSourceFile(relativePath, content) || isCanonicalAlphaBaselineMigration(relativePath);
-}
-
-function isParserSourceFile(relativePath: string): boolean {
-    return relativePath.includes('/parsers/') || relativePath.includes('/parse/');
-}
-
-function isRendererSourceFile(relativePath: string): boolean {
-    return relativePath.startsWith('src/');
-}
-
-function isPreloadSourceFile(relativePath: string): boolean {
-    return relativePath.startsWith('electron/main/preload/');
-}
-
-function isElectronSourceFile(relativePath: string): boolean {
-    return relativePath.startsWith('electron/');
-}
-
-function collectSourceFiles(rootDir: string): AuditSourceFile[] {
-    const files: AuditSourceFile[] = [];
-
-    function walk(currentDirectory: string): void {
-        for (const entry of readdirSync(currentDirectory, { withFileTypes: true })) {
-            if (entry.isDirectory()) {
-                if (shouldSkipDirectory(entry.name)) {
-                    continue;
-                }
-
-                walk(path.join(currentDirectory, entry.name));
-                continue;
-            }
-
-            const absolutePath = path.join(currentDirectory, entry.name);
-            if (!isSourceFile(absolutePath)) {
-                continue;
-            }
-
-            const content = readFileSync(absolutePath, 'utf8');
-            const relativePath = normalizeRelativePath(rootDir, absolutePath);
-            const lineCount = content.length === 0 ? 0 : content.split(/\r?\n/).length;
-
-            files.push({
-                absolutePath,
-                relativePath,
-                content,
-                lineCount,
-            });
-        }
-    }
-
-    for (const sourceRoot of SOURCE_ROOT_DIRECTORIES) {
-        const sourceRootPath = path.join(rootDir, sourceRoot);
-        try {
-            walk(sourceRootPath);
-        } catch (error) {
-            if (
-                typeof error === 'object' &&
-                error !== null &&
-                'code' in error &&
-                error.code === 'ENOENT'
-            ) {
-                continue;
-            }
-
-            throw error;
-        }
-    }
-    return files;
 }
 
 function collectPatternViolations(input: {
-    files: AuditSourceFile[];
-    shouldInclude: (file: AuditSourceFile) => boolean;
-    shouldIncludeLine?: (file: AuditSourceFile, lineContent: string) => boolean;
+    files: ReturnType<typeof collectSourceFiles>;
+    shouldInclude: (file: ReturnType<typeof collectSourceFiles>[number]) => boolean;
+    shouldIncludeLine?: (
+        file: ReturnType<typeof collectSourceFiles>[number],
+        lineContent: string
+    ) => boolean;
     pattern: RegExp | string;
     message: string;
 }): AuditViolation[] {
@@ -236,7 +125,7 @@ function isIntentionalThrowLine(relativePath: string, lineContent: string): bool
     return false;
 }
 
-function collectTestFrameworkImportViolations(files: AuditSourceFile[]): AuditViolation[] {
+function collectTestFrameworkImportViolations(files: ReturnType<typeof collectSourceFiles>): AuditViolation[] {
     return files.flatMap((file) => {
         if (isTestFile(file.relativePath) || isGeneratedSourceFile(file.relativePath, file.content)) {
             return [];
@@ -244,8 +133,15 @@ function collectTestFrameworkImportViolations(files: AuditSourceFile[]): AuditVi
 
         const lines = file.content.split(/\r?\n/);
         return lines.flatMap((lineContent, index) => {
-            const importsTestFramework = TEST_FRAMEWORK_IMPORT_PATTERNS.some((pattern) => lineContent.includes(pattern));
-            const importsTestsDirectory = lineContent.includes('__tests__');
+            const trimmedLine = lineContent.trimStart();
+            const importsTestFramework =
+                trimmedLine.startsWith('import ') &&
+                TEST_FRAMEWORK_IMPORT_PATTERNS.some((pattern) => lineContent.includes(pattern));
+            const importsTestsDirectory =
+                trimmedLine.startsWith('import ') &&
+                (lineContent.includes("'__tests__/") ||
+                    lineContent.includes('"__tests__/') ||
+                    lineContent.includes('/__tests__/'));
             if (!importsTestFramework && !importsTestsDirectory) {
                 return [];
             }
@@ -275,7 +171,7 @@ function isForbiddenLayoutEffectLine(lineContent: string): boolean {
     return lineContent.includes('useLayoutEffect(') || lineContent.includes('useLayoutEffect<');
 }
 
-function collectRendererElectronImportViolations(files: AuditSourceFile[]): AuditViolation[] {
+function collectRendererElectronImportViolations(files: ReturnType<typeof collectSourceFiles>): AuditViolation[] {
     return collectPatternViolations({
         files,
         shouldInclude: (file) => !isTestFile(file.relativePath) && isRendererSourceFile(file.relativePath),
@@ -284,7 +180,7 @@ function collectRendererElectronImportViolations(files: AuditSourceFile[]): Audi
     });
 }
 
-function collectNonPreloadElectronBridgeViolations(files: AuditSourceFile[]): AuditViolation[] {
+function collectNonPreloadElectronBridgeViolations(files: ReturnType<typeof collectSourceFiles>): AuditViolation[] {
     const violations: AuditViolation[] = [];
 
     for (const file of files) {
@@ -321,7 +217,7 @@ function countOccurrences(value: string, pattern: RegExp): number {
     return matches ? matches.length : 0;
 }
 
-function collectBrowserWindowSegments(file: AuditSourceFile): Array<{ line: number; content: string }> {
+function collectBrowserWindowSegments(file: ReturnType<typeof collectSourceFiles>[number]): Array<{ line: number; content: string }> {
     const lines = file.content.split(/\r?\n/);
     const segments: Array<{ line: number; content: string }> = [];
 
@@ -360,7 +256,7 @@ function collectBrowserWindowSegments(file: AuditSourceFile): Array<{ line: numb
     return segments;
 }
 
-function collectInsecureBrowserWindowViolations(files: AuditSourceFile[]): AuditViolation[] {
+function collectInsecureBrowserWindowViolations(files: ReturnType<typeof collectSourceFiles>): AuditViolation[] {
     const violations: AuditViolation[] = [];
 
     for (const file of files) {
@@ -395,7 +291,7 @@ function collectInsecureBrowserWindowViolations(files: AuditSourceFile[]): Audit
     return violations;
 }
 
-function collectAsyncEffectViolations(files: AuditSourceFile[]): AuditViolation[] {
+function collectAsyncEffectViolations(files: ReturnType<typeof collectSourceFiles>): AuditViolation[] {
     return collectPatternViolations({
         files,
         shouldInclude: (file) => !isTestFile(file.relativePath) && isRendererSourceFile(file.relativePath),
@@ -404,7 +300,7 @@ function collectAsyncEffectViolations(files: AuditSourceFile[]): AuditViolation[
     });
 }
 
-function collectSuspiciousEffectViolations(files: AuditSourceFile[]): AuditViolation[] {
+function collectSuspiciousEffectViolations(files: ReturnType<typeof collectSourceFiles>): AuditViolation[] {
     const violations: AuditViolation[] = [];
     const setterPattern =
         /\b(?:set[A-Z][A-Za-z0-9_]*|input\.uiState\.set[A-Z][A-Za-z0-9_]*|uiState\.set[A-Z][A-Za-z0-9_]*)\s*\(/;
@@ -452,79 +348,34 @@ function collectSuspiciousEffectViolations(files: AuditSourceFile[]): AuditViola
     return violations;
 }
 
-export function auditAgentsConformance(rootDir: string): AgentsConformanceReport {
-    const sourceFiles = collectSourceFiles(rootDir);
-    const handwrittenFiles = sourceFiles.filter((file) => !isSizeReviewException(file.relativePath, file.content));
+function buildReportFromCategories(categories: AuditCategoryReport[]): AgentsConformanceReport {
+    const findViolations = (key: string): ReviewedAuditViolation[] =>
+        categories.find((category) => category.key === key)?.violations ?? [];
+    const summary = buildAuditSummary(categories);
 
     return {
-        handwrittenSourceFilesRequiringReview: handwrittenFiles
-            .filter((file) => file.lineCount >= REVIEW_SOURCE_LINES)
-            .map((file) => ({
-                path: file.relativePath,
-                line: file.lineCount,
-                message: `Handwritten source file meets or exceeds ${String(REVIEW_SOURCE_LINES)} lines and requires manual cohesion review.`,
-            })),
-        handwrittenSourceFilesRequiringStrictReview: handwrittenFiles
-            .filter((file) => file.lineCount >= STRICT_REVIEW_SOURCE_LINES)
-            .map((file) => ({
-                path: file.relativePath,
-                line: file.lineCount,
-                message: `Handwritten source file meets or exceeds ${String(STRICT_REVIEW_SOURCE_LINES)} lines and requires strict manual review.`,
-            })),
-        inlineLintSuppressions: collectPatternViolations({
-            files: sourceFiles,
-            shouldInclude: (file) => !isGeneratedSourceFile(file.relativePath, file.content),
-            pattern: INLINE_LINT_SUPPRESSION_PATTERN,
-            message: 'Inline lint suppressions are not allowed in handwritten source.',
-        }),
-        nonTestFrameworkImports: collectTestFrameworkImportViolations(sourceFiles),
-        forbiddenLayoutEffects: collectPatternViolations({
-            files: sourceFiles,
-            shouldInclude: (file) => !isTestFile(file.relativePath) && isRendererSourceFile(file.relativePath),
-            pattern: 'useLayoutEffect',
-            shouldIncludeLine: (_file, lineContent) => isForbiddenLayoutEffectLine(lineContent),
-            message: 'useLayoutEffect is not allowed unless the file is explicitly allowlisted for a proven pre-paint layout need.',
-        }),
-        rendererElectronImports: collectRendererElectronImportViolations(sourceFiles),
-        nonPreloadElectronBridgeUsage: collectNonPreloadElectronBridgeViolations(sourceFiles),
-        insecureBrowserWindows: collectInsecureBrowserWindowViolations(sourceFiles),
-        nonBlockingReactMemoization: collectPatternViolations({
-            files: sourceFiles,
-            shouldInclude: (file) => !isTestFile(file.relativePath) && isRendererSourceFile(file.relativePath),
-            pattern: 'useMemo',
-            shouldIncludeLine: (_file, lineContent) => isReactMemoizationLine(lineContent),
-            message: 'Review defensive React memoization and remove it unless compiler coverage is known to miss.',
-        }),
-        nonBlockingSuspiciousEffects: collectSuspiciousEffectViolations(sourceFiles),
-        nonBlockingAsyncEffects: collectAsyncEffectViolations(sourceFiles),
-        nonBlockingBroadCasts: collectPatternViolations({
-            files: sourceFiles,
-            shouldInclude: (file) => !isTestFile(file.relativePath),
-            shouldIncludeLine: (_file, lineContent) => {
-                const trimmedLine = lineContent.trimStart();
-                return (
-                    !trimmedLine.startsWith('import ') &&
-                    !trimmedLine.startsWith('export {') &&
-                    !isImportAliasLine(lineContent)
-                );
-            },
-            pattern: BROAD_CAST_PATTERN,
-            message: 'Review broad type cast and replace it with a validated boundary where possible.',
-        }),
-        nonBlockingThrows: collectPatternViolations({
-            files: sourceFiles,
-            shouldInclude: (file) =>
-                !isTestFile(file.relativePath) &&
-                !isParserSourceFile(file.relativePath) &&
-                file.relativePath !== 'scripts/audit-agents-conformance.ts',
-            shouldIncludeLine: (file, lineContent) => !isIntentionalThrowLine(file.relativePath, lineContent),
-            pattern: /\bthrow\b/,
-            message: 'Review non-parser throw and confirm it is an invariant, data-corruption, or impossible-readback case.',
-        }),
+        handwrittenSourceFilesRequiringReview: findViolations('handwritten-source-review'),
+        handwrittenSourceFilesRequiringStrictReview: findViolations('handwritten-source-strict-review'),
+        inlineLintSuppressions: findViolations('inline-lint-suppressions'),
+        nonTestFrameworkImports: findViolations('non-test-framework-imports'),
+        forbiddenLayoutEffects: findViolations('forbidden-layout-effects'),
+        rendererElectronImports: findViolations('renderer-electron-imports'),
+        nonPreloadElectronBridgeUsage: findViolations('non-preload-electron-bridge-usage'),
+        insecureBrowserWindows: findViolations('insecure-browserwindows'),
+        actionableAsyncOwnership: findViolations('actionable-async-ownership'),
+        actionablePlaceholderQueryInputs: findViolations('actionable-placeholder-query-inputs'),
+        actionableCallSiteCasts: findViolations('actionable-call-site-casts'),
+        nonBlockingReactMemoization: findViolations('manual-react-memoization'),
+        nonBlockingSuspiciousEffects: findViolations('manual-suspicious-effects'),
+        nonBlockingAsyncEffects: findViolations('manual-async-effects'),
+        nonBlockingBroadCasts: findViolations('manual-broad-casts'),
+        nonBlockingThrows: findViolations('manual-non-parser-throws'),
+        categories,
+        summary,
     };
 }
 
-function logViolations(label: string, violations: AuditViolation[], level: 'info' | 'warn' | 'error'): void {
+function logViolations(label: string, violations: ReviewedAuditViolation[], level: 'warn' | 'error'): void {
     if (violations.length === 0) {
         scriptLog.info({
             tag: 'agents.audit',
@@ -540,70 +391,221 @@ function logViolations(label: string, violations: AuditViolation[], level: 'info
     });
 }
 
+function logReport(report: AgentsConformanceReport, rootDir: string, reportOnly: boolean): void {
+    for (const category of report.categories) {
+        logViolations(category.label, category.violations, category.lane === 'blocking' ? 'error' : 'warn');
+    }
+
+    scriptLog.info({
+        tag: 'agents.audit',
+        message: 'AGENTS conformance audit completed.',
+        rootDir,
+        blockingViolations: hasBlockingViolations(report),
+        actionableReviewRequired: hasActionableReviewCandidates(report),
+        manualReviewRequired: hasManualReviewCandidates(report),
+        reportOnly,
+        overallStatus: report.summary.overallStatus,
+    });
+}
+
+export function auditAgentsConformance(rootDir: string): AgentsConformanceReport {
+    const sourceFiles = collectSourceFiles(rootDir);
+    const handwrittenFiles = sourceFiles.filter(
+        (file) => !isSizeReviewException(file.relativePath, file.content) && !isAuditSupportFile(file.relativePath)
+    );
+
+    const categories: AuditCategoryReport[] = [
+        {
+            key: 'handwritten-source-review',
+            label: `Handwritten source files requiring ${String(REVIEW_SOURCE_LINES)}+ LOC review`,
+            lane: 'manual-review',
+            violations: handwrittenFiles
+                .filter((file) => file.lineCount >= REVIEW_SOURCE_LINES)
+                .map((file) => ({
+                    path: file.relativePath,
+                    line: file.lineCount,
+                    message: `Handwritten source file meets or exceeds ${String(REVIEW_SOURCE_LINES)} lines and requires manual cohesion review.`,
+                })),
+        },
+        {
+            key: 'handwritten-source-strict-review',
+            label: `Handwritten source files requiring ${String(STRICT_REVIEW_SOURCE_LINES)}+ LOC strict review`,
+            lane: 'manual-review',
+            violations: handwrittenFiles
+                .filter((file) => file.lineCount >= STRICT_REVIEW_SOURCE_LINES)
+                .map((file) => ({
+                    path: file.relativePath,
+                    line: file.lineCount,
+                    message: `Handwritten source file meets or exceeds ${String(STRICT_REVIEW_SOURCE_LINES)} lines and requires strict manual review.`,
+                })),
+        },
+        {
+            key: 'inline-lint-suppressions',
+            label: 'Inline lint suppressions',
+            lane: 'blocking',
+            violations: collectPatternViolations({
+                files: sourceFiles,
+                shouldInclude: (file) => !isGeneratedSourceFile(file.relativePath, file.content),
+                pattern: INLINE_LINT_SUPPRESSION_PATTERN,
+                message: 'Inline lint suppressions are not allowed in handwritten source.',
+            }),
+        },
+        {
+            key: 'non-test-framework-imports',
+            label: 'Non-test framework imports',
+            lane: 'blocking',
+            violations: collectTestFrameworkImportViolations(sourceFiles),
+        },
+        {
+            key: 'forbidden-layout-effects',
+            label: 'Forbidden useLayoutEffect review',
+            lane: 'blocking',
+            violations: collectPatternViolations({
+                files: sourceFiles,
+                shouldInclude: (file) => !isTestFile(file.relativePath) && isRendererSourceFile(file.relativePath),
+                pattern: 'useLayoutEffect',
+                shouldIncludeLine: (_file, lineContent) => isForbiddenLayoutEffectLine(lineContent),
+                message: 'useLayoutEffect is not allowed unless the file is explicitly allowlisted for a proven pre-paint layout need.',
+            }),
+        },
+        {
+            key: 'renderer-electron-imports',
+            label: 'Renderer electron import violations',
+            lane: 'blocking',
+            violations: collectRendererElectronImportViolations(sourceFiles),
+        },
+        {
+            key: 'non-preload-electron-bridge-usage',
+            label: 'Non-preload Electron bridge usage',
+            lane: 'blocking',
+            violations: collectNonPreloadElectronBridgeViolations(sourceFiles),
+        },
+        {
+            key: 'insecure-browserwindows',
+            label: 'BrowserWindow hardening violations',
+            lane: 'blocking',
+            violations: collectInsecureBrowserWindowViolations(sourceFiles),
+        },
+        {
+            key: 'actionable-async-ownership',
+            label: 'Async ownership review',
+            lane: 'actionable-review',
+            violations: collectAsyncOwnershipViolations(sourceFiles),
+        },
+        {
+            key: 'actionable-placeholder-query-inputs',
+            label: 'Placeholder query input review',
+            lane: 'actionable-review',
+            violations: collectPlaceholderQueryInputViolations(sourceFiles),
+        },
+        {
+            key: 'actionable-call-site-casts',
+            label: 'Call-site cast review',
+            lane: 'actionable-review',
+            violations: collectCallSiteCastViolations(sourceFiles),
+        },
+        {
+            key: 'manual-react-memoization',
+            label: 'React memoization review',
+            lane: 'manual-review',
+            violations: collectPatternViolations({
+                files: sourceFiles,
+                shouldInclude: (file) => !isTestFile(file.relativePath) && isRendererSourceFile(file.relativePath),
+                pattern: 'useMemo',
+                shouldIncludeLine: (_file, lineContent) => isReactMemoizationLine(lineContent),
+                message: 'Review defensive React memoization and remove it unless compiler coverage is known to miss.',
+            }),
+        },
+        {
+            key: 'manual-suspicious-effects',
+            label: 'Suspicious effect review',
+            lane: 'manual-review',
+            violations: collectSuspiciousEffectViolations(sourceFiles),
+        },
+        {
+            key: 'manual-async-effects',
+            label: 'Async effect review',
+            lane: 'manual-review',
+            violations: collectAsyncEffectViolations(sourceFiles),
+        },
+        {
+            key: 'manual-broad-casts',
+            label: 'Broad cast review',
+            lane: 'manual-review',
+            violations: collectPatternViolations({
+                files: sourceFiles,
+                shouldInclude: (file) => !isTestFile(file.relativePath) && !isAuditSupportFile(file.relativePath),
+                shouldIncludeLine: (_file, lineContent) => {
+                    const trimmedLine = lineContent.trimStart();
+                    return (
+                        !trimmedLine.startsWith('import ') &&
+                        !trimmedLine.startsWith('export {') &&
+                        !isImportAliasLine(lineContent)
+                    );
+                },
+                pattern: BROAD_CAST_PATTERN,
+                message: 'Review broad type cast and replace it with a validated boundary where possible.',
+            }),
+        },
+        {
+            key: 'manual-non-parser-throws',
+            label: 'Non-parser throw review',
+            lane: 'manual-review',
+            violations: collectPatternViolations({
+                files: sourceFiles,
+                shouldInclude: (file) =>
+                    !isTestFile(file.relativePath) &&
+                    !isParserSourceFile(file.relativePath) &&
+                    !isAuditSupportFile(file.relativePath),
+                shouldIncludeLine: (file, lineContent) => !isIntentionalThrowLine(file.relativePath, lineContent),
+                pattern: /\bthrow\b/,
+                message: 'Review non-parser throw and confirm it is an invariant, data-corruption, or impossible-readback case.',
+            }),
+        },
+    ];
+
+    const annotatedCategories = annotateManualReviewCategories({
+        rootDir,
+        sourceFiles,
+        categories,
+    });
+
+    return buildReportFromCategories(annotatedCategories);
+}
+
 export function hasBlockingViolations(report: AgentsConformanceReport): boolean {
-    return (
-        report.inlineLintSuppressions.length > 0 ||
-        report.nonTestFrameworkImports.length > 0 ||
-        report.forbiddenLayoutEffects.length > 0 ||
-        report.rendererElectronImports.length > 0 ||
-        report.nonPreloadElectronBridgeUsage.length > 0 ||
-        report.insecureBrowserWindows.length > 0
+    return report.categories.some((category) => category.lane === 'blocking' && category.violations.length > 0);
+}
+
+export function hasActionableReviewCandidates(report: AgentsConformanceReport): boolean {
+    return report.categories.some(
+        (category) => category.lane === 'actionable-review' && category.violations.length > 0
     );
 }
 
 export function hasManualReviewCandidates(report: AgentsConformanceReport): boolean {
-    return (
-        report.handwrittenSourceFilesRequiringReview.length > 0 ||
-        report.handwrittenSourceFilesRequiringStrictReview.length > 0 ||
-        report.nonBlockingReactMemoization.length > 0 ||
-        report.nonBlockingSuspiciousEffects.length > 0 ||
-        report.nonBlockingAsyncEffects.length > 0 ||
-        report.nonBlockingBroadCasts.length > 0 ||
-        report.nonBlockingThrows.length > 0
-    );
+    return report.summary.manualReviewOutstandingCount > 0;
 }
 
 export function runAgentsConformanceAudit(options: {
     rootDir?: string;
     reportOnly?: boolean;
+    outputMode?: 'log' | 'json' | 'worklist';
+    worklistOptions?: AuditWorklistOptions;
 } = {}): AgentsConformanceReport {
     const rootDir = options.rootDir ?? process.cwd();
     const report = auditAgentsConformance(rootDir);
+    const outputMode = options.outputMode ?? 'log';
 
-    logViolations(
-        `Handwritten source files requiring ${String(REVIEW_SOURCE_LINES)}+ LOC review`,
-        report.handwrittenSourceFilesRequiringReview,
-        'warn'
-    );
-    logViolations(
-        `Handwritten source files requiring ${String(STRICT_REVIEW_SOURCE_LINES)}+ LOC strict review`,
-        report.handwrittenSourceFilesRequiringStrictReview,
-        'warn'
-    );
-    logViolations('Inline lint suppressions', report.inlineLintSuppressions, 'error');
-    logViolations('Non-test framework imports', report.nonTestFrameworkImports, 'error');
-    logViolations('Forbidden useLayoutEffect review', report.forbiddenLayoutEffects, 'error');
-    logViolations('Renderer electron import violations', report.rendererElectronImports, 'error');
-    logViolations('Non-preload Electron bridge usage', report.nonPreloadElectronBridgeUsage, 'error');
-    logViolations('BrowserWindow hardening violations', report.insecureBrowserWindows, 'error');
-    logViolations('React memoization review', report.nonBlockingReactMemoization, 'warn');
-    logViolations('Suspicious effect review', report.nonBlockingSuspiciousEffects, 'warn');
-    logViolations('Async effect review', report.nonBlockingAsyncEffects, 'warn');
-    logViolations('Broad cast review', report.nonBlockingBroadCasts, 'warn');
-    logViolations('Non-parser throw review', report.nonBlockingThrows, 'warn');
+    if (outputMode === 'json') {
+        process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+    } else if (outputMode === 'worklist') {
+        process.stdout.write(`${formatAuditWorklist(report, options.worklistOptions)}\n`);
+    } else {
+        logReport(report, rootDir, options.reportOnly ?? false);
+    }
 
-    const blockingViolations = hasBlockingViolations(report);
-    const manualReviewRequired = hasManualReviewCandidates(report);
-    scriptLog.info({
-        tag: 'agents.audit',
-        message: 'AGENTS conformance audit completed.',
-        rootDir,
-        blockingViolations,
-        manualReviewRequired,
-        reportOnly: options.reportOnly ?? false,
-    });
-
-    if (blockingViolations && !options.reportOnly) {
+    if (hasBlockingViolations(report) && !options.reportOnly) {
         throw new Error('AGENTS conformance audit failed.');
     }
 
@@ -620,7 +622,28 @@ function isDirectExecution(importMetaUrl: string): boolean {
 }
 
 if (isDirectExecution(import.meta.url)) {
+    const outputMode = process.argv.includes('--json')
+        ? 'json'
+        : process.argv.includes('--worklist')
+          ? 'worklist'
+          : 'log';
+    const laneOption = process.argv.find((argument) => argument.startsWith('--lane='))?.slice('--lane='.length);
+    const categoryOption = process.argv.find((argument) => argument.startsWith('--category='))?.slice('--category='.length);
+    const worklistOptions: AuditWorklistOptions = {
+        includeReviewed: process.argv.includes('--include-reviewed'),
+        newOnly: process.argv.includes('--new-only'),
+        staleOnly: process.argv.includes('--stale-only'),
+    };
+    if (laneOption === 'blocking' || laneOption === 'actionable-review' || laneOption === 'manual-review') {
+        worklistOptions.lane = laneOption;
+    }
+    if (categoryOption !== undefined) {
+        worklistOptions.category = categoryOption;
+    }
+
     runAgentsConformanceAudit({
         reportOnly: process.argv.includes('--report'),
+        outputMode,
+        worklistOptions,
     });
 }

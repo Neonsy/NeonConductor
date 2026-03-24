@@ -1,0 +1,68 @@
+{
+  "entries": [
+    {
+      "path": "electron/backend/runtime/services/checkpoint/service.ts",
+      "category": "handwritten-source-review",
+      "contentHash": "ad5001b07398aef0",
+      "status": "reviewed-clean",
+      "reviewedAt": "2026-03-24",
+      "note": "Manual review: checkpoint service is large but remains cohesive by responsibility."
+    },
+    {
+      "path": "electron/backend/runtime/services/context/sessionContextService.ts",
+      "category": "handwritten-source-review",
+      "contentHash": "e2472f8518cb32c8",
+      "status": "reviewed-clean",
+      "reviewedAt": "2026-03-24",
+      "note": "Manual review: session context service is large but cohesive."
+    },
+    {
+      "path": "src/components/conversation/panels/composerActionPanel.tsx",
+      "category": "handwritten-source-review",
+      "contentHash": "d91580d33b0de178",
+      "status": "reviewed-clean",
+      "reviewedAt": "2026-03-24",
+      "note": "Manual review: large but cohesive conversation action boundary."
+    },
+    {
+      "path": "src/components/modelSelection/modelPicker.tsx",
+      "category": "handwritten-source-review",
+      "contentHash": "8a4ce41224b08cde",
+      "status": "reviewed-clean",
+      "reviewedAt": "2026-03-24",
+      "note": "Manual review: large but cohesive model selection surface."
+    },
+    {
+      "path": "src/components/settings/modesSettings/modesInstructionsSections.tsx",
+      "category": "handwritten-source-review",
+      "contentHash": "e3d0aeebc9a54388",
+      "status": "reviewed-clean",
+      "reviewedAt": "2026-03-24",
+      "note": "Manual review: presentational modes instructions surface remains cohesive."
+    },
+    {
+      "path": "src/lib/runtime/eventPatches/readers.ts",
+      "category": "handwritten-source-review",
+      "contentHash": "3660fa0117ff434d",
+      "status": "reviewed-clean",
+      "reviewedAt": "2026-03-24",
+      "note": "Manual review: large but cohesive event patch reader module."
+    },
+    {
+      "path": "electron/backend/runtime/services/promptLayers/shared.ts",
+      "category": "manual-broad-casts",
+      "contentHash": "79e28b002e20b0cf",
+      "status": "reviewed-clean",
+      "reviewedAt": "2026-03-24",
+      "note": "Manual review: cast is at a validated prompt-layer boundary."
+    },
+    {
+      "path": "electron/backend/runtime/services/promptLayers/customModePortability.ts",
+      "category": "manual-non-parser-throws",
+      "contentHash": "693f3f14887ea1a4",
+      "status": "accepted-risk",
+      "reviewedAt": "2026-03-24",
+      "note": "Manual review: throw sites are parser-normalization invariants and portability validation failures."
+    }
+  ]
+}
