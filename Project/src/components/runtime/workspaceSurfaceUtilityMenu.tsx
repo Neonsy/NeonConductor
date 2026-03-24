@@ -25,7 +25,12 @@ export function WorkspaceSurfaceUtilityMenu({
         }
 
         const handlePointerDown = (event: MouseEvent) => {
-            if (!containerRef.current?.contains(event.target as Node)) {
+            const targetNode = event.target;
+            if (!(targetNode instanceof Node)) {
+                return;
+            }
+
+            if (!containerRef.current?.contains(targetNode)) {
                 setOpen(false);
             }
         };

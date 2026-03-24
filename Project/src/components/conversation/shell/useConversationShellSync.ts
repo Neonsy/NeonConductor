@@ -1,3 +1,4 @@
+import { skipToken } from '@tanstack/react-query';
 import { useEffect, useEffectEvent, useRef } from 'react';
 
 import type { useConversationQueries } from '@/web/components/conversation/shell/queries/useConversationQueries';
@@ -8,7 +9,7 @@ import type { useConversationRunTarget } from '@/web/components/conversation/she
 import { trpc } from '@/web/trpc/client';
 import type { ConversationShellBootChromeReadiness } from '@/web/components/runtime/bootReadiness';
 
-import type { EntityId, TopLevelTab } from '@/shared/contracts';
+import type { TopLevelTab } from '@/shared/contracts';
 
 import { buildConversationSelectionSyncPatch } from '@/web/components/conversation/shell/selectionSync';
 import { buildConversationUiSyncPatch } from '@/web/components/conversation/shell/queries/useConversationSync';
@@ -22,7 +23,9 @@ interface UseConversationShellSyncInput {
     hasSelectedSession: boolean;
     streamState: string;
     contextStateQueryEnabled: boolean;
-    contextStateQueryInput: Parameters<ReturnType<typeof trpc.useUtils>['context']['getResolvedState']['fetch']>[0];
+    contextStateQueryInput:
+        | Parameters<ReturnType<typeof trpc.useUtils>['context']['getResolvedState']['fetch']>[0]
+        | typeof skipToken;
     uiState: ConversationUiState;
     queries: ReturnType<typeof useConversationQueries>;
     shellViewModel: ReturnType<typeof useConversationShellViewModel>;
@@ -34,6 +37,7 @@ interface UseConversationShellSyncInput {
 
 export function useConversationShellSync(input: UseConversationShellSyncInput): void {
     const lastContextRefreshSignatureRef = useRef<string | undefined>(undefined);
+    const selectedSessionId = isEntityId(input.selectedSessionId, 'sess') ? input.selectedSessionId : undefined;
 
     const reconcileConversationSelection = useEffectEvent(() => {
         const patch = buildConversationSelectionSyncPatch({
@@ -121,18 +125,18 @@ export function useConversationShellSync(input: UseConversationShellSyncInput): 
     }, [input.profileId, input.queries.sessionsQuery.data?.sessions, input.uiState.selectedThreadId, input.utils.session.listRuns]);
 
     useEffect(() => {
-        if (!input.hasSelectedSession) {
+        if (!selectedSessionId) {
             return;
         }
 
         void input.utils.session.listRuns.prefetch({
             profileId: input.profileId,
-            sessionId: input.selectedSessionId as EntityId<'sess'>,
+            sessionId: selectedSessionId,
         });
 
         void input.utils.session.listMessages.prefetch({
             profileId: input.profileId,
-            sessionId: input.selectedSessionId as EntityId<'sess'>,
+            sessionId: selectedSessionId,
         });
 
         const preferredRunId = isEntityId(input.selectedRunId, 'run')
@@ -148,13 +152,12 @@ export function useConversationShellSync(input: UseConversationShellSyncInput): 
         if (input.topLevelTab !== 'chat') {
             void input.utils.checkpoint.list.prefetch({
                 profileId: input.profileId,
-                sessionId: input.selectedSessionId as EntityId<'sess'>,
+                sessionId: selectedSessionId,
             });
         }
     }, [
-        input.hasSelectedSession,
         input.profileId,
-        input.selectedSessionId,
+        selectedSessionId,
         input.shellViewModel.sessionRunSelection.runs,
         input.topLevelTab,
         input.selectedRunId,
@@ -176,7 +179,7 @@ export function useConversationShellSync(input: UseConversationShellSyncInput): 
     }, [input.profileId, input.shellViewModel.selectedThread?.workspaceFingerprint, input.topLevelTab, input.utils.sandbox.list]);
 
     const refetchSelectedConversationState = useEffectEvent(() => {
-        if (!input.hasSelectedSession) {
+        if (!selectedSessionId) {
             return;
         }
 
@@ -185,18 +188,20 @@ export function useConversationShellSync(input: UseConversationShellSyncInput): 
             : input.shellViewModel.sessionRunSelection.runs.at(0)?.id;
 
         void input.utils.session.status.fetch({
-                profileId: input.profileId,
-                sessionId: input.selectedSessionId as EntityId<'sess'>,
+            profileId: input.profileId,
+            sessionId: selectedSessionId,
         });
         void input.utils.session.listRuns.fetch({
             profileId: input.profileId,
-            sessionId: input.selectedSessionId as EntityId<'sess'>,
+            sessionId: selectedSessionId,
         });
         void input.utils.session.listMessages.fetch({
             profileId: input.profileId,
-            sessionId: input.selectedSessionId as EntityId<'sess'>,
+            sessionId: selectedSessionId,
         });
-        void input.utils.context.getResolvedState.fetch(input.contextStateQueryInput);
+        if (input.contextStateQueryInput !== skipToken) {
+            void input.utils.context.getResolvedState.fetch(input.contextStateQueryInput);
+        }
 
         if (activeRunId) {
             void input.utils.diff.listByRun.fetch({
@@ -241,7 +246,9 @@ export function useConversationShellSync(input: UseConversationShellSyncInput): 
         }
 
         lastContextRefreshSignatureRef.current = runContextRefreshSignature;
-        void input.utils.context.getResolvedState.fetch(input.contextStateQueryInput);
+        if (input.contextStateQueryInput !== skipToken) {
+            void input.utils.context.getResolvedState.fetch(input.contextStateQueryInput);
+        }
     }, [
         input.contextStateQueryEnabled,
         input.contextStateQueryInput,

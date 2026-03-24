@@ -3,12 +3,13 @@ import { useState } from 'react';
 import { buildModelPickerOption } from '@/web/components/modelSelection/modelCapabilities';
 import { ModelPicker } from '@/web/components/modelSelection/modelPicker';
 import { resolveSelectedModelId, resolveSelectedProviderId } from '@/web/components/settings/providerSettings/selection';
+import { isOneOf } from '@/web/lib/typeGuards/isOneOf';
 import { trpc } from '@/web/trpc/client';
 
 import type { ProviderModelRecord } from '@/app/backend/persistence/types';
 import type { ProviderListItem } from '@/app/backend/providers/service/types';
 import type { WorkspacePreferenceRecord } from '@/app/backend/runtime/contracts/types/runtime';
-import type { RuntimeProviderId, TopLevelTab } from '@/shared/contracts';
+import { providerIds, type RuntimeProviderId, type TopLevelTab } from '@/shared/contracts';
 
 export function formatTimestamp(value: string | undefined): string {
     if (!value) {
@@ -49,6 +50,10 @@ export function buildWorkspaceModelOptions(
                 },
             })
         );
+}
+
+function isRuntimeProviderId(value: string | undefined): value is RuntimeProviderId {
+    return isOneOf(value, providerIds);
 }
 
 export function resolveWorkspaceDefaultDraft(input: {
@@ -137,6 +142,22 @@ export function WorkspaceDefaultsSection({
         modelId && modelOptions.some((option) => option.id === modelId) ? modelId : modelOptions[0]?.id ?? '';
     const selectedModelOption = modelOptions.find((option) => option.id === selectedModelId);
 
+    async function handleSaveDefaults() {
+        if (!providerId || selectedModelId.length === 0) {
+            return;
+        }
+
+        try {
+            await setWorkspacePreferenceMutation.mutateAsync({
+                profileId,
+                workspaceFingerprint,
+                defaultTopLevelTab: topLevelTab,
+                defaultProviderId: providerId,
+                defaultModelId: selectedModelId,
+            });
+        } catch {}
+    }
+
     return (
         <article className='border-border/70 bg-card/55 rounded-[24px] border p-5'>
             <div className='space-y-1'>
@@ -203,8 +224,8 @@ export function WorkspaceDefaultsSection({
                         placeholder='Select a model'
                         onSelectModel={setModelId}
                         onSelectOption={(option) => {
-                            if (option.providerId && option.providerId !== providerId) {
-                                setProviderId(option.providerId as RuntimeProviderId);
+                            if (option.providerId && option.providerId !== providerId && isRuntimeProviderId(option.providerId)) {
+                                setProviderId(option.providerId);
                             }
                             setModelId(option.id);
                         }}
@@ -222,17 +243,7 @@ export function WorkspaceDefaultsSection({
                     className='rounded-full border border-primary/40 bg-primary/10 px-4 py-2 text-sm font-medium text-primary disabled:cursor-not-allowed disabled:opacity-60'
                     disabled={!providerId || selectedModelId.length === 0 || setWorkspacePreferenceMutation.isPending}
                     onClick={() => {
-                        void setWorkspacePreferenceMutation.mutateAsync({
-                            profileId,
-                            workspaceFingerprint,
-                            defaultTopLevelTab: topLevelTab,
-                            ...(providerId
-                                ? {
-                                      defaultProviderId: providerId,
-                                      defaultModelId: selectedModelId,
-                                  }
-                                : {}),
-                        });
+                        void handleSaveDefaults();
                     }}>
                     {setWorkspacePreferenceMutation.isPending ? 'Saving…' : 'Save defaults'}
                 </button>

@@ -14,13 +14,14 @@ import {
 } from '@/app/backend/runtime/contracts';
 import { canonicalizeProviderModelId } from '@/shared/kiloModels';
 import { providerIds } from '@/shared/contracts';
+import { isOneOf } from '@/web/lib/typeGuards/isOneOf';
 
 interface ProviderSpecialistDefaultsSectionProps {
     profileId: string;
 }
 
 function isRuntimeProviderId(value: string | undefined): value is ProviderListItem['id'] {
-    return typeof value === 'string' && providerIds.includes(value as ProviderListItem['id']);
+    return isOneOf(value, providerIds);
 }
 
 function createModeOptions(input: {
@@ -100,6 +101,23 @@ export function ProviderSpecialistDefaultsSection({ profileId }: ProviderSpecial
             targets: providerSpecialistDefaultTargets.filter((target) => target.topLevelTab === 'orchestrator'),
         },
     ];
+
+    async function handleSelectSpecialistDefault(input: {
+        topLevelTab: 'agent' | 'orchestrator';
+        modeKey: 'ask' | 'code' | 'debug' | 'orchestrate';
+        providerId: ProviderListItem['id'];
+        modelId: string;
+    }) {
+        try {
+            await setSpecialistDefaultMutation.mutateAsync({
+                profileId,
+                topLevelTab: input.topLevelTab,
+                modeKey: input.modeKey,
+                providerId: input.providerId,
+                modelId: input.modelId,
+            });
+        } catch {}
+    }
 
     return (
         <section className='border-border/70 bg-card/40 space-y-4 rounded-[24px] border p-5'>
@@ -197,8 +215,7 @@ export function ProviderSpecialistDefaultsSection({ profileId }: ProviderSpecial
                                                     return;
                                                 }
 
-                                                void setSpecialistDefaultMutation.mutateAsync({
-                                                    profileId,
+                                                void handleSelectSpecialistDefault({
                                                     topLevelTab: target.topLevelTab,
                                                     modeKey: target.modeKey,
                                                     providerId: option.providerId,

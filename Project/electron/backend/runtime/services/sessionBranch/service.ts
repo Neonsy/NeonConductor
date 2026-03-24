@@ -155,13 +155,14 @@ export class SessionBranchService {
                   workflowId: input.workflowId,
               })
             : null;
-        if (input.workflowId && !selectedWorkflow) {
+        const resolvedWorkflow = selectedWorkflow?.isOk() ? selectedWorkflow.value : null;
+        if (input.workflowId && (!selectedWorkflow || selectedWorkflow.isErr() || !resolvedWorkflow)) {
             return {
                 branched: false,
                 reason: 'workflow_not_found',
             };
         }
-        if (selectedWorkflow && !selectedWorkflow.enabled) {
+        if (resolvedWorkflow && !resolvedWorkflow.enabled) {
             return {
                 branched: false,
                 reason: 'workflow_disabled',
@@ -213,12 +214,12 @@ export class SessionBranchService {
         }
 
         const workflowExecution =
-            selectedWorkflow && thread.workspaceFingerprint
+            resolvedWorkflow && thread.workspaceFingerprint
                 ? await workflowExecutionService.executeBranchWorkflow({
                       profileId: input.profileId,
                       workspaceFingerprint: thread.workspaceFingerprint,
                       ...(thread.sandboxId ? { sandboxId: thread.sandboxId } : {}),
-                      command: selectedWorkflow.command,
+                      command: resolvedWorkflow.command,
                   })
                 : { status: 'not_requested' as const };
 

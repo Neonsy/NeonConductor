@@ -288,7 +288,10 @@ function PopoverModelPicker(props: ModelPickerProps) {
         });
 
         const handlePointerDown = (event: MouseEvent) => {
-            const targetNode = event.target as Node;
+            const targetNode = event.target;
+            if (!(targetNode instanceof Node)) {
+                return;
+            }
             if (!containerRef.current?.contains(targetNode) && !panelRef.current?.contains(targetNode)) {
                 setOpen(false);
             }

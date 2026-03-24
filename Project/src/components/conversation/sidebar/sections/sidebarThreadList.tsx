@@ -2,6 +2,7 @@ import { ChevronDown, ChevronRight, GitBranch, Play, Plus, Star, Trash2 } from '
 import { useState } from 'react';
 
 import { SidebarInlineThreadDraft } from '@/web/components/conversation/sidebar/sections/sidebarInlineThreadDraft';
+import type { SidebarMutationResult } from '@/web/components/conversation/sidebar/sidebarMutationResult';
 
 import type { SessionSummaryRecord, ThreadListRecord } from '@/app/backend/persistence/types';
 import type { ProviderModelRecord } from '@/app/backend/persistence/types';
@@ -39,7 +40,7 @@ interface SidebarThreadListProps {
     onPreviewThread?: (threadId: string) => void;
     onSelectThread: (threadId: string) => void;
     onSelectWorkspaceFingerprint: (workspaceFingerprint: string | undefined) => void;
-    onToggleThreadFavorite: (threadId: string, nextFavorite: boolean) => Promise<void>;
+    onToggleThreadFavorite: (threadId: string, nextFavorite: boolean) => Promise<SidebarMutationResult>;
     onRequestWorkspaceDelete: (workspaceFingerprint: string, workspaceLabel: string) => void;
     onRequestNewThread: (workspaceFingerprint?: string) => void;
     inlineThreadDraft?: {
@@ -152,7 +153,7 @@ function ThreadRow({
     showAllModes: boolean;
     onPreviewThread?: (threadId: string) => void;
     onSelectThread: (threadId: string) => void;
-    onToggleThreadFavorite: (threadId: string, nextFavorite: boolean) => Promise<void>;
+    onToggleThreadFavorite: (threadId: string, nextFavorite: boolean) => Promise<SidebarMutationResult>;
 }) {
     const tagIds = threadTagIdsByThread.get(thread.id) ?? [];
     const runSummary = summarizeThreadRuns(thread.id, sessions);
@@ -199,7 +200,7 @@ function ThreadRow({
                         ) : null}
                     </div>
                     <div className='text-muted-foreground mt-2 flex flex-wrap items-center gap-1.5 text-[11px]'>
-                        <span className='rounded-full border border-border/70 px-2 py-0.5'>
+                        <span className='border-border/70 rounded-full border px-2 py-0.5'>
                             {thread.sessionCount === 1 ? '1 session' : `${String(thread.sessionCount)} sessions`}
                         </span>
                         {runSummary ? (
@@ -209,7 +210,7 @@ function ThreadRow({
                             </span>
                         ) : null}
                         {thread.sandboxId ? (
-                            <span className='inline-flex items-center gap-1 rounded-full border border-border/70 px-2 py-0.5'>
+                            <span className='border-border/70 inline-flex items-center gap-1 rounded-full border px-2 py-0.5'>
                                 <GitBranch className='h-3 w-3' />
                                 Branch-linked
                             </span>
@@ -243,7 +244,9 @@ function ThreadRow({
                 <button
                     type='button'
                     className={`focus-visible:ring-ring mt-0.5 rounded-md p-1 transition-colors focus-visible:ring-2 ${
-                        thread.isFavorite ? 'text-amber-400 hover:text-amber-300' : 'text-muted-foreground hover:text-foreground'
+                        thread.isFavorite
+                            ? 'text-amber-400 hover:text-amber-300'
+                            : 'text-muted-foreground hover:text-foreground'
                     }`}
                     aria-label={
                         thread.isFavorite ? `Remove ${thread.title} from favorites` : `Add ${thread.title} to favorites`
@@ -302,7 +305,7 @@ export function SidebarThreadList({
     return (
         <div className='min-h-0 flex-1 overflow-y-auto p-3'>
             {!hasAnyThreads ? (
-                <div className='text-muted-foreground flex h-full min-h-48 items-center justify-center rounded-3xl border border-dashed border-border/70 bg-background/30 px-6 text-center text-sm'>
+                <div className='text-muted-foreground border-border/70 bg-background/30 flex h-full min-h-48 items-center justify-center rounded-3xl border border-dashed px-6 text-center text-sm'>
                     {statusMessage && statusTone !== 'error'
                         ? 'The sessions tree is still loading. The center workspace is ready to use.'
                         : statusTone === 'error'
@@ -320,9 +323,7 @@ export function SidebarThreadList({
                     <section key={group.workspaceFingerprint} className='mb-4 space-y-2'>
                         <div
                             className={`rounded-[26px] border p-3 ${
-                                isSelectedWorkspace
-                                    ? 'border-primary/40 bg-primary/6'
-                                    : 'border-border bg-card/60'
+                                isSelectedWorkspace ? 'border-primary/40 bg-primary/6' : 'border-border bg-card/60'
                             }`}>
                             <div className='flex items-start justify-between gap-3'>
                                 <div className='min-w-0 flex-1'>
@@ -330,22 +331,30 @@ export function SidebarThreadList({
                                         <button
                                             type='button'
                                             className='border-border bg-background/70 hover:bg-accent inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border'
-                                            aria-label={isCollapsed ? `Expand ${group.label}` : `Collapse ${group.label}`}
+                                            aria-label={
+                                                isCollapsed ? `Expand ${group.label}` : `Collapse ${group.label}`
+                                            }
                                             onClick={() => {
                                                 toggleWorkspaceCollapsed(group.workspaceFingerprint);
                                             }}>
-                                            {isCollapsed ? <ChevronRight className='h-4 w-4' /> : <ChevronDown className='h-4 w-4' />}
+                                            {isCollapsed ? (
+                                                <ChevronRight className='h-4 w-4' />
+                                            ) : (
+                                                <ChevronDown className='h-4 w-4' />
+                                            )}
                                         </button>
                                         <button
                                             type='button'
-                                            className='min-w-0 flex-1 rounded-xl px-1 py-0.5 text-left transition-colors hover:bg-background/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+                                            className='hover:bg-background/60 focus-visible:ring-ring min-w-0 flex-1 rounded-xl px-1 py-0.5 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none'
                                             onClick={() => {
                                                 onSelectWorkspaceFingerprint(group.workspaceFingerprint);
                                             }}>
                                             <div className='min-w-0'>
                                                 <p className='truncate text-sm font-semibold'>{group.label}</p>
                                                 {group.absolutePath ? (
-                                                    <p className='text-muted-foreground truncate text-xs'>{group.absolutePath}</p>
+                                                    <p className='text-muted-foreground truncate text-xs'>
+                                                        {group.absolutePath}
+                                                    </p>
                                                 ) : null}
                                             </div>
                                         </button>
@@ -378,12 +387,14 @@ export function SidebarThreadList({
                             </div>
 
                             <div className='text-muted-foreground mt-3 flex flex-wrap gap-1.5 text-[11px]'>
-                                <span className='rounded-full border border-border/70 px-2 py-0.5'>
+                                <span className='border-border/70 rounded-full border px-2 py-0.5'>
                                     {group.threadCount === 1 ? '1 thread' : `${String(group.threadCount)} threads`}
                                 </span>
                                 {group.favoriteCount > 0 ? (
-                                    <span className='rounded-full border border-border/70 px-2 py-0.5'>
-                                        {group.favoriteCount === 1 ? '1 favorite' : `${String(group.favoriteCount)} favorites`}
+                                    <span className='border-border/70 rounded-full border px-2 py-0.5'>
+                                        {group.favoriteCount === 1
+                                            ? '1 favorite'
+                                            : `${String(group.favoriteCount)} favorites`}
                                     </span>
                                 ) : null}
                             </div>
@@ -435,7 +446,9 @@ export function SidebarThreadList({
                     <div className='border-border bg-card/60 rounded-[26px] border p-3'>
                         <div>
                             <p className='text-sm font-semibold'>Playground</p>
-                            <p className='text-muted-foreground text-xs'>Detached threads that are not tied to a workspace.</p>
+                            <p className='text-muted-foreground text-xs'>
+                                Detached threads that are not tied to a workspace.
+                            </p>
                         </div>
                     </div>
 

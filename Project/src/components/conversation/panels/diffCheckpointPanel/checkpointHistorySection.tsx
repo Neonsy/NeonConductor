@@ -1,44 +1,35 @@
 import { Button } from '@/web/components/ui/button';
+import { PROGRESSIVE_QUERY_OPTIONS } from '@/web/lib/query/progressiveQueryOptions';
+import { trpc } from '@/web/trpc/client';
 
-import { describeCompactionRun, describeRetentionDisposition, formatCheckpointByteSize } from '@/web/components/conversation/panels/diffCheckpointPanelState';
+import {
+    buildRollbackWarningLines,
+    describeCompactionRun,
+    describeRetentionDisposition,
+    formatCheckpointByteSize,
+} from '@/web/components/conversation/panels/diffCheckpointPanelState';
 
 import type { CheckpointRecord } from '@/app/backend/persistence/types';
-import type { CheckpointStorageSummary } from '@/app/backend/runtime/contracts';
+import type {
+    CheckpointCleanupPreview,
+    CheckpointRollbackPreview,
+    CheckpointStorageSummary,
+} from '@/app/backend/runtime/contracts';
 
-interface CleanupPreviewData {
-    milestoneCount: number;
-    protectedRecentCount: number;
-    eligibleCount: number;
-    candidates: Array<{
-        checkpointId: string;
-        summary: string;
-        snapshotFileCount: number;
-        changesetChangeCount: number;
-    }>;
-}
+export type CleanupPreviewData = CheckpointCleanupPreview;
+export type RollbackPreview = CheckpointRollbackPreview;
 
-interface RollbackPreview {
-    changeset?: {
-        summary: string;
-    };
-    recommendedAction: 'restore_checkpoint' | 'revert_changeset';
-    hasChangeset: boolean;
-    canRevertSafely: boolean;
-}
-
-interface RollbackWarningState {
+export interface RollbackWarningState {
     tone: 'warning' | 'isolated';
     lines: string[];
 }
 
-interface CheckpointHistorySectionProps {
+export interface CheckpointHistorySectionProps {
     visibleCheckpoints: CheckpointRecord[];
     checkpointStorage: CheckpointStorageSummary | undefined;
     selectedSessionId: CheckpointRecord['sessionId'] | undefined;
     disabled: boolean;
     cleanupPreviewOpen: boolean;
-    cleanupPreviewPending: boolean;
-    cleanupPreviewData: CleanupPreviewData | undefined;
     forceCompactPending: boolean;
     applyCleanupPending: boolean;
     rollbackPending: boolean;
@@ -49,9 +40,7 @@ interface CheckpointHistorySectionProps {
     confirmRollbackId: CheckpointRecord['id'] | undefined;
     rollbackTargetId: CheckpointRecord['id'] | undefined;
     milestoneDrafts: Record<string, string>;
-    rollbackPreviewPending: boolean;
-    rollbackWarningState: RollbackWarningState | null;
-    selectedPreview: RollbackPreview | undefined;
+    profileId: string;
     onToggleCheckpointActions: (checkpointId: CheckpointRecord['id']) => void;
     onCloseCheckpointActions: () => void;
     onMilestoneDraftChange: (checkpointId: CheckpointRecord['id'], value: string) => void;
@@ -65,14 +54,175 @@ interface CheckpointHistorySectionProps {
     onForceCompact: () => void;
 }
 
+function RollbackPreviewSection(input: {
+    profileId: string;
+    checkpointId: CheckpointRecord['id'];
+    rollbackPending: boolean;
+    revertChangesetPending: boolean;
+    rollbackTargetId: CheckpointRecord['id'] | undefined;
+    onRestoreCheckpoint: (checkpointId: CheckpointRecord['id']) => void;
+    onRevertChangeset: (checkpointId: CheckpointRecord['id']) => void;
+    onCloseCheckpointActions: () => void;
+    buildRollbackWarningState: (preview: RollbackPreview | undefined) => RollbackWarningState | null;
+    executionTargetLabel: string;
+}) {
+    const rollbackPreviewQuery = trpc.checkpoint.previewRollback.useQuery(
+        {
+            profileId: input.profileId,
+            checkpointId: input.checkpointId,
+        },
+        PROGRESSIVE_QUERY_OPTIONS
+    );
+    const rollbackPreviewPending = rollbackPreviewQuery.isPending;
+    const selectedPreview =
+        rollbackPreviewQuery.data?.found && rollbackPreviewQuery.data.preview.checkpointId === input.checkpointId
+            ? rollbackPreviewQuery.data.preview
+            : undefined;
+    const rollbackWarningState = selectedPreview ? input.buildRollbackWarningState(selectedPreview) : null;
+
+    return (
+        <div className='border-border bg-background/60 mt-3 rounded-md border p-3'>
+            <p className='text-sm'>
+                Choose how to go back from <span className='font-medium'>{input.checkpointId}</span>.
+            </p>
+            <p className='text-muted-foreground mt-1 text-xs'>
+                Backend guidance is based on the current shared-target risk for{' '}
+                <span className='font-medium'>{input.executionTargetLabel}</span>.
+            </p>
+            <div className='mt-2 space-y-1 text-xs'>
+                {selectedPreview?.changeset ? (
+                    <p className='text-muted-foreground'>Changeset: {selectedPreview.changeset.summary}</p>
+                ) : null}
+                {rollbackPreviewPending ? (
+                    <p className='text-muted-foreground'>Checking whether other chats share this target…</p>
+                ) : null}
+                {rollbackWarningState
+                    ? rollbackWarningState.lines.map((line) => (
+                          <p
+                              key={line}
+                              className={
+                                  rollbackWarningState.tone === 'warning'
+                                      ? 'text-destructive'
+                                      : 'text-emerald-700 dark:text-emerald-400'
+                              }>
+                              {line}
+                          </p>
+                      ))
+                    : null}
+            </div>
+            <div className='mt-3 flex flex-wrap gap-2'>
+                <Button
+                    type='button'
+                    size='sm'
+                    variant={selectedPreview?.recommendedAction === 'restore_checkpoint' ? 'default' : 'outline'}
+                    className='h-11'
+                    disabled={input.rollbackPending || input.revertChangesetPending || rollbackPreviewPending}
+                    onClick={() => {
+                        input.onRestoreCheckpoint(input.checkpointId);
+                    }}>
+                    {input.rollbackPending && input.rollbackTargetId === input.checkpointId
+                        ? 'Restoring…'
+                        : 'Restore Checkpoint'}
+                </Button>
+                {selectedPreview?.hasChangeset ? (
+                    <Button
+                        type='button'
+                        size='sm'
+                        variant={selectedPreview.recommendedAction === 'revert_changeset' ? 'default' : 'outline'}
+                        className='h-11'
+                        disabled={
+                            input.rollbackPending ||
+                            input.revertChangesetPending ||
+                            rollbackPreviewPending ||
+                            !selectedPreview.canRevertSafely
+                        }
+                        onClick={() => {
+                            input.onRevertChangeset(input.checkpointId);
+                        }}>
+                        {input.revertChangesetPending && input.rollbackTargetId === input.checkpointId
+                            ? 'Reverting…'
+                            : 'Revert Changeset'}
+                    </Button>
+                ) : null}
+                <Button
+                    type='button'
+                    size='sm'
+                    variant='outline'
+                    className='h-11'
+                    disabled={input.rollbackPending || input.revertChangesetPending}
+                    onClick={input.onCloseCheckpointActions}>
+                    Keep Current State
+                </Button>
+            </div>
+        </div>
+    );
+}
+
+function CleanupPreviewSection(input: {
+    profileId: string;
+    selectedSessionId: CheckpointRecord['sessionId'];
+    applyCleanupPending: boolean;
+    onApplyCleanup: () => void;
+}) {
+    const cleanupPreviewQuery = trpc.checkpoint.previewCleanup.useQuery(
+        {
+            profileId: input.profileId,
+            sessionId: input.selectedSessionId,
+        },
+        PROGRESSIVE_QUERY_OPTIONS
+    );
+    const cleanupPreviewPending = cleanupPreviewQuery.isPending;
+    const cleanupPreviewData = cleanupPreviewQuery.data;
+
+    return (
+        <div className='border-border border-t p-3'>
+            <p className='text-sm font-medium'>Retention Cleanup</p>
+            <p className='text-muted-foreground mt-1 text-xs'>
+                Cleanup affects retained checkpoint history only. It does not modify current workspace or sandbox files.
+            </p>
+            {cleanupPreviewPending ? (
+                <p className='text-muted-foreground mt-3 text-sm'>Loading cleanup preview…</p>
+            ) : cleanupPreviewData ? (
+                <div className='mt-3 space-y-3'>
+                    <div className='grid gap-2 text-xs text-muted-foreground sm:grid-cols-3'>
+                        <p>Milestones kept: {String(cleanupPreviewData.milestoneCount)}</p>
+                        <p>Recent checkpoints kept: {String(cleanupPreviewData.protectedRecentCount)}</p>
+                        <p>Cleanup candidates: {String(cleanupPreviewData.eligibleCount)}</p>
+                    </div>
+                    {cleanupPreviewData.candidates.length === 0 ? (
+                        <p className='text-muted-foreground text-sm'>No cleanup-eligible checkpoints in this session.</p>
+                    ) : (
+                        <div className='max-h-48 space-y-2 overflow-y-auto'>
+                            {cleanupPreviewData.candidates.map((candidate) => (
+                                <div key={candidate.checkpointId} className='border-border rounded-md border px-3 py-2 text-xs'>
+                                    <p className='font-medium'>{candidate.summary}</p>
+                                    <p className='text-muted-foreground mt-1'>
+                                        {candidate.snapshotFileCount} snapshot files · {candidate.changesetChangeCount} changeset entries
+                                    </p>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                    <Button
+                        type='button'
+                        size='sm'
+                        className='h-11'
+                        disabled={input.applyCleanupPending || cleanupPreviewData.candidates.length === 0}
+                        onClick={input.onApplyCleanup}>
+                        {input.applyCleanupPending ? 'Cleaning Up…' : 'Apply Cleanup'}
+                    </Button>
+                </div>
+            ) : null}
+        </div>
+    );
+}
+
 export function CheckpointHistorySection({
     visibleCheckpoints,
     checkpointStorage,
     selectedSessionId,
     disabled,
     cleanupPreviewOpen,
-    cleanupPreviewPending,
-    cleanupPreviewData,
     forceCompactPending,
     applyCleanupPending,
     rollbackPending,
@@ -83,9 +233,7 @@ export function CheckpointHistorySection({
     confirmRollbackId,
     rollbackTargetId,
     milestoneDrafts,
-    rollbackPreviewPending,
-    rollbackWarningState,
-    selectedPreview,
+    profileId,
     onToggleCheckpointActions,
     onCloseCheckpointActions,
     onMilestoneDraftChange,
@@ -178,80 +326,18 @@ export function CheckpointHistorySection({
                                     </Button>
                                 </div>
                                 {confirmRollbackId === checkpoint.id ? (
-                                    <div className='border-border bg-background/60 mt-3 rounded-md border p-3'>
-                                        <p className='text-sm'>
-                                            Choose how to go back from <span className='font-medium'>{checkpoint.id}</span>.
-                                        </p>
-                                        <p className='text-muted-foreground mt-1 text-xs'>
-                                            Backend guidance is based on the current shared-target risk for{' '}
-                                            <span className='font-medium'>{checkpoint.executionTargetLabel}</span>.
-                                        </p>
-                                        <div className='mt-2 space-y-1 text-xs'>
-                                            <p className='text-muted-foreground'>
-                                                Target: {checkpoint.executionTargetKind} · {checkpoint.executionTargetKey}
-                                            </p>
-                                            <p className='text-muted-foreground'>Snapshot: {String(checkpoint.snapshotFileCount)} files</p>
-                                            {selectedPreview?.changeset ? (
-                                                <p className='text-muted-foreground'>Changeset: {selectedPreview.changeset.summary}</p>
-                                            ) : null}
-                                            {rollbackPreviewPending ? (
-                                                <p className='text-muted-foreground'>Checking whether other chats share this target…</p>
-                                            ) : null}
-                                            {rollbackWarningState
-                                                ? rollbackWarningState.lines.map((line) => (
-                                                      <p
-                                                          key={line}
-                                                          className={
-                                                              rollbackWarningState.tone === 'warning'
-                                                                  ? 'text-destructive'
-                                                                  : 'text-emerald-700 dark:text-emerald-400'
-                                                          }>
-                                                          {line}
-                                                      </p>
-                                                  ))
-                                                : null}
-                                        </div>
-                                        <div className='mt-3 flex flex-wrap gap-2'>
-                                            <Button
-                                                type='button'
-                                                size='sm'
-                                                variant={selectedPreview?.recommendedAction === 'restore_checkpoint' ? 'default' : 'outline'}
-                                                className='h-11'
-                                                disabled={rollbackPending || revertChangesetPending || rollbackPreviewPending}
-                                                onClick={() => {
-                                                    onRestoreCheckpoint(checkpoint.id);
-                                                }}>
-                                                {rollbackPending && rollbackTargetId === checkpoint.id ? 'Restoring…' : 'Restore Checkpoint'}
-                                            </Button>
-                                            {selectedPreview?.hasChangeset ? (
-                                                <Button
-                                                    type='button'
-                                                    size='sm'
-                                                    variant={selectedPreview.recommendedAction === 'revert_changeset' ? 'default' : 'outline'}
-                                                    className='h-11'
-                                                    disabled={
-                                                        rollbackPending ||
-                                                        revertChangesetPending ||
-                                                        rollbackPreviewPending ||
-                                                        !selectedPreview.canRevertSafely
-                                                    }
-                                                    onClick={() => {
-                                                        onRevertChangeset(checkpoint.id);
-                                                    }}>
-                                                    {revertChangesetPending && rollbackTargetId === checkpoint.id ? 'Reverting…' : 'Revert Changeset'}
-                                                </Button>
-                                            ) : null}
-                                            <Button
-                                                type='button'
-                                                size='sm'
-                                                variant='outline'
-                                                className='h-11'
-                                                disabled={rollbackPending || revertChangesetPending}
-                                                onClick={onCloseCheckpointActions}>
-                                                Keep Current State
-                                            </Button>
-                                        </div>
-                                    </div>
+                                    <RollbackPreviewSection
+                                        profileId={profileId}
+                                        checkpointId={checkpoint.id}
+                                        rollbackPending={rollbackPending}
+                                        revertChangesetPending={revertChangesetPending}
+                                        rollbackTargetId={rollbackTargetId}
+                                        executionTargetLabel={checkpoint.executionTargetLabel}
+                                        buildRollbackWarningState={buildRollbackWarningLines}
+                                        onRestoreCheckpoint={onRestoreCheckpoint}
+                                        onRevertChangeset={onRevertChangeset}
+                                        onCloseCheckpointActions={onCloseCheckpointActions}
+                                    />
                                 ) : null}
                                 <div className='border-border bg-background/60 mt-3 rounded-md border p-3'>
                                     <p className='text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground'>
@@ -310,41 +396,13 @@ export function CheckpointHistorySection({
                     </div>
                 )}
             </div>
-            {cleanupPreviewOpen ? (
-                <div className='border-border border-t p-3'>
-                    <p className='text-sm font-medium'>Retention Cleanup</p>
-                    <p className='text-muted-foreground mt-1 text-xs'>
-                        Cleanup affects retained checkpoint history only. It does not modify current workspace or sandbox files.
-                    </p>
-                    {cleanupPreviewPending ? (
-                        <p className='text-muted-foreground mt-3 text-sm'>Loading cleanup preview…</p>
-                    ) : cleanupPreviewData ? (
-                        <div className='mt-3 space-y-3'>
-                            <div className='grid gap-2 text-xs text-muted-foreground sm:grid-cols-3'>
-                                <p>Milestones kept: {String(cleanupPreviewData.milestoneCount)}</p>
-                                <p>Recent checkpoints kept: {String(cleanupPreviewData.protectedRecentCount)}</p>
-                                <p>Cleanup candidates: {String(cleanupPreviewData.eligibleCount)}</p>
-                            </div>
-                            {cleanupPreviewData.candidates.length === 0 ? (
-                                <p className='text-muted-foreground text-sm'>No cleanup-eligible checkpoints in this session.</p>
-                            ) : (
-                                <div className='max-h-48 space-y-2 overflow-y-auto'>
-                                    {cleanupPreviewData.candidates.map((candidate) => (
-                                        <div key={candidate.checkpointId} className='border-border rounded-md border px-3 py-2 text-xs'>
-                                            <p className='font-medium'>{candidate.summary}</p>
-                                            <p className='text-muted-foreground mt-1'>
-                                                {candidate.snapshotFileCount} snapshot files · {candidate.changesetChangeCount} changeset entries
-                                            </p>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                            <Button type='button' size='sm' className='h-11' disabled={applyCleanupPending || !selectedSessionId || cleanupPreviewData.candidates.length === 0} onClick={onApplyCleanup}>
-                                {applyCleanupPending ? 'Cleaning Up…' : 'Apply Cleanup'}
-                            </Button>
-                        </div>
-                    ) : null}
-                </div>
+            {cleanupPreviewOpen && selectedSessionId ? (
+                <CleanupPreviewSection
+                    profileId={profileId}
+                    selectedSessionId={selectedSessionId}
+                    applyCleanupPending={applyCleanupPending}
+                    onApplyCleanup={onApplyCleanup}
+                />
             ) : null}
         </section>
     );

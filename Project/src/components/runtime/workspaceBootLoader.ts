@@ -76,10 +76,13 @@ export function startWorkspaceBootPrefetch(input: WorkspaceBootLoaderInput): Pro
         return workspaceBootPrefetchPromise;
     }
 
-    workspaceBootPrefetchPromise = prefetchWorkspaceBootData(input).catch((error: unknown) => {
-        workspaceBootPrefetchPromise = null;
-        throw error;
-    });
+    workspaceBootPrefetchPromise = prefetchWorkspaceBootData(input)
+        .catch(() => {
+            // Boot prefetch is opportunistic warmup work and must not fail the route.
+        })
+        .finally(() => {
+            workspaceBootPrefetchPromise = null;
+        });
 
     return workspaceBootPrefetchPromise;
 }

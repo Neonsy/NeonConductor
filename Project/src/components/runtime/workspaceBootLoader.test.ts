@@ -252,6 +252,49 @@ describe('workspaceBootLoader', () => {
         expect(shellBootstrapPrefetch).not.toHaveBeenCalled();
     });
 
+    it('does not reject the shared boot prefetch promise when warmup work fails', async () => {
+        resetWorkspaceBootPrefetchForTests();
+
+        const bootPrefetchPromise = startWorkspaceBootPrefetch({
+            trpcClient: {
+                profile: {
+                    list: {
+                        query: vi.fn().mockResolvedValue({
+                            profiles: [
+                                {
+                                    id: 'profile_default',
+                                    isActive: true,
+                                },
+                            ],
+                        }),
+                    },
+                    getActive: {
+                        query: vi.fn().mockResolvedValue({
+                            activeProfileId: 'profile_default',
+                        }),
+                    },
+                },
+            },
+            trpcUtils: {
+                mode: {
+                    list: {
+                        prefetch: vi.fn().mockRejectedValue(new Error('prefetch failed')),
+                    },
+                    getActive: {
+                        prefetch: vi.fn().mockResolvedValue(undefined),
+                    },
+                },
+                runtime: {
+                    getShellBootstrap: {
+                        prefetch: vi.fn().mockResolvedValue(undefined),
+                    },
+                },
+            },
+        });
+
+        await expect(bootPrefetchPromise).resolves.toBeUndefined();
+    });
+
     it('returns without throwing when warm profile payloads are invalid', async () => {
         resetWorkspaceBootPrefetchForTests();
 

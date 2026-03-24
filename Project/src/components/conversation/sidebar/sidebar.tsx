@@ -3,9 +3,12 @@ import { useState } from 'react';
 
 import { SidebarRailHeader } from '@/web/components/conversation/sidebar/sections/sidebarRailHeader';
 import { SidebarThreadBrowser } from '@/web/components/conversation/sidebar/sections/sidebarThreadBrowser';
+import type { SidebarMutationResult } from '@/web/components/conversation/sidebar/sidebarMutationResult';
+import { useSidebarThreadDraftController } from '@/web/components/conversation/sidebar/useSidebarThreadDraftController';
+import { useSidebarWorkspaceCreateController } from '@/web/components/conversation/sidebar/useSidebarWorkspaceCreateController';
+import { useSidebarWorkspaceDeleteController } from '@/web/components/conversation/sidebar/useSidebarWorkspaceDeleteController';
 import { WorkspaceDeleteDialog } from '@/web/components/conversation/sidebar/sections/workspaceDeleteDialog';
 import { WorkspaceLifecycleDialog } from '@/web/components/conversation/sidebar/sections/workspaceLifecycleDialog';
-import { resolveThreadDraftDefaults } from '@/web/components/conversation/sidebar/threadDraftDefaults';
 import { Button } from '@/web/components/ui/button';
 import { SECONDARY_QUERY_OPTIONS } from '@/web/lib/query/secondaryQueryOptions';
 import { trpc } from '@/web/trpc/client';
@@ -44,18 +47,18 @@ interface ConversationSidebarProps {
     onSelectThread: (threadId: string) => void;
     onPreviewThread?: (threadId: string) => void;
     onToggleTagFilter: (tagId: string) => void;
-    onToggleThreadFavorite: (threadId: string, nextFavorite: boolean) => Promise<void>;
+    onToggleThreadFavorite: (threadId: string, nextFavorite: boolean) => Promise<SidebarMutationResult>;
     onScopeFilterChange: (scope: 'all' | 'workspace' | 'detached') => void;
     onWorkspaceFilterChange: (workspaceFingerprint?: string) => void;
     onSortChange: (sort: 'latest' | 'alphabetical') => void;
     onShowAllModesChange: (showAllModes: boolean) => void;
     onGroupViewChange: (groupView: 'workspace' | 'branch') => void;
     onSelectWorkspaceFingerprint: (workspaceFingerprint: string | undefined) => void;
-    onAddTagToThread: (threadId: string, label: string) => Promise<void>;
+    onAddTagToThread: (threadId: string, label: string) => Promise<SidebarMutationResult>;
     onDeleteWorkspaceThreads: (input: {
         workspaceFingerprint: string;
         includeFavoriteThreads: boolean;
-    }) => Promise<void>;
+    }) => Promise<SidebarMutationResult>;
     onCreateThread: (input: {
         workspaceFingerprint: string;
         workspaceAbsolutePath: string;
@@ -103,92 +106,42 @@ export function ConversationSidebar({
     onDeleteWorkspaceThreads,
     onCreateThread,
 }: ConversationSidebarProps) {
-    const utils = trpc.useUtils();
     const shellBootstrapQuery = trpc.runtime.getShellBootstrap.useQuery({ profileId }, SECONDARY_QUERY_OPTIONS);
     const [feedbackMessage, setFeedbackMessage] = useState<string | undefined>(undefined);
-    const [isWorkspaceCreateOpen, setIsWorkspaceCreateOpen] = useState(false);
-    const [workspaceCreateError, setWorkspaceCreateError] = useState<string | undefined>(undefined);
-    const [isPickingWorkspaceDirectory, setIsPickingWorkspaceDirectory] = useState(false);
-    const [workspaceDeleteTarget, setWorkspaceDeleteTarget] = useState<
-        | {
-              workspaceFingerprint: string;
-              workspaceLabel: string;
-          }
-        | undefined
-    >(undefined);
-    const [includeFavoriteThreads, setIncludeFavoriteThreads] = useState(false);
-    const [inlineThreadDraft, setInlineThreadDraft] = useState<
-        | {
-              workspaceFingerprint: string;
-              title: string;
-              topLevelTab: TopLevelTab;
-              providerId: RuntimeProviderId | undefined;
-              modelId: string;
-          }
-        | undefined
-    >(undefined);
-    const workspaceDeletePreviewQuery = trpc.conversation.getWorkspaceThreadDeletePreview.useQuery(
-        {
-            profileId,
-            workspaceFingerprint: workspaceDeleteTarget?.workspaceFingerprint ?? '',
-            includeFavorites: includeFavoriteThreads,
-        },
-        {
-            enabled: Boolean(workspaceDeleteTarget),
-            ...SECONDARY_QUERY_OPTIONS,
-        }
-    );
-    const registerWorkspaceRootMutation = trpc.runtime.registerWorkspaceRoot.useMutation();
-    const setWorkspacePreferenceMutation = trpc.runtime.setWorkspacePreference.useMutation({
-        onSuccess: ({ workspacePreference }) => {
-            utils.runtime.getShellBootstrap.setData({ profileId }, (current) =>
-                current
-                    ? {
-                          ...current,
-                          workspacePreferences: [
-                              workspacePreference,
-                              ...current.workspacePreferences.filter(
-                                  (record) => record.workspaceFingerprint !== workspacePreference.workspaceFingerprint
-                              ),
-                          ],
-                      }
-                    : current
-            );
-        },
-    });
     const providers = shellBootstrapQuery.data?.providers ?? [];
     const providerModels = shellBootstrapQuery.data?.providerModels ?? [];
     const workspacePreferences = shellBootstrapQuery.data?.workspacePreferences ?? [];
     const defaults = shellBootstrapQuery.data?.defaults;
     const desktopBridge = typeof window !== 'undefined' ? window.neonDesktop : undefined;
-
-    const openWorkspaceCreate = () => {
-        setWorkspaceCreateError(undefined);
-        setIsWorkspaceCreateOpen(true);
-    };
-
-    const startInlineThreadDraft = (workspaceFingerprint: string | undefined) => {
-        if (!workspaceFingerprint) {
-            return;
-        }
-
-        const nextDefaults = resolveThreadDraftDefaults({
-            workspaceFingerprint,
-            workspacePreferences,
-            providers,
-            providerModels,
-            defaults,
-            fallbackTopLevelTab: 'agent',
-        });
-        setInlineThreadDraft({
-            workspaceFingerprint,
-            title: '',
-            topLevelTab: nextDefaults.topLevelTab,
-            providerId: nextDefaults.providerId,
-            modelId: nextDefaults.modelId,
-        });
-        onSelectWorkspaceFingerprint(workspaceFingerprint);
-    };
+    const threadDraftController = useSidebarThreadDraftController({
+        preferredWorkspaceFingerprint,
+        workspaceRoots,
+        workspacePreferences,
+        providers,
+        providerModels,
+        defaults,
+        onSelectWorkspaceFingerprint,
+        onCreateThread,
+        onFeedbackMessageChange: setFeedbackMessage,
+    });
+    const workspaceCreateController = useSidebarWorkspaceCreateController({
+        profileId,
+        providers,
+        providerModels,
+        workspacePreferences,
+        defaults,
+        desktopBridge,
+        onSelectWorkspaceFingerprint,
+        onCreateThread,
+        onFeedbackMessageChange: setFeedbackMessage,
+        onStarterThreadFallback: threadDraftController.startInlineThreadDraft,
+    });
+    const workspaceDeleteController = useSidebarWorkspaceDeleteController({
+        profileId,
+        isDeletingWorkspaceThreads,
+        onDeleteWorkspaceThreads,
+        onFeedbackMessageChange: setFeedbackMessage,
+    });
 
     return (
         <>
@@ -210,7 +163,7 @@ export function ConversationSidebar({
                                 className='h-10 w-10 rounded-2xl'
                                 aria-label='Add workspace'
                                 title='Add workspace'
-                                onClick={openWorkspaceCreate}>
+                                onClick={workspaceCreateController.openWorkspaceCreate}>
                                 <FolderPlus className='h-4 w-4' />
                             </Button>
                         ) : (
@@ -219,7 +172,7 @@ export function ConversationSidebar({
                                 size='sm'
                                 variant='secondary'
                                 className='h-9 w-full rounded-xl whitespace-nowrap'
-                                onClick={openWorkspaceCreate}>
+                                onClick={workspaceCreateController.openWorkspaceCreate}>
                                 Add workspace
                             </Button>
                         )
@@ -261,96 +214,40 @@ export function ConversationSidebar({
                         {...(statusMessage ? { statusMessage, statusTone } : {})}
                         providers={providers}
                         providerModels={providerModels}
-                        isCreatingThread={
-                            isCreatingThread ||
-                            registerWorkspaceRootMutation.isPending ||
-                            setWorkspacePreferenceMutation.isPending
-                        }
-                        {...(inlineThreadDraft ? { inlineThreadDraft } : {})}
+                        isCreatingThread={isCreatingThread || workspaceCreateController.busy}
+                        {...(threadDraftController.inlineThreadDraft
+                            ? { inlineThreadDraft: threadDraftController.inlineThreadDraft }
+                            : {})}
                         onSelectThread={onSelectThread}
                         {...(onPreviewThread ? { onPreviewThread } : {})}
                         onToggleTagFilter={onToggleTagFilter}
                         onToggleThreadFavorite={async (threadId, nextFavorite) => {
                             setFeedbackMessage(undefined);
-                            try {
-                                await onToggleThreadFavorite(threadId, nextFavorite);
-                            } catch (error) {
-                                const message =
-                                    error instanceof Error ? error.message : 'Favorite status could not be updated.';
-                                setFeedbackMessage(message);
-                                throw error;
+                            const result = await onToggleThreadFavorite(threadId, nextFavorite);
+                            if (!result.ok) {
+                                setFeedbackMessage(result.message);
                             }
+                            return result;
                         }}
                         onRequestWorkspaceDelete={(workspaceFingerprint, workspaceLabel) => {
-                            setFeedbackMessage(undefined);
-                            setIncludeFavoriteThreads(false);
-                            setWorkspaceDeleteTarget({
-                                workspaceFingerprint,
-                                workspaceLabel,
-                            });
+                            workspaceDeleteController.requestWorkspaceDelete(workspaceFingerprint, workspaceLabel);
                         }}
                         onRequestNewThread={(workspaceFingerprint) => {
-                            startInlineThreadDraft(workspaceFingerprint ?? preferredWorkspaceFingerprint);
+                            threadDraftController.startInlineThreadDraft(
+                                threadDraftController.getRequestWorkspaceFingerprint(workspaceFingerprint)
+                            );
                         }}
-                        onInlineThreadTitleChange={(title) => {
-                            setInlineThreadDraft((current) => (current ? { ...current, title } : current));
-                        }}
-                        onInlineThreadTopLevelTabChange={(topLevelTab) => {
-                            setInlineThreadDraft((current) => (current ? { ...current, topLevelTab } : current));
-                        }}
+                        onInlineThreadTitleChange={threadDraftController.setInlineThreadTitle}
+                        onInlineThreadTopLevelTabChange={threadDraftController.setInlineThreadTopLevelTab}
                         onInlineThreadProviderChange={(providerId) => {
                             const nextModelId =
                                 providerModels.find((model) => model.providerId === providerId)?.id ?? '';
-                            setInlineThreadDraft((current) =>
-                                current
-                                    ? {
-                                          ...current,
-                                          providerId,
-                                          modelId: nextModelId,
-                                      }
-                                    : current
-                            );
+                            threadDraftController.setInlineThreadProvider(providerId, nextModelId);
                         }}
-                        onInlineThreadModelChange={(modelId) => {
-                            setInlineThreadDraft((current) => (current ? { ...current, modelId } : current));
-                        }}
-                        onCancelInlineThread={() => {
-                            setInlineThreadDraft(undefined);
-                        }}
+                        onInlineThreadModelChange={threadDraftController.setInlineThreadModel}
+                        onCancelInlineThread={threadDraftController.cancelInlineThread}
                         onSubmitInlineThread={() => {
-                            if (!inlineThreadDraft) {
-                                return;
-                            }
-
-                            const workspaceRoot = workspaceRoots.find(
-                                (workspace) => workspace.fingerprint === inlineThreadDraft.workspaceFingerprint
-                            );
-                            if (!workspaceRoot) {
-                                setFeedbackMessage('Thread could not be created because the workspace is unresolved.');
-                                return;
-                            }
-
-                            setFeedbackMessage(undefined);
-                            void onCreateThread({
-                                workspaceFingerprint: inlineThreadDraft.workspaceFingerprint,
-                                workspaceAbsolutePath: workspaceRoot.absolutePath,
-                                title: inlineThreadDraft.title,
-                                topLevelTab: inlineThreadDraft.topLevelTab,
-                                ...(inlineThreadDraft.providerId && inlineThreadDraft.modelId
-                                    ? {
-                                          providerId: inlineThreadDraft.providerId,
-                                          modelId: inlineThreadDraft.modelId,
-                                      }
-                                    : {}),
-                            })
-                                .then(() => {
-                                    setInlineThreadDraft(undefined);
-                                })
-                                .catch((error) => {
-                                    setFeedbackMessage(
-                                        error instanceof Error ? error.message : 'Thread could not be created.'
-                                    );
-                                });
+                            void threadDraftController.submitInlineThread();
                         }}
                         onSelectWorkspaceFingerprint={onSelectWorkspaceFingerprint}
                         onScopeFilterChange={onScopeFilterChange}
@@ -360,156 +257,46 @@ export function ConversationSidebar({
                         onGroupViewChange={onGroupViewChange}
                         onAddTagToThread={async (threadId, label) => {
                             setFeedbackMessage(undefined);
-                            try {
-                                await onAddTagToThread(threadId, label);
-                            } catch (error) {
-                                const message =
-                                    error instanceof Error ? error.message : 'Thread tags could not be updated.';
-                                setFeedbackMessage(message);
-                                throw error;
+                            const result = await onAddTagToThread(threadId, label);
+                            if (!result.ok) {
+                                setFeedbackMessage(result.message);
                             }
+                            return result;
                         }}
                     />
                 )}
             </aside>
 
             <WorkspaceLifecycleDialog
-                open={isWorkspaceCreateOpen}
+                open={workspaceCreateController.open}
                 providers={providers}
                 providerModels={providerModels}
                 workspacePreferences={workspacePreferences}
                 defaults={defaults}
-                busy={registerWorkspaceRootMutation.isPending || setWorkspacePreferenceMutation.isPending}
-                isPickingDirectory={isPickingWorkspaceDirectory}
-                {...(workspaceCreateError ? { statusMessage: workspaceCreateError } : {})}
-                onClose={() => {
-                    setWorkspaceCreateError(undefined);
-                    setIsWorkspaceCreateOpen(false);
-                }}
-                onBrowseDirectory={async () => {
-                    if (!desktopBridge || isPickingWorkspaceDirectory) {
-                        return undefined;
-                    }
-
-                    setIsPickingWorkspaceDirectory(true);
-                    try {
-                        const result = await desktopBridge.pickDirectory();
-                        return result.canceled ? undefined : result.absolutePath;
-                    } finally {
-                        setIsPickingWorkspaceDirectory(false);
-                    }
-                }}
-                onSubmit={async (input) => {
-                    setWorkspaceCreateError(undefined);
-                    setFeedbackMessage(undefined);
-                    try {
-                        const result = await registerWorkspaceRootMutation.mutateAsync({
-                            profileId,
-                            absolutePath: input.absolutePath,
-                            label: input.label,
-                        });
-
-                        utils.runtime.listWorkspaceRoots.setData({ profileId }, (current) => ({
-                            workspaceRoots: current
-                                ? [
-                                      result.workspaceRoot,
-                                      ...current.workspaceRoots.filter(
-                                          (workspaceRoot) =>
-                                              workspaceRoot.fingerprint !== result.workspaceRoot.fingerprint
-                                      ),
-                                  ]
-                                : [result.workspaceRoot],
-                        }));
-                        utils.runtime.getShellBootstrap.setData({ profileId }, (current) =>
-                            current
-                                ? {
-                                      ...current,
-                                      workspaceRoots: [
-                                          result.workspaceRoot,
-                                          ...current.workspaceRoots.filter(
-                                              (workspaceRoot) =>
-                                                  workspaceRoot.fingerprint !== result.workspaceRoot.fingerprint
-                                          ),
-                                      ],
-                                  }
-                                : current
-                        );
-
-                        await setWorkspacePreferenceMutation.mutateAsync({
-                            profileId,
-                            workspaceFingerprint: result.workspaceRoot.fingerprint,
-                            defaultTopLevelTab: input.defaultTopLevelTab,
-                            ...(input.defaultProviderId
-                                ? {
-                                      defaultProviderId: input.defaultProviderId,
-                                      defaultModelId: input.defaultModelId,
-                                  }
-                                : {}),
-                        });
-
-                        onSelectWorkspaceFingerprint(result.workspaceRoot.fingerprint);
-                        setIsWorkspaceCreateOpen(false);
-                        try {
-                            await onCreateThread({
-                                workspaceFingerprint: result.workspaceRoot.fingerprint,
-                                workspaceAbsolutePath: result.workspaceRoot.absolutePath,
-                                title: '',
-                                topLevelTab: input.defaultTopLevelTab,
-                                ...(input.defaultProviderId && input.defaultModelId
-                                    ? {
-                                          providerId: input.defaultProviderId,
-                                          modelId: input.defaultModelId,
-                                      }
-                                    : {}),
-                            });
-                        } catch (error) {
-                            const message =
-                                error instanceof Error
-                                    ? error.message
-                                    : 'Workspace was created, but the starter thread could not be created.';
-                            setFeedbackMessage(message);
-                            startInlineThreadDraft(result.workspaceRoot.fingerprint);
-                        }
-                    } catch (error) {
-                        setWorkspaceCreateError(
-                            error instanceof Error ? error.message : 'Workspace could not be created.'
-                        );
-                    }
-                }}
+                busy={workspaceCreateController.busy}
+                isPickingDirectory={workspaceCreateController.isPickingDirectory}
+                {...(workspaceCreateController.statusMessage
+                    ? { statusMessage: workspaceCreateController.statusMessage }
+                    : {})}
+                onClose={workspaceCreateController.closeWorkspaceCreate}
+                onBrowseDirectory={workspaceCreateController.browseDirectory}
+                onSubmit={workspaceCreateController.submitWorkspaceCreate}
             />
 
             <WorkspaceDeleteDialog
-                open={Boolean(workspaceDeleteTarget)}
-                {...(workspaceDeleteTarget?.workspaceLabel ? { workspaceLabel: workspaceDeleteTarget.workspaceLabel } : {})}
-                deletableThreadCount={workspaceDeletePreviewQuery.data?.deletableThreadCount ?? 0}
-                favoriteThreadCount={workspaceDeletePreviewQuery.data?.favoriteThreadCount ?? 0}
-                totalThreadCount={workspaceDeletePreviewQuery.data?.totalThreadCount ?? 0}
-                busy={isDeletingWorkspaceThreads || workspaceDeletePreviewQuery.isLoading}
-                includeFavoriteThreads={includeFavoriteThreads}
-                onIncludeFavoriteThreadsChange={setIncludeFavoriteThreads}
-                onCancel={() => {
-                    setWorkspaceDeleteTarget(undefined);
-                    setIncludeFavoriteThreads(false);
-                }}
+                open={Boolean(workspaceDeleteController.target)}
+                {...(workspaceDeleteController.target?.workspaceLabel
+                    ? { workspaceLabel: workspaceDeleteController.target.workspaceLabel }
+                    : {})}
+                deletableThreadCount={workspaceDeleteController.previewQuery.data?.deletableThreadCount ?? 0}
+                favoriteThreadCount={workspaceDeleteController.previewQuery.data?.favoriteThreadCount ?? 0}
+                totalThreadCount={workspaceDeleteController.previewQuery.data?.totalThreadCount ?? 0}
+                busy={workspaceDeleteController.busy}
+                includeFavoriteThreads={workspaceDeleteController.includeFavoriteThreads}
+                onIncludeFavoriteThreadsChange={workspaceDeleteController.setIncludeFavoriteThreads}
+                onCancel={workspaceDeleteController.cancelWorkspaceDelete}
                 onConfirm={() => {
-                    if (!workspaceDeleteTarget) {
-                        return;
-                    }
-
-                    setFeedbackMessage(undefined);
-                    void onDeleteWorkspaceThreads({
-                        workspaceFingerprint: workspaceDeleteTarget.workspaceFingerprint,
-                        includeFavoriteThreads,
-                    })
-                        .then(() => {
-                            setWorkspaceDeleteTarget(undefined);
-                            setIncludeFavoriteThreads(false);
-                        })
-                        .catch((error) => {
-                            setFeedbackMessage(
-                                error instanceof Error ? error.message : 'Workspace threads could not be deleted.'
-                            );
-                        });
+                    void workspaceDeleteController.confirmWorkspaceDelete();
                 }}
             />
         </>

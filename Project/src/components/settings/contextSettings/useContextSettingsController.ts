@@ -13,6 +13,7 @@ import {
     type ContextProfileDraft,
 } from '@/web/components/settings/contextSettingsDrafts';
 import { resolveSelectedProfileId } from '@/web/components/settings/profileSettings/selection';
+import { createFailClosedAsyncAction } from '@/web/lib/async/createFailClosedAsyncAction';
 import { PROGRESSIVE_QUERY_OPTIONS } from '@/web/lib/query/progressiveQueryOptions';
 import { trpc } from '@/web/trpc/client';
 
@@ -23,6 +24,8 @@ interface UseContextSettingsControllerInput {
 }
 
 export function useContextSettingsController({ activeProfileId }: UseContextSettingsControllerInput) {
+    const wrapFailClosedAction = <TArgs extends unknown[]>(action: (...args: TArgs) => Promise<void>) =>
+        createFailClosedAsyncAction(action);
     const utils = trpc.useUtils();
     const [selectedProfileId, setSelectedProfileId] = useState(activeProfileId);
     const [feedbackMessage, setFeedbackMessage] = useState<string | undefined>(undefined);
@@ -227,13 +230,13 @@ export function useContextSettingsController({ activeProfileId }: UseContextSett
             draft: composerMediaDraft,
             draftKey: `${composerMediaDraft.maxImageAttachmentsPerMessage}:${composerMediaDraft.imageCompressionConcurrency}`,
             isSaving: setComposerMediaSettingsMutation.isPending,
-            save: saveComposerMediaSettings,
+            save: wrapFailClosedAction(saveComposerMediaSettings),
         },
         globalDefaults: {
             draft: globalDraft,
             draftKey: `${String(globalDraft.enabled)}:${globalDraft.percent}`,
             isSaving: setGlobalSettingsMutation.isPending,
-            save: saveGlobalSettings,
+            save: wrapFailClosedAction(saveGlobalSettings),
         },
         profileOverride: {
             draft: profileDraft,
@@ -244,7 +247,7 @@ export function useContextSettingsController({ activeProfileId }: UseContextSett
                 profileDraft.fixedInputTokens,
             ].join(':'),
             isSaving: setProfileSettingsMutation.isPending,
-            save: saveProfileSettings,
+            save: wrapFailClosedAction(saveProfileSettings),
             modelLimitsKnown: resolvedContextStateQuery.data?.policy.limits.modelLimitsKnown ?? false,
         },
         resolvedPreview: {

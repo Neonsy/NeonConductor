@@ -1,7 +1,9 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
-const useProviderSettingsControllerMock = vi.fn(() => ({
+const { useProviderSettingsControllerMock } = vi.hoisted(() => {
+    return {
+        useProviderSettingsControllerMock: vi.fn(() => ({
     selection: {
         providerItems: [
             {
@@ -144,7 +146,9 @@ const useProviderSettingsControllerMock = vi.fn(() => ({
         message: undefined,
         tone: 'info',
     },
-}));
+        })),
+    };
+});
 
 vi.mock('@/web/components/settings/providerSettings/hooks/useProviderSettingsController', () => ({
     useProviderSettingsController: useProviderSettingsControllerMock,

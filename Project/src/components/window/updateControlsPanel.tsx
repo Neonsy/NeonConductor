@@ -88,6 +88,25 @@ export function UpdateControlsPanel({ open, onClose, anchorRef }: UpdateControls
 
     const selectedMeta = CHANNEL_OPTIONS.find((option) => option.id === currentChannel);
 
+    async function handleCheckForUpdates() {
+        try {
+            await checkMutation.mutateAsync();
+        } catch {}
+    }
+
+    async function handleConfirmChannelSwitch() {
+        if (!pendingChannel) {
+            return;
+        }
+
+        try {
+            await setChannelMutation.mutateAsync(pendingChannel);
+        } catch {
+        } finally {
+            setPendingChannel(null);
+        }
+    }
+
     useEffect(() => {
         if (!open || !anchorRef?.current) {
             setPanelPosition(undefined);
@@ -235,7 +254,7 @@ export function UpdateControlsPanel({ open, onClose, anchorRef }: UpdateControls
                         variant='outline'
                         disabled={checkMutation.isPending || switchStatusQuery.data?.canInteract === false}
                         onClick={() => {
-                            void checkMutation.mutateAsync();
+                            void handleCheckForUpdates();
                         }}>
                         {checkMutation.isPending ? 'Checking...' : 'Check for updates'}
                     </Button>
@@ -258,13 +277,7 @@ export function UpdateControlsPanel({ open, onClose, anchorRef }: UpdateControls
                     setPendingChannel(null);
                 }}
                 onConfirm={() => {
-                    if (!pendingChannel) {
-                        return;
-                    }
-
-                    void setChannelMutation.mutateAsync(pendingChannel).finally(() => {
-                        setPendingChannel(null);
-                    });
+                    void handleConfirmChannelSwitch();
                 }}
             />
         </>

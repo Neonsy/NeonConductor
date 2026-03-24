@@ -84,9 +84,7 @@ function KiloProviderContent({
                 isPollingAuth={controller.authentication.isPollingAuth}
                 isCancellingAuth={controller.authentication.isCancellingAuth}
                 isOpeningVerificationPage={controller.authentication.isOpeningVerificationPage}
-                onConnectionProfileChange={(value) => {
-                    void controller.authentication.changeConnectionProfile(value);
-                }}
+                onConnectionProfileChange={controller.authentication.changeConnectionProfile}
                 onExecutionPreferenceChange={() => {}}
                 onSaveApiKey={(value) => {
                     return controller.authentication.saveApiKey(value);
@@ -95,21 +93,11 @@ function KiloProviderContent({
                     return controller.authentication.saveBaseUrlOverride(value);
                 }}
                 onLoadStoredCredential={controller.authentication.loadStoredCredential}
-                onStartOAuthDevice={() => {
-                    void controller.authentication.startOAuthDevice();
-                }}
-                onStartDeviceCode={() => {
-                    void controller.authentication.startDeviceCode();
-                }}
-                onPollNow={() => {
-                    void controller.authentication.pollNow();
-                }}
-                onCancelFlow={() => {
-                    void controller.authentication.cancelFlow();
-                }}
-                onOpenVerificationPage={() => {
-                    void controller.authentication.openVerificationPage();
-                }}
+                onStartOAuthDevice={controller.authentication.startOAuthDevice}
+                onStartDeviceCode={controller.authentication.startDeviceCode}
+                onPollNow={controller.authentication.pollNow}
+                onCancelFlow={controller.authentication.cancelFlow}
+                onOpenVerificationPage={controller.authentication.openVerificationPage}
                 {...(controller.authentication.credentialSummary
                     ? { credentialSummary: controller.authentication.credentialSummary }
                     : {})}
@@ -130,11 +118,9 @@ function KiloProviderContent({
                         return;
                     }
 
-                    void controller.models.setDefaultModel(modelId);
+                    controller.models.setDefaultModel(modelId);
                 }}
-                onSyncCatalog={() => {
-                    void controller.models.syncCatalog();
-                }}
+                onSyncCatalog={controller.models.syncCatalog}
             />
 
             {shouldShowRoutingSection && controller.kilo.routingDraft ? (
@@ -145,15 +131,9 @@ function KiloProviderContent({
                     isLoadingPreference={controller.kilo.isLoadingRoutingPreference}
                     isLoadingProviders={controller.kilo.isLoadingModelProviders}
                     isSaving={controller.kilo.isSavingRoutingPreference}
-                    onModeChange={(mode) => {
-                        void controller.kilo.changeRoutingMode(mode);
-                    }}
-                    onSortChange={(sort) => {
-                        void controller.kilo.changeRoutingSort(sort);
-                    }}
-                    onPinnedProviderChange={(providerId) => {
-                        void controller.kilo.changePinnedProvider(providerId);
-                    }}
+                    onModeChange={controller.kilo.changeRoutingMode}
+                    onSortChange={controller.kilo.changeRoutingSort}
+                    onPinnedProviderChange={controller.kilo.changePinnedProvider}
                 />
             ) : null}
         </div>
@@ -201,9 +181,7 @@ function DirectProviderContent({
                 isLoadingOpenAIUsage={controller.providerStatus.isLoadingOpenAIUsage}
                 isLoadingOpenAIRateLimits={controller.providerStatus.isLoadingOpenAIRateLimits}
                 isRefreshingOpenAICodexUsage={controller.providerStatus.isRefreshingOpenAICodexUsage}
-                onRefreshOpenAICodexUsage={() => {
-                    void controller.providerStatus.refreshOpenAICodexUsage();
-                }}
+                onRefreshOpenAICodexUsage={controller.providerStatus.refreshOpenAICodexUsage}
             />
 
             <ProviderAuthenticationSection
@@ -228,12 +206,8 @@ function DirectProviderContent({
                 isPollingAuth={controller.authentication.isPollingAuth}
                 isCancellingAuth={controller.authentication.isCancellingAuth}
                 isOpeningVerificationPage={controller.authentication.isOpeningVerificationPage}
-                onConnectionProfileChange={(value) => {
-                    void controller.authentication.changeConnectionProfile(value);
-                }}
-                onExecutionPreferenceChange={(mode) => {
-                    void controller.authentication.changeExecutionPreference(mode);
-                }}
+                onConnectionProfileChange={controller.authentication.changeConnectionProfile}
+                onExecutionPreferenceChange={controller.authentication.changeExecutionPreference}
                 onSaveApiKey={(value) => {
                     return controller.authentication.saveApiKey(value);
                 }}
@@ -241,21 +215,11 @@ function DirectProviderContent({
                     return controller.authentication.saveBaseUrlOverride(value);
                 }}
                 onLoadStoredCredential={controller.authentication.loadStoredCredential}
-                onStartOAuthDevice={() => {
-                    void controller.authentication.startOAuthDevice();
-                }}
-                onStartDeviceCode={() => {
-                    void controller.authentication.startDeviceCode();
-                }}
-                onPollNow={() => {
-                    void controller.authentication.pollNow();
-                }}
-                onCancelFlow={() => {
-                    void controller.authentication.cancelFlow();
-                }}
-                onOpenVerificationPage={() => {
-                    void controller.authentication.openVerificationPage();
-                }}
+                onStartOAuthDevice={controller.authentication.startOAuthDevice}
+                onStartDeviceCode={controller.authentication.startDeviceCode}
+                onPollNow={controller.authentication.pollNow}
+                onCancelFlow={controller.authentication.cancelFlow}
+                onOpenVerificationPage={controller.authentication.openVerificationPage}
                 {...(controller.authentication.credentialSummary
                     ? { credentialSummary: controller.authentication.credentialSummary }
                     : {})}
@@ -276,11 +240,9 @@ function DirectProviderContent({
                         return;
                     }
 
-                    void controller.models.setDefaultModel(modelId);
+                    controller.models.setDefaultModel(modelId);
                 }}
-                onSyncCatalog={() => {
-                    void controller.models.syncCatalog();
-                }}
+                onSyncCatalog={controller.models.syncCatalog}
             />
         </div>
     );

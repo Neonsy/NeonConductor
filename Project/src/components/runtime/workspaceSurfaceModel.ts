@@ -9,8 +9,6 @@ export const FALLBACK_MODE_BY_TAB: Record<TopLevelTab, string> = {
     orchestrator: 'plan',
 };
 
-export const MISSING_PROFILE_ID = 'profile_missing';
-
 export function getWorkspaceSectionPath(section: WorkspaceAppSection): WorkspaceAppRoutePath {
     return section === 'settings' ? '/settings' : '/sessions';
 }

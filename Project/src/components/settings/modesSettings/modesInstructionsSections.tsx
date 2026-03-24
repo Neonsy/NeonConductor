@@ -1,7 +1,16 @@
 import { Button } from '@/web/components/ui/button';
+import { isOneOf } from '@/web/lib/typeGuards/isOneOf';
 import type { useModesInstructionsSettingsController } from '@/web/components/settings/modesSettings/useModesInstructionsSettingsController';
 
 import { toolCapabilities, topLevelTabs, type ToolCapability, type TopLevelTab } from '@/shared/contracts';
+
+function isTopLevelTab(value: string): value is TopLevelTab {
+    return isOneOf(value, topLevelTabs);
+}
+
+function isCustomModeScope(value: string): value is 'global' | 'workspace' {
+    return value === 'global' || value === 'workspace';
+}
 
 export function PromptInstructionsHeader() {
     return (
@@ -60,9 +69,7 @@ export function PromptLayerCard(input: {
                     type='button'
                     size='sm'
                     disabled={input.isSaving}
-                    onClick={() => {
-                        void input.onSave();
-                    }}>
+                    onClick={input.onSave}>
                     {input.isSaving ? 'Saving…' : 'Save'}
                 </Button>
                 <Button
@@ -70,9 +77,7 @@ export function PromptLayerCard(input: {
                     size='sm'
                     variant='outline'
                     disabled={input.isSaving}
-                    onClick={() => {
-                        void input.onReset();
-                    }}>
+                    onClick={input.onReset}>
                     Reset
                 </Button>
             </div>
@@ -142,9 +147,7 @@ export function BuiltInModePromptCard(input: {
                     type='button'
                     size='sm'
                     disabled={input.isSaving}
-                    onClick={() => {
-                        void input.onSave();
-                    }}>
+                    onClick={input.onSave}>
                     {input.isSaving ? 'Saving…' : 'Save'}
                 </Button>
                 <Button
@@ -152,9 +155,7 @@ export function BuiltInModePromptCard(input: {
                     size='sm'
                     variant='outline'
                     disabled={input.isSaving}
-                    onClick={() => {
-                        void input.onReset();
-                    }}>
+                    onClick={input.onReset}>
                     Reset
                 </Button>
             </div>
@@ -226,9 +227,7 @@ export function CustomModeEditorSection(input: {
                         disabled={
                             input.editor.isSaving || (draft.scope === 'workspace' && !input.editor.hasWorkspaceScope)
                         }
-                        onClick={() => {
-                            void input.editor.save();
-                        }}>
+                        onClick={input.editor.save}>
                         {input.editor.isSaving
                             ? draft.kind === 'create'
                                 ? 'Creating…'
@@ -250,7 +249,10 @@ export function CustomModeEditorSection(input: {
                             className='border-border bg-background h-11 w-full rounded-2xl border px-3 text-sm'
                             value={draft.scope}
                             onChange={(event) => {
-                                input.editor.setScope(event.target.value as 'global' | 'workspace');
+                                if (!isCustomModeScope(event.target.value)) {
+                                    return;
+                                }
+                                input.editor.setScope(event.target.value);
                             }}>
                             <option value='global'>Global</option>
                             <option value='workspace' disabled={!input.editor.hasWorkspaceScope}>
@@ -275,7 +277,10 @@ export function CustomModeEditorSection(input: {
                             className='border-border bg-background h-11 w-full rounded-2xl border px-3 text-sm'
                             value={draft.topLevelTab}
                             onChange={(event) => {
-                                input.editor.setTopLevelTab(event.target.value as TopLevelTab);
+                                if (!isTopLevelTab(event.target.value)) {
+                                    return;
+                                }
+                                input.editor.setTopLevelTab(event.target.value);
                             }}>
                             {topLevelTabs.map((topLevelTab) => (
                                 <option key={topLevelTab} value={topLevelTab}>
@@ -457,9 +462,7 @@ export function CustomModeEditorSection(input: {
                         size='sm'
                         variant='destructive'
                         disabled={input.editor.isSaving || !draft.deleteConfirmed}
-                        onClick={() => {
-                            void input.editor.deleteMode();
-                        }}>
+                        onClick={input.editor.deleteMode}>
                         {input.editor.isSaving ? 'Deleting…' : 'Delete Mode'}
                     </Button>
                 </div>
@@ -559,8 +562,8 @@ export function FileBackedModeInventorySection(input: {
                                             type='button'
                                             size='sm'
                                             variant='outline'
-                                            onClick={() => {
-                                                void input.onEdit(input.scope, mode.topLevelTab, mode.modeKey);
+                                            onClick={async () => {
+                                                await input.onEdit(input.scope, mode.topLevelTab, mode.modeKey);
                                             }}>
                                             Edit
                                         </Button>
@@ -568,8 +571,8 @@ export function FileBackedModeInventorySection(input: {
                                             type='button'
                                             size='sm'
                                             variant='outline'
-                                            onClick={() => {
-                                                void input.onDelete(input.scope, mode.topLevelTab, mode.modeKey);
+                                            onClick={async () => {
+                                                await input.onDelete(input.scope, mode.topLevelTab, mode.modeKey);
                                             }}>
                                             Delete
                                         </Button>
@@ -578,8 +581,8 @@ export function FileBackedModeInventorySection(input: {
                                             size='sm'
                                             variant='outline'
                                             disabled={input.isExporting}
-                                            onClick={() => {
-                                                void input.onExport(input.scope, mode.topLevelTab, mode.modeKey);
+                                            onClick={async () => {
+                                                await input.onExport(input.scope, mode.topLevelTab, mode.modeKey);
                                             }}>
                                             {input.isExporting ? 'Loading…' : 'Load Export JSON'}
                                         </Button>

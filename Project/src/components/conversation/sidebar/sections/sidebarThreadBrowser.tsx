@@ -1,10 +1,17 @@
 import { useDeferredValue, useState } from 'react';
 
 import { buildConversationSidebarModel } from '@/web/components/conversation/sidebar/sidebarModel';
+import type { SidebarMutationResult } from '@/web/components/conversation/sidebar/sidebarMutationResult';
 import { SidebarThreadList } from '@/web/components/conversation/sidebar/sections/sidebarThreadList';
 import { Button } from '@/web/components/ui/button';
 
-import type { ConversationRecord, ProviderModelRecord, SessionSummaryRecord, TagRecord, ThreadListRecord } from '@/app/backend/persistence/types';
+import type {
+    ConversationRecord,
+    ProviderModelRecord,
+    SessionSummaryRecord,
+    TagRecord,
+    ThreadListRecord,
+} from '@/app/backend/persistence/types';
 import type { ProviderListItem } from '@/app/backend/providers/service/types';
 import type { RuntimeProviderId, TopLevelTab } from '@/shared/contracts';
 
@@ -33,7 +40,7 @@ interface SidebarThreadBrowserProps {
     onSelectThread: (threadId: string) => void;
     onPreviewThread?: (threadId: string) => void;
     onToggleTagFilter: (tagId: string) => void;
-    onToggleThreadFavorite: (threadId: string, nextFavorite: boolean) => Promise<void>;
+    onToggleThreadFavorite: (threadId: string, nextFavorite: boolean) => Promise<SidebarMutationResult>;
     onRequestWorkspaceDelete: (workspaceFingerprint: string, workspaceLabel: string) => void;
     onRequestNewThread: (workspaceFingerprint?: string) => void;
     onSelectWorkspaceFingerprint: (workspaceFingerprint: string | undefined) => void;
@@ -42,7 +49,7 @@ interface SidebarThreadBrowserProps {
     onSortChange: (sort: 'latest' | 'alphabetical') => void;
     onShowAllModesChange: (showAllModes: boolean) => void;
     onGroupViewChange: (groupView: 'workspace' | 'branch') => void;
-    onAddTagToThread: (threadId: string, label: string) => Promise<void>;
+    onAddTagToThread: (threadId: string, label: string) => Promise<SidebarMutationResult>;
     inlineThreadDraft?: {
         workspaceFingerprint: string;
         title: string;
@@ -194,7 +201,7 @@ export function SidebarThreadBrowser({
                     </select>
                 </div>
 
-                <details className='rounded-2xl border border-border/70 bg-background/50 px-3 py-2'>
+                <details className='border-border/70 bg-background/50 rounded-2xl border px-3 py-2'>
                     <summary className='flex cursor-pointer list-none items-center justify-between gap-3 py-1'>
                         <div>
                             <p className='text-sm font-medium'>Filters</p>
@@ -294,8 +301,10 @@ export function SidebarThreadBrowser({
                                         variant='outline'
                                         disabled={isAddingTag}
                                         onClick={() => {
-                                            void onAddTagToThread(selectedThread.id, newTagLabel).then(() => {
-                                                setNewTagLabel('');
+                                            void onAddTagToThread(selectedThread.id, newTagLabel).then((result) => {
+                                                if (result.ok) {
+                                                    setNewTagLabel('');
+                                                }
                                             });
                                         }}>
                                         Add

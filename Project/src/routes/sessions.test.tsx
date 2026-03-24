@@ -99,6 +99,24 @@ describe('sessions route', () => {
         });
     });
 
+    it('does not fail the route loader when boot prefetch later rejects', async () => {
+        startWorkspaceBootPrefetchMock.mockReturnValue(Promise.reject(new Error('warmup failed')));
+        const routeLoader = Route.options.loader;
+
+        if (typeof routeLoader !== 'function') {
+            throw new Error('Expected the sessions route loader to be callable.');
+        }
+
+        await expect(
+            routeLoader({
+                context: {
+                    trpcClient: { profile: 'client' },
+                    trpcUtils: { runtime: 'utils' },
+                },
+            } as never)
+        ).resolves.toBeUndefined();
+    });
+
     it('renders the conversation shell with local hot shell state still owned by the controller', () => {
         const SessionsRouteComponent = Route.options.component as (() => ReactElement) | undefined;
         if (!SessionsRouteComponent) {

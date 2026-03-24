@@ -6,6 +6,7 @@ import {
     type ProfileRenameDraft,
 } from '@/web/components/settings/profileSettings/drafts';
 import { resolveSelectedProfileId } from '@/web/components/settings/profileSettings/selection';
+import { createFailClosedAsyncAction } from '@/web/lib/async/createFailClosedAsyncAction';
 import { PROGRESSIVE_QUERY_OPTIONS } from '@/web/lib/query/progressiveQueryOptions';
 import { invalidateRuntimeResetQueries } from '@/web/lib/runtime/invalidation/queryInvalidation';
 import { trpc } from '@/web/trpc/client';
@@ -294,6 +295,8 @@ export function useProfileSettingsController(input: {
         setConfirmDeleteOpen,
         onProfileActivated: input.onProfileActivated,
     });
+    const wrapFailClosedAction = <TArgs extends unknown[]>(action: (...args: TArgs) => Promise<void>) =>
+        createFailClosedAsyncAction(action);
 
     return {
         feedbackMessage:
@@ -375,7 +378,7 @@ export function useProfileSettingsController(input: {
         setConfirmDeleteOpen,
         setConfirmFactoryResetOpen,
         setFactoryResetConfirmationText,
-        updateExecutionPreset: async (preset: 'privacy' | 'standard' | 'yolo') => {
+        updateExecutionPreset: wrapFailClosedAction(async (preset: 'privacy' | 'standard' | 'yolo') => {
             if (!selectedProfile) {
                 return;
             }
@@ -385,14 +388,21 @@ export function useProfileSettingsController(input: {
                 preset,
             });
             setStatusMessage('Updated execution preset.');
-        },
-        factoryResetAppData: async () => {
+        }),
+        factoryResetAppData: wrapFailClosedAction(async () => {
             await factoryResetMutation.mutateAsync({
                 confirm: true,
                 confirmationText: factoryResetConfirmationText,
             });
-        },
-        ...actions,
+        }),
+        renameProfile: wrapFailClosedAction(actions.renameProfile),
+        duplicateProfile: wrapFailClosedAction(actions.duplicateProfile),
+        activateProfile: wrapFailClosedAction(actions.activateProfile),
+        createProfile: wrapFailClosedAction(actions.createProfile),
+        deleteProfile: wrapFailClosedAction(actions.deleteProfile),
+        updateEditPreference: wrapFailClosedAction(actions.updateEditPreference),
+        updateThreadTitleMode: wrapFailClosedAction(actions.updateThreadTitleMode),
+        saveThreadTitleAiModel: wrapFailClosedAction(actions.saveThreadTitleAiModel),
     };
 }
 

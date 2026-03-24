@@ -64,6 +64,38 @@ interface UseConversationShellComposerInput<
     onRunStarted: (result: TRunStartAcceptedResult) => void;
 }
 
+function readComposerImagePreparationErrorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : 'Image preparation failed.';
+}
+
+export async function preparePendingComposerImage(input: {
+    clientId: string;
+    sourceFile: File;
+    prepareImageAttachment: typeof prepareComposerImageAttachment;
+    onPreparedImage: (clientId: string, prepared: PreparedComposerImageAttachment) => void;
+    onFailedImage: (clientId: string, message: string) => void;
+    onAttachmentError: (message: string) => void;
+    onQueueProgressed: () => void;
+}): Promise<void> {
+    try {
+        const preparedResult = await input.prepareImageAttachment(input.sourceFile, input.clientId);
+        if (preparedResult.isErr()) {
+            const message = preparedResult.error.message;
+            input.onFailedImage(input.clientId, message);
+            input.onAttachmentError(message);
+            return;
+        }
+
+        input.onPreparedImage(input.clientId, preparedResult.value);
+    } catch (error) {
+        const message = readComposerImagePreparationErrorMessage(error);
+        input.onFailedImage(input.clientId, message);
+        input.onAttachmentError(message);
+    } finally {
+        input.onQueueProgressed();
+    }
+}
+
 export function useConversationShellComposer<
     TPlanStartResult extends { plan: PlanRecordView },
     TRunStartAcceptedResult extends { accepted: true },
@@ -140,17 +172,16 @@ export function useConversationShellComposer<
     }
 
     function startCompressingImage(clientId: string, sourceFile: File) {
-        void prepareComposerImageAttachment(sourceFile, clientId).then((preparedResult) => {
-            if (preparedResult.isErr()) {
-                const message = preparedResult.error.message;
-                updatePendingImages((current) => failComposerPendingImage(current, clientId, message));
-                failImageAttachment(message);
-                pumpPendingImageCompressionQueue();
-                return;
-            }
-
-            resolvePreparedImage(clientId, preparedResult.value);
-            pumpPendingImageCompressionQueue();
+        preparePendingComposerImage({
+            clientId,
+            sourceFile,
+            prepareImageAttachment: prepareComposerImageAttachment,
+            onPreparedImage: resolvePreparedImage,
+            onFailedImage: (failedClientId, message) => {
+                updatePendingImages((current) => failComposerPendingImage(current, failedClientId, message));
+            },
+            onAttachmentError: failImageAttachment,
+            onQueueProgressed: pumpPendingImageCompressionQueue,
         });
     }
 

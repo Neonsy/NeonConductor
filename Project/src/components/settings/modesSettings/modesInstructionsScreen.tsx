@@ -10,8 +10,17 @@ import {
 } from '@/web/components/settings/modesSettings/modesInstructionsSections';
 import { useModesInstructionsSettingsController } from '@/web/components/settings/modesSettings/useModesInstructionsSettingsController';
 import { Button } from '@/web/components/ui/button';
+import { isOneOf } from '@/web/lib/typeGuards/isOneOf';
 
 import { topLevelTabs, type TopLevelTab } from '@/shared/contracts';
+
+function isTopLevelTab(value: string): value is TopLevelTab {
+    return isOneOf(value, topLevelTabs);
+}
+
+function isCustomModeScope(value: string): value is 'global' | 'workspace' {
+    return value === 'global' || value === 'workspace';
+}
 
 export function ModesInstructionsScreen(input: {
     profileId: string;
@@ -196,7 +205,10 @@ export function ModesInstructionsScreen(input: {
                                     className='border-border bg-background h-11 w-full rounded-2xl border px-3 text-sm'
                                     value={controller.customModes.importDraft.topLevelTab}
                                     onChange={(event) => {
-                                        controller.customModes.setImportTopLevelTab(event.target.value as TopLevelTab);
+                                        if (!isTopLevelTab(event.target.value)) {
+                                            return;
+                                        }
+                                        controller.customModes.setImportTopLevelTab(event.target.value);
                                     }}>
                                     {topLevelTabs.map((topLevelTab) => (
                                         <option key={topLevelTab} value={topLevelTab}>
@@ -214,7 +226,10 @@ export function ModesInstructionsScreen(input: {
                                     className='border-border bg-background h-11 w-full rounded-2xl border px-3 text-sm'
                                     value={controller.customModes.importDraft.scope}
                                     onChange={(event) => {
-                                        controller.customModes.setImportScope(event.target.value as 'global' | 'workspace');
+                                        if (!isCustomModeScope(event.target.value)) {
+                                            return;
+                                        }
+                                        controller.customModes.setImportScope(event.target.value);
                                     }}>
                                     <option value='global'>Global</option>
                                     <option
@@ -279,9 +294,7 @@ export function ModesInstructionsScreen(input: {
                                     (controller.customModes.importDraft.scope === 'workspace' &&
                                         !controller.customModes.importDraft.hasWorkspaceScope)
                                 }
-                                onClick={() => {
-                                    void controller.customModes.importMode();
-                                }}>
+                                onClick={controller.customModes.importMode}>
                                 {controller.customModes.isImporting ? 'Importing…' : 'Import Mode'}
                             </Button>
                         </div>
@@ -320,9 +333,7 @@ export function ModesInstructionsScreen(input: {
                                 size='sm'
                                 variant='outline'
                                 disabled={controller.customModes.exportState.jsonText.trim().length === 0}
-                                onClick={() => {
-                                    void controller.customModes.copyExportJson();
-                                }}>
+                                onClick={controller.customModes.copyExportJson}>
                                 Copy JSON
                             </Button>
                         </div>

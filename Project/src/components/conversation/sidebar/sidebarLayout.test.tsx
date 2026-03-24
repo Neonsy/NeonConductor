@@ -156,15 +156,15 @@ describe('conversation sidebar layout', () => {
                 isCreatingThread={false}
                 onSelectThread={vi.fn()}
                 onToggleTagFilter={vi.fn()}
-                onToggleThreadFavorite={vi.fn(async () => {})}
+                onToggleThreadFavorite={vi.fn(async () => ({ ok: true as const }))}
                 onScopeFilterChange={vi.fn()}
                 onWorkspaceFilterChange={vi.fn()}
                 onSortChange={vi.fn()}
                 onShowAllModesChange={vi.fn()}
                 onGroupViewChange={vi.fn()}
                 onSelectWorkspaceFingerprint={vi.fn()}
-                onAddTagToThread={vi.fn(async () => {})}
-                onDeleteWorkspaceThreads={vi.fn(async () => {})}
+                onAddTagToThread={vi.fn(async () => ({ ok: true as const }))}
+                onDeleteWorkspaceThreads={vi.fn(async () => ({ ok: true as const }))}
                 onCreateThread={vi.fn(async () => {})}
             />
         );

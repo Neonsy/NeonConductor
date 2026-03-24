@@ -7,6 +7,7 @@ import { useProviderSettingsMutations } from '@/web/components/settings/provider
 import { useProviderSettingsQueries } from '@/web/components/settings/providerSettings/hooks/useProviderSettingsQueries';
 import { prefetchProviderSettingsData } from '@/web/components/settings/providerSettings/providerSettingsPrefetch';
 import type { ActiveAuthFlow } from '@/web/components/settings/providerSettings/types';
+import { createFailClosedAsyncAction } from '@/web/lib/async/createFailClosedAsyncAction';
 import { trpc } from '@/web/trpc/client';
 
 import type { RuntimeProviderId } from '@/shared/contracts';
@@ -42,6 +43,8 @@ export function useProviderSettingsController(profileId: string, options?: Provi
             await mutateAsync(input);
         };
     };
+    const wrapFailClosedAction = <TArgs extends unknown[]>(action: (...args: TArgs) => Promise<void>) =>
+        createFailClosedAsyncAction(action);
 
     useProviderSettingsAuthPolling({
         profileId,
@@ -203,7 +206,7 @@ export function useProviderSettingsController(profileId: string, options?: Provi
             isRefreshingOpenAICodexUsage:
                 queries.openAISubscriptionUsageQuery.isRefetching ||
                 queries.openAISubscriptionRateLimitsQuery.isRefetching,
-            refreshOpenAICodexUsage,
+            refreshOpenAICodexUsage: wrapFailClosedAction(refreshOpenAICodexUsage),
         },
         authentication: {
             methods: queries.selectedProvider?.availableAuthMethods ?? [],
@@ -217,16 +220,16 @@ export function useProviderSettingsController(profileId: string, options?: Provi
             isPollingAuth: mutations.pollAuthMutation.isPending,
             isCancellingAuth: mutations.cancelAuthMutation.isPending,
             isOpeningVerificationPage: mutations.openExternalUrlMutation.isPending,
-            changeConnectionProfile: actions.changeConnectionProfile,
-            changeExecutionPreference: actions.changeExecutionPreference,
+            changeConnectionProfile: wrapFailClosedAction(actions.changeConnectionProfile),
+            changeExecutionPreference: wrapFailClosedAction(actions.changeExecutionPreference),
             saveApiKey: actions.saveApiKey,
             saveBaseUrlOverride: actions.saveBaseUrlOverride,
             loadStoredCredential,
-            startOAuthDevice: actions.startOAuthDevice,
-            startDeviceCode: actions.startDeviceCode,
-            pollNow: actions.pollNow,
-            cancelFlow: actions.cancelFlow,
-            openVerificationPage: actions.openVerificationPage,
+            startOAuthDevice: wrapFailClosedAction(actions.startOAuthDevice),
+            startDeviceCode: wrapFailClosedAction(actions.startDeviceCode),
+            pollNow: wrapFailClosedAction(actions.pollNow),
+            cancelFlow: wrapFailClosedAction(actions.cancelFlow),
+            openVerificationPage: wrapFailClosedAction(actions.openVerificationPage),
         },
         models: {
             selectedModelId: queries.selectedModelId,
@@ -237,8 +240,8 @@ export function useProviderSettingsController(profileId: string, options?: Provi
             isSavingDefault: mutations.setDefaultMutation.isPending,
             isSyncingCatalog: mutations.syncCatalogMutation.isPending,
             setSelectedModelId: setRequestedModelId,
-            setDefaultModel: actions.setDefaultModel,
-            syncCatalog: actions.syncCatalog,
+            setDefaultModel: wrapFailClosedAction(actions.setDefaultModel),
+            syncCatalog: wrapFailClosedAction(actions.syncCatalog),
         },
         kilo: {
             routingDraft: kiloRoutingDraft,
@@ -248,10 +251,10 @@ export function useProviderSettingsController(profileId: string, options?: Provi
             isLoadingModelProviders: queries.kiloModelProvidersQuery.isLoading,
             isSavingRoutingPreference: mutations.setModelRoutingPreferenceMutation.isPending,
             isSavingOrganization: mutations.setOrganizationMutation.isPending,
-            changeRoutingMode: actions.changeRoutingMode,
-            changeRoutingSort: actions.changeRoutingSort,
-            changePinnedProvider: actions.changePinnedProvider,
-            changeOrganization: actions.changeOrganization,
+            changeRoutingMode: wrapFailClosedAction(actions.changeRoutingMode),
+            changeRoutingSort: wrapFailClosedAction(actions.changeRoutingSort),
+            changePinnedProvider: wrapFailClosedAction(actions.changePinnedProvider),
+            changeOrganization: wrapFailClosedAction(actions.changeOrganization),
         },
     };
 }

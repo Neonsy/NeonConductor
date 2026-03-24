@@ -1,6 +1,7 @@
 import { settingsStore, workspaceRootStore } from '@/app/backend/persistence/stores';
 import { nowIso, isJsonRecord, isJsonString, isJsonUnknownArray } from '@/app/backend/persistence/stores/shared/utils';
 import type { WorkspacePreferenceRecord } from '@/app/backend/runtime/contracts/types/runtime';
+import { errOp, okOp, type OperationalResult } from '@/app/backend/runtime/services/common/operationalError';
 import { canonicalizeProviderModelId } from '@/shared/kiloModels';
 import { providerIds, topLevelTabs, type RuntimeProviderId, type TopLevelTab } from '@/shared/contracts';
 
@@ -95,10 +96,10 @@ export async function setWorkspacePreference(input: {
     defaultTopLevelTab?: TopLevelTab;
     defaultProviderId?: RuntimeProviderId;
     defaultModelId?: string;
-}): Promise<WorkspacePreferenceRecord> {
+}): Promise<OperationalResult<WorkspacePreferenceRecord>> {
     const workspaceRoot = await workspaceRootStore.getByFingerprint(input.profileId, input.workspaceFingerprint);
     if (!workspaceRoot) {
-        throw new Error('Workspace preference could not be saved because the workspace no longer exists.');
+        return errOp('not_found', 'Workspace preference could not be saved because the workspace no longer exists.');
     }
 
     const persisted = await readWorkspacePreferenceRecords(input.profileId);
@@ -121,5 +122,5 @@ export async function setWorkspacePreference(input: {
     ];
 
     await settingsStore.setJson(input.profileId, WORKSPACE_PREFERENCES_SETTING_KEY, nextRecords);
-    return mapWorkspacePreferenceRecord(input.profileId, nextRecord);
+    return okOp(mapWorkspacePreferenceRecord(input.profileId, nextRecord));
 }

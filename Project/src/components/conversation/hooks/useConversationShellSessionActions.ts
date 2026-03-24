@@ -34,6 +34,44 @@ interface UseConversationShellSessionActionsInput {
     }) => void;
 }
 
+function readSessionCreationErrorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : 'Session could not be created.';
+}
+
+export async function submitConversationSessionCreate(input: {
+    profileId: string;
+    selectedThreadId: EntityId<'thr'>;
+    createSession: UseConversationShellSessionActionsInput['createSession'];
+    onClearError: () => void;
+    onError: (message: string) => void;
+    onSelectSessionId: (sessionId: string | undefined) => void;
+    onSelectRunId: (runId: string | undefined) => void;
+    onSessionCreated: UseConversationShellSessionActionsInput['onSessionCreated'];
+}): Promise<void> {
+    try {
+        const result = await input.createSession({
+            profileId: input.profileId,
+            threadId: input.selectedThreadId,
+            kind: 'local',
+        });
+        if (!result.created) {
+            input.onError('Selected thread no longer exists.');
+            return;
+        }
+
+        input.onSelectSessionId(result.session.id);
+        input.onSelectRunId(undefined);
+        input.onClearError();
+        input.onSessionCreated({
+            sessionId: result.session.id,
+            session: result.session,
+            ...(result.thread ? { thread: result.thread } : {}),
+        });
+    } catch (error) {
+        input.onError(readSessionCreationErrorMessage(error));
+    }
+}
+
 export function useConversationShellSessionActions(input: UseConversationShellSessionActionsInput) {
     const [sessionTargetBySessionId, setSessionTargetBySessionId] = useState<
         Record<string, { providerId?: RuntimeProviderId; modelId?: string }>
@@ -79,24 +117,15 @@ export function useConversationShellSessionActions(input: UseConversationShellSe
                 return;
             }
 
-            void input.createSession({
+            void submitConversationSessionCreate({
                 profileId: input.profileId,
-                threadId: input.selectedThreadId,
-                kind: 'local',
-            }).then((result) => {
-                if (!result.created) {
-                    input.onError('Selected thread no longer exists.');
-                    return;
-                }
-
-                input.onSelectSessionId(result.session.id);
-                input.onSelectRunId(undefined);
-                input.onClearError();
-                input.onSessionCreated({
-                    sessionId: result.session.id,
-                    session: result.session,
-                    ...(result.thread ? { thread: result.thread } : {}),
-                });
+                selectedThreadId: input.selectedThreadId,
+                createSession: input.createSession,
+                onClearError: input.onClearError,
+                onError: input.onError,
+                onSelectSessionId: input.onSelectSessionId,
+                onSelectRunId: input.onSelectRunId,
+                onSessionCreated: input.onSessionCreated,
             });
         },
     };

@@ -10,11 +10,6 @@ import { RegistrySettingsView } from '@/web/components/settings/registrySettings
 import {
     getDefaultSettingsSelection,
     SETTINGS_PRIMARY_SECTIONS,
-    type AppSettingsSubsectionId,
-    type ContextSettingsSubsectionId,
-    type KiloSettingsSubsectionId,
-    type ProfileSettingsSubsectionId,
-    type RegistrySettingsSubsectionId,
     type SettingsPrimarySectionId,
     type SettingsSelection,
 } from '@/web/components/settings/settingsNavigation';
@@ -70,6 +65,75 @@ export function SettingsSheet({ open, profileId, onClose, onProfileActivated }: 
                 currentSelection.section === section ? currentSelection : getDefaultSettingsSelection(section)
             );
         });
+    }
+
+    function renderSelectedSection() {
+        switch (selection.section) {
+            case 'kilo':
+                return (
+                    <KiloSettingsView
+                        key={profileId}
+                        profileId={profileId}
+                        subsection={selection.subsection}
+                        onSubsectionChange={(subsection) => {
+                            setSelection({ section: 'kilo', subsection });
+                        }}
+                    />
+                );
+            case 'providers':
+                return (
+                    <ProviderSettingsView
+                        profileId={profileId}
+                        selectedProviderId={selection.subsection}
+                        onProviderChange={(providerId) => {
+                            setSelection({ section: 'providers', subsection: providerId });
+                        }}
+                    />
+                );
+            case 'profiles':
+                return (
+                    <ProfileSettingsView
+                        activeProfileId={profileId}
+                        onProfileActivated={onProfileActivated}
+                        subsection={selection.subsection}
+                        onSubsectionChange={(subsection) => {
+                            setSelection({ section: 'profiles', subsection });
+                        }}
+                    />
+                );
+            case 'context':
+                return (
+                    <ContextSettingsView
+                        activeProfileId={profileId}
+                        subsection={selection.subsection}
+                        onSubsectionChange={(subsection) => {
+                            setSelection({ section: 'context', subsection });
+                        }}
+                    />
+                );
+            case 'registry':
+                return (
+                    <RegistrySettingsView
+                        profileId={profileId}
+                        subsection={selection.subsection}
+                        onSubsectionChange={(subsection) => {
+                            setSelection({ section: 'registry', subsection });
+                        }}
+                    />
+                );
+            case 'app':
+                return (
+                    <AppSettingsView
+                        profileId={profileId}
+                        subsection={selection.subsection}
+                        onSubsectionChange={(subsection) => {
+                            setSelection({ section: 'app', subsection });
+                        }}
+                    />
+                );
+            case 'modes':
+                return null;
+        }
     }
 
     return (
@@ -140,61 +204,7 @@ export function SettingsSheet({ open, profileId, onClose, onProfileActivated }: 
                     </header>
 
                     <div className='bg-background/20 h-full min-h-0 min-w-0 flex-1 overflow-hidden'>
-                        {selection.section === 'kilo' ? (
-                            <KiloSettingsView
-                                profileId={profileId}
-                                subsection={selection.subsection as KiloSettingsSubsectionId}
-                                onSubsectionChange={(subsection) => {
-                                    setSelection({ section: 'kilo', subsection });
-                                }}
-                            />
-                        ) : null}
-                        {selection.section === 'providers' ? (
-                            <ProviderSettingsView
-                                profileId={profileId}
-                                selectedProviderId={selection.subsection}
-                                onProviderChange={(providerId) => {
-                                    setSelection({ section: 'providers', subsection: providerId });
-                                }}
-                            />
-                        ) : null}
-                        {selection.section === 'profiles' ? (
-                            <ProfileSettingsView
-                                activeProfileId={profileId}
-                                onProfileActivated={onProfileActivated}
-                                subsection={selection.subsection as ProfileSettingsSubsectionId}
-                                onSubsectionChange={(subsection) => {
-                                    setSelection({ section: 'profiles', subsection });
-                                }}
-                            />
-                        ) : null}
-                        {selection.section === 'context' ? (
-                            <ContextSettingsView
-                                activeProfileId={profileId}
-                                subsection={selection.subsection as ContextSettingsSubsectionId}
-                                onSubsectionChange={(subsection) => {
-                                    setSelection({ section: 'context', subsection });
-                                }}
-                            />
-                        ) : null}
-                        {selection.section === 'registry' ? (
-                            <RegistrySettingsView
-                                profileId={profileId}
-                                subsection={selection.subsection as RegistrySettingsSubsectionId}
-                                onSubsectionChange={(subsection) => {
-                                    setSelection({ section: 'registry', subsection });
-                                }}
-                            />
-                        ) : null}
-                        {selection.section === 'app' ? (
-                            <AppSettingsView
-                                profileId={profileId}
-                                subsection={selection.subsection as AppSettingsSubsectionId}
-                                onSubsectionChange={(subsection) => {
-                                    setSelection({ section: 'app', subsection });
-                                }}
-                            />
-                        ) : null}
+                        {renderSelectedSection()}
                     </div>
                 </div>
             </div>

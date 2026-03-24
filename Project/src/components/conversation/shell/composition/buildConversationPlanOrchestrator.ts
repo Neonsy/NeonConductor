@@ -93,6 +93,27 @@ interface BuildConversationPlanOrchestratorInput {
     >;
 }
 
+function readActionErrorMessage(prefix: string, error: unknown): string {
+    const message = error instanceof Error ? error.message : String(error);
+    return `${prefix}: ${message}`;
+}
+
+export async function runConversationPlanMutation<TResult>(input: {
+    mutation: {
+        mutateAsync: () => Promise<TResult>;
+    };
+    applyResult: (result: TResult) => void;
+    onError: (message: string) => void;
+    errorPrefix: string;
+}): Promise<void> {
+    try {
+        const result = await input.mutation.mutateAsync();
+        input.applyResult(result);
+    } catch (error) {
+        input.onError(readActionErrorMessage(input.errorPrefix, error));
+    }
+}
+
 export function buildConversationPlanOrchestrator(input: BuildConversationPlanOrchestratorInput): {
     isPlanMutating: boolean;
     isOrchestratorMutating: boolean;
@@ -117,55 +138,72 @@ export function buildConversationPlanOrchestrator(input: BuildConversationPlanOr
         orchestratorView: input.orchestratorView,
         selectedExecutionStrategy: input.selectedExecutionStrategy,
         onAnswerQuestion: (planId, questionId, answer) => {
-            void input.planAnswerMutation
-                .mutateAsync({
-                    profileId: input.profileId,
-                    planId,
-                    questionId,
-                    answer,
-                })
-                .then((result) => {
+            void runConversationPlanMutation({
+                mutation: {
+                    mutateAsync: () =>
+                        input.planAnswerMutation.mutateAsync({
+                            profileId: input.profileId,
+                            planId,
+                            questionId,
+                            answer,
+                        }),
+                },
+                applyResult: (result) => {
                     input.applyPlanWorkspaceUpdate(result);
-                });
+                },
+                onError: input.onError,
+                errorPrefix: 'Plan answer failed',
+            });
         },
         onRevisePlan: (planId, summaryMarkdown, items) => {
-            void input.planReviseMutation
-                .mutateAsync({
-                    profileId: input.profileId,
-                    planId,
-                    summaryMarkdown,
-                    items: items.map((description) => ({ description })),
-                })
-                .then((result) => {
+            void runConversationPlanMutation({
+                mutation: {
+                    mutateAsync: () =>
+                        input.planReviseMutation.mutateAsync({
+                            profileId: input.profileId,
+                            planId,
+                            summaryMarkdown,
+                            items: items.map((description) => ({ description })),
+                        }),
+                },
+                applyResult: (result) => {
                     input.applyPlanWorkspaceUpdate(result);
-                });
+                },
+                onError: input.onError,
+                errorPrefix: 'Plan revision failed',
+            });
         },
         onApprovePlan: (planId) => {
-            void input.planApproveMutation
-                .mutateAsync({
-                    profileId: input.profileId,
-                    planId,
-                })
-                .then((result) => {
+            void runConversationPlanMutation({
+                mutation: {
+                    mutateAsync: () =>
+                        input.planApproveMutation.mutateAsync({
+                            profileId: input.profileId,
+                            planId,
+                        }),
+                },
+                applyResult: (result) => {
                     input.applyPlanWorkspaceUpdate(result);
-                })
-                .catch((error: unknown) => {
-                    const message = error instanceof Error ? error.message : String(error);
-                    input.onError(`Plan approval failed: ${message}`);
-                });
+                },
+                onError: input.onError,
+                errorPrefix: 'Plan approval failed',
+            });
         },
         onImplementPlan: (planId, executionStrategy) => {
-            void input.planImplementMutation
-                .mutateAsync({
-                    profileId: input.profileId,
-                    planId,
-                    runtimeOptions: input.runtimeOptions,
-                    ...(input.resolvedRunTarget ? { providerId: input.resolvedRunTarget.providerId } : {}),
-                    ...(input.resolvedRunTarget ? { modelId: input.resolvedRunTarget.modelId } : {}),
-                    ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
-                    ...(executionStrategy ? { executionStrategy } : {}),
-                })
-                .then((result) => {
+            void runConversationPlanMutation({
+                mutation: {
+                    mutateAsync: () =>
+                        input.planImplementMutation.mutateAsync({
+                            profileId: input.profileId,
+                            planId,
+                            runtimeOptions: input.runtimeOptions,
+                            ...(input.resolvedRunTarget ? { providerId: input.resolvedRunTarget.providerId } : {}),
+                            ...(input.resolvedRunTarget ? { modelId: input.resolvedRunTarget.modelId } : {}),
+                            ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
+                            ...(executionStrategy ? { executionStrategy } : {}),
+                        }),
+                },
+                applyResult: (result) => {
                     input.applyPlanWorkspaceUpdate(
                         result.found
                             ? {
@@ -174,23 +212,28 @@ export function buildConversationPlanOrchestrator(input: BuildConversationPlanOr
                               }
                             : { found: false }
                     );
-                })
-                .catch((error: unknown) => {
-                    const message = error instanceof Error ? error.message : String(error);
-                    input.onError(`Plan implementation failed: ${message}`);
-                });
+                },
+                onError: input.onError,
+                errorPrefix: 'Plan implementation failed',
+            });
         },
         onAbortOrchestrator: (orchestratorRunId) => {
-            void input.orchestratorAbortMutation
-                .mutateAsync({
-                    profileId: input.profileId,
-                    orchestratorRunId,
-                })
-                .then((result) => {
+            void runConversationPlanMutation({
+                mutation: {
+                    mutateAsync: () =>
+                        input.orchestratorAbortMutation.mutateAsync({
+                            profileId: input.profileId,
+                            orchestratorRunId,
+                        }),
+                },
+                applyResult: (result) => {
                     if (result.aborted) {
                         input.applyOrchestratorWorkspaceUpdate(result.latest);
                     }
-                });
+                },
+                onError: input.onError,
+                errorPrefix: 'Orchestrator abort failed',
+            });
         },
     };
 }

@@ -3,6 +3,10 @@ import { useState } from 'react';
 import { useConversationMutations } from '@/web/components/conversation/shell/actions/useConversationMutations';
 import { isEntityId } from '@/web/components/conversation/shell/workspace/helpers';
 import { patchSandboxCaches } from '@/web/components/conversation/shell/workspace/sandboxCache';
+import {
+    workspaceActionMutationFailure,
+    workspaceActionMutationSuccess,
+} from '@/web/components/conversation/shell/workspace/workspaceActionMutationResult';
 import { trpc } from '@/web/trpc/client';
 
 import type { PermissionRecord } from '@/app/backend/persistence/types';
@@ -88,10 +92,12 @@ export function useConversationWorkspaceActions(input: UseConversationWorkspaceA
                 });
                 setFeedbackTone('success');
                 setFeedbackMessage('Execution environment updated.');
+                return workspaceActionMutationSuccess();
             } catch (error: unknown) {
+                const message = error instanceof Error ? error.message : 'Execution environment update failed.';
                 setFeedbackTone('error');
-                setFeedbackMessage(error instanceof Error ? error.message : 'Execution environment update failed.');
-                throw error;
+                setFeedbackMessage(message);
+                return workspaceActionMutationFailure(message);
             }
         },
         async refreshSandbox(sandboxId: `sb_${string}`) {
@@ -106,7 +112,7 @@ export function useConversationWorkspaceActions(input: UseConversationWorkspaceA
                         : 'Managed sandbox refresh failed.';
                     setFeedbackTone('error');
                     setFeedbackMessage(message);
-                    return;
+                    return workspaceActionMutationFailure(message);
                 }
                 patchSandboxCaches({
                     utils,
@@ -116,10 +122,12 @@ export function useConversationWorkspaceActions(input: UseConversationWorkspaceA
                 });
                 setFeedbackTone('success');
                 setFeedbackMessage('Managed sandbox status refreshed.');
+                return workspaceActionMutationSuccess();
             } catch (error: unknown) {
+                const message = error instanceof Error ? error.message : 'Managed sandbox refresh failed.';
                 setFeedbackTone('error');
-                setFeedbackMessage(error instanceof Error ? error.message : 'Managed sandbox refresh failed.');
-                throw error;
+                setFeedbackMessage(message);
+                return workspaceActionMutationFailure(message);
             }
         },
         async removeSandbox(sandboxId: `sb_${string}`) {
@@ -130,9 +138,10 @@ export function useConversationWorkspaceActions(input: UseConversationWorkspaceA
                     removeFiles: true,
                 });
                 if (!result.removed || !result.sandboxId) {
+                    const message = result.message ?? 'Managed sandbox removal failed.';
                     setFeedbackTone('error');
-                    setFeedbackMessage(result.message ?? 'Managed sandbox removal failed.');
-                    return;
+                    setFeedbackMessage(message);
+                    return workspaceActionMutationFailure(message);
                 }
                 patchSandboxCaches({
                     utils,
@@ -142,10 +151,12 @@ export function useConversationWorkspaceActions(input: UseConversationWorkspaceA
                 });
                 setFeedbackTone('success');
                 setFeedbackMessage('Managed sandbox removed.');
+                return workspaceActionMutationSuccess();
             } catch (error: unknown) {
+                const message = error instanceof Error ? error.message : 'Managed sandbox removal failed.';
                 setFeedbackTone('error');
-                setFeedbackMessage(error instanceof Error ? error.message : 'Managed sandbox removal failed.');
-                throw error;
+                setFeedbackMessage(message);
+                return workspaceActionMutationFailure(message);
             }
         },
         async removeOrphanedSandboxes(workspaceFingerprint: string | undefined) {
@@ -164,10 +175,12 @@ export function useConversationWorkspaceActions(input: UseConversationWorkspaceA
                 }
                 setFeedbackTone('success');
                 setFeedbackMessage('Removed orphaned managed sandboxes.');
+                return workspaceActionMutationSuccess();
             } catch (error: unknown) {
+                const message = error instanceof Error ? error.message : 'Orphaned sandbox cleanup failed.';
                 setFeedbackTone('error');
-                setFeedbackMessage(error instanceof Error ? error.message : 'Orphaned sandbox cleanup failed.');
-                throw error;
+                setFeedbackMessage(message);
+                return workspaceActionMutationFailure(message);
             }
         },
     };

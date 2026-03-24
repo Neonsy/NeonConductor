@@ -10,6 +10,18 @@ interface MarkdownCodeBlockProps {
     className?: string;
 }
 
+export async function resolveHighlightedMarkdownCode(input: {
+    code: string;
+    theme: 'light' | 'dark';
+    language?: string;
+}): Promise<string | null> {
+    try {
+        return await highlightMarkdownCode(input);
+    } catch {
+        return null;
+    }
+}
+
 export function MarkdownCodeBlock({ code, language, className }: MarkdownCodeBlockProps) {
     const themeContext = useContext(ThemeContext);
     const resolvedTheme = themeContext?.resolvedTheme ?? 'light';
@@ -19,17 +31,20 @@ export function MarkdownCodeBlock({ code, language, className }: MarkdownCodeBlo
         let cancelled = false;
         setHighlightedHtml(null);
 
-        void highlightMarkdownCode({
-            code,
-            theme: resolvedTheme,
-            ...(language ? { language } : {}),
-        }).then((html) => {
+        const loadHighlight = async () => {
+            const html = await resolveHighlightedMarkdownCode({
+                code,
+                theme: resolvedTheme,
+                ...(language ? { language } : {}),
+            });
             if (cancelled) {
                 return;
             }
 
             setHighlightedHtml(html);
-        });
+        };
+
+        void loadHighlight();
 
         return () => {
             cancelled = true;

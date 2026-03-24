@@ -6,20 +6,30 @@ import {
 } from '@/app/backend/runtime/contracts';
 import { publicProcedure, router } from '@/app/backend/trpc/init';
 import { workflowService } from '@/app/backend/runtime/services/workflows/service';
+import { raiseMappedTrpcError, toTrpcError } from '@/app/backend/trpc/trpcErrorMap';
 
 export const workflowRouter = router({
     list: publicProcedure.input(projectWorkflowListInputSchema).query(async ({ input }) => {
         return {
-            workflows: await workflowService.listProjectWorkflows(input),
+            workflows: (await workflowService.listProjectWorkflows(input)).match(
+                (value) => value,
+                (error) => raiseMappedTrpcError(error, toTrpcError)
+            ),
         };
     }),
     create: publicProcedure.input(projectWorkflowCreateInputSchema).mutation(async ({ input }) => {
         return {
-            workflow: await workflowService.createProjectWorkflow(input),
+            workflow: (await workflowService.createProjectWorkflow(input)).match(
+                (value) => value,
+                (error) => raiseMappedTrpcError(error, toTrpcError)
+            ),
         };
     }),
     update: publicProcedure.input(projectWorkflowUpdateInputSchema).mutation(async ({ input }) => {
-        const workflow = await workflowService.updateProjectWorkflow(input);
+        const workflow = (await workflowService.updateProjectWorkflow(input)).match(
+            (value) => value,
+            (error) => raiseMappedTrpcError(error, toTrpcError)
+        );
         return workflow
             ? {
                   updated: true as const,
@@ -32,7 +42,10 @@ export const workflowRouter = router({
     }),
     delete: publicProcedure.input(projectWorkflowDeleteInputSchema).mutation(async ({ input }) => {
         return {
-            deleted: await workflowService.deleteProjectWorkflow(input),
+            deleted: (await workflowService.deleteProjectWorkflow(input)).match(
+                (value) => value,
+                (error) => raiseMappedTrpcError(error, toTrpcError)
+            ),
         };
     }),
 });

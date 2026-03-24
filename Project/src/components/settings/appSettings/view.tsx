@@ -49,6 +49,15 @@ export function AppSettingsView({
         },
     });
 
+    async function handleConfirmFactoryReset() {
+        try {
+            await factoryResetMutation.mutateAsync({
+                confirm: true,
+                confirmationText,
+            });
+        } catch {}
+    }
+
     return (
         <section className='grid h-full min-h-0 min-w-0 overflow-hidden xl:grid-cols-[280px_minmax(0,1fr)]'>
             <SettingsSelectionRail
@@ -165,10 +174,7 @@ export function AppSettingsView({
                     setConfirmationText('');
                 }}
                 onConfirm={() => {
-                    void factoryResetMutation.mutateAsync({
-                        confirm: true,
-                        confirmationText,
-                    });
+                    void handleConfirmFactoryReset();
                 }}>
                 <div className='space-y-2'>
                     <p className='text-muted-foreground text-xs'>

@@ -9,6 +9,10 @@ import {
     replaceThreadTagRelations,
     upsertTagRecord,
 } from '@/web/components/conversation/sidebar/sidebarCache';
+import {
+    sidebarMutationFailure,
+    sidebarMutationSuccess,
+} from '@/web/components/conversation/sidebar/sidebarMutationResult';
 import { trpc } from '@/web/trpc/client';
 
 import type {
@@ -217,16 +221,45 @@ export function ConversationSidebarPane({
                 });
             }}
             onToggleThreadFavorite={async (threadId, nextFavorite) => {
-                    if (!isEntityId(threadId, 'thr')) {
-                        throw new Error('Favorite status could not be updated.');
+                const failureMessage = 'Favorite status could not be updated.';
+                if (!isEntityId(threadId, 'thr')) {
+                    return sidebarMutationFailure(failureMessage);
+                }
+
+                const currentThread = threads.find((thread) => thread.id === threadId);
+                if (!currentThread) {
+                    return sidebarMutationFailure(failureMessage);
+                }
+
+                const previousThreadList = utils.conversation.listThreads.getData(threadListQueryInput);
+                utils.conversation.listThreads.setData(threadListQueryInput, (current) => {
+                    if (!current) {
+                        return current;
                     }
 
-                    const currentThread = threads.find((thread) => thread.id === threadId);
-                    if (!currentThread) {
-                        throw new Error('Favorite status could not be updated.');
-                    }
+                    return {
+                        ...current,
+                        threads: patchThreadListRecord(current.threads, {
+                            ...currentThread,
+                            isFavorite: nextFavorite,
+                        }),
+                    };
+                });
 
-                    const previousThreadList = utils.conversation.listThreads.getData(threadListQueryInput);
+                try {
+                    const result = await setThreadFavorite({
+                        profileId,
+                        threadId,
+                        isFavorite: nextFavorite,
+                    });
+                    if (!result.updated || !result.thread) {
+                        if (previousThreadList) {
+                            utils.conversation.listThreads.setData(threadListQueryInput, previousThreadList);
+                        }
+                        return sidebarMutationFailure(failureMessage);
+                    }
+                    const updatedThread = result.thread;
+
                     utils.conversation.listThreads.setData(threadListQueryInput, (current) => {
                         if (!current) {
                             return current;
@@ -234,144 +267,120 @@ export function ConversationSidebarPane({
 
                         return {
                             ...current,
-                            threads: patchThreadListRecord(current.threads, {
-                                ...currentThread,
-                                isFavorite: nextFavorite,
-                            }),
+                            threads: patchThreadListRecord(current.threads, updatedThread),
+                        };
+                    });
+                    return sidebarMutationSuccess();
+                } catch (error) {
+                    if (previousThreadList) {
+                        utils.conversation.listThreads.setData(threadListQueryInput, previousThreadList);
+                    }
+                    return sidebarMutationFailure(error instanceof Error ? error.message : failureMessage);
+                }
+            }}
+            onScopeFilterChange={(scope) => {
+                startTransition(() => {
+                    onScopeFilterChange(scope);
+                });
+            }}
+            onWorkspaceFilterChange={(nextWorkspaceFingerprint) => {
+                startTransition(() => {
+                    onWorkspaceFilterChange(nextWorkspaceFingerprint);
+                });
+            }}
+            onSortChange={(nextSort) => {
+                startTransition(() => {
+                    onSortChange(nextSort);
+                });
+            }}
+            onShowAllModesChange={(nextShowAllModes) => {
+                startTransition(() => {
+                    onShowAllModesChange(nextShowAllModes);
+                });
+            }}
+            onGroupViewChange={(nextGroupView) => {
+                startTransition(() => {
+                    onGroupViewChange(nextGroupView);
+                });
+            }}
+            onCreateThread={onCreateThread}
+            onAddTagToThread={async (threadId, label) => {
+                const failureMessage = 'Thread tags could not be updated.';
+                if (!isEntityId(threadId, 'thr')) {
+                    return sidebarMutationFailure(failureMessage);
+                }
+                const previousTags = utils.conversation.listTags.getData({ profileId });
+                const previousShellBootstrap = utils.runtime.getShellBootstrap.getData({ profileId });
+
+                try {
+                    const upserted = await upsertTag({
+                        profileId,
+                        label,
+                    });
+                    const existingTagIds = threadTagIdsByThread.get(threadId) ?? [];
+                    const nextTagIds = [...new Set([...existingTagIds, upserted.tag.id])];
+                    const validTagIds = nextTagIds.filter((tagId): tagId is EntityId<'tag'> =>
+                        isEntityId(tagId, 'tag')
+                    );
+                    if (validTagIds.length !== nextTagIds.length) {
+                        return sidebarMutationFailure('The selected tag could not be applied to this thread.');
+                    }
+
+                    utils.conversation.listTags.setData({ profileId }, (current) => {
+                        if (!current) {
+                            return current;
+                        }
+
+                        return {
+                            tags: upsertTagRecord(current.tags, upserted.tag),
+                        };
+                    });
+                    utils.runtime.getShellBootstrap.setData({ profileId }, (current) => {
+                        if (!current) {
+                            return current;
+                        }
+
+                        const optimisticThreadTags: ThreadTagRecord[] = validTagIds.map((tagId) => ({
+                            profileId,
+                            threadId,
+                            tagId,
+                            createdAt: new Date().toISOString(),
+                        }));
+
+                        return {
+                            ...current,
+                            threadTags: replaceThreadTagRelations(current.threadTags, threadId, optimisticThreadTags),
                         };
                     });
 
-                    try {
-                        const result = await setThreadFavorite({
-                            profileId,
-                            threadId,
-                            isFavorite: nextFavorite,
-                        });
-                        if (!result.updated || !result.thread) {
-                            if (previousThreadList) {
-                                utils.conversation.listThreads.setData(threadListQueryInput, previousThreadList);
-                            }
-                            throw new Error('Favorite status could not be updated.');
+                    const result = await setThreadTags({
+                        profileId,
+                        threadId,
+                        tagIds: validTagIds,
+                    });
+                    utils.runtime.getShellBootstrap.setData({ profileId }, (current) => {
+                        if (!current) {
+                            return current;
                         }
-                        const updatedThread = result.thread;
 
-                        utils.conversation.listThreads.setData(threadListQueryInput, (current) => {
-                            if (!current) {
-                                return current;
-                            }
-
-                            return {
-                                ...current,
-                                threads: patchThreadListRecord(current.threads, updatedThread),
-                            };
-                        });
-                    } catch (error) {
-                        if (previousThreadList) {
-                            utils.conversation.listThreads.setData(threadListQueryInput, previousThreadList);
-                        }
-                        throw error instanceof Error ? error : new Error('Favorite status could not be updated.');
+                        return {
+                            ...current,
+                            threadTags: replaceThreadTagRelations(current.threadTags, threadId, result.threadTags),
+                        };
+                    });
+                    return sidebarMutationSuccess();
+                } catch (error) {
+                    if (previousTags) {
+                        utils.conversation.listTags.setData({ profileId }, previousTags);
                     }
-                }}
-                onScopeFilterChange={(scope) => {
-                    startTransition(() => {
-                        onScopeFilterChange(scope);
-                    });
-                }}
-                onWorkspaceFilterChange={(nextWorkspaceFingerprint) => {
-                    startTransition(() => {
-                        onWorkspaceFilterChange(nextWorkspaceFingerprint);
-                    });
-                }}
-                onSortChange={(nextSort) => {
-                    startTransition(() => {
-                        onSortChange(nextSort);
-                    });
-                }}
-                onShowAllModesChange={(nextShowAllModes) => {
-                    startTransition(() => {
-                        onShowAllModesChange(nextShowAllModes);
-                    });
-                }}
-                onGroupViewChange={(nextGroupView) => {
-                    startTransition(() => {
-                        onGroupViewChange(nextGroupView);
-                    });
-                }}
-            onCreateThread={onCreateThread}
-                onAddTagToThread={async (threadId, label) => {
-                    if (!isEntityId(threadId, 'thr')) {
-                        throw new Error('Thread tags could not be updated.');
+                    if (previousShellBootstrap) {
+                        utils.runtime.getShellBootstrap.setData({ profileId }, previousShellBootstrap);
                     }
-                    const previousTags = utils.conversation.listTags.getData({ profileId });
-                    const previousShellBootstrap = utils.runtime.getShellBootstrap.getData({ profileId });
-
-                    try {
-                        const upserted = await upsertTag({
-                            profileId,
-                            label,
-                        });
-                        const existingTagIds = threadTagIdsByThread.get(threadId) ?? [];
-                        const nextTagIds = [...new Set([...existingTagIds, upserted.tag.id])];
-                        const validTagIds = nextTagIds.filter(
-                            (tagId): tagId is EntityId<'tag'> => isEntityId(tagId, 'tag')
-                        );
-                        if (validTagIds.length !== nextTagIds.length) {
-                            throw new Error('The selected tag could not be applied to this thread.');
-                        }
-
-                        utils.conversation.listTags.setData({ profileId }, (current) => {
-                            if (!current) {
-                                return current;
-                            }
-
-                            return {
-                                tags: upsertTagRecord(current.tags, upserted.tag),
-                            };
-                        });
-                        utils.runtime.getShellBootstrap.setData({ profileId }, (current) => {
-                            if (!current) {
-                                return current;
-                            }
-
-                            const optimisticThreadTags: ThreadTagRecord[] = validTagIds.map((tagId) => ({
-                                profileId,
-                                threadId,
-                                tagId,
-                                createdAt: new Date().toISOString(),
-                            }));
-
-                            return {
-                                ...current,
-                                threadTags: replaceThreadTagRelations(current.threadTags, threadId, optimisticThreadTags),
-                            };
-                        });
-
-                        const result = await setThreadTags({
-                            profileId,
-                            threadId,
-                            tagIds: validTagIds,
-                        });
-                        utils.runtime.getShellBootstrap.setData({ profileId }, (current) => {
-                            if (!current) {
-                                return current;
-                            }
-
-                            return {
-                                ...current,
-                                threadTags: replaceThreadTagRelations(current.threadTags, threadId, result.threadTags),
-                            };
-                        });
-                    } catch (error) {
-                        if (previousTags) {
-                            utils.conversation.listTags.setData({ profileId }, previousTags);
-                        }
-                        if (previousShellBootstrap) {
-                            utils.runtime.getShellBootstrap.setData({ profileId }, previousShellBootstrap);
-                        }
-                        throw error instanceof Error ? error : new Error('Thread tags could not be updated.');
-                    }
-                }}
+                    return sidebarMutationFailure(error instanceof Error ? error.message : failureMessage);
+                }
+            }}
             onDeleteWorkspaceThreads={async ({ workspaceFingerprint, includeFavoriteThreads }) => {
+                const failureMessage = 'Workspace threads could not be deleted.';
                 const previousBucketList = utils.conversation.listBuckets.getData({ profileId });
                 const previousThreadList = utils.conversation.listThreads.getData(threadListQueryInput);
                 const previousTagList = utils.conversation.listTags.getData({ profileId });
@@ -409,9 +418,12 @@ export function ConversationSidebarPane({
                         deletedTagIds: result.deletedTagIds,
                         deletedConversationIds: result.deletedConversationIds,
                     });
-                    utils.conversation.listBuckets.setData({ profileId }, {
-                        buckets: deletedSidebarRecords.buckets,
-                    });
+                    utils.conversation.listBuckets.setData(
+                        { profileId },
+                        {
+                            buckets: deletedSidebarRecords.buckets,
+                        }
+                    );
                     utils.conversation.listThreads.setData(threadListQueryInput, (current) => {
                         if (!current) {
                             return current;
@@ -422,14 +434,20 @@ export function ConversationSidebarPane({
                             threads: deletedSidebarRecords.threads,
                         };
                     });
-                    utils.conversation.listTags.setData({ profileId }, {
-                        tags: deletedSidebarRecords.tags,
-                    });
+                    utils.conversation.listTags.setData(
+                        { profileId },
+                        {
+                            tags: deletedSidebarRecords.tags,
+                        }
+                    );
                     if (previousShellBootstrap) {
-                        utils.runtime.getShellBootstrap.setData({ profileId }, {
-                            ...previousShellBootstrap,
-                            threadTags: deletedSidebarRecords.threadTags,
-                        });
+                        utils.runtime.getShellBootstrap.setData(
+                            { profileId },
+                            {
+                                ...previousShellBootstrap,
+                                threadTags: deletedSidebarRecords.threadTags,
+                            }
+                        );
                     }
                     if (previousSessionList) {
                         utils.session.list.setData(
@@ -441,6 +459,7 @@ export function ConversationSidebarPane({
                             }
                         );
                     }
+                    return sidebarMutationSuccess();
                 } catch (error) {
                     if (previousBucketList) {
                         utils.conversation.listBuckets.setData({ profileId }, previousBucketList);
@@ -457,10 +476,9 @@ export function ConversationSidebarPane({
                     if (previousSessionList) {
                         utils.session.list.setData({ profileId }, previousSessionList);
                     }
-                    throw error instanceof Error ? error : new Error('Workspace threads could not be deleted.');
+                    return sidebarMutationFailure(error instanceof Error ? error.message : failureMessage);
                 }
             }}
         />
     );
 }
-

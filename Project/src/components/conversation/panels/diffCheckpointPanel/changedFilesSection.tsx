@@ -30,7 +30,7 @@ function statusLabel(status: DiffFileArtifact['status']): string {
     return status;
 }
 
-interface ChangedFilesSectionProps {
+export interface ChangedFilesSectionProps {
     selectedDiff: DiffRecord;
     resolvedSelectedPath: string | undefined;
     milestonesOnly: boolean;

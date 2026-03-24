@@ -75,7 +75,10 @@ export const runtimeRouter = router({
         };
     }),
     setWorkspacePreference: publicProcedure.input(runtimeSetWorkspacePreferenceInputSchema).mutation(async ({ input }) => {
-        const workspacePreference = await setWorkspacePreference(input);
+        const workspacePreference = (await setWorkspacePreference(input)).match(
+            (value) => value,
+            (error) => raiseMappedTrpcError(error, toTrpcError)
+        );
         return {
             workspacePreference,
         };

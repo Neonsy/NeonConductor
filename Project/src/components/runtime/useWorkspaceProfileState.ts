@@ -2,9 +2,25 @@ import { useState } from 'react';
 
 import { BOOT_CRITICAL_QUERY_OPTIONS } from '@/web/components/runtime/startupQueryOptions';
 import { resolveActiveWorkspaceProfileId } from '@/web/components/runtime/workspaceSurfaceModel';
+import { createFailClosedAsyncAction } from '@/web/lib/async/createFailClosedAsyncAction';
 import { trpc } from '@/web/trpc/client';
 
 import type { TopLevelTab } from '@/shared/contracts';
+
+export function createSelectProfileAction(input: {
+    resolvedProfileId: string | undefined;
+    mutateAsync: (value: { profileId: string }) => Promise<unknown>;
+}) {
+    return createFailClosedAsyncAction(async (profileId: string) => {
+        if (!profileId || profileId === input.resolvedProfileId) {
+            return;
+        }
+
+        await input.mutateAsync({
+            profileId,
+        });
+    });
+}
 
 export function useWorkspaceProfileState(input: { setTopLevelTab: (value: TopLevelTab) => void }) {
     const [activeProfileId, setActiveProfileId] = useState<string | undefined>(undefined);
@@ -46,6 +62,10 @@ export function useWorkspaceProfileState(input: { setTopLevelTab: (value: TopLev
             });
         },
     });
+    const selectProfile = createSelectProfileAction({
+        resolvedProfileId,
+        mutateAsync: profileSetActiveMutation.mutateAsync,
+    });
 
     return {
         profiles,
@@ -58,15 +78,7 @@ export function useWorkspaceProfileState(input: { setTopLevelTab: (value: TopLev
             setActiveProfileId(profileId);
             input.setTopLevelTab('chat');
         },
-        selectProfile: async (profileId: string) => {
-            if (!profileId || profileId === resolvedProfileId) {
-                return;
-            }
-
-            await profileSetActiveMutation.mutateAsync({
-                profileId,
-            });
-        },
+        selectProfile,
     };
 }
 

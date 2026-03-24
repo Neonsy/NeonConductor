@@ -1,7 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
+    applyHydratedKiloStoredCredential,
     buildProviderAuthenticationDraftKey,
+    resolveCopyStoredCredentialAction,
+    resolveRevealStoredCredentialAction,
     shouldHydrateKiloStoredCredential,
 } from '@/web/components/settings/providerSettings/authenticationSection';
 
@@ -34,5 +37,142 @@ describe('provider authentication draft helpers', () => {
                 apiKeyInput: 'manual-user-entry',
             })
         ).toBe(false);
+    });
+
+    it('does not overwrite a user draft when stored credential hydration resolves late', () => {
+        expect(
+            applyHydratedKiloStoredCredential({
+                draftState: {
+                    apiKeyInput: 'manual-user-entry',
+                    baseUrlOverrideInput: '',
+                    isCredentialVisible: false,
+                    hasLoadedStoredCredential: false,
+                },
+                selectedProviderId: 'kilo',
+                credentialSource: 'access_token',
+                credentialValue: 'stored-kilo-token',
+            })
+        ).toEqual({
+            apiKeyInput: 'manual-user-entry',
+            baseUrlOverrideInput: '',
+            isCredentialVisible: false,
+            hasLoadedStoredCredential: false,
+        });
+    });
+
+    it('applies the stored Kilo credential when the untouched draft is still eligible', () => {
+        expect(
+            applyHydratedKiloStoredCredential({
+                draftState: {
+                    apiKeyInput: '',
+                    baseUrlOverrideInput: '',
+                    isCredentialVisible: false,
+                    hasLoadedStoredCredential: false,
+                },
+                selectedProviderId: 'kilo',
+                credentialSource: 'access_token',
+                credentialValue: 'stored-kilo-token',
+            })
+        ).toEqual({
+            apiKeyInput: 'stored-kilo-token',
+            baseUrlOverrideInput: '',
+            isCredentialVisible: false,
+            hasLoadedStoredCredential: true,
+        });
+    });
+
+    it('reveals the stored credential when loading succeeds', async () => {
+        await expect(
+            resolveRevealStoredCredentialAction({
+                draftState: {
+                    apiKeyInput: '',
+                    baseUrlOverrideInput: '',
+                    isCredentialVisible: false,
+                    hasLoadedStoredCredential: false,
+                },
+                hasStoredCredential: true,
+                onLoadStoredCredential: async () => 'stored-kilo-token',
+            })
+        ).resolves.toEqual({
+            draftState: {
+                apiKeyInput: 'stored-kilo-token',
+                baseUrlOverrideInput: '',
+                isCredentialVisible: true,
+                hasLoadedStoredCredential: true,
+            },
+        });
+    });
+
+    it('reports a local reveal error when credential loading rejects', async () => {
+        await expect(
+            resolveRevealStoredCredentialAction({
+                draftState: {
+                    apiKeyInput: '',
+                    baseUrlOverrideInput: '',
+                    isCredentialVisible: false,
+                    hasLoadedStoredCredential: false,
+                },
+                hasStoredCredential: true,
+                onLoadStoredCredential: async () => {
+                    throw new Error('load failed');
+                },
+            })
+        ).resolves.toEqual({
+            status: {
+                tone: 'error',
+                message: 'Failed to reveal the stored credential.',
+            },
+        });
+    });
+
+    it('copies the loaded credential and reports success', async () => {
+        const writeText = vi.fn(async () => undefined);
+
+        await expect(
+            resolveCopyStoredCredentialAction({
+                draftState: {
+                    apiKeyInput: '',
+                    baseUrlOverrideInput: '',
+                    isCredentialVisible: false,
+                    hasLoadedStoredCredential: false,
+                },
+                onLoadStoredCredential: async () => 'stored-kilo-token',
+                writeText,
+            })
+        ).resolves.toEqual({
+            draftState: {
+                apiKeyInput: '',
+                baseUrlOverrideInput: '',
+                isCredentialVisible: false,
+                hasLoadedStoredCredential: true,
+            },
+            status: {
+                tone: 'success',
+                message: 'Credential copied.',
+            },
+        });
+        expect(writeText).toHaveBeenCalledWith('stored-kilo-token');
+    });
+
+    it('reports a local copy error when clipboard write rejects', async () => {
+        await expect(
+            resolveCopyStoredCredentialAction({
+                draftState: {
+                    apiKeyInput: 'stored-kilo-token',
+                    baseUrlOverrideInput: '',
+                    isCredentialVisible: true,
+                    hasLoadedStoredCredential: true,
+                },
+                onLoadStoredCredential: async () => undefined,
+                writeText: async () => {
+                    throw new Error('clipboard denied');
+                },
+            })
+        ).resolves.toEqual({
+            status: {
+                tone: 'error',
+                message: 'Failed to copy the stored credential.',
+            },
+        });
     });
 });

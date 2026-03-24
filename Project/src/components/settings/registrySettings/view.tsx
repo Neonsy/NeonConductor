@@ -49,6 +49,25 @@ export function RegistrySettingsScreen({
     const discoveredGlobalSkills = controller.registryQuery.data?.discovered.global.skillfiles ?? [];
     const discoveredWorkspaceSkills = controller.registryQuery.data?.discovered.workspace?.skillfiles ?? [];
 
+    async function handleRefreshGlobal() {
+        try {
+            await controller.refreshMutation.mutateAsync({ profileId });
+        } catch {}
+    }
+
+    async function handleRefreshWorkspace() {
+        if (!controller.selectedWorkspaceFingerprint) {
+            return;
+        }
+
+        try {
+            await controller.refreshMutation.mutateAsync({
+                profileId,
+                workspaceFingerprint: controller.selectedWorkspaceFingerprint,
+            });
+        } catch {}
+    }
+
     return (
         <section className='grid h-full min-h-0 min-w-0 overflow-hidden xl:grid-cols-[280px_minmax(0,1fr)]'>
             <SettingsSelectionRail
@@ -88,7 +107,7 @@ export function RegistrySettingsScreen({
                                         variant='outline'
                                         disabled={controller.refreshMutation.isPending}
                                         onClick={() => {
-                                            void controller.refreshMutation.mutateAsync({ profileId });
+                                            void handleRefreshGlobal();
                                         }}>
                                         {controller.refreshMutation.isPending && !controller.selectedWorkspaceFingerprint
                                             ? 'Refreshing…'
@@ -100,14 +119,7 @@ export function RegistrySettingsScreen({
                                         variant='outline'
                                         disabled={controller.refreshMutation.isPending || !controller.selectedWorkspaceFingerprint}
                                         onClick={() => {
-                                            if (!controller.selectedWorkspaceFingerprint) {
-                                                return;
-                                            }
-
-                                            void controller.refreshMutation.mutateAsync({
-                                                profileId,
-                                                workspaceFingerprint: controller.selectedWorkspaceFingerprint,
-                                            });
+                                            void handleRefreshWorkspace();
                                         }}>
                                         {controller.refreshMutation.isPending && controller.selectedWorkspaceFingerprint
                                             ? 'Refreshing…'

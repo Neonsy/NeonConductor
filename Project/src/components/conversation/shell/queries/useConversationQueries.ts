@@ -1,3 +1,5 @@
+import { skipToken } from '@tanstack/react-query';
+
 import type { ConversationUiState } from '@/web/components/conversation/hooks/useConversationUiState';
 import { isEntityId } from '@/web/components/conversation/shell/workspace/helpers';
 import { BOOT_CRITICAL_QUERY_OPTIONS } from '@/web/components/runtime/startupQueryOptions';
@@ -13,6 +15,68 @@ interface UseConversationQueriesInput {
     selectedRunId: string | undefined;
     topLevelTab: TopLevelTab;
     modeKey: string;
+}
+
+export function buildConversationSessionScopedQueryInput(profileId: string, selectedSessionId: string | undefined) {
+    return isEntityId(selectedSessionId, 'sess')
+        ? {
+              profileId,
+              sessionId: selectedSessionId,
+          }
+        : skipToken;
+}
+
+export function buildConversationRunScopedQueryInput(profileId: string, selectedRunId: string | undefined) {
+    return isEntityId(selectedRunId, 'run')
+        ? {
+              profileId,
+              runId: selectedRunId,
+          }
+        : skipToken;
+}
+
+export function buildConversationAttachedRegistryQueryInput(input: {
+    profileId: string;
+    selectedSessionId: string | undefined;
+    topLevelTab: TopLevelTab;
+    modeKey: string;
+}) {
+    return isEntityId(input.selectedSessionId, 'sess') && input.topLevelTab !== 'chat'
+        ? {
+              profileId: input.profileId,
+              sessionId: input.selectedSessionId,
+              topLevelTab: input.topLevelTab,
+              modeKey: input.modeKey,
+          }
+        : skipToken;
+}
+
+export function buildConversationActivePlanQueryInput(input: {
+    profileId: string;
+    selectedSessionId: string | undefined;
+    topLevelTab: TopLevelTab;
+}) {
+    return isEntityId(input.selectedSessionId, 'sess') &&
+        (input.topLevelTab === 'agent' || input.topLevelTab === 'orchestrator')
+        ? {
+              profileId: input.profileId,
+              sessionId: input.selectedSessionId,
+              topLevelTab: input.topLevelTab,
+          }
+        : skipToken;
+}
+
+export function buildConversationOrchestratorLatestQueryInput(input: {
+    profileId: string;
+    selectedSessionId: string | undefined;
+    topLevelTab: TopLevelTab;
+}) {
+    return isEntityId(input.selectedSessionId, 'sess') && input.topLevelTab === 'orchestrator'
+        ? {
+              profileId: input.profileId,
+              sessionId: input.selectedSessionId,
+          }
+        : skipToken;
 }
 
 export function useConversationQueries(input: UseConversationQueriesInput) {
@@ -39,97 +103,49 @@ export function useConversationQueries(input: UseConversationQueriesInput) {
     );
     const listThreadsQuery = trpc.conversation.listThreads.useQuery(listThreadsInput, PROGRESSIVE_QUERY_OPTIONS);
 
-    const fallbackSessionId = 'sess_missing';
-    const selectedSessionIdForQueries = isEntityId(input.selectedSessionId, 'sess')
-        ? input.selectedSessionId
-        : fallbackSessionId;
-    const selectedRunIdForQueries = isEntityId(input.selectedRunId, 'run') ? input.selectedRunId : undefined;
-    const fallbackRunId = 'run_missing' as const;
     const sessionsInput = { profileId: input.profileId };
-    const runsInput = {
+    const runsInput = buildConversationSessionScopedQueryInput(input.profileId, input.selectedSessionId);
+    const messagesInput = runsInput;
+    const attachedRegistryInput = buildConversationAttachedRegistryQueryInput({
         profileId: input.profileId,
-        sessionId: selectedSessionIdForQueries,
-    };
-    const messagesInput = {
-        profileId: input.profileId,
-        sessionId: selectedSessionIdForQueries,
-    };
-
-    const sessionsQuery = trpc.session.list.useQuery(sessionsInput, PROGRESSIVE_QUERY_OPTIONS);
-    const runsQuery = trpc.session.listRuns.useQuery(runsInput, {
-        enabled: isEntityId(input.selectedSessionId, 'sess'),
-        ...PROGRESSIVE_QUERY_OPTIONS,
-    });
-    const messagesQuery = trpc.session.listMessages.useQuery(messagesInput, {
-        enabled: isEntityId(input.selectedSessionId, 'sess'),
-        ...PROGRESSIVE_QUERY_OPTIONS,
-    });
-    const attachedRegistryInput = {
-        profileId: input.profileId,
-        sessionId: selectedSessionIdForQueries,
+        selectedSessionId: input.selectedSessionId,
         topLevelTab: input.topLevelTab,
         modeKey: input.modeKey,
-    };
-    const attachedRulesQuery = trpc.session.getAttachedRules.useQuery(attachedRegistryInput, {
-        enabled: isEntityId(input.selectedSessionId, 'sess') && input.topLevelTab !== 'chat',
-        ...PROGRESSIVE_QUERY_OPTIONS,
     });
-    const attachedSkillsQuery = trpc.session.getAttachedSkills.useQuery(
-        attachedRegistryInput,
-        {
-            enabled: isEntityId(input.selectedSessionId, 'sess') && input.topLevelTab !== 'chat',
-            ...PROGRESSIVE_QUERY_OPTIONS,
-        }
-    );
+    const runDiffsInput = buildConversationRunScopedQueryInput(input.profileId, input.selectedRunId);
+    const checkpointsInput = buildConversationSessionScopedQueryInput(input.profileId, input.selectedSessionId);
+    const activePlanInput = buildConversationActivePlanQueryInput({
+        profileId: input.profileId,
+        selectedSessionId: input.selectedSessionId,
+        topLevelTab: input.topLevelTab,
+    });
+    const orchestratorLatestInput = buildConversationOrchestratorLatestQueryInput({
+        profileId: input.profileId,
+        selectedSessionId: input.selectedSessionId,
+        topLevelTab: input.topLevelTab,
+    });
+
+    const sessionsQuery = trpc.session.list.useQuery(sessionsInput, PROGRESSIVE_QUERY_OPTIONS);
+    const runsQuery = trpc.session.listRuns.useQuery(runsInput, PROGRESSIVE_QUERY_OPTIONS);
+    const messagesQuery = trpc.session.listMessages.useQuery(messagesInput, PROGRESSIVE_QUERY_OPTIONS);
+    const attachedRulesQuery = trpc.session.getAttachedRules.useQuery(attachedRegistryInput, PROGRESSIVE_QUERY_OPTIONS);
+    const attachedSkillsQuery = trpc.session.getAttachedSkills.useQuery(attachedRegistryInput, PROGRESSIVE_QUERY_OPTIONS);
     const usageSummaryQuery = trpc.provider.getUsageSummary.useQuery(
         { profileId: input.profileId },
         PROGRESSIVE_QUERY_OPTIONS
     );
-    const runDiffsQuery = trpc.diff.listByRun.useQuery(
-        {
-            profileId: input.profileId,
-            runId: selectedRunIdForQueries ?? fallbackRunId,
-        },
-        {
-            enabled: isEntityId(input.selectedRunId, 'run'),
-            ...PROGRESSIVE_QUERY_OPTIONS,
-        }
-    );
-    const checkpointsQuery = trpc.checkpoint.list.useQuery(
-        {
-            profileId: input.profileId,
-            sessionId: selectedSessionIdForQueries,
-        },
-        {
-            enabled: isEntityId(input.selectedSessionId, 'sess') && input.topLevelTab !== 'chat',
-            ...PROGRESSIVE_QUERY_OPTIONS,
-        }
-    );
+    const runDiffsQuery = trpc.diff.listByRun.useQuery(runDiffsInput, PROGRESSIVE_QUERY_OPTIONS);
+    const checkpointsQuery = trpc.checkpoint.list.useQuery(checkpointsInput, {
+        enabled: input.topLevelTab !== 'chat',
+        ...PROGRESSIVE_QUERY_OPTIONS,
+    });
     const pendingPermissionsQuery = trpc.permission.listPending.useQuery(undefined, PROGRESSIVE_QUERY_OPTIONS);
 
-    const activePlanQuery = trpc.plan.getActive.useQuery(
-        {
-            profileId: input.profileId,
-            sessionId: selectedSessionIdForQueries,
-            topLevelTab: input.topLevelTab,
-        },
-        {
-            enabled:
-                Boolean(input.selectedSessionId) &&
-                (input.topLevelTab === 'agent' || input.topLevelTab === 'orchestrator'),
-            ...PROGRESSIVE_QUERY_OPTIONS,
-        }
-    );
+    const activePlanQuery = trpc.plan.getActive.useQuery(activePlanInput, PROGRESSIVE_QUERY_OPTIONS);
 
     const orchestratorLatestQuery = trpc.orchestrator.latestBySession.useQuery(
-        {
-            profileId: input.profileId,
-            sessionId: selectedSessionIdForQueries,
-        },
-        {
-            enabled: Boolean(input.selectedSessionId) && input.topLevelTab === 'orchestrator',
-            ...PROGRESSIVE_QUERY_OPTIONS,
-        }
+        orchestratorLatestInput,
+        PROGRESSIVE_QUERY_OPTIONS
     );
 
     return {

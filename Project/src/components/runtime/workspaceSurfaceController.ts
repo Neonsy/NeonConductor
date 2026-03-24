@@ -1,3 +1,4 @@
+import { skipToken } from '@tanstack/react-query';
 import { useState } from 'react';
 
 import { useWorkspaceModeState } from '@/web/components/runtime/useWorkspaceModeState';
@@ -6,6 +7,14 @@ import { BOOT_CRITICAL_QUERY_OPTIONS } from '@/web/components/runtime/startupQue
 import { trpc } from '@/web/trpc/client';
 
 import type { TopLevelTab } from '@/shared/contracts';
+
+export function buildWorkspaceRootsQueryInput(resolvedProfileId: string | undefined) {
+    return resolvedProfileId
+        ? {
+              profileId: resolvedProfileId,
+          }
+        : skipToken;
+}
 
 export function useWorkspaceSurfaceController() {
     const [topLevelTab, setTopLevelTab] = useState<TopLevelTab>('chat');
@@ -21,11 +30,8 @@ export function useWorkspaceSurfaceController() {
         ...(currentWorkspaceFingerprint ? { workspaceFingerprint: currentWorkspaceFingerprint } : {}),
     });
     const workspaceRootsQuery = trpc.runtime.listWorkspaceRoots.useQuery(
-        { profileId: profileState.resolvedProfileId ?? 'profile_missing' },
-        {
-            enabled: Boolean(profileState.resolvedProfileId),
-            ...BOOT_CRITICAL_QUERY_OPTIONS,
-        }
+        buildWorkspaceRootsQueryInput(profileState.resolvedProfileId),
+        BOOT_CRITICAL_QUERY_OPTIONS
     );
     const workspaceRoots = workspaceRootsQuery.data?.workspaceRoots ?? [];
     const resolvedWorkspaceFingerprint =

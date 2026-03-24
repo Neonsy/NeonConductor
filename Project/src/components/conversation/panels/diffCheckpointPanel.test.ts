@@ -1,4 +1,112 @@
-import { describe, expect, it } from 'vitest';
+import { skipToken } from '@tanstack/react-query';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { describe, expect, it, vi } from 'vitest';
+
+const { diffGetFilePatchUseQueryMock, previewRollbackUseQueryMock, previewCleanupUseQueryMock } = vi.hoisted(() => ({
+    diffGetFilePatchUseQueryMock: vi.fn(() => ({
+        data: undefined,
+        isPending: false,
+        isFetching: false,
+    })),
+    previewRollbackUseQueryMock: vi.fn(() => ({
+        isPending: false,
+        data: undefined,
+    })),
+    previewCleanupUseQueryMock: vi.fn(() => ({
+        isPending: false,
+        data: undefined,
+    })),
+}));
+
+vi.mock('@/web/trpc/client', () => ({
+    trpc: {
+        useUtils: () => ({
+            checkpoint: {
+                list: {
+                    invalidate: vi.fn(() => Promise.resolve()),
+                },
+                previewCleanup: {
+                    invalidate: vi.fn(() => Promise.resolve()),
+                },
+            },
+            diff: {
+                getFilePatch: {
+                    prefetch: vi.fn(),
+                },
+            },
+        }),
+        diff: {
+            getFilePatch: {
+                useQuery: diffGetFilePatchUseQueryMock,
+            },
+        },
+        system: {
+            openPath: {
+                useMutation: () => ({
+                    isPending: false,
+                    mutateAsync: vi.fn(),
+                }),
+            },
+        },
+        checkpoint: {
+            previewRollback: {
+                useQuery: previewRollbackUseQueryMock,
+            },
+            previewCleanup: {
+                useQuery: previewCleanupUseQueryMock,
+            },
+            rollback: {
+                useMutation: () => ({
+                    isPending: false,
+                    mutateAsync: vi.fn(),
+                }),
+            },
+            create: {
+                useMutation: () => ({
+                    isPending: false,
+                    mutateAsync: vi.fn(),
+                }),
+            },
+            promoteToMilestone: {
+                useMutation: () => ({
+                    isPending: false,
+                    mutateAsync: vi.fn(),
+                }),
+            },
+            renameMilestone: {
+                useMutation: () => ({
+                    isPending: false,
+                    mutateAsync: vi.fn(),
+                }),
+            },
+            deleteMilestone: {
+                useMutation: () => ({
+                    isPending: false,
+                    mutateAsync: vi.fn(),
+                }),
+            },
+            applyCleanup: {
+                useMutation: () => ({
+                    isPending: false,
+                    mutateAsync: vi.fn(),
+                }),
+            },
+            revertChangeset: {
+                useMutation: () => ({
+                    isPending: false,
+                    mutateAsync: vi.fn(),
+                }),
+            },
+            forceCompact: {
+                useMutation: () => ({
+                    isPending: false,
+                    mutateAsync: vi.fn(),
+                }),
+            },
+        },
+    },
+}));
 
 import {
     buildRollbackWarningLines,
@@ -8,6 +116,8 @@ import {
     formatCheckpointByteSize,
     resolveSelectedDiffPath,
 } from '@/web/components/conversation/panels/diffCheckpointPanelState';
+import { DiffCheckpointPanel } from '@/web/components/conversation/panels/diffCheckpointPanel';
+import { CheckpointHistorySection } from '@/web/components/conversation/panels/diffCheckpointPanel/checkpointHistorySection';
 
 describe('resolveSelectedDiffPath', () => {
     it('keeps the preferred path while it still exists and falls back when it disappears', () => {
@@ -206,5 +316,105 @@ describe('checkpoint compaction helpers', () => {
                 completedAt: '2026-03-19T10:00:01.000Z',
             })
         ).toBe('Last manual compaction failed. Verification failed.');
+    });
+});
+
+describe('DiffCheckpointPanel preview query ownership', () => {
+    it('does not issue rollback or cleanup preview queries until the relevant mounted boundary exists', () => {
+        renderToStaticMarkup(
+            createElement(DiffCheckpointPanel, {
+                profileId: 'profile_default',
+                diffs: [],
+                checkpoints: [],
+                disabled: false,
+            })
+        );
+
+        expect(previewRollbackUseQueryMock).not.toHaveBeenCalled();
+        expect(previewCleanupUseQueryMock).not.toHaveBeenCalled();
+    });
+
+    it('passes skipToken to file patch preview until a real diff and selected path exist', () => {
+        renderToStaticMarkup(
+            createElement(DiffCheckpointPanel, {
+                profileId: 'profile_default',
+                diffs: [],
+                checkpoints: [],
+                disabled: false,
+            })
+        );
+
+        expect(diffGetFilePatchUseQueryMock).toHaveBeenCalledWith(skipToken, expect.any(Object));
+    });
+
+    it('issues preview queries only from the mounted maintenance boundary and only with real ids', () => {
+        renderToStaticMarkup(
+            createElement(CheckpointHistorySection, {
+                profileId: 'profile_default',
+                selectedSessionId: 'sess_real',
+                visibleCheckpoints: [
+                    {
+                        id: 'ckpt_real',
+                        profileId: 'profile_default',
+                        sessionId: 'sess_real',
+                        threadId: 'thr_real',
+                        runId: 'run_real',
+                        workspaceFingerprint: 'wsf_real',
+                        executionTargetKey: 'workspace:c:/repo',
+                        executionTargetKind: 'workspace',
+                        executionTargetLabel: 'Workspace Root',
+                        createdByKind: 'system',
+                        checkpointKind: 'named',
+                        snapshotFileCount: 1,
+                        topLevelTab: 'agent',
+                        modeKey: 'code',
+                        summary: 'Checkpoint',
+                        createdAt: '2026-03-10T10:00:00.000Z',
+                        updatedAt: '2026-03-10T10:00:00.000Z',
+                        retentionDisposition: 'milestone',
+                        milestoneTitle: 'Checkpoint',
+                    },
+                ],
+                checkpointStorage: undefined,
+                disabled: false,
+                cleanupPreviewOpen: true,
+                forceCompactPending: false,
+                applyCleanupPending: false,
+                rollbackPending: false,
+                revertChangesetPending: false,
+                promoteMilestonePending: false,
+                renameMilestonePending: false,
+                deleteMilestonePending: false,
+                confirmRollbackId: 'ckpt_real',
+                rollbackTargetId: undefined,
+                milestoneDrafts: {},
+                onToggleCheckpointActions: vi.fn(),
+                onCloseCheckpointActions: vi.fn(),
+                onMilestoneDraftChange: vi.fn(),
+                onRestoreCheckpoint: vi.fn(),
+                onRevertChangeset: vi.fn(),
+                onPromoteMilestone: vi.fn(),
+                onRenameMilestone: vi.fn(),
+                onDeleteMilestone: vi.fn(),
+                onToggleCleanupPreview: vi.fn(),
+                onApplyCleanup: vi.fn(),
+                onForceCompact: vi.fn(),
+            })
+        );
+
+        expect(previewRollbackUseQueryMock).toHaveBeenCalledWith(
+            {
+                profileId: 'profile_default',
+                checkpointId: 'ckpt_real',
+            },
+            expect.any(Object)
+        );
+        expect(previewCleanupUseQueryMock).toHaveBeenCalledWith(
+            {
+                profileId: 'profile_default',
+                sessionId: 'sess_real',
+            },
+            expect.any(Object)
+        );
     });
 });

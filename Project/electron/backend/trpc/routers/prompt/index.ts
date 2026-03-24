@@ -33,6 +33,7 @@ import {
     updateCustomMode,
 } from '@/app/backend/runtime/services/promptLayers/service';
 import { publicProcedure, router } from '@/app/backend/trpc/init';
+import { raiseMappedTrpcError, toTrpcError } from '@/app/backend/trpc/trpcErrorMap';
 
 export const promptRouter = router({
     getSettings: publicProcedure.input(promptLayerGetSettingsInputSchema).query(async ({ input }) => {
@@ -86,40 +87,64 @@ export const promptRouter = router({
         .input(promptLayerSetBuiltInModePromptInputSchema)
         .mutation(async ({ input }) => {
             return {
-                settings: await setBuiltInModePrompt(input),
+                settings: (await setBuiltInModePrompt(input)).match(
+                    (value) => value,
+                    (error) => raiseMappedTrpcError(error, toTrpcError)
+                ),
             };
         }),
     resetBuiltInModePrompt: publicProcedure
         .input(promptLayerResetBuiltInModePromptInputSchema)
         .mutation(async ({ input }) => {
             return {
-                settings: await resetBuiltInModePrompt(input),
+                settings: (await resetBuiltInModePrompt(input)).match(
+                    (value) => value,
+                    (error) => raiseMappedTrpcError(error, toTrpcError)
+                ),
             };
         }),
     getCustomMode: publicProcedure.input(promptLayerGetCustomModeInputSchema).query(async ({ input }) => {
-        return getCustomMode(input);
+        return (await getCustomMode(input)).match(
+            (value) => value,
+            (error) => raiseMappedTrpcError(error, toTrpcError)
+        );
     }),
     createCustomMode: publicProcedure.input(promptLayerCreateCustomModeInputSchema).mutation(async ({ input }) => {
         return {
-            settings: await createCustomMode(input),
+            settings: (await createCustomMode(input)).match(
+                (value) => value,
+                (error) => raiseMappedTrpcError(error, toTrpcError)
+            ),
         };
     }),
     updateCustomMode: publicProcedure.input(promptLayerUpdateCustomModeInputSchema).mutation(async ({ input }) => {
         return {
-            settings: await updateCustomMode(input),
+            settings: (await updateCustomMode(input)).match(
+                (value) => value,
+                (error) => raiseMappedTrpcError(error, toTrpcError)
+            ),
         };
     }),
     deleteCustomMode: publicProcedure.input(promptLayerDeleteCustomModeInputSchema).mutation(async ({ input }) => {
         return {
-            settings: await deleteCustomMode(input),
+            settings: (await deleteCustomMode(input)).match(
+                (value) => value,
+                (error) => raiseMappedTrpcError(error, toTrpcError)
+            ),
         };
     }),
     exportCustomMode: publicProcedure.input(promptLayerExportCustomModeInputSchema).mutation(async ({ input }) => {
-        return exportCustomMode(input);
+        return (await exportCustomMode(input)).match(
+            (value) => value,
+            (error) => raiseMappedTrpcError(error, toTrpcError)
+        );
     }),
     importCustomMode: publicProcedure.input(promptLayerImportCustomModeInputSchema).mutation(async ({ input }) => {
         return {
-            settings: await importCustomMode(input),
+            settings: (await importCustomMode(input)).match(
+                (value) => value,
+                (error) => raiseMappedTrpcError(error, toTrpcError)
+            ),
         };
     }),
 });

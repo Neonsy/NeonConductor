@@ -5,6 +5,7 @@ import {
     FlowUserMessageActionBar,
 } from '@/web/components/conversation/messages/flow/messageFlowActionBar';
 import { MessageFlowBody } from '@/web/components/conversation/messages/flow/messageFlowBody';
+import { readRelatedTargetNode } from '@/web/lib/dom/readRelatedTargetNode';
 
 import type { MessageFlowMessage } from '@/web/components/conversation/messages/messageFlowModel';
 import type { FocusEvent } from 'react';
@@ -32,7 +33,7 @@ export function FlowMessageView({
     const isAssistantMessage = message.role === 'assistant';
 
     function handleUserMessageBlur(event: FocusEvent<HTMLElement>) {
-        if (event.currentTarget.contains(event.relatedTarget as Node | null)) {
+        if (event.currentTarget.contains(readRelatedTargetNode(event.relatedTarget))) {
             return;
         }
 

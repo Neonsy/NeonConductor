@@ -138,6 +138,21 @@ function WorkspaceLifecycleDialogBody({
             ? defaultModelId
             : modelOptions[0]?.id ?? '';
 
+    async function handleBrowseDirectory() {
+        const nextPath = await onBrowseDirectory();
+        if (!nextPath) {
+            return;
+        }
+
+        setAbsolutePath(nextPath);
+        if (label.trim().length === 0) {
+            const nextLabel = nextPath.split(/[\\/]/).filter(Boolean).at(-1);
+            if (nextLabel) {
+                setLabel(nextLabel);
+            }
+        }
+    }
+
     return (
         <div className='border-border bg-background w-[min(92vw,34rem)] rounded-[28px] border p-5 shadow-xl'>
             <div className='space-y-1'>
@@ -182,19 +197,7 @@ function WorkspaceLifecycleDialogBody({
                             className='border-border bg-card hover:bg-accent rounded-2xl border px-4 py-2 text-sm font-medium'
                             disabled={isPickingDirectory}
                             onClick={() => {
-                                void onBrowseDirectory().then((nextPath) => {
-                                    if (!nextPath) {
-                                        return;
-                                    }
-
-                                    setAbsolutePath(nextPath);
-                                    if (label.trim().length === 0) {
-                                        const nextLabel = nextPath.split(/[\\/]/).filter(Boolean).at(-1);
-                                        if (nextLabel) {
-                                            setLabel(nextLabel);
-                                        }
-                                    }
-                                });
+                                handleBrowseDirectory();
                             }}>
                             {isPickingDirectory ? 'Opening…' : 'Browse…'}
                         </button>

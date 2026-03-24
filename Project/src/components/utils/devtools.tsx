@@ -1,4 +1,3 @@
-import { AiDevtoolsPanel } from '@tanstack/react-ai-devtools';
 import { TanStackDevtools } from '@tanstack/react-devtools';
 import { FormDevtoolsPanel } from '@tanstack/react-form-devtools';
 import { ReactQueryDevtoolsPanel } from '@tanstack/react-query-devtools';
@@ -21,12 +20,6 @@ export default function DevTools({ router }: DevToolsProps) {
                 {
                     name: 'TanStack Query',
                     render: <ReactQueryDevtoolsPanel />,
-                },
-                {
-                    defaultOpen: true,
-                    id: 'tanstack-ai',
-                    name: 'TanStack AI',
-                    render: <AiDevtoolsPanel />,
                 },
                 {
                     name: 'TanStack Form',

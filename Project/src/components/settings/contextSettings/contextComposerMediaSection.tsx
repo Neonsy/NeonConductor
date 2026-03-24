@@ -31,7 +31,7 @@ export function ContextComposerMediaSection({
                 setDraft((current) => updater(current));
                 onClearFeedback();
             }}
-            onSave={() => {
+            onSave={async () => {
                 const maxImageAttachmentsPerMessage = Number(draft.maxImageAttachmentsPerMessage);
                 if (
                     !Number.isInteger(maxImageAttachmentsPerMessage) ||
@@ -50,7 +50,7 @@ export function ContextComposerMediaSection({
                     return;
                 }
 
-                void onSave(draft);
+                await onSave(draft);
             }}
         />
     );

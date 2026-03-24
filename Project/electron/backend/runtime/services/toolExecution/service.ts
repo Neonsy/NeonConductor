@@ -283,18 +283,17 @@ export class ToolExecutionService {
         const execution =
             definition.source === 'mcp'
                 ? await (async () => {
-                      try {
-                          const output = await mcpService.invokeTool({
-                              toolId: definition.tool.id,
-                              args: executionArgs,
-                          });
-                          return ok(output);
-                      } catch (error) {
+                      const output = await mcpService.invokeTool({
+                          toolId: definition.tool.id,
+                          args: executionArgs,
+                      });
+                      if (output.isErr()) {
                           return err({
                               code: 'execution_failed' as const,
-                              message: error instanceof Error ? error.message : 'MCP tool execution failed.',
+                              message: output.error.message,
                           });
                       }
+                      return ok(output.value);
                   })()
                 : await invokeToolHandler(definition.tool, executionArgs, {
                       ...(workspaceRootPath ? { cwd: workspaceRootPath } : {}),

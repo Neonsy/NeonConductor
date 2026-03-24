@@ -8,6 +8,7 @@ import { mcpStore, workspaceRootStore } from '@/app/backend/persistence/stores';
 import type { McpServerRecord } from '@/app/backend/persistence/types';
 import type { ProviderRuntimeToolDefinition } from '@/app/backend/providers/types';
 import type { McpDiscoveredToolRecord } from '@/app/backend/runtime/contracts';
+import { errOp, okOp, type OperationalResult } from '@/app/backend/runtime/services/common/operationalError';
 
 interface LiveMcpConnection {
     client: Client;
@@ -116,29 +117,31 @@ class McpService {
         profileId: string;
         server: McpServerRecord;
         workspaceFingerprint?: string;
-    }): Promise<string | undefined> {
+    }): Promise<OperationalResult<string | undefined>> {
         if (input.server.workingDirectoryMode === 'inherit_process') {
-            return undefined;
+            return okOp(undefined);
         }
 
         if (input.server.workingDirectoryMode === 'fixed_path') {
-            return input.server.fixedWorkingDirectory;
+            return okOp(input.server.fixedWorkingDirectory);
         }
 
         if (!input.workspaceFingerprint) {
-            throw new Error(
+            return errOp(
+                'invalid_input',
                 `MCP server "${input.server.label}" requires a selected workspace root to connect.`
             );
         }
 
         const workspaceRoot = await workspaceRootStore.getByFingerprint(input.profileId, input.workspaceFingerprint);
         if (!workspaceRoot) {
-            throw new Error(
+            return errOp(
+                'not_found',
                 `Workspace root "${input.workspaceFingerprint}" could not be resolved for MCP server "${input.server.label}".`
             );
         }
 
-        return workspaceRoot.absolutePath;
+        return okOp(workspaceRoot.absolutePath);
     }
 
     async listRuntimeTools(): Promise<McpResolvedToolDefinition[]> {
@@ -207,11 +210,19 @@ class McpService {
                 server: serverConfig.server,
                 ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
             });
+            if (cwd.isErr()) {
+                return mcpStore.setLifecycleState({
+                    serverId: input.serverId,
+                    connectionState: 'error',
+                    toolDiscoveryState: 'error',
+                    lastError: cwd.error.message,
+                });
+            }
             transport = new StdioClientTransport({
                 command: serverConfig.server.command,
                 args: serverConfig.server.args,
                 ...(Object.keys(serverConfig.env).length > 0 ? { env: serverConfig.env } : {}),
-                ...(cwd ? { cwd } : {}),
+                ...(cwd.value ? { cwd: cwd.value } : {}),
             });
             await client.connect(transport);
             const listed = await client.listTools();
@@ -251,32 +262,42 @@ class McpService {
         });
     }
 
-    async invokeTool(input: { toolId: string; args: Record<string, unknown> }): Promise<Record<string, unknown>> {
+    async invokeTool(input: {
+        toolId: string;
+        args: Record<string, unknown>;
+    }): Promise<OperationalResult<Record<string, unknown>>> {
         await this.ensureStartupStateNormalized();
         const decoded = decodeMcpRuntimeToolId(input.toolId);
         if (!decoded) {
-            throw new Error(`Tool "${input.toolId}" is not a valid MCP tool identifier.`);
+            return errOp('invalid_input', `Tool "${input.toolId}" is not a valid MCP tool identifier.`);
         }
 
         const liveConnection = this.liveConnections.get(decoded.serverId);
         if (!liveConnection) {
-            throw new Error(`MCP server "${decoded.serverId}" is not connected.`);
+            return errOp('request_failed', `MCP server "${decoded.serverId}" is not connected.`);
         }
 
-        const result = await liveConnection.client.callTool(
-            {
-                name: decoded.toolName,
-                arguments: input.args,
-            },
-            CallToolResultSchema
-        );
+        try {
+            const result = await liveConnection.client.callTool(
+                {
+                    name: decoded.toolName,
+                    arguments: input.args,
+                },
+                CallToolResultSchema
+            );
 
-        return {
-            content: result.content ?? [],
-            ...(result.structuredContent !== undefined ? { structuredContent: result.structuredContent } : {}),
-            ...(result.isError !== undefined ? { isError: result.isError } : {}),
-            ...(result._meta !== undefined ? { meta: result._meta } : {}),
-        };
+            return okOp({
+                content: result.content ?? [],
+                ...(result.structuredContent !== undefined ? { structuredContent: result.structuredContent } : {}),
+                ...(result.isError !== undefined ? { isError: result.isError } : {}),
+                ...(result._meta !== undefined ? { meta: result._meta } : {}),
+            });
+        } catch (error) {
+            return errOp(
+                'request_failed',
+                error instanceof Error ? error.message : 'MCP tool execution failed.'
+            );
+        }
     }
 }
 

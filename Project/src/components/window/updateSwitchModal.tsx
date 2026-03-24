@@ -20,6 +20,18 @@ export default function UpdateSwitchModal() {
     const descriptionId = useId();
     const primaryActionRef = useRef<HTMLButtonElement>(null);
 
+    async function handleDismiss() {
+        try {
+            await dismissMutation.mutateAsync();
+        } catch {}
+    }
+
+    async function handleRestart() {
+        try {
+            await restartMutation.mutateAsync();
+        } catch {}
+    }
+
     if (!status || !isActiveUpdatePhase(status.phase)) {
         return null;
     }
@@ -40,7 +52,7 @@ export default function UpdateSwitchModal() {
                 }
 
                 if (isDownloaded) {
-                    void dismissMutation.mutateAsync();
+                    void handleDismiss();
                 }
             }}>
             <section className='border-border bg-card text-card-foreground w-full max-w-md rounded-xl border p-5 shadow-xl'>
@@ -72,7 +84,7 @@ export default function UpdateSwitchModal() {
                             variant='outline'
                             disabled={dismissMutation.isPending || restartMutation.isPending}
                             onClick={() => {
-                                void dismissMutation.mutateAsync();
+                                void handleDismiss();
                             }}>
                             Later
                         </Button>
@@ -81,7 +93,7 @@ export default function UpdateSwitchModal() {
                             type='button'
                             disabled={dismissMutation.isPending || restartMutation.isPending}
                             onClick={() => {
-                                void restartMutation.mutateAsync();
+                                void handleRestart();
                             }}>
                             {restartMutation.isPending ? 'Restarting...' : 'Restart now'}
                         </Button>

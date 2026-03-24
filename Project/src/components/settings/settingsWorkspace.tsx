@@ -11,12 +11,6 @@ import { RegistrySettingsView } from '@/web/components/settings/registrySettings
 import {
     getDefaultSettingsSelection,
     SETTINGS_PRIMARY_SECTIONS,
-    type AppSettingsSubsectionId,
-    type ContextSettingsSubsectionId,
-    type KiloSettingsSubsectionId,
-    type ModesSettingsSubsectionId,
-    type ProfileSettingsSubsectionId,
-    type RegistrySettingsSubsectionId,
     type SettingsPrimarySectionId,
     type SettingsSelection,
 } from '@/web/components/settings/settingsNavigation';
@@ -81,6 +75,86 @@ export function SettingsWorkspace({
         });
     }
 
+    function renderSelectedSection() {
+        switch (selection.section) {
+            case 'kilo':
+                return (
+                    <KiloSettingsView
+                        key={profileId}
+                        profileId={profileId}
+                        subsection={selection.subsection}
+                        onSubsectionChange={(subsection) => {
+                            onSelectionChange({ section: 'kilo', subsection });
+                        }}
+                    />
+                );
+            case 'modes':
+                return (
+                    <ModesSettingsView
+                        profileId={profileId}
+                        subsection={selection.subsection}
+                        {...(currentWorkspaceFingerprint ? { workspaceFingerprint: currentWorkspaceFingerprint } : {})}
+                        {...(selectedWorkspaceLabel ? { selectedWorkspaceLabel } : {})}
+                        onSubsectionChange={(subsection) => {
+                            onSelectionChange({ section: 'modes', subsection });
+                        }}
+                    />
+                );
+            case 'providers':
+                return (
+                    <ProviderSettingsView
+                        profileId={profileId}
+                        selectedProviderId={selection.subsection}
+                        onProviderChange={(providerId) => {
+                            onSelectionChange({ section: 'providers', subsection: providerId });
+                        }}
+                    />
+                );
+            case 'profiles':
+                return (
+                    <ProfileSettingsView
+                        activeProfileId={profileId}
+                        onProfileActivated={onProfileActivated}
+                        subsection={selection.subsection}
+                        onSubsectionChange={(subsection) => {
+                            onSelectionChange({ section: 'profiles', subsection });
+                        }}
+                    />
+                );
+            case 'context':
+                return (
+                    <ContextSettingsView
+                        activeProfileId={profileId}
+                        subsection={selection.subsection}
+                        onSubsectionChange={(subsection) => {
+                            onSelectionChange({ section: 'context', subsection });
+                        }}
+                    />
+                );
+            case 'registry':
+                return (
+                    <RegistrySettingsView
+                        profileId={profileId}
+                        subsection={selection.subsection}
+                        onSubsectionChange={(subsection) => {
+                            onSelectionChange({ section: 'registry', subsection });
+                        }}
+                    />
+                );
+            case 'app':
+                return (
+                    <AppSettingsView
+                        profileId={profileId}
+                        subsection={selection.subsection}
+                        {...(currentWorkspaceFingerprint ? { currentWorkspaceFingerprint } : {})}
+                        onSubsectionChange={(subsection) => {
+                            onSelectionChange({ section: 'app', subsection });
+                        }}
+                    />
+                );
+        }
+    }
+
     return (
         <section className='flex h-full min-h-0 min-w-0 flex-1 overflow-hidden'>
             <aside className='border-border/80 bg-background/70 flex min-h-0 w-[272px] shrink-0 flex-col gap-4 overflow-y-auto border-r p-4'>
@@ -137,73 +211,7 @@ export function SettingsWorkspace({
             </aside>
 
             <div className='bg-background/20 h-full min-h-0 min-w-0 flex-1 overflow-hidden'>
-                {selection.section === 'kilo' ? (
-                    <KiloSettingsView
-                        profileId={profileId}
-                        subsection={selection.subsection as KiloSettingsSubsectionId}
-                        onSubsectionChange={(subsection) => {
-                            onSelectionChange({ section: 'kilo', subsection });
-                        }}
-                    />
-                ) : null}
-                {selection.section === 'modes' ? (
-                    <ModesSettingsView
-                        profileId={profileId}
-                        subsection={selection.subsection as ModesSettingsSubsectionId}
-                        {...(currentWorkspaceFingerprint ? { workspaceFingerprint: currentWorkspaceFingerprint } : {})}
-                        {...(selectedWorkspaceLabel ? { selectedWorkspaceLabel } : {})}
-                        onSubsectionChange={(subsection) => {
-                            onSelectionChange({ section: 'modes', subsection });
-                        }}
-                    />
-                ) : null}
-                {selection.section === 'providers' ? (
-                    <ProviderSettingsView
-                        profileId={profileId}
-                        selectedProviderId={selection.subsection}
-                        onProviderChange={(providerId) => {
-                            onSelectionChange({ section: 'providers', subsection: providerId });
-                        }}
-                    />
-                ) : null}
-                {selection.section === 'profiles' ? (
-                    <ProfileSettingsView
-                        activeProfileId={profileId}
-                        onProfileActivated={onProfileActivated}
-                        subsection={selection.subsection as ProfileSettingsSubsectionId}
-                        onSubsectionChange={(subsection) => {
-                            onSelectionChange({ section: 'profiles', subsection });
-                        }}
-                    />
-                ) : null}
-                {selection.section === 'context' ? (
-                    <ContextSettingsView
-                        activeProfileId={profileId}
-                        subsection={selection.subsection as ContextSettingsSubsectionId}
-                        onSubsectionChange={(subsection) => {
-                            onSelectionChange({ section: 'context', subsection });
-                        }}
-                    />
-                ) : null}
-                {selection.section === 'registry' ? (
-                    <RegistrySettingsView
-                        profileId={profileId}
-                        subsection={selection.subsection as RegistrySettingsSubsectionId}
-                        onSubsectionChange={(subsection) => {
-                            onSelectionChange({ section: 'registry', subsection });
-                        }}
-                    />
-                ) : null}
-                {selection.section === 'app' ? (
-                    <AppSettingsView
-                        profileId={profileId}
-                        subsection={selection.subsection as AppSettingsSubsectionId}
-                        {...(currentWorkspaceFingerprint ? { currentWorkspaceFingerprint } : {})}
-                        onSubsectionChange={(subsection) => {
-                            onSelectionChange({ section: 'app', subsection });
-                        }}
-                    />
-                ) : null}
+                {renderSelectedSection()}
             </div>
         </section>
     );

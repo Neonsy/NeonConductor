@@ -1,7 +1,10 @@
 import { ImagePlus } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
-import { useComposerSlashCommands } from '@/web/components/conversation/hooks/useComposerSlashCommands';
+import {
+    useComposerSlashCommands,
+    type SlashAcceptResult,
+} from '@/web/components/conversation/hooks/useComposerSlashCommands';
 import type { ModelCompatibilityState, ModelPickerOption } from '@/web/components/modelSelection/modelCapabilities';
 import { ContextSummaryCard } from '@/web/components/conversation/panels/composerActionPanel/contextSummaryCard';
 import {
@@ -39,6 +42,44 @@ import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 export { shouldSubmitComposerOnEnter } from '@/web/components/conversation/panels/composerActionPanel/helpers';
 
 type PendingImageView = PendingImageCardView;
+
+function readComposerActionErrorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : 'Slash command action failed.';
+}
+
+export async function handleComposerSlashAcceptance(input: {
+    acceptHighlighted: () => Promise<SlashAcceptResult>;
+    draftPrompt: string;
+    submitWhenUnhandled: boolean;
+    onSubmitPrompt: (prompt: string) => void;
+    onSetDraftPrompt: (prompt: string) => void;
+    onFocusPrompt: () => void;
+    onError: (message: string | undefined) => void;
+}): Promise<void> {
+    input.onError(undefined);
+
+    try {
+        const slashResult = await input.acceptHighlighted();
+        if (!slashResult.handled) {
+            if (input.submitWhenUnhandled) {
+                input.onSubmitPrompt(input.draftPrompt);
+            }
+            return;
+        }
+
+        if (slashResult.clearDraft) {
+            input.onSetDraftPrompt('');
+            input.onFocusPrompt();
+            return;
+        }
+        if (slashResult.nextDraft !== undefined) {
+            input.onSetDraftPrompt(slashResult.nextDraft);
+            input.onFocusPrompt();
+        }
+    } catch (error) {
+        input.onError(readComposerActionErrorMessage(error));
+    }
+}
 
 interface ComposerActionPanelProps {
     profileId: string;
@@ -101,7 +142,93 @@ interface ComposerActionPanelProps {
     >;
 }
 
-export function ComposerActionPanel({
+function ComposerContextSummarySection(input: {
+    contextState: ResolvedContextState;
+    selectedProviderStatus?: {
+        label: string;
+        authState: string;
+        authMethod: string;
+    };
+    canCompactContext: boolean;
+    isCompactingContext: boolean;
+    onCompactContext?: () => Promise<
+        | void
+        | {
+              message: string;
+              tone: 'success' | 'error' | 'info';
+          }
+    >;
+}) {
+    const [contextFeedback, setContextFeedback] = useState<
+        | {
+              message: string;
+              tone: 'success' | 'error' | 'info';
+          }
+        | undefined
+    >(undefined);
+    const thresholdTokens = input.contextState.policy.thresholdTokens;
+    const totalTokens = input.contextState.estimate?.totalTokens;
+    const usableInputBudgetTokens = input.contextState.policy.usableInputBudgetTokens;
+    const hasUsageNumbers = totalTokens !== undefined && usableInputBudgetTokens !== undefined;
+    const remainingInputTokens =
+        hasUsageNumbers && usableInputBudgetTokens !== undefined && totalTokens !== undefined
+            ? Math.max(usableInputBudgetTokens - totalTokens, 0)
+            : undefined;
+    const usagePercent =
+        hasUsageNumbers && usableInputBudgetTokens !== undefined && totalTokens !== undefined
+            ? formatUsagePercent(totalTokens, usableInputBudgetTokens)
+            : undefined;
+    const countingModeLabel =
+        input.contextState.estimate?.mode === 'exact' || input.contextState.countingMode === 'exact'
+            ? 'Exact'
+            : 'Estimated';
+    function handleCompactContext() {
+        if (!input.onCompactContext) {
+            return;
+        }
+
+        setContextFeedback(undefined);
+        void input.onCompactContext()
+            .then((result) => {
+                if (!result) {
+                    return;
+                }
+
+                setContextFeedback(result);
+            })
+            .catch((error: unknown) => {
+                setContextFeedback({
+                    tone: 'error',
+                    message: error instanceof Error ? error.message : 'Context compaction failed.',
+                });
+            });
+    }
+
+    return (
+        <ContextSummaryCard
+            hasUsageNumbers={hasUsageNumbers}
+            totalTokens={totalTokens}
+            usableInputBudgetTokens={usableInputBudgetTokens}
+            remainingInputTokens={remainingInputTokens}
+            usagePercent={usagePercent}
+            countingModeLabel={countingModeLabel}
+            missingReason={input.contextState.policy.disabledReason}
+            countingMode={input.contextState.countingMode}
+            thresholdTokens={thresholdTokens}
+            limitsSource={input.contextState.policy.limits.source}
+            limitsOverrideReason={input.contextState.policy.limits.overrideReason}
+            compactionRecord={input.contextState.compaction}
+            contextFeedback={contextFeedback}
+            canCompactContext={input.canCompactContext}
+            isCompactingContext={input.isCompactingContext}
+            onCompactContext={input.onCompactContext ? handleCompactContext : undefined}
+            formatTokenCount={formatTokenCount}
+            formatCompactionTimestamp={formatCompactionTimestamp}
+        />
+    );
+}
+
+function ComposerActionPanelDraftBoundary({
     profileId,
     pendingImages,
     disabled,
@@ -137,7 +264,6 @@ export function ComposerActionPanel({
     missingAttachedSkillKeys = [],
     canCompactContext = false,
     isCompactingContext = false,
-    promptResetKey,
     focusComposerRequestKey,
     onProfileChange,
     onProviderChange,
@@ -161,30 +287,9 @@ export function ComposerActionPanel({
           }
         | undefined
     >(undefined);
-    const [contextFeedback, setContextFeedback] = useState<
-        | {
-              message: string;
-              tone: 'success' | 'error' | 'info';
-          }
-        | undefined
-    >(undefined);
+    const [slashCommandError, setSlashCommandError] = useState<string | undefined>(undefined);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const promptTextareaRef = useRef<HTMLTextAreaElement>(null);
-    const thresholdTokens = contextState?.policy.thresholdTokens;
-    const totalTokens = contextState?.estimate?.totalTokens;
-    const usableInputBudgetTokens = contextState?.policy.usableInputBudgetTokens;
-    const hasUsageNumbers = totalTokens !== undefined && usableInputBudgetTokens !== undefined;
-    const remainingInputTokens =
-        hasUsageNumbers && usableInputBudgetTokens !== undefined && totalTokens !== undefined
-            ? Math.max(usableInputBudgetTokens - totalTokens, 0)
-            : undefined;
-    const usagePercent =
-        hasUsageNumbers && usableInputBudgetTokens !== undefined && totalTokens !== undefined
-            ? formatUsagePercent(totalTokens, usableInputBudgetTokens)
-            : undefined;
-    const countingModeLabel =
-        contextState?.estimate?.mode === 'exact' || contextState?.countingMode === 'exact' ? 'Exact' : 'Estimated';
-    const compactionRecord = contextState?.compaction;
     const hasBlockingPendingImages = pendingImages.some((image) => image.status !== 'ready');
     const hasSubmittableContent = draftPrompt.trim().length > 0 || pendingImages.some((image) => image.status === 'ready');
     const hasUnsupportedPendingImages = pendingImages.length > 0 && !canAttachImages;
@@ -214,6 +319,12 @@ export function ComposerActionPanel({
     const compactConnectionLabel = selectedProviderStatus
         ? `${selectedProviderStatus.label} · ${selectedProviderStatus.authState.replace('_', ' ')}`
         : undefined;
+    const contextFeedbackResetKey = [
+        selectedProviderId ?? '',
+        selectedModelId ?? '',
+        topLevelTab,
+        activeModeKey,
+    ].join('|');
     const slashCommands = useComposerSlashCommands({
         draftPrompt,
         profileId,
@@ -241,6 +352,7 @@ export function ComposerActionPanel({
     const composerFooterMessage = composerSubmitDisabled
         ? 'Create or select a thread before you start the run.'
         : attachmentStatusMessage;
+    const composerErrorMessage = slashCommandError ?? runErrorMessage;
 
     useEffect(() => {
         if (focusComposerRequestKey === undefined) {
@@ -250,42 +362,22 @@ export function ComposerActionPanel({
         promptTextareaRef.current?.focus();
     }, [focusComposerRequestKey]);
 
-    useEffect(() => {
-        if (promptResetKey === undefined) {
-            return;
-        }
-
-        setDraftPrompt('');
-    }, [promptResetKey]);
-
-    useEffect(() => {
-        setContextFeedback(undefined);
-    }, [selectedProviderId, selectedModelId, topLevelTab, activeModeKey]);
-
-    function handleCompactContext() {
-        if (!onCompactContext) {
-            return;
-        }
-
-        setContextFeedback(undefined);
-        void onCompactContext()
-            .then((result) => {
-                if (!result) {
-                    return;
-                }
-
-                setContextFeedback(result);
-            })
-            .catch((error: unknown) => {
-                setContextFeedback({
-                    tone: 'error',
-                    message: error instanceof Error ? error.message : 'Context compaction failed.',
-                });
-            });
-    }
-
     function openFilePicker() {
         fileInputRef.current?.click();
+    }
+
+    async function handleSlashCommandAccept(submitWhenUnhandled: boolean) {
+        await handleComposerSlashAcceptance({
+            acceptHighlighted: slashCommands.acceptHighlighted,
+            draftPrompt,
+            submitWhenUnhandled,
+            onSubmitPrompt,
+            onSetDraftPrompt: setDraftPrompt,
+            onFocusPrompt: () => {
+                promptTextareaRef.current?.focus();
+            },
+            onError: setSlashCommandError,
+        });
     }
 
     return (
@@ -323,22 +415,7 @@ export function ComposerActionPanel({
                 }}
                 onSubmit={(event) => {
                     event.preventDefault();
-                    void slashCommands.acceptHighlighted().then((slashResult) => {
-                        if (!slashResult.handled) {
-                            onSubmitPrompt(draftPrompt);
-                            return;
-                        }
-
-                        if (slashResult.clearDraft) {
-                            setDraftPrompt('');
-                            promptTextareaRef.current?.focus();
-                            return;
-                        }
-                        if (slashResult.nextDraft !== undefined) {
-                            setDraftPrompt(slashResult.nextDraft);
-                            promptTextareaRef.current?.focus();
-                        }
-                    });
+                    handleSlashCommandAccept(true);
                 }}>
                 <input
                     ref={fileInputRef}
@@ -353,31 +430,19 @@ export function ComposerActionPanel({
                         }
                     }}
                 />
-                {runErrorMessage ? (
+                {composerErrorMessage ? (
                     <p aria-live='polite' className='text-destructive text-xs'>
-                        {runErrorMessage}
+                        {composerErrorMessage}
                     </p>
                 ) : null}
                 {contextState ? (
-                    <ContextSummaryCard
-                        hasUsageNumbers={hasUsageNumbers}
-                        totalTokens={totalTokens}
-                        usableInputBudgetTokens={usableInputBudgetTokens}
-                        remainingInputTokens={remainingInputTokens}
-                        usagePercent={usagePercent}
-                        countingModeLabel={countingModeLabel}
-                        missingReason={contextState.policy.disabledReason}
-                        countingMode={contextState.countingMode}
-                        thresholdTokens={thresholdTokens}
-                        limitsSource={contextState.policy.limits.source}
-                        limitsOverrideReason={contextState.policy.limits.overrideReason}
-                        compactionRecord={compactionRecord}
-                        contextFeedback={contextFeedback}
+                    <ComposerContextSummarySection
+                        key={contextFeedbackResetKey}
+                        contextState={contextState}
                         canCompactContext={canCompactContext}
                         isCompactingContext={isCompactingContext}
-                        onCompactContext={onCompactContext ? handleCompactContext : undefined}
-                        formatTokenCount={formatTokenCount}
-                        formatCompactionTimestamp={formatCompactionTimestamp}
+                        {...(selectedProviderStatus ? { selectedProviderStatus } : {})}
+                        {...(onCompactContext ? { onCompactContext } : {})}
                     />
                 ) : null}
                 <div
@@ -422,6 +487,9 @@ export function ComposerActionPanel({
                             if (runErrorMessage) {
                                 onPromptEdited();
                             }
+                            if (slashCommandError) {
+                                setSlashCommandError(undefined);
+                            }
                             setDraftPrompt(event.target.value);
                         }}
                         onPaste={(event) => {
@@ -460,21 +528,7 @@ export function ComposerActionPanel({
 
                             if (shouldInterceptSlashSubmit({ popupState: slashCommands.popupState })) {
                                 event.preventDefault();
-                                void slashCommands.acceptHighlighted().then((slashResult) => {
-                                    if (!slashResult.handled) {
-                                        return;
-                                    }
-
-                                    if (slashResult.clearDraft) {
-                                        setDraftPrompt('');
-                                        promptTextareaRef.current?.focus();
-                                        return;
-                                    }
-                                    if (slashResult.nextDraft !== undefined) {
-                                        setDraftPrompt(slashResult.nextDraft);
-                                        promptTextareaRef.current?.focus();
-                                    }
-                                });
+                                handleSlashCommandAccept(false);
                                 return;
                             }
 
@@ -652,4 +706,8 @@ export function ComposerActionPanel({
             />
         </>
     );
+}
+
+export function ComposerActionPanel(input: ComposerActionPanelProps) {
+    return <ComposerActionPanelDraftBoundary key={input.promptResetKey ?? 0} {...input} />;
 }

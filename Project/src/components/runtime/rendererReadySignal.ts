@@ -58,7 +58,6 @@ export async function ensureRendererReadySignal(): Promise<void> {
                 readySignalState: 'failed',
                 readySignalErrorMessage: error instanceof Error ? error.message : String(error),
             });
-            throw error;
         })
         .finally(() => {
             rendererReadySignalPromise = null;

@@ -2,6 +2,11 @@ import { ExternalLink } from 'lucide-react';
 
 import { Button } from '@/web/components/ui/button';
 
+export interface ProviderCredentialActionStatus {
+    tone: 'error' | 'success';
+    message: string;
+}
+
 interface ProviderCredentialSectionProps {
     selectedProviderId: string | undefined;
     isKilo: boolean;
@@ -10,6 +15,7 @@ interface ProviderCredentialSectionProps {
     isCredentialVisible: boolean;
     isSavingApiKey: boolean;
     apiKeyCta: { label: string; url: string } | undefined;
+    credentialActionStatus?: ProviderCredentialActionStatus;
     credentialSummary:
         | {
               hasStoredCredential: boolean;
@@ -19,9 +25,9 @@ interface ProviderCredentialSectionProps {
         | undefined;
     onApiKeyInputChange: (value: string) => void;
     onSaveApiKey: () => void;
-    onRevealStoredCredential: () => void;
+    onRevealStoredCredential: () => void | Promise<void>;
     onHideStoredCredential: () => void;
-    onCopyStoredCredential: () => void;
+    onCopyStoredCredential: () => void | Promise<void>;
 }
 
 function ApiKeyField({
@@ -30,6 +36,7 @@ function ApiKeyField({
     isCredentialVisible,
     isSavingApiKey,
     apiKeyCta,
+    credentialActionStatus,
     credentialSummary,
     onApiKeyInputChange,
     onSaveApiKey,
@@ -38,6 +45,9 @@ function ApiKeyField({
     onCopyStoredCredential,
     compactIntro,
 }: ProviderCredentialSectionProps & { compactIntro: string }) {
+    const credentialActionMessageClassName =
+        propsCredentialActionToneToClassName(credentialActionStatus?.tone ?? undefined);
+
     return (
         <div className='border-border/70 bg-background/75 space-y-3 rounded-2xl border p-4'>
             <div className='space-y-1'>
@@ -90,6 +100,10 @@ function ApiKeyField({
                 </div>
             ) : null}
 
+            {credentialActionStatus ? (
+                <p className={`text-xs ${credentialActionMessageClassName}`}>{credentialActionStatus.message}</p>
+            ) : null}
+
             {apiKeyCta ? (
                 <Button size='sm' variant='ghost' asChild>
                     <a href={apiKeyCta.url} target='_blank' rel='noreferrer'>
@@ -100,6 +114,10 @@ function ApiKeyField({
             ) : null}
         </div>
     );
+}
+
+function propsCredentialActionToneToClassName(tone: ProviderCredentialActionStatus['tone'] | undefined): string {
+    return tone === 'error' ? 'text-destructive' : 'text-muted-foreground';
 }
 
 export function ProviderCredentialSection(props: ProviderCredentialSectionProps) {

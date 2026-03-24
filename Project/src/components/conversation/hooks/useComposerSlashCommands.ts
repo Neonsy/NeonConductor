@@ -28,7 +28,7 @@ interface UseComposerSlashCommandsInput {
     missingAttachedSkillKeys: string[];
 }
 
-type SlashAcceptResult =
+export type SlashAcceptResult =
     | { handled: false }
     | { handled: true; nextDraft?: string; clearDraft?: boolean };
 

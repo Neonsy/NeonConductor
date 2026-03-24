@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { ProviderAuthFlowSection } from '@/web/components/settings/providerSettings/authentication/providerAuthFlowSection';
 import { ProviderConnectionDetailsSection } from '@/web/components/settings/providerSettings/authentication/providerConnectionDetailsSection';
 import { ProviderCredentialSection } from '@/web/components/settings/providerSettings/authentication/providerCredentialSection';
+import type { ProviderCredentialActionStatus } from '@/web/components/settings/providerSettings/authentication/providerCredentialSection';
 import type { ActiveAuthFlow, ProviderAuthStateView } from '@/web/components/settings/providerSettings/types';
 
 import type { OpenAIExecutionMode, RuntimeProviderId } from '@/shared/contracts';
@@ -58,6 +59,11 @@ interface ProviderAuthenticationDraftState {
     hasLoadedStoredCredential: boolean;
 }
 
+interface ProviderCredentialActionResult {
+    draftState?: ProviderAuthenticationDraftState;
+    status?: ProviderCredentialActionStatus;
+}
+
 function createProviderAuthenticationDraftState(baseUrlOverrideValue: string): ProviderAuthenticationDraftState {
     return {
         apiKeyInput: '',
@@ -65,6 +71,80 @@ function createProviderAuthenticationDraftState(baseUrlOverrideValue: string): P
         isCredentialVisible: false,
         hasLoadedStoredCredential: false,
     };
+}
+
+export async function resolveRevealStoredCredentialAction(input: {
+    draftState: ProviderAuthenticationDraftState;
+    hasStoredCredential: boolean;
+    onLoadStoredCredential: () => Promise<string | undefined>;
+}): Promise<ProviderCredentialActionResult> {
+    try {
+        if (input.draftState.apiKeyInput.trim().length === 0 && input.hasStoredCredential) {
+            const credentialValue = await input.onLoadStoredCredential();
+            if (!credentialValue) {
+                return {};
+            }
+
+            return {
+                draftState: {
+                    ...input.draftState,
+                    apiKeyInput: credentialValue,
+                    isCredentialVisible: true,
+                    hasLoadedStoredCredential: true,
+                },
+            };
+        }
+
+        return {
+            draftState: {
+                ...input.draftState,
+                isCredentialVisible: true,
+            },
+        };
+    } catch {
+        return {
+            status: {
+                tone: 'error',
+                message: 'Failed to reveal the stored credential.',
+            },
+        };
+    }
+}
+
+export async function resolveCopyStoredCredentialAction(input: {
+    draftState: ProviderAuthenticationDraftState;
+    onLoadStoredCredential: () => Promise<string | undefined>;
+    writeText: (value: string) => Promise<void>;
+}): Promise<ProviderCredentialActionResult> {
+    try {
+        const credentialValue =
+            input.draftState.apiKeyInput.trim().length > 0
+                ? input.draftState.apiKeyInput
+                : await input.onLoadStoredCredential();
+        if (!credentialValue) {
+            return {};
+        }
+
+        await input.writeText(credentialValue);
+
+        return {
+            draftState: {
+                ...input.draftState,
+                hasLoadedStoredCredential: true,
+            },
+            status: {
+                tone: 'success',
+                message: 'Credential copied.',
+            },
+        };
+    } catch {
+        return {
+            status: {
+                tone: 'error',
+                message: 'Failed to copy the stored credential.',
+            },
+        };
+    }
 }
 
 export function buildProviderAuthenticationDraftKey(input: {
@@ -87,6 +167,31 @@ export function shouldHydrateKiloStoredCredential(input: {
         !input.hasLoadedStoredCredential &&
         input.apiKeyInput.trim().length === 0
     );
+}
+
+export function applyHydratedKiloStoredCredential(input: {
+    draftState: ProviderAuthenticationDraftState;
+    selectedProviderId: RuntimeProviderId | undefined;
+    credentialSource: 'api_key' | 'access_token' | null | undefined;
+    credentialValue: string | undefined;
+}): ProviderAuthenticationDraftState {
+    if (
+        !input.credentialValue ||
+        !shouldHydrateKiloStoredCredential({
+            selectedProviderId: input.selectedProviderId,
+            credentialSource: input.credentialSource,
+            hasLoadedStoredCredential: input.draftState.hasLoadedStoredCredential,
+            apiKeyInput: input.draftState.apiKeyInput,
+        })
+    ) {
+        return input.draftState;
+    }
+
+    return {
+        ...input.draftState,
+        apiKeyInput: input.credentialValue,
+        hasLoadedStoredCredential: true,
+    };
 }
 
 function AuthStateBadge({ authState, authMethod }: { authState: string; authMethod: string }) {
@@ -155,6 +260,9 @@ function ProviderAuthenticationDraftBoundary({
     onOpenVerificationPage,
 }: ProviderAuthenticationSectionProps) {
     const [draftState, setDraftState] = useState(() => createProviderAuthenticationDraftState(baseUrlOverrideValue));
+    const [credentialActionStatus, setCredentialActionStatus] = useState<ProviderCredentialActionStatus | undefined>(
+        undefined
+    );
     const effectiveAuthState = selectedAuthState?.authState ?? selectedProviderAuthState;
     const effectiveAuthMethod = selectedAuthState?.authMethod ?? selectedProviderAuthMethod;
     const isKilo = selectedProviderId === 'kilo';
@@ -184,15 +292,18 @@ function ProviderAuthenticationDraftBoundary({
         let cancelled = false;
         void onLoadStoredCredential()
             .then((credentialValue) => {
-                if (!credentialValue || cancelled) {
+                if (cancelled) {
                     return;
                 }
 
-                setDraftState((current) => ({
-                    ...current,
-                    apiKeyInput: credentialValue,
-                    hasLoadedStoredCredential: true,
-                }));
+                setDraftState((current) =>
+                    applyHydratedKiloStoredCredential({
+                        draftState: current,
+                        selectedProviderId,
+                        credentialSource: credentialSummary?.credentialSource,
+                        credentialValue,
+                    })
+                );
             })
             .catch(() => undefined);
 
@@ -207,44 +318,30 @@ function ProviderAuthenticationDraftBoundary({
         selectedProviderId,
     ]);
 
-    const revealStoredCredential = () => {
-        void (async () => {
-            if (draftState.apiKeyInput.trim().length === 0 && credentialSummary?.hasStoredCredential) {
-                const credentialValue = await onLoadStoredCredential();
-                if (!credentialValue) {
-                    return;
-                }
+    const revealStoredCredential = async (): Promise<void> => {
+        const result = await resolveRevealStoredCredentialAction({
+            draftState,
+            hasStoredCredential: credentialSummary?.hasStoredCredential ?? false,
+            onLoadStoredCredential,
+        });
+        if (result.draftState) {
+            setDraftState(result.draftState);
+        }
 
-                setDraftState((current) => ({
-                    ...current,
-                    apiKeyInput: credentialValue,
-                    hasLoadedStoredCredential: true,
-                }));
-            }
-
-            setDraftState((current) => ({
-                ...current,
-                isCredentialVisible: true,
-            }));
-        })();
+        setCredentialActionStatus(result.status);
     };
 
-    const copyStoredCredential = () => {
-        void (async () => {
-            const credentialValue =
-                draftState.apiKeyInput.trim().length > 0
-                    ? draftState.apiKeyInput
-                    : await onLoadStoredCredential();
-            if (!credentialValue) {
-                return;
-            }
+    const copyStoredCredential = async (): Promise<void> => {
+        const result = await resolveCopyStoredCredentialAction({
+            draftState,
+            onLoadStoredCredential,
+            writeText: (value) => navigator.clipboard.writeText(value),
+        });
+        if (result.draftState) {
+            setDraftState(result.draftState);
+        }
 
-            await navigator.clipboard.writeText(credentialValue);
-            setDraftState((current) => ({
-                ...current,
-                hasLoadedStoredCredential: true,
-            }));
-        })();
+        setCredentialActionStatus(result.status);
     };
 
     const saveApiKey = () => {
@@ -310,11 +407,13 @@ function ProviderAuthenticationDraftBoundary({
                             isSavingApiKey={isSavingApiKey}
                             apiKeyCta={apiKeyCta}
                             credentialSummary={credentialSummary}
+                            {...(credentialActionStatus ? { credentialActionStatus } : {})}
                             onApiKeyInputChange={(apiKeyInput) => {
                                 setDraftState((current) => ({
                                     ...current,
                                     apiKeyInput,
                                 }));
+                                setCredentialActionStatus(undefined);
                             }}
                             onSaveApiKey={saveApiKey}
                             onRevealStoredCredential={revealStoredCredential}
@@ -323,6 +422,7 @@ function ProviderAuthenticationDraftBoundary({
                                     ...current,
                                     isCredentialVisible: false,
                                 }));
+                                setCredentialActionStatus(undefined);
                             }}
                             onCopyStoredCredential={copyStoredCredential}
                         />

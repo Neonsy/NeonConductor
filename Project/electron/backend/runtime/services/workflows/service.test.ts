@@ -52,38 +52,58 @@ describe('workflowService', () => {
             command: 'pnpm install',
             enabled: true,
         });
-        expect(created.id).toMatch(/^workflow_/);
+        expect(created.isOk()).toBe(true);
+        if (created.isErr()) {
+            throw new Error(created.error.message);
+        }
+        expect(created.value.id).toMatch(/^workflow_/);
 
         const listed = await workflowService.listProjectWorkflows({
             profileId,
             workspaceFingerprint: 'ws_workflows_crud',
         });
-        expect(listed.map((workflow) => workflow.label)).toEqual(['Install deps']);
+        expect(listed.isOk()).toBe(true);
+        if (listed.isErr()) {
+            throw new Error(listed.error.message);
+        }
+        expect(listed.value.map((workflow) => workflow.label)).toEqual(['Install deps']);
 
         const updated = await workflowService.updateProjectWorkflow({
             profileId,
             workspaceFingerprint: 'ws_workflows_crud',
-            workflowId: created.id,
+            workflowId: created.value.id,
             label: 'Bootstrap',
             command: 'pnpm install --frozen-lockfile',
             enabled: false,
         });
-        expect(updated?.label).toBe('Bootstrap');
-        expect(updated?.enabled).toBe(false);
+        expect(updated.isOk()).toBe(true);
+        if (updated.isErr()) {
+            throw new Error(updated.error.message);
+        }
+        expect(updated.value?.label).toBe('Bootstrap');
+        expect(updated.value?.enabled).toBe(false);
 
         const deleted = await workflowService.deleteProjectWorkflow({
             profileId,
             workspaceFingerprint: 'ws_workflows_crud',
-            workflowId: created.id,
+            workflowId: created.value.id,
             confirm: true,
         });
-        expect(deleted).toBe(true);
+        expect(deleted.isOk()).toBe(true);
+        if (deleted.isErr()) {
+            throw new Error(deleted.error.message);
+        }
+        expect(deleted.value).toBe(true);
 
         const afterDelete = await workflowService.listProjectWorkflows({
             profileId,
             workspaceFingerprint: 'ws_workflows_crud',
         });
-        expect(afterDelete).toEqual([]);
+        expect(afterDelete.isOk()).toBe(true);
+        if (afterDelete.isErr()) {
+            throw new Error(afterDelete.error.message);
+        }
+        expect(afterDelete.value).toEqual([]);
 
         rmSync(workspacePath, { recursive: true, force: true });
     });
@@ -101,6 +121,10 @@ describe('workflowService', () => {
             command: 'pnpm format',
             enabled: true,
         });
+        expect(validWorkflow.isOk()).toBe(true);
+        if (validWorkflow.isErr()) {
+            throw new Error(validWorkflow.error.message);
+        }
         writeFileSync(path.join(workflowsRoot, 'broken.json'), '{"label":42', 'utf8');
         writeFileSync(
             path.join(workflowsRoot, 'wrong-shape.json'),
@@ -116,8 +140,12 @@ describe('workflowService', () => {
             profileId,
             workspaceFingerprint: 'ws_workflows_invalid',
         });
-        expect(workflows).toHaveLength(1);
-        expect(workflows[0]?.id).toBe(validWorkflow.id);
+        expect(workflows.isOk()).toBe(true);
+        if (workflows.isErr()) {
+            throw new Error(workflows.error.message);
+        }
+        expect(workflows.value).toHaveLength(1);
+        expect(workflows.value[0]?.id).toBe(validWorkflow.value.id);
 
         rmSync(workspacePath, { recursive: true, force: true });
     });
@@ -146,7 +174,11 @@ describe('workflowService', () => {
             profileId,
             workspaceFingerprint: 'ws_workflows_root_boundary',
         });
-        expect(workflows).toEqual([]);
+        expect(workflows.isOk()).toBe(true);
+        if (workflows.isErr()) {
+            throw new Error(workflows.error.message);
+        }
+        expect(workflows.value).toEqual([]);
 
         rmSync(workspacePath, { recursive: true, force: true });
         rmSync(unrelatedPath, { recursive: true, force: true });
