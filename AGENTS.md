@@ -87,8 +87,12 @@
 
 ### 9) Trust React Compiler First
 - React Compiler is enabled; write plain React first.
-- Add `useMemo`, `useCallback`, or `memo` only when compiler coverage is known to miss or profiling proves a real regression.
+- Prefer straightforward render code, clear state ownership, and small component boundaries before reaching for hook-level optimization.
+- Add `useMemo`, `useCallback`, or `memo` only when compiler coverage is known to miss, dependency identity is part of an external API contract, or profiling proves a real regression.
 - Do not add defensive memoization by default.
+- `useMemo` is not a substitute for fixing bad ownership or unnecessary rerenders higher in the tree.
+- `useCallback` is not a default style choice; only use it when a stable function identity is materially required.
+- If a component only feels “performant” after scattered memoization, the architecture is probably wrong and should be simplified first.
 
 ### 10) Prefer Aliases Except in Bundler-Sensitive Entry Files
 - Prefer `@/web`, `@/app`, and `@/shared` imports over deep relative paths in ordinary renderer, main-process, and shared modules.
@@ -96,24 +100,65 @@
 - Allowed exception cases include `*.worker.ts`, preload entrypoints, Vite/build config files, and local `new URL(..., import.meta.url)` entry references.
 - Keep these exceptions narrow; do not use them as a convenience escape hatch in ordinary source files.
 
-### 11) Review React Effects and Async Flows Strictly
-- Use `useEffect` only for external synchronization such as subscriptions, timers, DOM listeners, IPC/event bridges, persistence sync, or network/cache side effects.
-- Do not model user actions as state plus `useEffect`; run interaction-driven side effects in the event handler that caused them.
-- Do not mirror derivable state into component state through effects; derive it during render or reset through an explicit keyed boundary.
-- Prefer `useEffectEvent` when an effect needs the latest values without widening the effect dependency surface.
-- Prefer `startTransition` for non-urgent UI updates and `useDeferredValue` for deferred reads such as search filtering or heavy derived views.
-- React Compiler is the default optimization path; add `useMemo`, `useCallback`, or `memo` only for proven compiler gaps or profiling-backed regressions.
+### 11) Review React Hooks, Effects, and Async Flows Strictly
+- Treat hooks as architectural tools, not convenience macros.
+- Use fewer hooks when possible. If a value can be computed during render, compute it during render.
+
+#### `useState`
+- Use `useState` for truly local, user-editable, or interaction-driven state.
+- Do not put props into `useState` just to “keep them in sync” later.
+- Do not mirror derivable state into `useState`; derive it during render instead.
+- If local state must reset when an upstream identity changes, prefer an explicit keyed boundary over a reset effect.
 - Keep hot interaction state local.
-  Transient input text, drag state, hover state, inline drafts, and other high-frequency UI state must live at the lowest boundary that actually needs to coordinate it.
+  Transient input text, drag state, hover state, inline drafts, open row state, and other high-frequency UI state must live at the lowest boundary that actually needs to coordinate it.
   Do not lift hot state into large shells, workspace layouts, or top-level feature coordinators when only a leaf or small subtree needs it.
-- Prefer virtualization for genuinely large or unbounded collection surfaces.
-  Use TanStack Virtual by default for list-like views that can grow materially over time, such as long rails, large tables, or other continuously growing collections.
-  Do not add virtualization blindly to highly dynamic chat/transcript surfaces; first validate scroll anchoring, streaming behavior, and interaction semantics, then virtualize if the surface is still a real hotspot.
+- Use lazy `useState(() => initialValue)` initialization when the initial value is meaningfully expensive to compute or read.
+
+#### `useEffect`
+- Use `useEffect` only for external synchronization:
+  subscriptions, timers, DOM listeners, IPC/event bridges, persistence sync, imperative browser APIs, or network/cache side effects.
+- Do not model user actions as state plus `useEffect`; run interaction-driven side effects in the event handler that caused them.
+- Do not use `useEffect` to copy props into state, “refresh” local drafts from props, or repair ownership mistakes.
+- If an effect exists only to shuffle values between React states, the design is likely wrong.
+- Prefer `useEffectEvent` when an effect needs the latest values without widening the effect dependency surface.
+- Effect dependencies must reflect the real external synchronization contract.
+  Do not omit dependencies to suppress reruns.
+  Do not depend on broad objects when the effect really uses a smaller primitive subset.
+- Do not write `useEffect(async () => ...)`; keep the effect synchronous and call an inner async function when needed.
+- For independent async work started from an effect, start early, await late, and use `Promise.all` instead of avoidable waterfalls.
+
+#### `useLayoutEffect`
+- Do not use `useLayoutEffect` in ordinary app code.
+- Treat `useLayoutEffect` as disallowed unless a real pre-paint DOM measurement or mutation requirement exists and no safer alternative works.
+- If layout work is required, first try:
+  better CSS/layout structure,
+  `ResizeObserver`,
+  `requestAnimationFrame`,
+  or a regular `useEffect`.
+- Any `useLayoutEffect` that survives review should be rare, clearly justified, and treated as a smell by default.
+
+#### `useMemo`, `useCallback`, and `memo`
+- React Compiler is the default optimization path; add `useMemo`, `useCallback`, or `memo` only for proven compiler gaps or profiling-backed regressions.
+- Do not wrap simple filtering, mapping, or object construction in `useMemo` by default.
+- Do not use `useCallback` just to satisfy style preferences or speculative child rerender concerns.
+- Memoization is acceptable when:
+  the computation is genuinely expensive,
+  the memoized identity is required by an external dependency contract,
+  or profiling shows measurable benefit.
+
+#### `useRef`
+- Use `useRef` for imperative handles, mutable values that do not participate in rendering, and integration boundaries with external systems.
+- Do not use refs as a hidden state store to avoid proper data flow.
+- Do not read/write refs during render unless the pattern is intentionally render-safe and obvious.
+
+#### Transitions, deferred reads, and rendering boundaries
+- Prefer `startTransition` for non-urgent UI updates and `useDeferredValue` for deferred reads such as search filtering or heavy derived views.
 - Treat render-boundary shape as architecture, not micro-optimization.
   React Compiler does not fix state ownership mistakes: if a rapidly changing state value is owned high in the tree, broad rerenders are expected.
   Prefer smaller feature boundaries and local state over broad prop threading through large conversation or settings surfaces.
-- For independent async work, start early, await late, and use `Promise.all` instead of avoidable waterfalls.
-- Do not write `useEffect(async () => ...)`; keep the effect synchronous and call an inner async function when needed.
+- Prefer virtualization for genuinely large or unbounded collection surfaces.
+  Use TanStack Virtual by default for list-like views that can grow materially over time, such as long rails, large tables, or other continuously growing collections.
+  Do not add virtualization blindly to highly dynamic chat/transcript surfaces; first validate scroll anchoring, streaming behavior, and interaction semantics, then virtualize if the surface is still a real hotspot.
 
 ### 12) Preserve Electron Boundaries and Window Hardening
 - Renderer code must not import `electron` directly.

@@ -58,9 +58,25 @@ vi.mock('@/web/trpc/client', () => ({
     },
 }));
 
-import { BranchWorkflowDialog } from '@/web/components/conversation/panels/branchWorkflowDialog';
+import {
+    BranchWorkflowDialog,
+    createEmptyWorkflowDraftState,
+} from '@/web/components/conversation/panels/branchWorkflowDialog';
 
 describe('BranchWorkflowDialog', () => {
+    it('starts with an empty create-state draft', () => {
+        expect(createEmptyWorkflowDraftState()).toEqual({
+            formMode: 'create',
+            editingWorkflowId: undefined,
+            label: '',
+            command: '',
+            enabled: true,
+            isFormVisible: false,
+            statusMessage: undefined,
+            deleteCandidateId: undefined,
+        });
+    });
+
     it('renders branch actions and project workflows', () => {
         const html = renderToStaticMarkup(
             <BranchWorkflowDialog

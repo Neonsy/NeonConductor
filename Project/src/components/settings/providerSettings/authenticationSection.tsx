@@ -51,6 +51,44 @@ interface ProviderAuthenticationSectionProps {
     onOpenVerificationPage: () => void;
 }
 
+interface ProviderAuthenticationDraftState {
+    apiKeyInput: string;
+    baseUrlOverrideInput: string;
+    isCredentialVisible: boolean;
+    hasLoadedStoredCredential: boolean;
+}
+
+function createProviderAuthenticationDraftState(baseUrlOverrideValue: string): ProviderAuthenticationDraftState {
+    return {
+        apiKeyInput: '',
+        baseUrlOverrideInput: baseUrlOverrideValue,
+        isCredentialVisible: false,
+        hasLoadedStoredCredential: false,
+    };
+}
+
+export function buildProviderAuthenticationDraftKey(input: {
+    selectedProviderId: RuntimeProviderId | undefined;
+    connectionProfileValue: string;
+    baseUrlOverrideValue: string;
+}): string {
+    return `${input.selectedProviderId ?? 'none'}:${input.connectionProfileValue}:${input.baseUrlOverrideValue}`;
+}
+
+export function shouldHydrateKiloStoredCredential(input: {
+    selectedProviderId: RuntimeProviderId | undefined;
+    credentialSource: 'api_key' | 'access_token' | null | undefined;
+    hasLoadedStoredCredential: boolean;
+    apiKeyInput: string;
+}): boolean {
+    return (
+        input.selectedProviderId === 'kilo' &&
+        input.credentialSource === 'access_token' &&
+        !input.hasLoadedStoredCredential &&
+        input.apiKeyInput.trim().length === 0
+    );
+}
+
 function AuthStateBadge({ authState, authMethod }: { authState: string; authMethod: string }) {
     return (
         <div className='flex flex-wrap items-center gap-2 text-xs'>
@@ -63,6 +101,27 @@ function AuthStateBadge({ authState, authMethod }: { authState: string; authMeth
 }
 
 export function ProviderAuthenticationSection({
+    selectedProviderId,
+    connectionProfileValue,
+    baseUrlOverrideValue,
+    ...props
+}: ProviderAuthenticationSectionProps) {
+    return (
+        <ProviderAuthenticationDraftBoundary
+            key={buildProviderAuthenticationDraftKey({
+                selectedProviderId,
+                connectionProfileValue,
+                baseUrlOverrideValue,
+            })}
+            selectedProviderId={selectedProviderId}
+            connectionProfileValue={connectionProfileValue}
+            baseUrlOverrideValue={baseUrlOverrideValue}
+            {...props}
+        />
+    );
+}
+
+function ProviderAuthenticationDraftBoundary({
     selectedProviderId,
     selectedProviderAuthState,
     selectedProviderAuthMethod,
@@ -95,10 +154,7 @@ export function ProviderAuthenticationSection({
     onCancelFlow,
     onOpenVerificationPage,
 }: ProviderAuthenticationSectionProps) {
-    const [apiKeyInput, setApiKeyInput] = useState('');
-    const [baseUrlOverrideInput, setBaseUrlOverrideInput] = useState(baseUrlOverrideValue);
-    const [isCredentialVisible, setIsCredentialVisible] = useState(false);
-    const [hasLoadedStoredCredential, setHasLoadedStoredCredential] = useState(false);
+    const [draftState, setDraftState] = useState(() => createProviderAuthenticationDraftState(baseUrlOverrideValue));
     const effectiveAuthState = selectedAuthState?.authState ?? selectedProviderAuthState;
     const effectiveAuthMethod = selectedAuthState?.authMethod ?? selectedProviderAuthMethod;
     const isKilo = selectedProviderId === 'kilo';
@@ -114,18 +170,13 @@ export function ProviderAuthenticationSection({
               : 'Kilo account access is ready in this profile.';
 
     useEffect(() => {
-        setApiKeyInput('');
-        setBaseUrlOverrideInput(baseUrlOverrideValue);
-        setIsCredentialVisible(false);
-        setHasLoadedStoredCredential(false);
-    }, [baseUrlOverrideValue, connectionProfileValue, selectedProviderId]);
-
-    useEffect(() => {
         if (
-            selectedProviderId !== 'kilo' ||
-            hasLoadedStoredCredential ||
-            credentialSummary?.credentialSource !== 'access_token' ||
-            apiKeyInput.trim().length > 0
+            !shouldHydrateKiloStoredCredential({
+                selectedProviderId,
+                credentialSource: credentialSummary?.credentialSource,
+                hasLoadedStoredCredential: draftState.hasLoadedStoredCredential,
+                apiKeyInput: draftState.apiKeyInput,
+            })
         ) {
             return;
         }
@@ -137,57 +188,80 @@ export function ProviderAuthenticationSection({
                     return;
                 }
 
-                setApiKeyInput(credentialValue);
-                setHasLoadedStoredCredential(true);
+                setDraftState((current) => ({
+                    ...current,
+                    apiKeyInput: credentialValue,
+                    hasLoadedStoredCredential: true,
+                }));
             })
             .catch(() => undefined);
 
         return () => {
             cancelled = true;
         };
-    }, [apiKeyInput, credentialSummary?.credentialSource, hasLoadedStoredCredential, onLoadStoredCredential, selectedProviderId]);
+    }, [
+        draftState.apiKeyInput,
+        draftState.hasLoadedStoredCredential,
+        credentialSummary?.credentialSource,
+        onLoadStoredCredential,
+        selectedProviderId,
+    ]);
 
     const revealStoredCredential = () => {
         void (async () => {
-            if (apiKeyInput.trim().length === 0 && credentialSummary?.hasStoredCredential) {
+            if (draftState.apiKeyInput.trim().length === 0 && credentialSummary?.hasStoredCredential) {
                 const credentialValue = await onLoadStoredCredential();
                 if (!credentialValue) {
                     return;
                 }
 
-                setApiKeyInput(credentialValue);
-                setHasLoadedStoredCredential(true);
+                setDraftState((current) => ({
+                    ...current,
+                    apiKeyInput: credentialValue,
+                    hasLoadedStoredCredential: true,
+                }));
             }
 
-            setIsCredentialVisible(true);
+            setDraftState((current) => ({
+                ...current,
+                isCredentialVisible: true,
+            }));
         })();
     };
 
     const copyStoredCredential = () => {
         void (async () => {
             const credentialValue =
-                apiKeyInput.trim().length > 0 ? apiKeyInput : await onLoadStoredCredential();
+                draftState.apiKeyInput.trim().length > 0
+                    ? draftState.apiKeyInput
+                    : await onLoadStoredCredential();
             if (!credentialValue) {
                 return;
             }
 
             await navigator.clipboard.writeText(credentialValue);
-            setHasLoadedStoredCredential(true);
+            setDraftState((current) => ({
+                ...current,
+                hasLoadedStoredCredential: true,
+            }));
         })();
     };
 
     const saveApiKey = () => {
-        void onSaveApiKey(apiKeyInput)
+        void onSaveApiKey(draftState.apiKeyInput)
             .then(() => {
-                setApiKeyInput('');
-                setIsCredentialVisible(false);
-                setHasLoadedStoredCredential(false);
+                setDraftState((current) => ({
+                    ...current,
+                    apiKeyInput: '',
+                    isCredentialVisible: false,
+                    hasLoadedStoredCredential: false,
+                }));
             })
             .catch(() => undefined);
     };
 
     const saveBaseUrlOverride = () => {
-        void onSaveBaseUrlOverride(baseUrlOverrideInput).catch(() => undefined);
+        void onSaveBaseUrlOverride(draftState.baseUrlOverrideInput).catch(() => undefined);
     };
 
     return (
@@ -231,16 +305,24 @@ export function ProviderAuthenticationSection({
                             selectedProviderId={selectedProviderId}
                             isKilo={isKilo}
                             canUseApiKey={canUseApiKey}
-                            apiKeyInput={apiKeyInput}
-                            isCredentialVisible={isCredentialVisible}
+                            apiKeyInput={draftState.apiKeyInput}
+                            isCredentialVisible={draftState.isCredentialVisible}
                             isSavingApiKey={isSavingApiKey}
                             apiKeyCta={apiKeyCta}
                             credentialSummary={credentialSummary}
-                            onApiKeyInputChange={setApiKeyInput}
+                            onApiKeyInputChange={(apiKeyInput) => {
+                                setDraftState((current) => ({
+                                    ...current,
+                                    apiKeyInput,
+                                }));
+                            }}
                             onSaveApiKey={saveApiKey}
                             onRevealStoredCredential={revealStoredCredential}
                             onHideStoredCredential={() => {
-                                setIsCredentialVisible(false);
+                                setDraftState((current) => ({
+                                    ...current,
+                                    isCredentialVisible: false,
+                                }));
                             }}
                             onCopyStoredCredential={copyStoredCredential}
                         />
@@ -251,14 +333,19 @@ export function ProviderAuthenticationSection({
                         connectionProfileValue={connectionProfileValue}
                         connectionProfileOptions={connectionProfileOptions}
                         supportsCustomBaseUrl={supportsCustomBaseUrl}
-                        baseUrlOverrideValue={baseUrlOverrideInput}
+                        baseUrlOverrideValue={draftState.baseUrlOverrideInput}
                         resolvedBaseUrl={resolvedBaseUrl}
                         executionPreference={executionPreference}
                         isSavingConnectionProfile={isSavingConnectionProfile}
                         isSavingExecutionPreference={isSavingExecutionPreference}
                         onConnectionProfileChange={onConnectionProfileChange}
                         onExecutionPreferenceChange={onExecutionPreferenceChange}
-                        onBaseUrlOverrideChange={setBaseUrlOverrideInput}
+                        onBaseUrlOverrideChange={(baseUrlOverrideInput) => {
+                            setDraftState((current) => ({
+                                ...current,
+                                baseUrlOverrideInput,
+                            }));
+                        }}
                         onSaveBaseUrlOverride={saveBaseUrlOverride}
                     />
                 </div>

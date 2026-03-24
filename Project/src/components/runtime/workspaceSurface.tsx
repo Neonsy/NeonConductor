@@ -1,5 +1,5 @@
 import { Outlet, useNavigate, useRouter, useRouterState } from '@tanstack/react-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useEffectEvent, useState } from 'react';
 
 import {
     INITIAL_CONVERSATION_SHELL_BOOT_CHROME_READINESS,
@@ -71,6 +71,10 @@ export function WorkspaceSurface() {
     const showBootDiagnostics =
         bootDiagnostics.hasCriticalError ||
         (readySignal.readySignalState !== 'sent' && bootElapsedMs >= BOOT_FORCE_SHOW_MS);
+    const openCommandPaletteFromEffect = useEffectEvent(() => {
+        controller.setIsCommandPaletteOpen(true);
+    });
+
     function openCommandPalette() {
         controller.setIsCommandPaletteOpen(true);
     }
@@ -123,14 +127,14 @@ export function WorkspaceSurface() {
             }
 
             event.preventDefault();
-            openCommandPalette();
+            openCommandPaletteFromEffect();
         };
 
         window.addEventListener('keydown', handleKeyDown);
         return () => {
             window.removeEventListener('keydown', handleKeyDown);
         };
-    }, [openCommandPalette]);
+    }, [openCommandPaletteFromEffect]);
 
     return (
         <section className='flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden'>

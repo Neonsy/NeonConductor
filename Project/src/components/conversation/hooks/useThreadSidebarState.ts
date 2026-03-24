@@ -77,13 +77,12 @@ export function useThreadSidebarState(input: UseThreadSidebarStateInput): Thread
         threadTagIdsByThread,
         selectedTagIds: input.selectedTagIds,
     });
+    const selection = resolveVisibleThreadSelection({
+        visibleThreads,
+        selectedThreadId: input.selectedThreadId,
+    });
 
     useEffect(() => {
-        const selection = resolveVisibleThreadSelection({
-            visibleThreads,
-            selectedThreadId: input.selectedThreadId,
-        });
-
         if (selection.shouldClearSelection) {
             input.onSelectedThreadInvalid();
             return;
@@ -92,7 +91,13 @@ export function useThreadSidebarState(input: UseThreadSidebarStateInput): Thread
         if (selection.shouldSelectFallbackThread && selection.resolvedThreadId) {
             input.onSelectFallbackThread(selection.resolvedThreadId);
         }
-    }, [input.onSelectFallbackThread, input.onSelectedThreadInvalid, input.selectedThreadId, visibleThreads]);
+    }, [
+        input.onSelectFallbackThread,
+        input.onSelectedThreadInvalid,
+        selection.resolvedThreadId,
+        selection.shouldClearSelection,
+        selection.shouldSelectFallbackThread,
+    ]);
 
     return {
         threadTagIdsByThread,

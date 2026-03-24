@@ -291,7 +291,10 @@ function ProviderSettingsViewBody({
     selectedProviderId,
     onProviderChange,
 }: ProviderSettingsViewProps) {
-    const controller = useProviderSettingsController(profileId, { initialProviderId: selectedProviderId });
+    const controller = useProviderSettingsController(
+        profileId,
+        selectedProviderId ? { initialProviderId: selectedProviderId } : undefined
+    );
     const providerItems = sortProviderItems(controller.selection.providerItems);
     const selectedProvider = controller.selection.selectedProvider;
 
@@ -342,7 +345,7 @@ export function ProviderSettingsView({
             key={buildProviderSettingsControllerKey(profileId, selectedProviderId)}
             profileId={profileId}
             selectedProviderId={selectedProviderId}
-            onProviderChange={onProviderChange}
+            {...(onProviderChange ? { onProviderChange } : {})}
         />
     );
 }
