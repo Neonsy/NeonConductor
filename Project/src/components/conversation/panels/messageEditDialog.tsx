@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 interface MessageEditDialogProps {
     open: boolean;
@@ -8,6 +8,12 @@ interface MessageEditDialogProps {
     busy: boolean;
     onCancel: () => void;
     onSave: (input: { replacementText: string; editMode: 'truncate' | 'branch'; rememberChoice: boolean }) => void;
+}
+
+interface MessageEditDraftState {
+    replacementText: string;
+    editMode: 'truncate' | 'branch';
+    rememberChoice: boolean;
 }
 
 function resolveInitialMode(input: {
@@ -24,48 +30,44 @@ function resolveInitialMode(input: {
     return 'truncate';
 }
 
-export function MessageEditDialog({
-    open,
+export function createMessageEditDraftState(input: {
+    initialText: string;
+    preferredResolution: 'ask' | 'truncate' | 'branch';
+    forcedMode?: 'branch';
+}): MessageEditDraftState {
+    return {
+        replacementText: input.initialText,
+        editMode: resolveInitialMode({
+            preferredResolution: input.preferredResolution,
+            ...(input.forcedMode ? { forcedMode: input.forcedMode } : {}),
+        }),
+        rememberChoice: false,
+    };
+}
+
+function MessageEditDialogBody({
     initialText,
     preferredResolution,
     forcedMode,
     busy,
     onCancel,
     onSave,
-}: MessageEditDialogProps) {
-    const [replacementText, setReplacementText] = useState(initialText);
-    const [editMode, setEditMode] = useState<'truncate' | 'branch'>(
-        resolveInitialMode({
+}: Omit<MessageEditDialogProps, 'open'>) {
+    const [draftState, setDraftState] = useState(() =>
+        createMessageEditDraftState({
+            initialText,
             preferredResolution,
             ...(forcedMode ? { forcedMode } : {}),
         })
     );
-    const [rememberChoice, setRememberChoice] = useState(false);
 
-    useEffect(() => {
-        if (!open) {
-            return;
-        }
-        setReplacementText(initialText);
-        setRememberChoice(false);
-        setEditMode(
-            resolveInitialMode({
-                preferredResolution,
-                ...(forcedMode ? { forcedMode } : {}),
-            })
-        );
-    }, [open, initialText, preferredResolution, forcedMode]);
-
+    const { replacementText, editMode, rememberChoice } = draftState;
     const modeSelectionVisible = preferredResolution === 'ask' && !forcedMode;
     const rememberChoiceVisible = preferredResolution === 'ask' && !forcedMode;
     const modeHelpText =
         editMode === 'branch'
             ? 'Branch mode creates a new session and keeps current session untouched.'
             : 'Truncate mode removes this turn and all turns after it in the target session.';
-
-    if (!open) {
-        return null;
-    }
 
     return (
         <div className='bg-background/70 fixed inset-0 z-50 flex items-center justify-center px-4 backdrop-blur-sm'>
@@ -80,7 +82,10 @@ export function MessageEditDialog({
                         className='border-border bg-background w-full rounded-md border p-2 text-sm'
                         value={replacementText}
                         onChange={(event) => {
-                            setReplacementText(event.target.value);
+                            setDraftState((current) => ({
+                                ...current,
+                                replacementText: event.target.value,
+                            }));
                         }}
                     />
                     {modeSelectionVisible ? (
@@ -93,7 +98,10 @@ export function MessageEditDialog({
                                         : 'border-border bg-background'
                                 }`}
                                 onClick={() => {
-                                    setEditMode('truncate');
+                                    setDraftState((current) => ({
+                                        ...current,
+                                        editMode: 'truncate',
+                                    }));
                                 }}>
                                 Truncate
                             </button>
@@ -105,7 +113,10 @@ export function MessageEditDialog({
                                         : 'border-border bg-background'
                                 }`}
                                 onClick={() => {
-                                    setEditMode('branch');
+                                    setDraftState((current) => ({
+                                        ...current,
+                                        editMode: 'branch',
+                                    }));
                                 }}>
                                 Branch
                             </button>
@@ -118,7 +129,10 @@ export function MessageEditDialog({
                                 type='checkbox'
                                 checked={rememberChoice}
                                 onChange={(event) => {
-                                    setRememberChoice(event.target.checked);
+                                    setDraftState((current) => ({
+                                        ...current,
+                                        rememberChoice: event.target.checked,
+                                    }));
                                 }}
                             />
                             Don&apos;t ask again for this profile
@@ -150,5 +164,30 @@ export function MessageEditDialog({
                 </div>
             </section>
         </div>
+    );
+}
+
+export function MessageEditDialog({
+    open,
+    initialText,
+    preferredResolution,
+    forcedMode,
+    busy,
+    onCancel,
+    onSave,
+}: MessageEditDialogProps) {
+    if (!open) {
+        return null;
+    }
+
+    return (
+        <MessageEditDialogBody
+            initialText={initialText}
+            preferredResolution={preferredResolution}
+            {...(forcedMode ? { forcedMode } : {})}
+            busy={busy}
+            onCancel={onCancel}
+            onSave={onSave}
+        />
     );
 }

@@ -40,7 +40,6 @@
         "@modelcontextprotocol/sdk": "^1.27.1",
         "@radix-ui/react-slot": "^1.2.4",
         "@tanstack/ai": "^0.8.1",
-        "@tanstack/ai-react": "^0.7.2",
         "@tanstack/react-form": "^1.28.5",
         "@tanstack/react-query": "^5.95.0",
         "@tanstack/react-router": "^1.168.2",

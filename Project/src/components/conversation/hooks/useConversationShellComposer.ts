@@ -1,13 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
 
 import {
+    type PreparedComposerImageAttachment,
     createPendingImage,
-    MAX_COMPOSER_TOTAL_IMAGE_BYTES,
     prepareComposerImageAttachment,
     releasePendingImageResources,
-    summarizeReadyImageBytes,
     type ComposerPendingImage,
 } from '@/web/components/conversation/hooks/composerImageAttachments';
+import {
+    failComposerPendingImage,
+    pumpComposerPendingImages,
+    queueComposerPendingImageForRetry,
+    resolvePreparedComposerPendingImage,
+} from '@/web/components/conversation/hooks/conversationComposerPendingImageQueue';
 import type { OptimisticConversationUserMessage } from '@/web/components/conversation/messages/optimisticUserMessage';
 import { submitPrompt as submitPromptFromComposer } from '@/web/components/conversation/shell/actions/promptSubmit';
 
@@ -74,10 +79,6 @@ export function useConversationShellComposer<
     const promptRef = useRef('');
 
     useEffect(() => {
-        pendingImagesRef.current = pendingImages;
-    }, [pendingImages]);
-
-    useEffect(() => {
         return () => {
             for (const image of pendingImagesRef.current) {
                 releasePendingImageResources(image);
@@ -85,93 +86,71 @@ export function useConversationShellComposer<
         };
     }, []);
 
-    function clearPendingImages() {
-        setPendingImages((current) => {
-            for (const image of current) {
-                releasePendingImageResources(image);
-            }
+    function replacePendingImages(nextImages: ComposerPendingImage[]) {
+        pendingImagesRef.current = nextImages;
+        setPendingImages(nextImages);
+    }
 
-            return [];
-        });
+    function updatePendingImages(updater: (current: ComposerPendingImage[]) => ComposerPendingImage[]) {
+        const nextImages = updater(pendingImagesRef.current);
+        replacePendingImages(nextImages);
+        return nextImages;
+    }
+
+    function clearPendingImages() {
+        for (const image of pendingImagesRef.current) {
+            releasePendingImageResources(image);
+        }
+        replacePendingImages([]);
     }
 
     function failImageAttachment(message: string) {
         setRunSubmitError(message);
     }
 
-    function toFailedImageState(image: ComposerPendingImage, errorMessage: string): ComposerPendingImage {
-        return {
-            clientId: image.clientId,
-            fileName: image.fileName,
-            sourceFile: image.sourceFile,
-            previewUrl: image.previewUrl,
-            status: 'failed',
-            errorMessage,
-        };
+    function pumpPendingImageCompressionQueue() {
+        const pumpResult = pumpComposerPendingImages(pendingImagesRef.current, input.imageCompressionConcurrency);
+        if (pumpResult.imagesToStart.length === 0) {
+            return;
+        }
+
+        replacePendingImages(pumpResult.nextImages);
+        for (const image of pumpResult.imagesToStart) {
+            startCompressingImage(image.clientId, image.sourceFile);
+        }
     }
 
-    function toQueuedImageState(image: ComposerPendingImage): ComposerPendingImage {
-        return {
-            clientId: image.clientId,
-            fileName: image.fileName,
-            sourceFile: image.sourceFile,
-            previewUrl: image.previewUrl,
-            status: 'queued',
-        };
+    function resolvePreparedImage(clientId: string, prepared: PreparedComposerImageAttachment) {
+        let replacedImage: ComposerPendingImage | undefined;
+        let errorMessage: string | undefined;
+
+        updatePendingImages((current) => {
+            const preparedResult = resolvePreparedComposerPendingImage(current, clientId, prepared);
+            replacedImage = preparedResult.replacedImage;
+            errorMessage = preparedResult.errorMessage;
+            return preparedResult.nextImages;
+        });
+
+        if (replacedImage) {
+            releasePendingImageResources(replacedImage);
+        }
+        if (errorMessage) {
+            failImageAttachment(errorMessage);
+        }
     }
 
-    function toCompressingImageState(image: ComposerPendingImage): ComposerPendingImage {
-        return {
-            clientId: image.clientId,
-            fileName: image.fileName,
-            sourceFile: image.sourceFile,
-            previewUrl: image.previewUrl,
-            status: 'compressing',
-        };
-    }
-
-    function startCompressingImage(image: ComposerPendingImage) {
-        void prepareComposerImageAttachment(image.sourceFile, image.clientId).then((preparedResult) => {
+    function startCompressingImage(clientId: string, sourceFile: File) {
+        void prepareComposerImageAttachment(sourceFile, clientId).then((preparedResult) => {
             if (preparedResult.isErr()) {
                 const message = preparedResult.error.message;
-                setPendingImages((current) =>
-                    current.map((candidate) =>
-                        candidate.clientId === image.clientId ? toFailedImageState(candidate, message) : candidate
-                    )
-                );
+                updatePendingImages((current) => failComposerPendingImage(current, clientId, message));
                 failImageAttachment(message);
+                pumpPendingImageCompressionQueue();
                 return;
             }
 
-            const prepared = preparedResult.value;
-            setPendingImages((current) => {
-                const existing = current.find((candidate) => candidate.clientId === image.clientId);
-                if (!existing) {
-                    return current;
-                }
-
-                const nextTotalBytes = summarizeReadyImageBytes(current, image.clientId) + prepared.byteSize;
-                if (nextTotalBytes > MAX_COMPOSER_TOTAL_IMAGE_BYTES) {
-                    return current.map((candidate) =>
-                        candidate.clientId === image.clientId
-                            ? toFailedImageState(candidate, 'Attached images exceed the 6 MB total payload limit.')
-                            : candidate
-                    );
-                }
-
-                releasePendingImageResources(existing);
-                return current.map((candidate) =>
-                    candidate.clientId === image.clientId
-                        ? {
-                              ...candidate,
-                              previewUrl: prepared.previewUrl,
-                              status: 'ready',
-                              attachment: prepared.attachment,
-                              byteSize: prepared.byteSize,
-                          }
-                        : candidate
-                );
-            });
+            resolvePreparedImage(clientId, preparedResult.value);
+            pumpPendingImageCompressionQueue();
         });
     }
 
@@ -206,19 +185,20 @@ export function useConversationShellComposer<
         }
 
         const nextImages = acceptedFiles.map((file) => createPendingImage(file));
-        setPendingImages((current) => [...current, ...nextImages]);
+        updatePendingImages((current) => [...current, ...nextImages]);
+        pumpPendingImageCompressionQueue();
     }
 
     function removePendingImage(clientId: string) {
         setRunSubmitError(undefined);
-        setPendingImages((current) => {
-            const image = current.find((candidate) => candidate.clientId === clientId);
-            if (image) {
-                releasePendingImageResources(image);
-            }
+        const removedImage = pendingImagesRef.current.find((candidate) => candidate.clientId === clientId);
+        if (!removedImage) {
+            return;
+        }
 
-            return current.filter((candidate) => candidate.clientId !== clientId);
-        });
+        releasePendingImageResources(removedImage);
+        replacePendingImages(pendingImagesRef.current.filter((candidate) => candidate.clientId !== clientId));
+        pumpPendingImageCompressionQueue();
     }
 
     function retryPendingImage(clientId: string) {
@@ -228,34 +208,13 @@ export function useConversationShellComposer<
             return;
         }
 
-        setPendingImages((current) =>
-            current.map((candidate) => (candidate.clientId === clientId ? toQueuedImageState(candidate) : candidate))
-        );
+        updatePendingImages((current) => queueComposerPendingImageForRetry(current, clientId));
+        pumpPendingImageCompressionQueue();
     }
 
     useEffect(() => {
-        const activeCompressionCount = pendingImages.filter((image) => image.status === 'compressing').length;
-        const availableCompressionSlots = Math.max(0, input.imageCompressionConcurrency - activeCompressionCount);
-        if (availableCompressionSlots === 0) {
-            return;
-        }
-
-        const queuedImages = pendingImages
-            .filter((image) => image.status === 'queued')
-            .slice(0, availableCompressionSlots);
-        if (queuedImages.length === 0) {
-            return;
-        }
-
-        for (const queuedImage of queuedImages) {
-            setPendingImages((current) =>
-                current.map((candidate) =>
-                    candidate.clientId === queuedImage.clientId ? toCompressingImageState(candidate) : candidate
-                )
-            );
-            startCompressingImage(queuedImage);
-        }
-    }, [input.imageCompressionConcurrency, pendingImages]);
+        pumpPendingImageCompressionQueue();
+    }, [input.imageCompressionConcurrency]);
 
     const readyAttachments = pendingImages.flatMap((image) =>
         image.status === 'ready' && image.attachment ? [image.attachment] : []

@@ -1,4 +1,4 @@
-import { useDeferredValue, useId, useMemo, useRef, useState } from 'react';
+import { useDeferredValue, useId, useRef, useState } from 'react';
 
 import { DialogSurface } from '@/web/components/ui/dialogSurface';
 
@@ -42,44 +42,42 @@ export function WorkspaceCommandPalette({
     const dialogTitleId = useId();
     const dialogDescriptionId = useId();
 
-    const actions = useMemo<CommandAction[]>(() => {
-        return [
-            ...APP_ACTIONS.map((action) => ({
-                id: `section:${action.id}`,
-                label: action.label,
-                meta: action.id === appSection ? 'Current section' : 'Application section',
-                ...(onPreviewSectionChange
-                    ? {
-                          onPreview: () => {
-                              onPreviewSectionChange(action.id);
-                          },
-                      }
-                    : {}),
-                onSelect: () => {
-                    onSectionChange(action.id);
-                    onClose();
-                },
-            })),
-            ...profiles.map((profile) => ({
-                id: `profile:${profile.id}`,
-                label: `Switch profile: ${profile.name}`,
-                meta: profile.id,
-                onSelect: () => {
-                    onProfileChange(profile.id);
-                    onClose();
-                },
-            })),
-            ...workspaceOptions.map((workspace) => ({
-                id: `workspace:${workspace.fingerprint}`,
-                label: `Focus workspace: ${workspace.label}`,
-                meta: workspace.fingerprint,
-                onSelect: () => {
-                    onWorkspaceChange(workspace.fingerprint);
-                    onClose();
-                },
-            })),
-        ];
-    }, [appSection, onClose, onPreviewSectionChange, onProfileChange, onSectionChange, onWorkspaceChange, profiles, workspaceOptions]);
+    const actions: CommandAction[] = [
+        ...APP_ACTIONS.map((action) => ({
+            id: `section:${action.id}`,
+            label: action.label,
+            meta: action.id === appSection ? 'Current section' : 'Application section',
+            ...(onPreviewSectionChange
+                ? {
+                      onPreview: () => {
+                          onPreviewSectionChange(action.id);
+                      },
+                  }
+                : {}),
+            onSelect: () => {
+                onSectionChange(action.id);
+                onClose();
+            },
+        })),
+        ...profiles.map((profile) => ({
+            id: `profile:${profile.id}`,
+            label: `Switch profile: ${profile.name}`,
+            meta: profile.id,
+            onSelect: () => {
+                onProfileChange(profile.id);
+                onClose();
+            },
+        })),
+        ...workspaceOptions.map((workspace) => ({
+            id: `workspace:${workspace.fingerprint}`,
+            label: `Focus workspace: ${workspace.label}`,
+            meta: workspace.fingerprint,
+            onSelect: () => {
+                onWorkspaceChange(workspace.fingerprint);
+                onClose();
+            },
+        })),
+    ];
 
     const visibleActions = deferredQuery.length
         ? actions.filter((action) => `${action.label} ${action.meta}`.toLowerCase().includes(deferredQuery))

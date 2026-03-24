@@ -1,5 +1,5 @@
 import { Check, ChevronDown, Search } from 'lucide-react';
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import type { ModelCapabilityBadge, ModelPickerOption } from '@/web/components/modelSelection/modelCapabilities';
@@ -247,27 +247,24 @@ function PopoverModelPicker(props: ModelPickerProps) {
     const [popoverLayout, setPopoverLayout] = useState<PopoverLayout | null>(null);
 
     const selectedOption = props.models.find((option) => option.id === props.selectedModelId);
-    const labelCollisionIndex = useMemo(() => getModelLabelCollisionIndex(props.models), [props.models]);
-    const filteredOptions = useMemo(() => {
-        const normalizedQuery = query.trim().toLowerCase();
-        if (normalizedQuery.length === 0) {
-            return props.models;
-        }
-
-        return props.models.filter((option) =>
-            [
-                option.id,
-                option.label,
-                option.providerLabel,
-                option.providerId,
-                option.sourceProvider,
-                option.promptFamily,
-            ]
-                .filter((value): value is string => typeof value === 'string')
-                .some((value) => value.toLowerCase().includes(normalizedQuery))
-        );
-    }, [props.models, query]);
-    const groups = useMemo(() => sortGroupedOptions(filteredOptions), [filteredOptions]);
+    const labelCollisionIndex = getModelLabelCollisionIndex(props.models);
+    const normalizedQuery = query.trim().toLowerCase();
+    const filteredOptions =
+        normalizedQuery.length === 0
+            ? props.models
+            : props.models.filter((option) =>
+                  [
+                      option.id,
+                      option.label,
+                      option.providerLabel,
+                      option.providerId,
+                      option.sourceProvider,
+                      option.promptFamily,
+                  ]
+                      .filter((value): value is string => typeof value === 'string')
+                      .some((value) => value.toLowerCase().includes(normalizedQuery))
+              );
+    const groups = sortGroupedOptions(filteredOptions);
 
     useEffect(() => {
         if (!open) {

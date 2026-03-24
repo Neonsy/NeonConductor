@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 
 import { buildModelPickerOption } from '@/web/components/modelSelection/modelCapabilities';
 import { ModelPicker } from '@/web/components/modelSelection/modelPicker';
@@ -86,25 +86,20 @@ export function ProviderSpecialistDefaultsSection({ profileId }: ProviderSpecial
         },
     });
 
-    const providers = useMemo(
-        () => (shellBootstrapQuery.data?.providers ?? []).filter((provider) => isRuntimeProviderId(provider.id)),
-        [shellBootstrapQuery.data?.providers]
-    );
+    const providers = (shellBootstrapQuery.data?.providers ?? []).filter((provider) => isRuntimeProviderId(provider.id));
     const providerModels = shellBootstrapQuery.data?.providerModels ?? [];
     const defaults = shellBootstrapQuery.data?.defaults;
     const specialistDefaults = shellBootstrapQuery.data?.specialistDefaults ?? [];
-    const sectionGroups = useMemo(() => {
-        return [
-            {
-                label: 'Agent',
-                targets: providerSpecialistDefaultTargets.filter((target) => target.topLevelTab === 'agent'),
-            },
-            {
-                label: 'Orchestrator',
-                targets: providerSpecialistDefaultTargets.filter((target) => target.topLevelTab === 'orchestrator'),
-            },
-        ];
-    }, []);
+    const sectionGroups = [
+        {
+            label: 'Agent',
+            targets: providerSpecialistDefaultTargets.filter((target) => target.topLevelTab === 'agent'),
+        },
+        {
+            label: 'Orchestrator',
+            targets: providerSpecialistDefaultTargets.filter((target) => target.topLevelTab === 'orchestrator'),
+        },
+    ];
 
     return (
         <section className='border-border/70 bg-card/40 space-y-4 rounded-[24px] border p-5'>
