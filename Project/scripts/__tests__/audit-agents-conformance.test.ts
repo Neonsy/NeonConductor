@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { auditAgentsConformance, hasBlockingViolations } from '../audit-agents-conformance';
+import { auditAgentsConformance, hasBlockingViolations, hasManualReviewCandidates } from '../audit-agents-conformance';
 
 function writeFixture(rootDir: string, relativePath: string, content: string): void {
     const absolutePath = path.join(rootDir, relativePath);
@@ -12,11 +12,27 @@ function writeFixture(rootDir: string, relativePath: string, content: string): v
 }
 
 describe('auditAgentsConformance', () => {
-    it('detects blocking AGENTS violations in handwritten source', () => {
+    it('reports handwritten 1000+ LOC files for manual review without blocking on size alone', () => {
         const rootDir = mkdtempSync(path.join(os.tmpdir(), 'agents-audit-'));
 
         try {
             writeFixture(rootDir, 'src/tooLarge.ts', 'const value = 1;\n'.repeat(1000));
+
+            const report = auditAgentsConformance(rootDir);
+
+            expect(report.handwrittenSourceFilesRequiringReview).toHaveLength(1);
+            expect(report.handwrittenSourceFilesRequiringStrictReview).toHaveLength(1);
+            expect(hasBlockingViolations(report)).toBe(false);
+            expect(hasManualReviewCandidates(report)).toBe(true);
+        } finally {
+            rmSync(rootDir, { recursive: true, force: true });
+        }
+    });
+
+    it('still detects blocking AGENTS violations in handwritten source', () => {
+        const rootDir = mkdtempSync(path.join(os.tmpdir(), 'agents-audit-'));
+
+        try {
             writeFixture(
                 rootDir,
                 'src/withDisable.ts',
@@ -26,10 +42,30 @@ describe('auditAgentsConformance', () => {
 
             const report = auditAgentsConformance(rootDir);
 
-            expect(report.oversizedHandwrittenSourceFiles).toHaveLength(1);
             expect(report.inlineLintSuppressions).toHaveLength(1);
             expect(report.nonTestFrameworkImports).toHaveLength(1);
             expect(hasBlockingViolations(report)).toBe(true);
+        } finally {
+            rmSync(rootDir, { recursive: true, force: true });
+        }
+    });
+
+    it('excludes generated files and the canonical baseline migration from size-based review buckets', () => {
+        const rootDir = mkdtempSync(path.join(os.tmpdir(), 'agents-audit-'));
+
+        try {
+            writeFixture(rootDir, 'electron/backend/persistence/generatedMigrations.ts', 'const value = 1;\n'.repeat(1200));
+            writeFixture(
+                rootDir,
+                'electron/backend/persistence/migrations/001_runtime_baseline.sql',
+                'SELECT 1;\n'.repeat(1200)
+            );
+
+            const report = auditAgentsConformance(rootDir);
+
+            expect(report.handwrittenSourceFilesRequiringReview).toEqual([]);
+            expect(report.handwrittenSourceFilesRequiringStrictReview).toEqual([]);
+            expect(hasManualReviewCandidates(report)).toBe(false);
         } finally {
             rmSync(rootDir, { recursive: true, force: true });
         }
@@ -56,6 +92,8 @@ describe('auditAgentsConformance', () => {
             expect(report.nonBlockingBroadCasts).toHaveLength(1);
             expect(report.nonBlockingThrows).toHaveLength(1);
             expect(report.nonBlockingThrows[0]?.path).toBe('src/view.tsx');
+            expect(hasBlockingViolations(report)).toBe(false);
+            expect(hasManualReviewCandidates(report)).toBe(true);
         } finally {
             rmSync(rootDir, { recursive: true, force: true });
         }

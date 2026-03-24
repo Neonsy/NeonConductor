@@ -33,11 +33,14 @@
 - Keep touched areas sharper than you found them.
 - Structural smell is the decision rule, not file length.
 - If a file is multi-concern, brittle, hard to scan, or hard to change, it is non-conform even when the LOC count looks acceptable.
+- LOC-style thresholds are inspection conditions, not automatic pass/fail proof.
+- Every file still has to be judged for cohesion, clarity, and single-responsibility even when it is below the preferred size thresholds.
 
 ### 4) Keep Files, Modules, and Folders Focused
 - Do not create god files; split by responsibility as soon as a file carries multiple concerns.
 - LOC is only a rough heuristic, not the conformance rule.
 - Files may exceed 500 LOC when still coherent, but the preferred target is under 1000 LOC.
+- Crossing 500 LOC or 1000 LOC means the file must be explicitly inspected for smell, cohesion, and changeability; it is not automatically valid or invalid on length alone.
 - Do not treat "under 1000 LOC" as a reason to keep a smell-heavy file intact.
 - A 300 LOC multi-concern file still fails this standard; a longer file can still be acceptable if it is genuinely cohesive.
 - Treat oversized or multi-concern files as a DX bug.
@@ -45,7 +48,7 @@
 - Group by responsibility, not convenience.
 - Keep folder fan-out reasonable: a folder with too many unrelated files increases cognitive load and should be split into clearer subfolders.
 - Narrow exceptions are allowed only for generated artifacts and the single canonical alpha baseline migration, where centralization is intentional.
-- These exceptions do not relax the standard for handwritten source, handwritten tests, or ordinary file-backed assets.
+- These exceptions apply to size-based review automation only; they do not relax the standard for handwritten source, handwritten tests, or ordinary file-backed assets.
 
 ### 4.5) Prefer Self-Explanatory Code Before More Documentation
 - Make code understandable through names, boundaries, and structure first.

@@ -6,7 +6,8 @@ import { scriptLog } from '@/scripts/logger';
 
 const SOURCE_FILE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs']);
 const SKIPPED_DIRECTORIES = new Set(['node_modules', 'dist', 'dist-electron', '.git', '.turbo', 'release']);
-const MAX_SOURCE_LINES = 999;
+const REVIEW_SOURCE_LINES = 500;
+const STRICT_REVIEW_SOURCE_LINES = 1000;
 const TEST_FRAMEWORK_IMPORT_PATTERNS = ["from 'vitest'", 'from "vitest"', "from 'jest'", 'from "jest"'];
 const BROAD_CAST_PATTERN = /\bas\s+[A-Z][A-Za-z0-9_<>,`'[\]|& ]+/;
 const INLINE_LINT_SUPPRESSION_PATTERN = /\beslint-disable(?:-next-line|-line)?\b/;
@@ -19,7 +20,8 @@ export interface AuditViolation {
 }
 
 export interface AgentsConformanceReport {
-    oversizedHandwrittenSourceFiles: AuditViolation[];
+    handwrittenSourceFilesRequiringReview: AuditViolation[];
+    handwrittenSourceFilesRequiringStrictReview: AuditViolation[];
     inlineLintSuppressions: AuditViolation[];
     nonTestFrameworkImports: AuditViolation[];
     forbiddenLayoutEffects: AuditViolation[];
@@ -76,6 +78,14 @@ function isGeneratedSourceFile(relativePath: string, content: string): boolean {
         fileName.includes('.generated.') ||
         content.includes('@generated')
     );
+}
+
+function isCanonicalAlphaBaselineMigration(relativePath: string): boolean {
+    return relativePath === 'electron/backend/persistence/migrations/001_runtime_baseline.sql';
+}
+
+function isSizeReviewException(relativePath: string, content: string): boolean {
+    return isGeneratedSourceFile(relativePath, content) || isCanonicalAlphaBaselineMigration(relativePath);
 }
 
 function isParserSourceFile(relativePath: string): boolean {
@@ -444,14 +454,22 @@ function collectSuspiciousEffectViolations(files: AuditSourceFile[]): AuditViola
 
 export function auditAgentsConformance(rootDir: string): AgentsConformanceReport {
     const sourceFiles = collectSourceFiles(rootDir);
+    const handwrittenFiles = sourceFiles.filter((file) => !isSizeReviewException(file.relativePath, file.content));
 
     return {
-        oversizedHandwrittenSourceFiles: sourceFiles
-            .filter((file) => file.lineCount > MAX_SOURCE_LINES)
+        handwrittenSourceFilesRequiringReview: handwrittenFiles
+            .filter((file) => file.lineCount >= REVIEW_SOURCE_LINES)
             .map((file) => ({
                 path: file.relativePath,
                 line: file.lineCount,
-                message: `Source file exceeds ${String(MAX_SOURCE_LINES)} lines.`,
+                message: `Handwritten source file meets or exceeds ${String(REVIEW_SOURCE_LINES)} lines and requires manual cohesion review.`,
+            })),
+        handwrittenSourceFilesRequiringStrictReview: handwrittenFiles
+            .filter((file) => file.lineCount >= STRICT_REVIEW_SOURCE_LINES)
+            .map((file) => ({
+                path: file.relativePath,
+                line: file.lineCount,
+                message: `Handwritten source file meets or exceeds ${String(STRICT_REVIEW_SOURCE_LINES)} lines and requires strict manual review.`,
             })),
         inlineLintSuppressions: collectPatternViolations({
             files: sourceFiles,
@@ -524,13 +542,24 @@ function logViolations(label: string, violations: AuditViolation[], level: 'info
 
 export function hasBlockingViolations(report: AgentsConformanceReport): boolean {
     return (
-        report.oversizedHandwrittenSourceFiles.length > 0 ||
         report.inlineLintSuppressions.length > 0 ||
         report.nonTestFrameworkImports.length > 0 ||
         report.forbiddenLayoutEffects.length > 0 ||
         report.rendererElectronImports.length > 0 ||
         report.nonPreloadElectronBridgeUsage.length > 0 ||
         report.insecureBrowserWindows.length > 0
+    );
+}
+
+export function hasManualReviewCandidates(report: AgentsConformanceReport): boolean {
+    return (
+        report.handwrittenSourceFilesRequiringReview.length > 0 ||
+        report.handwrittenSourceFilesRequiringStrictReview.length > 0 ||
+        report.nonBlockingReactMemoization.length > 0 ||
+        report.nonBlockingSuspiciousEffects.length > 0 ||
+        report.nonBlockingAsyncEffects.length > 0 ||
+        report.nonBlockingBroadCasts.length > 0 ||
+        report.nonBlockingThrows.length > 0
     );
 }
 
@@ -541,7 +570,16 @@ export function runAgentsConformanceAudit(options: {
     const rootDir = options.rootDir ?? process.cwd();
     const report = auditAgentsConformance(rootDir);
 
-    logViolations('Oversized source files', report.oversizedHandwrittenSourceFiles, 'error');
+    logViolations(
+        `Handwritten source files requiring ${String(REVIEW_SOURCE_LINES)}+ LOC review`,
+        report.handwrittenSourceFilesRequiringReview,
+        'warn'
+    );
+    logViolations(
+        `Handwritten source files requiring ${String(STRICT_REVIEW_SOURCE_LINES)}+ LOC strict review`,
+        report.handwrittenSourceFilesRequiringStrictReview,
+        'warn'
+    );
     logViolations('Inline lint suppressions', report.inlineLintSuppressions, 'error');
     logViolations('Non-test framework imports', report.nonTestFrameworkImports, 'error');
     logViolations('Forbidden useLayoutEffect review', report.forbiddenLayoutEffects, 'error');
@@ -555,11 +593,13 @@ export function runAgentsConformanceAudit(options: {
     logViolations('Non-parser throw review', report.nonBlockingThrows, 'warn');
 
     const blockingViolations = hasBlockingViolations(report);
+    const manualReviewRequired = hasManualReviewCandidates(report);
     scriptLog.info({
         tag: 'agents.audit',
         message: 'AGENTS conformance audit completed.',
         rootDir,
         blockingViolations,
+        manualReviewRequired,
         reportOnly: options.reportOnly ?? false,
     });
 
