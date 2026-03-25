@@ -1,10 +1,5 @@
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
-
-const projectPath = path.win32.join('Project');
-const mainDirname = path.win32.join(projectPath, 'electron', 'main');
-const mainEntryUrl = pathToFileURL(path.resolve(projectPath, 'electron', 'main', 'index.ts')).toString();
 
 const {
     appOnSpy,
@@ -35,7 +30,18 @@ const {
     runtimeEnvState,
     appState,
     defaultUserDataPath,
-} = vi.hoisted(() => ({
+    projectPath,
+    mainDirname,
+    mainEntryUrl,
+} = vi.hoisted(() => {
+    const projectPath = 'Project';
+    const mainDirname = 'Project\\electron\\main';
+    const mainEntryUrl = 'file:///Project/electron/main/index.ts';
+
+    return {
+        projectPath,
+        mainDirname,
+        mainEntryUrl,
     appOnSpy: vi.fn(),
     appQuitSpy: vi.fn(),
     appExitSpy: vi.fn(),
@@ -74,7 +80,8 @@ const {
         isPackaged: false,
         userDataPath: 'C:\\Users\\Neon\\AppData\\Roaming\\neon-conductor',
     },
-}));
+    };
+});
 
 const appEventHandlers = new Map<string, Array<(...arguments_: unknown[]) => unknown>>();
 
