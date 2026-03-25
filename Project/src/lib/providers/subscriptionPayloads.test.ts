@@ -38,6 +38,39 @@ describe('subscriptionPayloads', () => {
         ).toEqual({
             sequence: 1,
         });
+        expect(
+            normalizeSubscriptionPayload({
+                id: 'tracked_runtime_stream',
+                data: {
+                    sequence: 2,
+                },
+            })
+        ).toEqual({
+            sequence: 2,
+        });
+        expect(
+            normalizeSubscriptionPayload({
+                result: {
+                    data: {
+                        id: 'tracked_runtime_stream',
+                        data: {
+                            sequence: 3,
+                        },
+                    },
+                },
+            })
+        ).toEqual({
+            sequence: 3,
+        });
+        expect(
+            normalizeSubscriptionPayload({
+                data: {
+                    sequence: 4,
+                },
+            })
+        ).toEqual({
+            sequence: 4,
+        });
     });
 
     it('recognizes runtime event records with object payloads', () => {

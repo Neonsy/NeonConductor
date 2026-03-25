@@ -77,6 +77,37 @@ function clearBootTimers(): void {
     }
 }
 
+function startBootTimers(warningMs: number, forceShowMs: number): void {
+    if (bootWindowState.warningTimer || bootWindowState.forceTimer || bootWindowState.handoffCompleted) {
+        return;
+    }
+
+    bootWindowState.warningTimer = setTimeout(() => {
+        if (bootWindowState.handoffCompleted) {
+            return;
+        }
+
+        const stuckStatus = createBootStatusSnapshot({
+            stage: 'boot_stuck',
+            source: 'main',
+            elapsedMs: getElapsedMs(),
+            isStuck: true,
+            blockingPrerequisite: bootWindowState.latestStatus.blockingPrerequisite,
+        });
+        publishBootStatus(stuckStatus);
+        appLog.warn({
+            tag: 'runtime.boot',
+            message: 'Boot warning threshold reached.',
+            blockingPrerequisite: stuckStatus.blockingPrerequisite,
+            elapsedMs: stuckStatus.elapsedMs,
+        });
+    }, warningMs);
+
+    bootWindowState.forceTimer = setTimeout(() => {
+        forceBootWindowHandoff();
+    }, forceShowMs);
+}
+
 function resetBootWindowState(): void {
     clearBootTimers();
     bootWindowState.mainWindow = null;
@@ -241,30 +272,14 @@ export function registerBootWindows(input: {
         app.quit();
     });
 
-    bootWindowState.warningTimer = setTimeout(() => {
-        if (bootWindowState.handoffCompleted) {
-            return;
-        }
-
-        const stuckStatus = createBootStatusSnapshot({
-            stage: 'boot_stuck',
-            source: 'main',
-            elapsedMs: getElapsedMs(),
-            isStuck: true,
-            blockingPrerequisite: bootWindowState.latestStatus.blockingPrerequisite,
+    if (typeof input.mainWindow.webContents?.once === 'function') {
+        input.mainWindow.webContents.once('did-finish-load', () => {
+            startBootTimers(input.warningMs ?? BOOT_STUCK_WARNING_MS, input.forceShowMs ?? BOOT_FORCE_SHOW_MS);
         });
-        publishBootStatus(stuckStatus);
-        appLog.warn({
-            tag: 'runtime.boot',
-            message: 'Boot warning threshold reached.',
-            blockingPrerequisite: stuckStatus.blockingPrerequisite,
-            elapsedMs: stuckStatus.elapsedMs,
-        });
-    }, input.warningMs ?? BOOT_STUCK_WARNING_MS);
+        return;
+    }
 
-    bootWindowState.forceTimer = setTimeout(() => {
-        forceBootWindowHandoff();
-    }, input.forceShowMs ?? BOOT_FORCE_SHOW_MS);
+    startBootTimers(input.warningMs ?? BOOT_STUCK_WARNING_MS, input.forceShowMs ?? BOOT_FORCE_SHOW_MS);
 }
 
 export function completeBootWindowHandoff(window: BrowserWindow | null): { success: boolean } {

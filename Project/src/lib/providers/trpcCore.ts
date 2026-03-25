@@ -1,8 +1,9 @@
 import { QueryClient } from '@tanstack/react-query';
 import { createTRPCQueryUtils } from '@trpc/react-query';
-import { ipcLink } from 'electron-trpc-experimental/renderer';
 
-import { trpc } from '@/web/trpc/client';
+import { trpcClient } from '@/web/lib/trpcClient';
+
+export { trpcClient };
 
 export const queryClient = new QueryClient({
     defaultOptions: {
@@ -11,10 +12,6 @@ export const queryClient = new QueryClient({
             retry: 1,
         },
     },
-});
-
-export const trpcClient = trpc.createClient({
-    links: [ipcLink()],
 });
 
 export const trpcQueryUtils = createTRPCQueryUtils({

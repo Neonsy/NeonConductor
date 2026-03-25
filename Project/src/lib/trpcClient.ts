@@ -1,7 +1,8 @@
-import { createTRPCProxyClient } from '@trpc/client';
 import { ipcLink } from 'electron-trpc-experimental/renderer';
 
-import type { AppRouter } from '@/app/backend/trpc/router';
+import { trpc } from '@/web/trpc/client';
 
-// Vanilla tRPC client for use outside React components (e.g., in main.tsx)
-export const trpcClient = createTRPCProxyClient<AppRouter>({ links: [ipcLink()] });
+// Shared renderer tRPC client. Multiple client instances can collide on IPC request ids.
+export const trpcClient = trpc.createClient({
+    links: [ipcLink()],
+});

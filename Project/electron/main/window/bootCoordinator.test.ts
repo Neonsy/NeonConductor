@@ -40,9 +40,16 @@ function createMockWindow(id: number) {
         destroyed: false,
     };
     const eventHandlers = new Map<string, Array<() => void>>();
+    const webContentsEventHandlers = new Map<string, Array<() => void>>();
 
     const emit = (eventName: string) => {
         for (const handler of eventHandlers.get(eventName) ?? []) {
+            handler();
+        }
+    };
+
+    const emitWebContents = (eventName: string) => {
+        for (const handler of webContentsEventHandlers.get(eventName) ?? []) {
             handler();
         }
     };
@@ -64,9 +71,17 @@ function createMockWindow(id: number) {
             handlers.push(handler);
             eventHandlers.set(eventName, handlers);
         }),
+        webContents: {
+            once: vi.fn((eventName: string, handler: () => void) => {
+                const handlers = webContentsEventHandlers.get(eventName) ?? [];
+                handlers.push(handler);
+                webContentsEventHandlers.set(eventName, handlers);
+            }),
+        },
         show: vi.fn(() => {
             windowState.visible = true;
         }),
+        emitWebContents,
     };
 }
 
@@ -90,6 +105,7 @@ describe('bootCoordinator', () => {
             stage: 'renderer_connecting',
             blockingPrerequisite: 'renderer_first_report',
         });
+        mainWindow.emitWebContents('did-finish-load');
 
         vi.advanceTimersByTime(BOOT_STUCK_WARNING_MS);
 
@@ -112,6 +128,7 @@ describe('bootCoordinator', () => {
             mainWindow: mainWindow as never,
             splashWindow: splashWindow as never,
         });
+        mainWindow.emitWebContents('did-finish-load');
         reportRendererBootStatus(mainWindow as never, {
             stage: 'shell_bootstrap_loading',
             blockingPrerequisite: 'shell_bootstrap',
@@ -132,6 +149,44 @@ describe('bootCoordinator', () => {
         );
     });
 
+    it('accepts the earliest renderer boot report and avoids forced handoff on a healthy startup path', () => {
+        const mainWindow = createMockWindow(30);
+        const splashWindow = createMockWindow(40);
+
+        registerBootWindows({
+            mainWindow: mainWindow as never,
+            splashWindow: splashWindow as never,
+        });
+        mainWindow.emitWebContents('did-finish-load');
+
+        expect(
+            reportRendererBootStatus(mainWindow as never, {
+                stage: 'renderer_connecting',
+                blockingPrerequisite: 'renderer_first_report',
+            })
+        ).toEqual({ accepted: true });
+        expect(updateSplashWindowStatusSpy).toHaveBeenLastCalledWith(
+            splashWindow,
+            expect.objectContaining({
+                stage: 'renderer_connecting',
+                source: 'renderer',
+                blockingPrerequisite: 'renderer_first_report',
+            })
+        );
+
+        vi.advanceTimersByTime(BOOT_FORCE_SHOW_MS - 1000);
+        expect(completeBootWindowHandoff(mainWindow as never)).toEqual({ success: true });
+
+        vi.advanceTimersByTime(2000);
+
+        expect(appLogWarnSpy).not.toHaveBeenCalledWith(
+            expect.objectContaining({
+                tag: 'runtime.boot',
+                message: 'Forced boot handoff after startup timeout.',
+            })
+        );
+    });
+
     it('keeps ready handoff idempotent and logs late ready once after a forced handoff', () => {
         const mainWindow = createMockWindow(100);
         const splashWindow = createMockWindow(200);
@@ -140,6 +195,7 @@ describe('bootCoordinator', () => {
             mainWindow: mainWindow as never,
             splashWindow: splashWindow as never,
         });
+        mainWindow.emitWebContents('did-finish-load');
 
         vi.advanceTimersByTime(BOOT_FORCE_SHOW_MS);
 
@@ -161,6 +217,7 @@ describe('bootCoordinator', () => {
             mainWindow: mainWindow as never,
             splashWindow: splashWindow as never,
         });
+        mainWindow.emitWebContents('did-finish-load');
         updateSplashWindowStatusSpy.mockClear();
         appLogInfoSpy.mockClear();
 
@@ -190,6 +247,7 @@ describe('bootCoordinator', () => {
             mainWindow: mainWindow as never,
             splashWindow: splashWindow as never,
         });
+        mainWindow.emitWebContents('did-finish-load');
 
         expect(
             reportRendererBootStatus(otherWindow as never, {

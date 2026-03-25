@@ -17,21 +17,40 @@ function isOneOf<const T extends readonly string[]>(value: unknown, allowed: T):
 
 const subscriptionControlTypes = ['started', 'stopped', 'state'] as const;
 
+function isSubscriptionDataEnvelope(value: unknown): value is { data: unknown; id?: number | string } {
+    return (
+        isRecord(value) &&
+        'data' in value &&
+        Object.keys(value).every(
+            (key) => key === 'data' || (key === 'id' && (typeof value['id'] === 'number' || typeof value['id'] === 'string'))
+        )
+    );
+}
+
 export function normalizeSubscriptionPayload(value: unknown): unknown {
-    if (!isRecord(value) || !isRecord(value['result'])) {
-        return value;
-    }
+    let nextValue = value;
 
-    const result = value['result'];
-    if (isOneOf(result['type'], subscriptionControlTypes)) {
-        return result;
-    }
+    while (true) {
+        if (isRecord(nextValue) && isRecord(nextValue['result'])) {
+            const result = nextValue['result'];
+            if (isOneOf(result['type'], subscriptionControlTypes)) {
+                nextValue = result;
+                continue;
+            }
 
-    if ('data' in result) {
-        return result['data'];
-    }
+            if ('data' in result) {
+                nextValue = result['data'];
+                continue;
+            }
+        }
 
-    return value;
+        if (isSubscriptionDataEnvelope(nextValue)) {
+            nextValue = nextValue.data;
+            continue;
+        }
+
+        return nextValue;
+    }
 }
 
 export function isSubscriptionControlPayload(value: unknown): value is null | undefined | { type: string } {

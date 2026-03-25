@@ -3,6 +3,7 @@ import { initLogger } from 'evlog';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
+import { RendererBootStatusBootstrap } from '@/web/components/runtime/rendererBootStatusBootstrap';
 import DevTools from '@/web/components/utils/devtools';
 import { initializePrivacyMode } from '@/web/lib/privacy/privacy';
 import Providers from '@/web/lib/providers';
@@ -30,14 +31,17 @@ if (isDev) {
 
 if (rootElement) {
     createRoot(rootElement).render(
-        <Providers>
+        <>
             <StrictMode>
-                <RouterProvider
-                    router={router}
-                />
+                <RendererBootStatusBootstrap />
+                <Providers>
+                    <RouterProvider
+                        router={router}
+                    />
+                </Providers>
             </StrictMode>
             {/* Keep DevTools outside StrictMode to avoid dev-only WS close noise from double-mount. */}
             {isDev && <DevTools router={router} />}
-        </Providers>
+        </>
     );
 }
