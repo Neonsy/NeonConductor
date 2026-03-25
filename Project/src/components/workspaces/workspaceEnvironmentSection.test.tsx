@@ -89,10 +89,7 @@ const snapshot = {
         preferredVcs: 'jj' as const,
         preferredPackageManager: 'auto' as const,
     },
-    notes: [
-        'This workspace prefers pnpm.',
-        'The pinned VCS preference "jj" is not available on this machine.',
-    ],
+    notes: ['This workspace prefers pnpm.', 'The pinned VCS preference "jj" is not available on this machine.'],
 };
 
 describe('WorkspaceEnvironmentPreviewCard', () => {
@@ -106,7 +103,7 @@ describe('WorkspaceEnvironmentPreviewCard', () => {
             />
         );
 
-        expect(html).toContain('Detection preview');
+        expect(html).toContain('Tool detection preview');
         expect(html).toContain('pnpm');
         expect(html).toContain('PowerShell');
         expect(html).toContain('The pinned VCS preference');
@@ -149,9 +146,9 @@ describe('WorkspaceEnvironmentSection', () => {
             />
         );
 
-        expect(html).toContain('Environment and toolchain');
-        expect(html).toContain('Preferred VCS');
-        expect(html).toContain('Preferred Package Manager');
+        expect(html).toContain('Tools Neon should use in this workspace');
+        expect(html).toContain('Version control to prefer');
+        expect(html).toContain('Package manager to prefer');
         expect(html).toContain('This workspace prefers pnpm.');
         expect(html).toContain('The pinned VCS preference');
     });

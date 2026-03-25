@@ -53,7 +53,7 @@ describe('settings workspace', () => {
         expect(html).toContain('Kilo');
         expect(html).toContain('Modes &amp; Instructions');
         expect(html).toContain('Providers &amp; Models');
-        expect(html).toContain('Modes are app-level.');
+        expect(html).toContain('Kilo is the default setup path.');
     });
 
     it('keeps the settings body overflow-safe inside the workspace surface', () => {

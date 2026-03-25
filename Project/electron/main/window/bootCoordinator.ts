@@ -22,6 +22,9 @@ interface BootWindowState {
     handoffForced: boolean;
     lateReadyLogged: boolean;
     bootStartedAtMs: number;
+    warningMs: number;
+    lastProgressAtMs: number;
+    lastProgressSignature: string | null;
     latestStatus: BootStatusSnapshot;
     latestStatusSignature: string;
     latestStatusDisplaySignature: string;
@@ -46,6 +49,9 @@ const bootWindowState: BootWindowState = {
     handoffForced: false,
     lateReadyLogged: false,
     bootStartedAtMs: 0,
+    warningMs: BOOT_STUCK_WARNING_MS,
+    lastProgressAtMs: 0,
+    lastProgressSignature: null,
     latestStatus: createBootStatusSnapshot({
         stage: 'main_initializing',
         source: 'main',
@@ -77,12 +83,64 @@ function clearBootTimers(): void {
     }
 }
 
-function startBootTimers(warningMs: number, forceShowMs: number): void {
-    if (bootWindowState.warningTimer || bootWindowState.forceTimer || bootWindowState.handoffCompleted) {
+const bootProgressOrdinals: Record<string, number> = {
+    'renderer_connecting:main': 1,
+    'renderer_connecting:renderer': 2,
+    profile_resolving: 3,
+    mode_resolving: 4,
+    shell_bootstrap_loading: 5,
+    ready_to_show: 6,
+};
+
+function getBootProgressSignature(input: Pick<BootStatusSnapshot, 'stage' | 'source'>): string | null {
+    switch (input.stage) {
+        case 'renderer_connecting':
+            return `${input.stage}:${input.source}`;
+        case 'profile_resolving':
+        case 'mode_resolving':
+        case 'shell_bootstrap_loading':
+        case 'ready_to_show':
+            return input.stage;
+        default:
+            return null;
+    }
+}
+
+function recordBootProgress(status: Pick<BootStatusSnapshot, 'stage' | 'source'>, atMs: number): void {
+    const progressSignature = getBootProgressSignature(status);
+    if (!progressSignature) {
+        return;
+    }
+
+    bootWindowState.lastProgressSignature = progressSignature;
+    bootWindowState.lastProgressAtMs = atMs;
+}
+
+function hasMeaningfulBootProgress(status: Pick<BootStatusSnapshot, 'stage' | 'source'>): boolean {
+    const nextProgressSignature = getBootProgressSignature(status);
+    if (!nextProgressSignature) {
+        return false;
+    }
+
+    if (bootWindowState.lastProgressSignature === nextProgressSignature) {
+        return false;
+    }
+
+    const previousProgressOrdinal =
+        bootWindowState.lastProgressSignature === null
+            ? 0
+            : (bootProgressOrdinals[bootWindowState.lastProgressSignature] ?? 0);
+    const nextProgressOrdinal = bootProgressOrdinals[nextProgressSignature] ?? 0;
+    return nextProgressOrdinal > previousProgressOrdinal;
+}
+
+function scheduleBootWarningTimer(): void {
+    if (bootWindowState.warningTimer || bootWindowState.handoffCompleted) {
         return;
     }
 
     bootWindowState.warningTimer = setTimeout(() => {
+        bootWindowState.warningTimer = null;
         if (bootWindowState.handoffCompleted) {
             return;
         }
@@ -101,9 +159,38 @@ function startBootTimers(warningMs: number, forceShowMs: number): void {
             blockingPrerequisite: stuckStatus.blockingPrerequisite,
             elapsedMs: stuckStatus.elapsedMs,
         });
-    }, warningMs);
+    }, bootWindowState.warningMs);
+}
+
+function maybeResetBootWarningTimerForProgress(status: BootStatusSnapshot): void {
+    if (!hasMeaningfulBootProgress(status)) {
+        return;
+    }
+
+    recordBootProgress(status, Date.now());
+
+    if (!bootWindowState.warningTimer) {
+        return;
+    }
+
+    clearTimeout(bootWindowState.warningTimer);
+    bootWindowState.warningTimer = null;
+    scheduleBootWarningTimer();
+}
+
+function startBootTimers(warningMs: number, forceShowMs: number): void {
+    if (bootWindowState.warningTimer || bootWindowState.forceTimer || bootWindowState.handoffCompleted) {
+        return;
+    }
+
+    bootWindowState.warningMs = warningMs;
+    bootWindowState.lastProgressAtMs = Date.now();
+    bootWindowState.lastProgressSignature = getBootProgressSignature(bootWindowState.latestStatus);
+
+    scheduleBootWarningTimer();
 
     bootWindowState.forceTimer = setTimeout(() => {
+        bootWindowState.forceTimer = null;
         forceBootWindowHandoff();
     }, forceShowMs);
 }
@@ -116,6 +203,9 @@ function resetBootWindowState(): void {
     bootWindowState.handoffForced = false;
     bootWindowState.lateReadyLogged = false;
     bootWindowState.bootStartedAtMs = 0;
+    bootWindowState.warningMs = BOOT_STUCK_WARNING_MS;
+    bootWindowState.lastProgressAtMs = 0;
+    bootWindowState.lastProgressSignature = null;
     bootWindowState.latestStatus = createBootStatusSnapshot({
         stage: 'main_initializing',
         source: 'main',
@@ -162,6 +252,8 @@ function publishBootStatus(status: BootStatusSnapshot): void {
     if (didTransition) {
         logBootStatusTransition(status);
     }
+
+    maybeResetBootWarningTimerForProgress(status);
 
     if (bootWindowState.splashWindow && !bootWindowState.splashWindow.isDestroyed()) {
         void updateSplashWindowStatus(bootWindowState.splashWindow, status);

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+    BOOT_STUCK_WARNING_DEV_MS,
     createBootStatusSnapshot,
     getBootBlockingPrerequisiteLabel,
     getBootStatusSignature,
@@ -37,7 +38,7 @@ describe('splashContract', () => {
                 isStuck: true,
                 blockingPrerequisite: 'shell_bootstrap',
             }).detail
-        ).toBe('Waiting on: shell bootstrap data.');
+        ).toBe('Still waiting on: shell bootstrap data. Startup time can vary depending on hardware performance.');
 
         expect(
             createBootStatusSnapshot({
@@ -48,6 +49,10 @@ describe('splashContract', () => {
                 blockingPrerequisite: 'shell_bootstrap',
             }).detail
         ).toBe('Forced the main window open while waiting on: shell bootstrap data.');
+    });
+
+    it('uses the dev warning threshold constant for slow cold local startup tolerance', () => {
+        expect(BOOT_STUCK_WARNING_DEV_MS).toBeGreaterThan(4000);
     });
 
     it('recognizes valid boot status payloads and rejects invalid ones', () => {

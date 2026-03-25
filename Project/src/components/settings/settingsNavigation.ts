@@ -41,43 +41,43 @@ export const SETTINGS_PRIMARY_SECTIONS: ReadonlyArray<SettingsPrimarySectionDefi
     {
         id: 'kilo',
         label: 'Kilo',
-        description: 'Product-default account, gateway models, routing, and future marketplace concerns.',
+        description: 'Sign in to Kilo, choose gateway models, and control how Kilo picks an upstream provider.',
         group: 'kilo',
     },
     {
         id: 'modes',
         label: 'Modes & Instructions',
-        description: 'App-level prompt layers, built-in mode overrides, and portable custom mode management.',
+        description: 'Manage the shared instructions and built-in modes Neon uses in Chat, Agent, and Orchestrator.',
         group: 'general',
     },
     {
         id: 'providers',
         label: 'Providers & Models',
-        description: 'Shared provider management with Kilo Gateway pinned first and direct providers below.',
+        description: 'Connect direct providers, choose models, and manage which connection Neon should use.',
         group: 'general',
     },
     {
         id: 'profiles',
         label: 'Profiles',
-        description: 'Profile lifecycle, execution defaults, and conversation naming preferences.',
+        description: 'Create profiles and choose their default behavior for approvals, edits, and conversation naming.',
         group: 'general',
     },
     {
         id: 'context',
         label: 'Context & Limits',
-        description: 'Workspace defaults and profile-specific context budgeting controls.',
+        description: 'Choose defaults for workspaces and set message, media, and context limits.',
         group: 'general',
     },
     {
         id: 'registry',
-        label: 'Skills & Registry',
-        description: 'Inspect resolved rules, skills, modes, and registry discovery state.',
+        label: 'Rules, Skills & Modes',
+        description: 'Browse the rules, skills, and modes Neon found, and refresh the files it reads from disk.',
         group: 'general',
     },
     {
         id: 'app',
         label: 'App',
-        description: 'Privacy and destructive maintenance actions that apply across the app.',
+        description: 'Manage privacy, local integrations, and maintenance actions that affect the whole app.',
         group: 'general',
     },
 ];
@@ -97,8 +97,8 @@ export const KILO_SETTINGS_SUBSECTIONS: ReadonlyArray<SettingsSubsectionDefiniti
     },
     {
         id: 'routing',
-        label: 'Routing',
-        description: 'Control Kilo routing when a selected model supports multiple upstream providers.',
+        label: 'Provider Choice',
+        description: 'Choose how Kilo picks a provider when the same model is available from more than one source.',
         availability: 'available',
     },
     {
@@ -113,7 +113,7 @@ export const MODES_SETTINGS_SUBSECTIONS: ReadonlyArray<SettingsSubsectionDefinit
     {
         id: 'instructions',
         label: 'Shared Modes & Instructions',
-        description: 'App-level prompt layers, built-in mode overrides, and file-backed custom mode portability.',
+        description: 'Manage shared instructions, built-in mode behavior, and portable custom mode files.',
         availability: 'available',
     },
 ];
@@ -128,7 +128,7 @@ export const PROFILE_SETTINGS_SUBSECTIONS: ReadonlyArray<SettingsSubsectionDefin
     {
         id: 'execution',
         label: 'Execution Defaults',
-        description: 'Default runtime approvals and edit-flow behavior for the selected profile.',
+        description: 'Choose default approval and edit behavior for the selected profile.',
         availability: 'available',
     },
     {
@@ -140,7 +140,8 @@ export const PROFILE_SETTINGS_SUBSECTIONS: ReadonlyArray<SettingsSubsectionDefin
     {
         id: 'utility',
         label: 'Utility AI',
-        description: 'Reserved for the future shared utility model used by conversation naming and other small utility tasks.',
+        description:
+            'Reserved for the future shared utility model used by conversation naming and other small utility tasks.',
         availability: 'planned',
     },
 ];
@@ -149,43 +150,44 @@ export const CONTEXT_SETTINGS_SUBSECTIONS: ReadonlyArray<SettingsSubsectionDefin
     {
         id: 'workspace',
         label: 'Workspace Defaults',
-        description: 'Global context defaults and composer media limits.',
+        description: 'Choose default workspace behavior and message media limits.',
         availability: 'available',
     },
     {
         id: 'budgeting',
         label: 'Context Budgeting',
-        description: 'Profile overrides and resolved compact-window previews.',
+        description: 'Review how much context Neon keeps and override it per profile when needed.',
         availability: 'available',
     },
 ];
 
-export const REGISTRY_SETTINGS_SUBSECTIONS: ReadonlyArray<SettingsSubsectionDefinition<RegistrySettingsSubsectionId>> = [
-    {
-        id: 'rules',
-        label: 'Rules',
-        description: 'Resolved and discovered rulesets available to the runtime.',
-        availability: 'available',
-    },
-    {
-        id: 'skills',
-        label: 'Skills',
-        description: 'Search and inspect resolved skill assets.',
-        availability: 'available',
-    },
-    {
-        id: 'modes',
-        label: 'Modes',
-        description: 'Resolved agent modes and discovered mode files.',
-        availability: 'available',
-    },
-    {
-        id: 'diagnostics',
-        label: 'Registry Diagnostics',
-        description: 'Registry roots, counts, workspace scope, and refresh controls.',
-        availability: 'available',
-    },
-];
+export const REGISTRY_SETTINGS_SUBSECTIONS: ReadonlyArray<SettingsSubsectionDefinition<RegistrySettingsSubsectionId>> =
+    [
+        {
+            id: 'rules',
+            label: 'Rules',
+            description: 'Browse the rules Neon can use right now and the rule files it found on disk.',
+            availability: 'available',
+        },
+        {
+            id: 'skills',
+            label: 'Skills',
+            description: 'Search the skills Neon can use and inspect the files they came from.',
+            availability: 'available',
+        },
+        {
+            id: 'modes',
+            label: 'Modes',
+            description: 'Inspect the modes Neon can use and the mode files it found.',
+            availability: 'available',
+        },
+        {
+            id: 'diagnostics',
+            label: 'File Discovery',
+            description: 'See which folders Neon checks, what it found there, and refresh the results.',
+            availability: 'available',
+        },
+    ];
 
 export const APP_SETTINGS_SUBSECTIONS: ReadonlyArray<SettingsSubsectionDefinition<AppSettingsSubsectionId>> = [
     {
@@ -197,7 +199,7 @@ export const APP_SETTINGS_SUBSECTIONS: ReadonlyArray<SettingsSubsectionDefinitio
     {
         id: 'mcp',
         label: 'MCP',
-        description: 'Manage backend-owned MCP stdio servers, env keys, and live tool discovery.',
+        description: 'Manage MCP servers, secrets, and the tools Neon discovers from those servers.',
         availability: 'available',
     },
     {
@@ -208,17 +210,34 @@ export const APP_SETTINGS_SUBSECTIONS: ReadonlyArray<SettingsSubsectionDefinitio
     },
 ];
 
-function isOneOf<const TValue extends readonly string[]>(value: string | undefined, allowed: TValue): value is TValue[number] {
+function isOneOf<const TValue extends readonly string[]>(
+    value: string | undefined,
+    allowed: TValue
+): value is TValue[number] {
     return typeof value === 'string' && allowed.includes(value);
 }
 
-const kiloSettingsSubsectionIds = KILO_SETTINGS_SUBSECTIONS.map((subsection) => subsection.id) as readonly KiloSettingsSubsectionId[];
-const modesSettingsSubsectionIds = MODES_SETTINGS_SUBSECTIONS.map((subsection) => subsection.id) as readonly ModesSettingsSubsectionId[];
-const profileSettingsSubsectionIds = PROFILE_SETTINGS_SUBSECTIONS.map((subsection) => subsection.id) as readonly ProfileSettingsSubsectionId[];
-const contextSettingsSubsectionIds = CONTEXT_SETTINGS_SUBSECTIONS.map((subsection) => subsection.id) as readonly ContextSettingsSubsectionId[];
-const registrySettingsSubsectionIds = REGISTRY_SETTINGS_SUBSECTIONS.map((subsection) => subsection.id) as readonly RegistrySettingsSubsectionId[];
-const appSettingsSubsectionIds = APP_SETTINGS_SUBSECTIONS.map((subsection) => subsection.id) as readonly AppSettingsSubsectionId[];
-const settingsPrimarySectionIds = SETTINGS_PRIMARY_SECTIONS.map((section) => section.id) as readonly SettingsPrimarySectionId[];
+const kiloSettingsSubsectionIds = KILO_SETTINGS_SUBSECTIONS.map(
+    (subsection) => subsection.id
+) as readonly KiloSettingsSubsectionId[];
+const modesSettingsSubsectionIds = MODES_SETTINGS_SUBSECTIONS.map(
+    (subsection) => subsection.id
+) as readonly ModesSettingsSubsectionId[];
+const profileSettingsSubsectionIds = PROFILE_SETTINGS_SUBSECTIONS.map(
+    (subsection) => subsection.id
+) as readonly ProfileSettingsSubsectionId[];
+const contextSettingsSubsectionIds = CONTEXT_SETTINGS_SUBSECTIONS.map(
+    (subsection) => subsection.id
+) as readonly ContextSettingsSubsectionId[];
+const registrySettingsSubsectionIds = REGISTRY_SETTINGS_SUBSECTIONS.map(
+    (subsection) => subsection.id
+) as readonly RegistrySettingsSubsectionId[];
+const appSettingsSubsectionIds = APP_SETTINGS_SUBSECTIONS.map(
+    (subsection) => subsection.id
+) as readonly AppSettingsSubsectionId[];
+const settingsPrimarySectionIds = SETTINGS_PRIMARY_SECTIONS.map(
+    (section) => section.id
+) as readonly SettingsPrimarySectionId[];
 
 export function getDefaultSettingsSelection(section: SettingsPrimarySectionId = 'kilo'): SettingsSelection {
     switch (section) {
@@ -267,7 +286,9 @@ export function resolveSettingsSelectionFromRouteSearch(search: SettingsRouteSea
                 ? { section, subsection }
                 : getDefaultSettingsSelection(section);
         case 'app':
-            return isOneOf(subsection, appSettingsSubsectionIds) ? { section, subsection } : getDefaultSettingsSelection(section);
+            return isOneOf(subsection, appSettingsSubsectionIds)
+                ? { section, subsection }
+                : getDefaultSettingsSelection(section);
     }
 }
 
@@ -279,7 +300,10 @@ export function getSettingsRouteSearch(selection: SettingsSelection): Required<S
 }
 
 export function parseSettingsRouteSearch(search: Record<string, unknown>): SettingsRouteSearch {
-    const section = typeof search.section === 'string' && isOneOf(search.section, settingsPrimarySectionIds) ? search.section : undefined;
+    const section =
+        typeof search.section === 'string' && isOneOf(search.section, settingsPrimarySectionIds)
+            ? search.section
+            : undefined;
     const subsection = typeof search.subsection === 'string' ? search.subsection : undefined;
 
     return {

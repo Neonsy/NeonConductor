@@ -48,7 +48,7 @@ function PrimaryRailButton({
                 onSelect(section.id);
             }}>
             <div className='space-y-1'>
-                <p className='min-w-0 break-words text-sm font-medium'>{section.label}</p>
+                <p className='min-w-0 text-sm font-medium break-words'>{section.label}</p>
                 <p className='text-muted-foreground text-[11px] leading-5'>{section.description}</p>
             </div>
         </button>
@@ -173,7 +173,8 @@ export function SettingsWorkspace({
                     <div className='space-y-1'>
                         <h2 className='text-sm font-semibold tracking-[0.18em] uppercase'>Settings</h2>
                         <p className='text-muted-foreground text-xs'>
-                            Modes are app-level. Kilo, providers, profiles, registry, and app utilities stay grouped by concern.
+                            Kilo is the default setup path. The other sections cover shared instructions, providers,
+                            profiles, workspace limits, rules, skills, and app tools.
                         </p>
                         {privacyMode.enabled ? (
                             <p className='text-primary text-[11px] font-semibold tracking-[0.12em] uppercase'>

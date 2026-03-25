@@ -92,7 +92,7 @@ export function WorkspaceSurfaceUtilityMenu({
                             <span className='text-muted-foreground block text-xs leading-5'>
                                 {appSection === 'settings'
                                     ? 'Return to the last primary workspace area.'
-                                    : 'Open provider, profile, context, registry, and app controls.'}
+                                    : 'Open settings for providers, profiles, workspace limits, rules, skills, and app tools.'}
                             </span>
                         </span>
                     </button>

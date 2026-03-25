@@ -13,6 +13,7 @@ import { devServerUrl, getMainDirname, isDev } from '@/app/main/runtime/env';
 import { resolveDesktopStorage, resolveDesktopStoragePaths } from '@/app/main/runtime/storage';
 import { attachCspHeaders } from '@/app/main/security/cspHeaders';
 import { registerBootWindows, reportMainBootStatus } from '@/app/main/window/bootCoordinator';
+import { BOOT_STUCK_WARNING_DEV_MS } from '@/app/shared/splashContract';
 import { createMainWindow } from '@/app/main/window/factory';
 import { createSplashWindow } from '@/app/main/window/splash';
 
@@ -62,6 +63,7 @@ export function bootstrapMainProcess(deps: BootstrapDeps, importMetaUrl: string)
         registerBootWindows({
             mainWindow: nextMainWindow,
             splashWindow,
+            ...(isDev ? { warningMs: BOOT_STUCK_WARNING_DEV_MS } : {}),
         });
         reportMainBootStatus({
             stage: 'windows_ready',

@@ -19,9 +19,7 @@ function buildProviderSettingsControllerKey(profileId: string, selectedProviderI
     return `${profileId}:${selectedProviderId}`;
 }
 
-function sortProviderItems(
-    providers: ReturnType<typeof useProviderSettingsController>['selection']['providerItems']
-) {
+function sortProviderItems(providers: ReturnType<typeof useProviderSettingsController>['selection']['providerItems']) {
     const kiloProvider = providers.find((provider) => provider.id === 'kilo');
     const directProviders = providers
         .filter((provider) => provider.id !== 'kilo')
@@ -51,8 +49,8 @@ function KiloProviderContent({
                 <div className='min-w-0'>
                     <h4 className='text-xl font-semibold text-balance'>Kilo Gateway</h4>
                     <p className='text-muted-foreground mt-1 max-w-3xl text-sm leading-6'>
-                        Keep Kilo Gateway first in the shared provider surface. Account access, default models, and
-                        routing live here without splitting provider management into a separate tab set.
+                        Manage your Kilo sign-in, default models, and provider choice here so the main setup path stays
+                        in one place.
                     </p>
                 </div>
                 <div className='border-border/70 bg-background/80 self-start rounded-full border px-3 py-1.5 text-xs font-medium'>
@@ -108,7 +106,9 @@ function KiloProviderContent({
                 selectedModelId={controller.models.selectedModelId}
                 models={controller.models.options}
                 catalogStateReason={controller.models.catalogStateReason}
-                {...(controller.models.catalogStateDetail ? { catalogStateDetail: controller.models.catalogStateDetail } : {})}
+                {...(controller.models.catalogStateDetail
+                    ? { catalogStateDetail: controller.models.catalogStateDetail }
+                    : {})}
                 isDefaultModel={controller.models.isDefaultModel}
                 isSavingDefault={controller.models.isSavingDefault}
                 isSyncingCatalog={controller.models.isSyncingCatalog}
@@ -160,8 +160,8 @@ function DirectProviderContent({
                 <div className='min-w-0'>
                     <h4 className='text-xl font-semibold text-balance'>{selectedProvider.label}</h4>
                     <p className='text-muted-foreground mt-1 max-w-3xl text-sm leading-6'>
-                        Connect and tune direct providers here. Kilo Gateway stays pinned above the divider, while
-                        custom providers stay together in this shared surface.
+                        Connect direct providers and adjust their settings here. Kilo stays at the top as the default
+                        path, while direct providers stay together in this shared view.
                     </p>
                 </div>
                 <div className='border-border/70 bg-background/80 self-start rounded-full border px-3 py-1.5 text-xs font-medium'>
@@ -230,7 +230,9 @@ function DirectProviderContent({
                 selectedModelId={controller.models.selectedModelId}
                 models={controller.models.options}
                 catalogStateReason={controller.models.catalogStateReason}
-                {...(controller.models.catalogStateDetail ? { catalogStateDetail: controller.models.catalogStateDetail } : {})}
+                {...(controller.models.catalogStateDetail
+                    ? { catalogStateDetail: controller.models.catalogStateDetail }
+                    : {})}
                 isDefaultModel={controller.models.isDefaultModel}
                 isSavingDefault={controller.models.isSavingDefault}
                 isSyncingCatalog={controller.models.isSyncingCatalog}
@@ -248,11 +250,7 @@ function DirectProviderContent({
     );
 }
 
-function ProviderSettingsViewBody({
-    profileId,
-    selectedProviderId,
-    onProviderChange,
-}: ProviderSettingsViewProps) {
+function ProviderSettingsViewBody({ profileId, selectedProviderId, onProviderChange }: ProviderSettingsViewProps) {
     const controller = useProviderSettingsController(
         profileId,
         selectedProviderId ? { initialProviderId: selectedProviderId } : undefined
@@ -287,8 +285,8 @@ function ProviderSettingsViewBody({
                     <div className='border-border/70 bg-card/40 space-y-2 rounded-[24px] border p-5'>
                         <p className='text-sm font-semibold'>No provider selected</p>
                         <p className='text-muted-foreground text-sm leading-6'>
-                            Choose Kilo Gateway or a direct provider from the provider rail to inspect auth, models,
-                            and runtime defaults.
+                            Choose Kilo Gateway or a direct provider from the provider rail to inspect auth, models, and
+                            runtime defaults.
                         </p>
                     </div>
                 )}

@@ -87,9 +87,9 @@ function WorkspaceCreateDialogBody({
     const [workspaceDefaultTopLevelTabDraft, setWorkspaceDefaultTopLevelTabDraft] = useState<TopLevelTab>(
         initialDraft.topLevelTab
     );
-    const [workspaceDefaultProviderIdDraft, setWorkspaceDefaultProviderIdDraft] = useState<RuntimeProviderId | undefined>(
-        initialDraft.providerId
-    );
+    const [workspaceDefaultProviderIdDraft, setWorkspaceDefaultProviderIdDraft] = useState<
+        RuntimeProviderId | undefined
+    >(initialDraft.providerId);
     const [workspaceDefaultModelIdDraft, setWorkspaceDefaultModelIdDraft] = useState(initialDraft.modelId);
     const [submitError, setSubmitError] = useState<string | undefined>(undefined);
     const deferredWorkspacePathDraft = useDeferredValue(workspacePathDraft.trim());
@@ -112,7 +112,7 @@ function WorkspaceCreateDialogBody({
     const createSelectedModelId =
         workspaceDefaultModelIdDraft && createModelOptions.some((option) => option.id === workspaceDefaultModelIdDraft)
             ? workspaceDefaultModelIdDraft
-            : createModelOptions[0]?.id ?? '';
+            : (createModelOptions[0]?.id ?? '');
     const createSelectedModelOption = createModelOptions.find((option) => option.id === createSelectedModelId);
 
     async function browseForWorkspaceDirectory() {
@@ -169,7 +169,7 @@ function WorkspaceCreateDialogBody({
                     New workspace
                 </h2>
                 <p id='workspace-create-description' className='text-muted-foreground text-sm'>
-                    Register the workspace once here, then use it across sessions, sandboxes, and registry flows.
+                    Add this folder once, then reuse it for sessions, isolated runs, and workspace files.
                 </p>
             </div>
 
@@ -220,14 +220,15 @@ function WorkspaceCreateDialogBody({
                     isLoading={environmentQuery.isLoading}
                     errorMessage={environmentQuery.error?.message}
                     snapshot={environmentQuery.data?.snapshot}
-                    emptyMessage='NeonConductor will treat the selected folder as the workspace root and use it for sessions, tool execution, and registry discovery.'
+                    emptyMessage='Neon will use this folder for sessions, commands, rules, and skills tied to the workspace.'
                 />
 
-                <div className='space-y-4 rounded-2xl border border-border/70 bg-card/35 px-4 py-4'>
+                <div className='border-border/70 bg-card/35 space-y-4 rounded-2xl border px-4 py-4'>
                     <div className='space-y-1'>
                         <p className='text-sm font-medium'>Workspace defaults</p>
                         <p className='text-muted-foreground text-xs leading-5'>
-                            These defaults seed new threads in the workspace before the active header can override them.
+                            These choices become the starting mode, provider, and model for new threads in this
+                            workspace.
                         </p>
                     </div>
 
@@ -257,12 +258,15 @@ function WorkspaceCreateDialogBody({
                                 value={workspaceDefaultProviderIdDraft ?? ''}
                                 onChange={(event) => {
                                     setSubmitError(undefined);
-                                    const nextProviderId = providers.find((provider) => provider.id === event.target.value)?.id;
+                                    const nextProviderId = providers.find(
+                                        (provider) => provider.id === event.target.value
+                                    )?.id;
                                     setWorkspaceDefaultProviderIdDraft(nextProviderId);
                                     const nextProvider = nextProviderId
                                         ? providers.find((provider) => provider.id === nextProviderId)
                                         : undefined;
-                                    const nextModelId = buildWorkspaceModelOptions(nextProvider, providerModels)[0]?.id ?? '';
+                                    const nextModelId =
+                                        buildWorkspaceModelOptions(nextProvider, providerModels)[0]?.id ?? '';
                                     setWorkspaceDefaultModelIdDraft(nextModelId);
                                 }}>
                                 {providers.map((provider) => (
@@ -296,7 +300,9 @@ function WorkspaceCreateDialogBody({
                             />
                             {createSelectedModelOption?.compatibilityReason &&
                             createSelectedModelOption.compatibilityScope !== 'provider' ? (
-                                <p className='text-muted-foreground text-xs'>{createSelectedModelOption.compatibilityReason}</p>
+                                <p className='text-muted-foreground text-xs'>
+                                    {createSelectedModelOption.compatibilityReason}
+                                </p>
                             ) : null}
                         </label>
                     </div>
@@ -304,7 +310,7 @@ function WorkspaceCreateDialogBody({
                 {submitError ? <p className='text-destructive text-sm'>{submitError}</p> : null}
             </div>
 
-            <div className='mt-5 flex items-center justify-end gap-2 border-t border-border/70 pt-4'>
+            <div className='border-border/70 mt-5 flex items-center justify-end gap-2 border-t pt-4'>
                 <button
                     type='button'
                     className='border-border bg-card hover:bg-accent rounded-full border px-4 py-2 text-sm font-medium'
@@ -313,7 +319,7 @@ function WorkspaceCreateDialogBody({
                 </button>
                 <button
                     type='button'
-                    className='rounded-full border border-primary/40 bg-primary/10 px-4 py-2 text-sm font-medium text-primary disabled:cursor-not-allowed disabled:opacity-60'
+                    className='border-primary/40 bg-primary/10 text-primary rounded-full border px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60'
                     disabled={
                         isSaving ||
                         workspacePathDraft.trim().length === 0 ||
@@ -324,7 +330,7 @@ function WorkspaceCreateDialogBody({
                     onClick={() => {
                         handleCreateWorkspace();
                     }}>
-                    {isSaving ? 'Saving…' : 'Save workspace'}
+                    {isSaving ? 'Saving…' : 'Add workspace'}
                 </button>
             </div>
         </div>

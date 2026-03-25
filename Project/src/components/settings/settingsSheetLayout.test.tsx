@@ -9,6 +9,10 @@ vi.mock('@/web/components/settings/kiloSettingsView', () => ({
     KiloSettingsView: () => <div>kilo view</div>,
 }));
 
+vi.mock('@/web/components/settings/modesSettings/view', () => ({
+    ModesSettingsView: () => <div>modes view</div>,
+}));
+
 vi.mock('@/web/components/settings/profileSettingsView', () => ({
     ProfileSettingsView: () => <div>profile view</div>,
 }));
@@ -39,5 +43,26 @@ describe('settings sheet layout', () => {
 
         expect(html).toContain('Kilo');
         expect(html).toContain('bg-background/20 h-full min-h-0 min-w-0 flex-1 overflow-hidden');
+    });
+
+    it('keeps modes controls available from the sheet rail', async () => {
+        vi.resetModules();
+        vi.doMock('@/web/components/settings/settingsNavigation', async () => {
+            const actual = await vi.importActual<typeof import('@/web/components/settings/settingsNavigation')>(
+                '@/web/components/settings/settingsNavigation'
+            );
+            return {
+                ...actual,
+                getDefaultSettingsSelection: () => ({ section: 'modes' as const, subsection: 'instructions' as const }),
+            };
+        });
+
+        const { SettingsSheet: ModesSettingsSheet } = await import('@/web/components/settings/settingsSheet');
+        const html = renderToStaticMarkup(
+            <ModesSettingsSheet open profileId='profile_default' onClose={() => {}} onProfileActivated={() => {}} />
+        );
+
+        expect(html).toContain('modes view');
+        vi.doUnmock('@/web/components/settings/settingsNavigation');
     });
 });

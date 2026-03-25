@@ -61,11 +61,11 @@ export function KiloRoutingSection({
     const canConfigureDynamicRouting = hasProviders && selectedModelId.trim().length > 0;
 
     return (
-        <section className='space-y-4 rounded-[24px] border border-border/70 bg-card/40 p-4'>
+        <section className='border-border/70 bg-card/40 space-y-4 rounded-[24px] border p-4'>
             <div className='space-y-1'>
-                <p className='text-sm font-semibold'>Kilo Routing</p>
+                <p className='text-sm font-semibold'>How Kilo chooses a provider</p>
                 <p className='text-muted-foreground text-xs'>
-                    Configure routing for <span className='font-mono'>{selectedModelId}</span>.
+                    Choose how Kilo should pick a provider for <span className='font-mono'>{selectedModelId}</span>.
                 </p>
             </div>
 
@@ -139,7 +139,7 @@ export function KiloRoutingSection({
             </div>
 
             <div className='border-border overflow-x-auto rounded-xl border'>
-                <table className='min-w-[42rem] w-full border-collapse text-xs'>
+                <table className='w-full min-w-[42rem] border-collapse text-xs'>
                     <thead className='bg-muted/40'>
                         <tr>
                             <th className='px-2 py-1.5 text-left font-medium'>Provider</th>
@@ -175,4 +175,3 @@ export function KiloRoutingSection({
         </section>
     );
 }
-

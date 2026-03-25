@@ -1,6 +1,8 @@
 import path from 'node:path';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { BOOT_STUCK_WARNING_DEV_MS } from '@/app/shared/splashContract';
+
 const {
     appOnSpy,
     appQuitSpy,
@@ -268,6 +270,7 @@ describe('bootstrapMainProcess', () => {
         expect(registerBootWindowsSpy).toHaveBeenCalledWith({
             mainWindow: { id: 'window-main' },
             splashWindow: { id: 'window-splash' },
+            warningMs: BOOT_STUCK_WARNING_DEV_MS,
         });
         expect(reportMainBootStatusSpy).toHaveBeenCalledWith({ stage: 'main_initializing' });
         expect(reportMainBootStatusSpy).toHaveBeenCalledWith({ stage: 'storage_ready' });
@@ -335,6 +338,10 @@ describe('bootstrapMainProcess', () => {
             isPackaged: true,
             mainDirname,
             resourcesPath: process.resourcesPath,
+        });
+        expect(registerBootWindowsSpy).toHaveBeenCalledWith({
+            mainWindow: { id: 'window-main' },
+            splashWindow: { id: 'window-splash' },
         });
     });
 

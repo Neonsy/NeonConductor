@@ -1,6 +1,7 @@
 export const SPLASH_BOOT_STATUS_CHANNEL = 'neonconductor:splash-phase';
 
 export const BOOT_STUCK_WARNING_MS = 4000;
+export const BOOT_STUCK_WARNING_DEV_MS = 10000;
 export const BOOT_FORCE_SHOW_MS = 12000;
 
 export const bootStages = [
@@ -154,8 +155,8 @@ function getDefaultBootDetail(
 ): string {
     if (stage === 'boot_stuck') {
         return blockingPrerequisite
-            ? `Waiting on: ${getBootBlockingPrerequisiteLabel(blockingPrerequisite)}.`
-            : 'Waiting on a startup prerequisite.';
+            ? `Still waiting on: ${getBootBlockingPrerequisiteLabel(blockingPrerequisite)}. Startup time can vary depending on hardware performance.`
+            : 'Still waiting on startup work. Startup time can vary depending on hardware performance.';
     }
 
     if (stage === 'handoff_forced') {

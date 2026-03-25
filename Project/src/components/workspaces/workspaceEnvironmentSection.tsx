@@ -12,7 +12,7 @@ import type {
 
 function formatFamilyLabel(value: string): string {
     if (value === 'unknown') {
-        return 'Unknown';
+        return 'Not detected';
     }
 
     if (value === 'posix_sh') {
@@ -21,6 +21,22 @@ function formatFamilyLabel(value: string): string {
 
     if (value === 'powershell') {
         return 'PowerShell';
+    }
+
+    if (value === 'jj') {
+        return 'Jujutsu (jj)';
+    }
+
+    if (value === 'git') {
+        return 'Git';
+    }
+
+    if (value === 'node') {
+        return 'Node.js';
+    }
+
+    if (value === 'python3') {
+        return 'Python 3';
     }
 
     return value;
@@ -42,24 +58,22 @@ function listAvailableCommands(snapshot: WorkspaceEnvironmentSnapshot): string {
     return labels.length > 0 ? labels.join(', ') : 'None detected';
 }
 
-function RuntimeEnvironmentSummary({
-    snapshot,
-}: {
-    snapshot: WorkspaceEnvironmentSnapshot;
-}) {
+function RuntimeEnvironmentSummary({ snapshot }: { snapshot: WorkspaceEnvironmentSnapshot }) {
     return (
         <div className='space-y-3'>
             <div className='grid gap-3 md:grid-cols-3'>
-                <div className='rounded-2xl border border-border/70 bg-background/70 px-4 py-3'>
+                <div className='border-border/70 bg-background/70 rounded-2xl border px-4 py-3'>
                     <p className='text-muted-foreground text-[11px] font-semibold tracking-[0.12em] uppercase'>
-                        VCS
+                        Version control
                     </p>
-                    <p className='mt-2 text-sm font-semibold'>{formatFamilyLabel(snapshot.effectivePreferences.vcs.family)}</p>
+                    <p className='mt-2 text-sm font-semibold'>
+                        {formatFamilyLabel(snapshot.effectivePreferences.vcs.family)}
+                    </p>
                     <p className='text-muted-foreground mt-1 text-xs'>
                         Detected {formatFamilyLabel(snapshot.detectedPreferences.vcs)}
                     </p>
                 </div>
-                <div className='rounded-2xl border border-border/70 bg-background/70 px-4 py-3'>
+                <div className='border-border/70 bg-background/70 rounded-2xl border px-4 py-3'>
                     <p className='text-muted-foreground text-[11px] font-semibold tracking-[0.12em] uppercase'>
                         Package Manager
                     </p>
@@ -70,18 +84,20 @@ function RuntimeEnvironmentSummary({
                         Detected {formatFamilyLabel(snapshot.detectedPreferences.packageManager)}
                     </p>
                 </div>
-                <div className='rounded-2xl border border-border/70 bg-background/70 px-4 py-3'>
+                <div className='border-border/70 bg-background/70 rounded-2xl border px-4 py-3'>
                     <p className='text-muted-foreground text-[11px] font-semibold tracking-[0.12em] uppercase'>
                         Runtime
                     </p>
-                    <p className='mt-2 text-sm font-semibold'>{formatFamilyLabel(snapshot.effectivePreferences.runtime)}</p>
+                    <p className='mt-2 text-sm font-semibold'>
+                        {formatFamilyLabel(snapshot.effectivePreferences.runtime)}
+                    </p>
                     <p className='text-muted-foreground mt-1 text-xs'>
                         Script runner {formatFamilyLabel(snapshot.effectivePreferences.scriptRunner)}
                     </p>
                 </div>
             </div>
 
-            <div className='rounded-2xl border border-border/70 bg-background/70 px-4 py-3'>
+            <div className='border-border/70 bg-background/70 rounded-2xl border px-4 py-3'>
                 <p className='text-muted-foreground text-[11px] font-semibold tracking-[0.12em] uppercase'>
                     Platform and Commands
                 </p>
@@ -94,7 +110,7 @@ function RuntimeEnvironmentSummary({
             </div>
 
             {snapshot.notes.length > 0 ? (
-                <div className='rounded-2xl border border-border/70 bg-background/70 px-4 py-3'>
+                <div className='border-border/70 bg-background/70 rounded-2xl border px-4 py-3'>
                     <p className='text-muted-foreground text-[11px] font-semibold tracking-[0.12em] uppercase'>
                         Guidance
                     </p>
@@ -118,10 +134,12 @@ export function WorkspaceEnvironmentPreviewCard(input: {
     emptyMessage: string;
 }) {
     return (
-        <div className='rounded-2xl border border-border/70 bg-card/35 px-4 py-3 text-sm'>
-            <p className='font-medium'>Detection preview</p>
+        <div className='border-border/70 bg-card/35 rounded-2xl border px-4 py-3 text-sm'>
+            <p className='font-medium'>Tool detection preview</p>
             {input.isLoading ? (
-                <p className='text-muted-foreground mt-1 text-xs leading-5'>Inspecting the selected workspace…</p>
+                <p className='text-muted-foreground mt-1 text-xs leading-5'>
+                    Checking which tools this folder can use…
+                </p>
             ) : input.errorMessage ? (
                 <p className='text-destructive mt-1 text-xs leading-5'>{input.errorMessage}</p>
             ) : input.snapshot ? (
@@ -147,6 +165,7 @@ export function WorkspaceEnvironmentSection(input: {
     const [preferredPackageManager, setPreferredPackageManager] = useState<WorkspacePreferredPackageManager>(
         input.workspacePreference?.preferredPackageManager ?? 'auto'
     );
+    const [feedbackMessage, setFeedbackMessage] = useState<string | undefined>(undefined);
     const environmentQuery = trpc.runtime.inspectWorkspaceEnvironment.useQuery(
         {
             profileId: input.profileId,
@@ -169,7 +188,11 @@ export function WorkspaceEnvironmentSection(input: {
                       }
                     : current
             );
+            setFeedbackMessage('Saved the tool preferences Neon should use for this workspace.');
             void environmentQuery.refetch();
+        },
+        onError: () => {
+            setFeedbackMessage('Could not save workspace tool preferences.');
         },
     });
     const currentPreferredVcs = input.workspacePreference?.preferredVcs ?? 'auto';
@@ -189,10 +212,10 @@ export function WorkspaceEnvironmentSection(input: {
     return (
         <article className='border-border/70 bg-card/55 rounded-[24px] border p-5'>
             <div className='space-y-1'>
-                <p className='text-sm font-semibold'>Environment and toolchain</p>
+                <p className='text-sm font-semibold'>Tools Neon should use in this workspace</p>
                 <p className='text-muted-foreground text-xs leading-5'>
-                    Detection is backend-owned. Overrides only influence preference selection and never fake command
-                    availability.
+                    Neon detects which tools are available in this folder. The choices below only tell Neon which tool
+                    to prefer when more than one is available.
                 </p>
             </div>
 
@@ -204,19 +227,22 @@ export function WorkspaceEnvironmentSection(input: {
                 ) : environmentQuery.data ? (
                     <RuntimeEnvironmentSummary snapshot={environmentQuery.data.snapshot} />
                 ) : (
-                    <p className='text-muted-foreground text-sm'>Environment data is not available for this workspace yet.</p>
+                    <p className='text-muted-foreground text-sm'>
+                        Environment data is not available for this workspace yet.
+                    </p>
                 )}
             </div>
 
-            <div className='mt-4 grid gap-4 border-t border-border/70 pt-4 md:grid-cols-2'>
+            <div className='border-border/70 mt-4 grid gap-4 border-t pt-4 md:grid-cols-2'>
                 <label className='space-y-2'>
                     <span className='text-muted-foreground text-[11px] font-semibold tracking-[0.12em] uppercase'>
-                        Preferred VCS
+                        Version control to prefer
                     </span>
                     <select
                         className='border-border bg-card h-10 w-full rounded-2xl border px-3 text-sm'
                         value={preferredVcs}
                         onChange={(event) => {
+                            setFeedbackMessage(undefined);
                             const nextValue = event.target.value;
                             if (nextValue === 'auto' || nextValue === 'jj' || nextValue === 'git') {
                                 setPreferredVcs(nextValue);
@@ -226,16 +252,20 @@ export function WorkspaceEnvironmentSection(input: {
                         <option value='jj'>{formatOverrideLabel('jj')}</option>
                         <option value='git'>{formatOverrideLabel('git')}</option>
                     </select>
+                    <p className='text-muted-foreground text-xs leading-5'>
+                        Auto uses the version control tool Neon detected for this folder.
+                    </p>
                 </label>
 
                 <label className='space-y-2'>
                     <span className='text-muted-foreground text-[11px] font-semibold tracking-[0.12em] uppercase'>
-                        Preferred Package Manager
+                        Package manager to prefer
                     </span>
                     <select
                         className='border-border bg-card h-10 w-full rounded-2xl border px-3 text-sm'
                         value={preferredPackageManager}
                         onChange={(event) => {
+                            setFeedbackMessage(undefined);
                             const nextValue = event.target.value;
                             if (
                                 nextValue === 'auto' ||
@@ -253,18 +283,22 @@ export function WorkspaceEnvironmentSection(input: {
                         <option value='yarn'>{formatOverrideLabel('yarn')}</option>
                         <option value='bun'>{formatOverrideLabel('bun')}</option>
                     </select>
+                    <p className='text-muted-foreground text-xs leading-5'>
+                        Auto uses the package manager Neon detected for this folder.
+                    </p>
                 </label>
             </div>
 
-            <div className='mt-4 flex items-center justify-end gap-2 border-t border-border/70 pt-4'>
+            <div className='border-border/70 mt-4 flex items-center justify-end gap-2 border-t pt-4'>
+                {feedbackMessage ? <p className='text-muted-foreground mr-auto text-xs'>{feedbackMessage}</p> : null}
                 <button
                     type='button'
-                    className='rounded-full border border-primary/40 bg-primary/10 px-4 py-2 text-sm font-medium text-primary disabled:cursor-not-allowed disabled:opacity-60'
+                    className='border-primary/40 bg-primary/10 text-primary rounded-full border px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60'
                     disabled={!hasPendingChanges || setWorkspacePreferenceMutation.isPending}
                     onClick={() => {
                         void handleSaveOverrides();
                     }}>
-                    {setWorkspacePreferenceMutation.isPending ? 'Saving…' : 'Save environment overrides'}
+                    {setWorkspacePreferenceMutation.isPending ? 'Saving…' : 'Save tool preferences'}
                 </button>
             </div>
         </article>

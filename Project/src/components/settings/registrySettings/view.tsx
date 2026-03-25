@@ -15,16 +15,12 @@ interface RegistrySettingsViewProps {
     onSubsectionChange?: (subsection: RegistrySettingsSubsectionId) => void;
 }
 
-function RegistrySectionHeader({
-    title,
-    description,
-}: {
-    title: string;
-    description: string;
-}) {
+function RegistrySectionHeader({ title, description }: { title: string; description: string }) {
     return (
         <div className='space-y-2'>
-            <p className='text-primary text-[11px] font-semibold tracking-[0.16em] uppercase'>Skills &amp; Registry</p>
+            <p className='text-primary text-[11px] font-semibold tracking-[0.16em] uppercase'>
+                Rules, Skills &amp; Modes
+            </p>
             <div className='space-y-1'>
                 <h4 className='text-xl font-semibold text-balance'>{title}</h4>
                 <p className='text-muted-foreground max-w-3xl text-sm leading-6'>{description}</p>
@@ -71,8 +67,8 @@ export function RegistrySettingsScreen({
     return (
         <section className='grid h-full min-h-0 min-w-0 overflow-hidden xl:grid-cols-[280px_minmax(0,1fr)]'>
             <SettingsSelectionRail
-                title='Skills & Registry'
-                ariaLabel='Registry settings sections'
+                title='Rules, Skills & Modes'
+                ariaLabel='Rules, skills, and modes settings sections'
                 selectedId={subsection}
                 onSelect={(itemId) => {
                     const nextSection = REGISTRY_SETTINGS_SUBSECTIONS.find((candidate) => candidate.id === itemId);
@@ -97,8 +93,8 @@ export function RegistrySettingsScreen({
                         <>
                             <div className='flex flex-wrap items-start justify-between gap-3'>
                                 <RegistrySectionHeader
-                                    title='Registry Diagnostics'
-                                    description='Inspect asset roots, workspace scope, and refresh behavior without mixing diagnostics into rules or mode browsing.'
+                                    title='How Neon found these files'
+                                    description='See which folders Neon checks, which workspace is selected, and refresh the files Neon reads from disk.'
                                 />
                                 <div className='flex flex-wrap gap-2'>
                                     <Button
@@ -109,21 +105,25 @@ export function RegistrySettingsScreen({
                                         onClick={() => {
                                             void handleRefreshGlobal();
                                         }}>
-                                        {controller.refreshMutation.isPending && !controller.selectedWorkspaceFingerprint
+                                        {controller.refreshMutation.isPending &&
+                                        !controller.selectedWorkspaceFingerprint
                                             ? 'Refreshing…'
-                                            : 'Refresh Global'}
+                                            : 'Refresh global files'}
                                     </Button>
                                     <Button
                                         type='button'
                                         size='sm'
                                         variant='outline'
-                                        disabled={controller.refreshMutation.isPending || !controller.selectedWorkspaceFingerprint}
+                                        disabled={
+                                            controller.refreshMutation.isPending ||
+                                            !controller.selectedWorkspaceFingerprint
+                                        }
                                         onClick={() => {
                                             void handleRefreshWorkspace();
                                         }}>
                                         {controller.refreshMutation.isPending && controller.selectedWorkspaceFingerprint
                                             ? 'Refreshing…'
-                                            : 'Refresh Workspace'}
+                                            : 'Refresh workspace files'}
                                     </Button>
                                 </div>
                             </div>
@@ -131,18 +131,20 @@ export function RegistrySettingsScreen({
                             <div className='grid gap-3 lg:grid-cols-[minmax(0,1fr)_320px]'>
                                 <div className='border-border bg-card rounded-2xl border p-4 shadow-sm'>
                                     <p className='text-muted-foreground text-[11px] font-semibold tracking-[0.12em] uppercase'>
-                                        Registry Roots
+                                        Folders Neon checks
                                     </p>
                                     <div className='mt-3 space-y-3'>
                                         <div>
-                                            <p className='text-sm font-semibold'>Global asset root</p>
-                                            <p className='text-muted-foreground mt-1 break-all text-xs'>
+                                            <p className='text-sm font-semibold'>Global files folder</p>
+                                            <p className='text-muted-foreground mt-1 text-xs break-all'>
                                                 {controller.registryQuery.data?.paths.globalAssetsRoot ?? 'Loading...'}
                                             </p>
                                         </div>
                                         <div>
-                                            <label className='text-sm font-semibold' htmlFor='registry-workspace-select'>
-                                                Workspace context
+                                            <label
+                                                className='text-sm font-semibold'
+                                                htmlFor='registry-workspace-select'>
+                                                Workspace to inspect
                                             </label>
                                             <select
                                                 id='registry-workspace-select'
@@ -156,15 +158,17 @@ export function RegistrySettingsScreen({
                                                 }}>
                                                 <option value=''>No workspace selected</option>
                                                 {controller.workspaceRoots.map((workspaceRoot) => (
-                                                    <option key={workspaceRoot.fingerprint} value={workspaceRoot.fingerprint}>
+                                                    <option
+                                                        key={workspaceRoot.fingerprint}
+                                                        value={workspaceRoot.fingerprint}>
                                                         {workspaceRoot.label}
                                                     </option>
                                                 ))}
                                             </select>
-                                            <p className='text-muted-foreground mt-2 break-all text-xs'>
+                                            <p className='text-muted-foreground mt-2 text-xs break-all'>
                                                 {controller.selectedWorkspaceRoot
                                                     ? controller.selectedWorkspaceRoot.absolutePath
-                                                    : 'Choose a workspace to inspect workspace-scoped assets and refresh the local registry view.'}
+                                                    : 'Choose a workspace to inspect workspace-only files and refresh the local results.'}
                                             </p>
                                         </div>
                                     </div>
@@ -172,19 +176,19 @@ export function RegistrySettingsScreen({
 
                                 <div className='grid gap-3 sm:grid-cols-3 lg:grid-cols-1'>
                                     <SummaryCard
-                                        label='Resolved Modes'
+                                        label='Available Modes'
                                         value={String(resolvedModes.length)}
-                                        detail='Agent-capable modes after precedence resolution'
+                                        detail='Modes Neon can use right now'
                                     />
                                     <SummaryCard
-                                        label='Resolved Rules'
+                                        label='Available Rules'
                                         value={String(resolvedRules.length)}
-                                        detail='Rules the active runtime can load for agent flows'
+                                        detail='Rules Neon can use right now'
                                     />
                                     <SummaryCard
-                                        label='Resolved Skills'
+                                        label='Available Skills'
                                         value={String(resolvedSkills.length)}
-                                        detail='Searchable skills after scope and precedence filtering'
+                                        detail='Skills Neon can use right now'
                                     />
                                 </div>
                             </div>

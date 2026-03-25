@@ -120,6 +120,86 @@ describe('bootCoordinator', () => {
         expect(mainWindow.show).not.toHaveBeenCalled();
     });
 
+    it('resets the warning timer when boot progress advances after the first renderer report', () => {
+        const mainWindow = createMockWindow(3);
+        const splashWindow = createMockWindow(4);
+
+        registerBootWindows({
+            mainWindow: mainWindow as never,
+            splashWindow: splashWindow as never,
+            warningMs: 1000,
+            forceShowMs: 5000,
+        });
+        reportMainBootStatus({
+            stage: 'renderer_connecting',
+            blockingPrerequisite: 'renderer_first_report',
+        });
+        mainWindow.emitWebContents('did-finish-load');
+
+        vi.advanceTimersByTime(900);
+        expect(
+            reportRendererBootStatus(mainWindow as never, {
+                stage: 'renderer_connecting',
+                blockingPrerequisite: 'renderer_first_report',
+            })
+        ).toEqual({ accepted: true });
+
+        vi.advanceTimersByTime(900);
+        expect(updateSplashWindowStatusSpy).not.toHaveBeenCalledWith(
+            splashWindow,
+            expect.objectContaining({
+                stage: 'boot_stuck',
+            })
+        );
+
+        vi.advanceTimersByTime(101);
+        expect(updateSplashWindowStatusSpy).toHaveBeenLastCalledWith(
+            splashWindow,
+            expect.objectContaining({
+                stage: 'boot_stuck',
+                blockingPrerequisite: 'renderer_first_report',
+            })
+        );
+    });
+
+    it('does not reset the warning timer for same-stage elapsed-only refreshes', () => {
+        const mainWindow = createMockWindow(5);
+        const splashWindow = createMockWindow(6);
+
+        registerBootWindows({
+            mainWindow: mainWindow as never,
+            splashWindow: splashWindow as never,
+            warningMs: 1000,
+            forceShowMs: 5000,
+        });
+        mainWindow.emitWebContents('did-finish-load');
+
+        expect(
+            reportRendererBootStatus(mainWindow as never, {
+                stage: 'profile_resolving',
+                blockingPrerequisite: 'resolved_profile',
+            })
+        ).toEqual({ accepted: true });
+
+        vi.advanceTimersByTime(900);
+        expect(
+            reportRendererBootStatus(mainWindow as never, {
+                stage: 'profile_resolving',
+                blockingPrerequisite: 'resolved_profile',
+                elapsedMs: 900,
+            })
+        ).toEqual({ accepted: true });
+
+        vi.advanceTimersByTime(101);
+        expect(updateSplashWindowStatusSpy).toHaveBeenLastCalledWith(
+            splashWindow,
+            expect.objectContaining({
+                stage: 'boot_stuck',
+                blockingPrerequisite: 'resolved_profile',
+            })
+        );
+    });
+
     it('forces the main window open and closes the splash after the force-show timeout', () => {
         const mainWindow = createMockWindow(10);
         const splashWindow = createMockWindow(20);
@@ -147,6 +227,39 @@ describe('bootCoordinator', () => {
                 isStuck: true,
             })
         );
+    });
+
+    it('keeps the force-show timer independent from warning resets', () => {
+        const mainWindow = createMockWindow(11);
+        const splashWindow = createMockWindow(21);
+
+        registerBootWindows({
+            mainWindow: mainWindow as never,
+            splashWindow: splashWindow as never,
+            warningMs: 1000,
+            forceShowMs: 2000,
+        });
+        reportMainBootStatus({
+            stage: 'renderer_connecting',
+            blockingPrerequisite: 'renderer_first_report',
+        });
+        mainWindow.emitWebContents('did-finish-load');
+
+        vi.advanceTimersByTime(900);
+        reportRendererBootStatus(mainWindow as never, {
+            stage: 'renderer_connecting',
+            blockingPrerequisite: 'renderer_first_report',
+        });
+        vi.advanceTimersByTime(900);
+        reportRendererBootStatus(mainWindow as never, {
+            stage: 'profile_resolving',
+            blockingPrerequisite: 'resolved_profile',
+        });
+        vi.advanceTimersByTime(200);
+
+        expect(splashWindow.close).toHaveBeenCalledTimes(1);
+        expect(mainWindow.show).toHaveBeenCalledTimes(1);
+        expect(mainWindow.maximize).toHaveBeenCalledTimes(1);
     });
 
     it('accepts the earliest renderer boot report and avoids forced handoff on a healthy startup path', () => {

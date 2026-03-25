@@ -45,7 +45,7 @@ export function WorkspaceDetailsPanel(input: {
             <div className='flex flex-wrap items-start justify-between gap-3'>
                 <div className='space-y-1'>
                     <h3 className='text-2xl font-semibold text-balance'>{input.selectedWorkspace.label}</h3>
-                    <p className='text-muted-foreground break-all text-sm leading-6'>
+                    <p className='text-muted-foreground text-sm leading-6 break-all'>
                         {input.selectedWorkspace.absolutePath}
                     </p>
                 </div>
@@ -62,29 +62,39 @@ export function WorkspaceDetailsPanel(input: {
                         className='border-border bg-card hover:bg-accent rounded-full border px-3 py-1.5 text-sm font-medium'
                         disabled={input.isRefreshingRegistry}
                         onClick={input.onRefreshRegistry}>
-                        {input.isRefreshingRegistry ? 'Refreshing…' : 'Refresh registry'}
+                        {input.isRefreshingRegistry ? 'Refreshing…' : 'Refresh workspace files'}
                     </button>
                 </div>
             </div>
 
             <div className='grid gap-4 md:grid-cols-2 xl:grid-cols-4'>
                 <article className='border-border/70 bg-card/55 rounded-[22px] border p-4'>
-                    <p className='text-muted-foreground text-[11px] font-semibold tracking-[0.14em] uppercase'>Threads</p>
+                    <p className='text-muted-foreground text-[11px] font-semibold tracking-[0.14em] uppercase'>
+                        Threads
+                    </p>
                     <p className='mt-2 text-2xl font-semibold'>{input.selectedWorkspaceThreads.length}</p>
                     <p className='text-muted-foreground mt-2 text-xs'>Conversations anchored to this workspace.</p>
                 </article>
                 <article className='border-border/70 bg-card/55 rounded-[22px] border p-4'>
-                    <p className='text-muted-foreground text-[11px] font-semibold tracking-[0.14em] uppercase'>Sessions</p>
+                    <p className='text-muted-foreground text-[11px] font-semibold tracking-[0.14em] uppercase'>
+                        Sessions
+                    </p>
                     <p className='mt-2 text-2xl font-semibold'>{input.selectedWorkspaceSessions.length}</p>
-                    <p className='text-muted-foreground mt-2 text-xs'>Runnable sessions currently linked to these threads.</p>
+                    <p className='text-muted-foreground mt-2 text-xs'>
+                        Runnable sessions currently linked to these threads.
+                    </p>
                 </article>
                 <article className='border-border/70 bg-card/55 rounded-[22px] border p-4'>
-                    <p className='text-muted-foreground text-[11px] font-semibold tracking-[0.14em] uppercase'>Sandboxes</p>
+                    <p className='text-muted-foreground text-[11px] font-semibold tracking-[0.14em] uppercase'>
+                        Sandboxes
+                    </p>
                     <p className='mt-2 text-2xl font-semibold'>{input.selectedWorkspaceSandboxes.length}</p>
                     <p className='text-muted-foreground mt-2 text-xs'>Managed sandboxes for isolated execution.</p>
                 </article>
                 <article className='border-border/70 bg-card/55 rounded-[22px] border p-4'>
-                    <p className='text-muted-foreground text-[11px] font-semibold tracking-[0.14em] uppercase'>Last updated</p>
+                    <p className='text-muted-foreground text-[11px] font-semibold tracking-[0.14em] uppercase'>
+                        Last updated
+                    </p>
                     <p className='mt-2 text-sm font-semibold'>{formatTimestamp(input.selectedWorkspace.updatedAt)}</p>
                     <p className='text-muted-foreground mt-2 text-xs'>Workspace root registration timestamp.</p>
                 </article>
@@ -96,7 +106,8 @@ export function WorkspaceDetailsPanel(input: {
                         <div className='space-y-1'>
                             <p className='text-sm font-semibold'>Linked sessions</p>
                             <p className='text-muted-foreground text-xs leading-5'>
-                                Sessions stay connected to the workspace through their conversation thread.
+                                Sessions created from this workspace stay connected to it through their conversation
+                                thread.
                             </p>
                         </div>
 
@@ -125,27 +136,34 @@ export function WorkspaceDetailsPanel(input: {
 
                     <article className='border-border/70 bg-card/55 rounded-[24px] border p-5'>
                         <div className='space-y-1'>
-                            <p className='text-sm font-semibold'>Registry and execution context</p>
+                            <p className='text-sm font-semibold'>Rules, skills, and isolated runs</p>
                             <p className='text-muted-foreground text-xs leading-5'>
-                                Workspace-local rules, skills, and sandboxes live here instead of being buried in settings.
+                                Files and isolated runs tied to this folder appear here so you do not have to hunt
+                                through settings.
                             </p>
                         </div>
 
                         <div className='mt-4 grid gap-3 md:grid-cols-3'>
-                            <div className='rounded-2xl border border-border/70 bg-background/70 px-4 py-3'>
-                                <p className='text-muted-foreground text-[11px] font-semibold tracking-[0.12em] uppercase'>Modes</p>
+                            <div className='border-border/70 bg-background/70 rounded-2xl border px-4 py-3'>
+                                <p className='text-muted-foreground text-[11px] font-semibold tracking-[0.12em] uppercase'>
+                                    Modes
+                                </p>
                                 <p className='mt-2 text-lg font-semibold'>
                                     {input.selectedWorkspaceRegistry?.resolved.modes.length ?? 0}
                                 </p>
                             </div>
-                            <div className='rounded-2xl border border-border/70 bg-background/70 px-4 py-3'>
-                                <p className='text-muted-foreground text-[11px] font-semibold tracking-[0.12em] uppercase'>Rules</p>
+                            <div className='border-border/70 bg-background/70 rounded-2xl border px-4 py-3'>
+                                <p className='text-muted-foreground text-[11px] font-semibold tracking-[0.12em] uppercase'>
+                                    Rules
+                                </p>
                                 <p className='mt-2 text-lg font-semibold'>
                                     {input.selectedWorkspaceRegistry?.resolved.rulesets.length ?? 0}
                                 </p>
                             </div>
-                            <div className='rounded-2xl border border-border/70 bg-background/70 px-4 py-3'>
-                                <p className='text-muted-foreground text-[11px] font-semibold tracking-[0.12em] uppercase'>Skills</p>
+                            <div className='border-border/70 bg-background/70 rounded-2xl border px-4 py-3'>
+                                <p className='text-muted-foreground text-[11px] font-semibold tracking-[0.12em] uppercase'>
+                                    Skills
+                                </p>
                                 <p className='mt-2 text-lg font-semibold'>
                                     {input.selectedWorkspaceRegistry?.resolved.skillfiles.length ?? 0}
                                 </p>
@@ -157,19 +175,23 @@ export function WorkspaceDetailsPanel(input: {
                 <div className='space-y-5'>
                     <article className='border-border/70 bg-card/55 rounded-[24px] border p-5'>
                         <div className='space-y-1'>
-                            <p className='text-sm font-semibold'>Workspace details</p>
+                            <p className='text-sm font-semibold'>Workspace info</p>
                             <p className='text-muted-foreground text-xs leading-5'>
-                                This root becomes the source of truth for workspace-scoped runs and registry discovery.
+                                Neon uses this folder for workspace runs, rules, skills, and other workspace-only files.
                             </p>
                         </div>
 
                         <dl className='mt-4 space-y-3 text-sm'>
                             <div>
-                                <dt className='text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase'>Fingerprint</dt>
+                                <dt className='text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase'>
+                                    Internal workspace ID
+                                </dt>
                                 <dd className='mt-1 break-all'>{input.selectedWorkspace.fingerprint}</dd>
                             </div>
                             <div>
-                                <dt className='text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase'>Absolute path</dt>
+                                <dt className='text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase'>
+                                    Absolute path
+                                </dt>
                                 <dd className='mt-1 break-all'>{input.selectedWorkspace.absolutePath}</dd>
                             </div>
                         </dl>
@@ -182,34 +204,39 @@ export function WorkspaceDetailsPanel(input: {
                         providers={input.providers}
                         providerModels={input.providerModels}
                         defaults={input.defaults}
-                        {...(input.selectedWorkspacePreference ? { workspacePreference: input.selectedWorkspacePreference } : {})}
+                        {...(input.selectedWorkspacePreference
+                            ? { workspacePreference: input.selectedWorkspacePreference }
+                            : {})}
                     />
 
                     <WorkspaceEnvironmentSection
                         key={`environment-${input.selectedWorkspace.fingerprint}`}
                         profileId={input.profileId}
                         workspaceFingerprint={input.selectedWorkspace.fingerprint}
-                        {...(input.selectedWorkspacePreference ? { workspacePreference: input.selectedWorkspacePreference } : {})}
+                        {...(input.selectedWorkspacePreference
+                            ? { workspacePreference: input.selectedWorkspacePreference }
+                            : {})}
                     />
 
                     <article className='border-destructive/30 bg-destructive/5 rounded-[24px] border p-5'>
                         <div className='space-y-1'>
                             <p className='text-sm font-semibold'>Destructive actions</p>
                             <p className='text-muted-foreground text-xs leading-5'>
-                                Removing the workspace record itself is still a later cleanup. For now, destructive actions
-                                are scoped to conversations anchored here.
+                                You can delete conversations linked to this workspace here. Removing the workspace entry
+                                itself is not available yet.
                             </p>
                         </div>
 
                         <div className='mt-4 flex justify-end'>
                             <button
                                 type='button'
-                                className='rounded-full border border-destructive/40 bg-destructive/10 px-4 py-2 text-sm font-medium text-destructive disabled:cursor-not-allowed disabled:opacity-60'
+                                className='border-destructive/40 bg-destructive/10 text-destructive rounded-full border px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60'
                                 disabled={
-                                    input.isDeletingWorkspaceConversations || input.selectedWorkspaceThreads.length === 0
+                                    input.isDeletingWorkspaceConversations ||
+                                    input.selectedWorkspaceThreads.length === 0
                                 }
                                 onClick={input.onRequestDeleteConversations}>
-                                Delete workspace conversations
+                                Delete linked conversations
                             </button>
                         </div>
                     </article>

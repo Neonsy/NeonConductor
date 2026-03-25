@@ -29,7 +29,9 @@ export function WorkspacesSurface({
 }: WorkspacesSurfaceProps) {
     const [searchValue, setSearchValue] = useState('');
     const [isCreateOpen, setIsCreateOpen] = useState(false);
-    const [confirmDeleteWorkspaceFingerprint, setConfirmDeleteWorkspaceFingerprint] = useState<string | undefined>(undefined);
+    const [confirmDeleteWorkspaceFingerprint, setConfirmDeleteWorkspaceFingerprint] = useState<string | undefined>(
+        undefined
+    );
     const deferredSearchValue = useDeferredValue(searchValue.trim().toLowerCase());
     const controller = useWorkspacesSurfaceController({
         profileId,
@@ -66,7 +68,8 @@ export function WorkspacesSurface({
                 <div className='space-y-1'>
                     <h2 className='text-sm font-semibold tracking-[0.18em] uppercase'>Workspaces</h2>
                     <p className='text-muted-foreground text-xs leading-5'>
-                        Register roots once, then keep sessions, sandboxes, and registry state anchored to them.
+                        Add a folder once, then reuse it for sessions, isolated runs, rules, and skills tied to that
+                        workspace.
                     </p>
                 </div>
 
@@ -108,11 +111,13 @@ export function WorkspacesSurface({
                                     });
                                 }}>
                                 <p className='text-sm font-semibold'>{workspaceRoot.label}</p>
-                                <p className='text-muted-foreground mt-1 truncate text-xs'>{workspaceRoot.absolutePath}</p>
+                                <p className='text-muted-foreground mt-1 truncate text-xs'>
+                                    {workspaceRoot.absolutePath}
+                                </p>
                             </button>
                         ))
                     ) : (
-                        <div className='border-border/70 bg-card/30 rounded-[22px] border border-dashed px-4 py-5 text-sm text-muted-foreground'>
+                        <div className='border-border/70 bg-card/30 text-muted-foreground rounded-[22px] border border-dashed px-4 py-5 text-sm'>
                             No workspaces match that search yet.
                         </div>
                     )}
@@ -149,8 +154,8 @@ export function WorkspacesSurface({
                         <div className='border-border/70 bg-card/40 space-y-2 rounded-[28px] border px-6 py-8 text-center'>
                             <p className='text-lg font-semibold'>No workspace selected</p>
                             <p className='text-muted-foreground text-sm leading-6'>
-                                Choose an existing workspace from the rail or register a new root to make workspaces a
-                                first-class part of the app.
+                                Choose a workspace from the rail or add a new folder to start using workspace-specific
+                                sessions and tools.
                             </p>
                         </div>
                     </div>

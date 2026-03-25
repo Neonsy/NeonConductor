@@ -136,24 +136,23 @@ function WorkspaceLifecycleDialogBody({
     const selectedProvider = defaultProviderId
         ? providers.find((provider) => provider.id === defaultProviderId)
         : undefined;
-    const modelOptions =
-        selectedProvider?.id
-            ? providerModels
-                  .filter((model) => model.providerId === selectedProvider.id)
-                  .map((model) =>
-                      buildModelPickerOption({
-                          model,
-                          provider: selectedProvider,
-                          compatibilityContext: {
-                              surface: 'settings',
-                          },
-                      })
-                  )
-            : [];
+    const modelOptions = selectedProvider?.id
+        ? providerModels
+              .filter((model) => model.providerId === selectedProvider.id)
+              .map((model) =>
+                  buildModelPickerOption({
+                      model,
+                      provider: selectedProvider,
+                      compatibilityContext: {
+                          surface: 'settings',
+                      },
+                  })
+              )
+        : [];
     const selectedModelId =
         defaultModelId && modelOptions.some((option) => option.id === defaultModelId)
             ? defaultModelId
-            : modelOptions[0]?.id ?? '';
+            : (modelOptions[0]?.id ?? '');
 
     async function handleBrowseDirectory() {
         const nextPath = await onBrowseDirectory();
@@ -177,7 +176,7 @@ function WorkspaceLifecycleDialogBody({
                     Add workspace
                 </h2>
                 <p id='workspace-lifecycle-description' className='text-muted-foreground text-sm'>
-                    Register the root once. NeonConductor will create the starter thread right away.
+                    Add a folder once. Neon will create the starter thread for it right away.
                 </p>
             </div>
 
@@ -228,14 +227,15 @@ function WorkspaceLifecycleDialogBody({
                     isLoading={environmentQuery.isLoading}
                     errorMessage={environmentQuery.error?.message}
                     snapshot={environmentQuery.data?.snapshot}
-                    emptyMessage='The selected folder becomes the workspace root for sessions, execution, and registry discovery.'
+                    emptyMessage='Neon will use this folder for sessions, commands, rules, and skills tied to the workspace.'
                 />
 
-                <div className='space-y-4 rounded-2xl border border-border/70 bg-card/35 px-4 py-4'>
+                <div className='border-border/70 bg-card/35 space-y-4 rounded-2xl border px-4 py-4'>
                     <div className='space-y-1'>
                         <p className='text-sm font-medium'>Workspace defaults</p>
                         <p className='text-muted-foreground text-xs leading-5'>
-                            These defaults seed the starter thread and future threads in this workspace.
+                            These choices become the starting mode, provider, and model for the starter thread and
+                            future threads in this workspace.
                         </p>
                     </div>
 
@@ -305,7 +305,7 @@ function WorkspaceLifecycleDialogBody({
                 {statusMessage ? <p className='text-destructive text-sm'>{statusMessage}</p> : null}
             </div>
 
-            <div className='mt-5 flex items-center justify-end gap-2 border-t border-border/70 pt-4'>
+            <div className='border-border/70 mt-5 flex items-center justify-end gap-2 border-t pt-4'>
                 <button
                     type='button'
                     className='border-border bg-card hover:bg-accent rounded-full border px-4 py-2 text-sm font-medium'
@@ -314,7 +314,7 @@ function WorkspaceLifecycleDialogBody({
                 </button>
                 <button
                     type='button'
-                    className='rounded-full border border-primary/40 bg-primary/10 px-4 py-2 text-sm font-medium text-primary disabled:cursor-not-allowed disabled:opacity-60'
+                    className='border-primary/40 bg-primary/10 text-primary rounded-full border px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60'
                     disabled={
                         busy ||
                         label.trim().length === 0 ||
