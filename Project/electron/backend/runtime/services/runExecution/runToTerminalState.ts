@@ -55,18 +55,30 @@ export async function runToTerminalState(input: {
             modeKey: input.modeKey,
             workspaceContext: input.workspaceContext,
         });
-        if (checkpoint) {
+        if (checkpoint.isErr()) {
+            await moveRunToFailedState({
+                profileId: input.profileId,
+                sessionId: input.sessionId,
+                runId: input.runId,
+                errorCode: checkpoint.error.code,
+                errorMessage: checkpoint.error.message,
+                logMessage: 'Run moved to failed terminal state.',
+            });
+            return;
+        }
+
+        if (checkpoint.value) {
             await runtimeEventLogService.append(
                 runtimeUpsertEvent({
                     entityType: 'checkpoint',
                     domain: 'checkpoint',
-                    entityId: checkpoint.id,
+                    entityId: checkpoint.value.id,
                     eventType: 'checkpoint.created',
                     payload: {
                         profileId: input.profileId,
                         sessionId: input.sessionId,
                         runId: input.runId,
-                        checkpoint,
+                        checkpoint: checkpoint.value,
                         diff: null,
                     },
                 })

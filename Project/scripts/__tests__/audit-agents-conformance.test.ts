@@ -21,11 +21,11 @@ function writeFixture(rootDir: string, relativePath: string, content: string): v
 }
 
 describe('auditAgentsConformance', () => {
-    it('reports handwritten 1000+ LOC files for manual review without blocking on size alone', () => {
+    it('reports handwritten 1200+ LOC files for manual review without blocking on size alone', () => {
         const rootDir = mkdtempSync(path.join(os.tmpdir(), 'agents-audit-'));
 
         try {
-            writeFixture(rootDir, 'src/tooLarge.ts', 'const value = 1;\n'.repeat(1000));
+            writeFixture(rootDir, 'src/tooLarge.ts', 'const value = 1;\n'.repeat(1200));
 
             const report = auditAgentsConformance(rootDir);
 
@@ -324,7 +324,7 @@ describe('auditAgentsConformance', () => {
         const rootDir = mkdtempSync(path.join(os.tmpdir(), 'agents-audit-'));
 
         try {
-            const content = 'const value = 1;\n'.repeat(600);
+            const content = 'const value = 1;\n'.repeat(950);
             writeFixture(rootDir, 'src/large.ts', content);
             writeFixture(
                 rootDir,
@@ -362,8 +362,8 @@ describe('auditAgentsConformance', () => {
         const rootDir = mkdtempSync(path.join(os.tmpdir(), 'agents-audit-'));
 
         try {
-            const staleContent = 'const oldValue = 1;\n'.repeat(600);
-            writeFixture(rootDir, 'src/large.ts', 'const nextValue = 1;\n'.repeat(600));
+            const staleContent = 'const oldValue = 1;\n'.repeat(950);
+            writeFixture(rootDir, 'src/large.ts', 'const nextValue = 1;\n'.repeat(950));
             writeFixture(
                 rootDir,
                 'scripts/audit/agents-review-manifest.json',
@@ -399,13 +399,13 @@ describe('auditAgentsConformance', () => {
         const rootDir = mkdtempSync(path.join(os.tmpdir(), 'agents-audit-'));
 
         try {
-            writeFixture(rootDir, 'src/large.ts', 'const value = 1;\n'.repeat(600));
+            writeFixture(rootDir, 'src/large.ts', 'const value = 1;\n'.repeat(950));
 
             const report = auditAgentsConformance(rootDir);
             const worklist = formatAuditWorklist(report);
 
             expect(worklist).toContain('AGENTS audit worklist');
-            expect(worklist).toContain('Handwritten source files requiring 500+ LOC review');
+            expect(worklist).toContain('Handwritten source files requiring 900+ LOC review');
             expect(worklist).toContain('(new)');
             expect(worklist).toContain('filters: default-unresolved');
         } finally {
@@ -417,7 +417,7 @@ describe('auditAgentsConformance', () => {
         const rootDir = mkdtempSync(path.join(os.tmpdir(), 'agents-audit-'));
 
         try {
-            const content = 'const value = 1;\n'.repeat(600);
+            const content = 'const value = 1;\n'.repeat(950);
             writeFixture(rootDir, 'src/large.ts', content);
             writeFixture(
                 rootDir,
@@ -449,13 +449,57 @@ describe('auditAgentsConformance', () => {
         }
     });
 
+    it('filters reviewed actionable items out of the default worklist and unresolved counts', () => {
+        const rootDir = mkdtempSync(path.join(os.tmpdir(), 'agents-audit-'));
+
+        try {
+            const content = `
+                async function saveDraft(): Promise<void> {}
+                function View(mutation: { mutateAsync: (input: { value: number }) => Promise<void> }) {
+                    void saveDraft();
+                    void mutation.mutateAsync({ value: 1 });
+                    return null;
+                }\n`;
+            writeFixture(rootDir, 'src/view.tsx', content);
+            writeFixture(
+                rootDir,
+                'scripts/audit/agents-review-manifest.json',
+                JSON.stringify(
+                    {
+                        entries: [
+                            {
+                                path: 'src/view.tsx',
+                                category: 'actionable-async-ownership',
+                                contentHash: createHash('sha256').update(content).digest('hex').slice(0, 16),
+                                status: 'reviewed-clean',
+                                note: 'fail-closed by contract',
+                                reviewedAt: '2026-03-25',
+                            },
+                        ],
+                    },
+                    null,
+                    2
+                )
+            );
+
+            const report = auditAgentsConformance(rootDir);
+
+            expect(report.summary.unresolvedActionableCount).toBe(0);
+            expect(report.summary.overallStatus).toBe('clean');
+            expect(formatAuditWorklist(report)).not.toContain('src/view.tsx');
+            expect(formatAuditWorklist(report, { includeReviewed: true })).toContain('src/view.tsx');
+        } finally {
+            rmSync(rootDir, { recursive: true, force: true });
+        }
+    });
+
     it('supports new-only and stale-only worklist filtering', () => {
         const rootDir = mkdtempSync(path.join(os.tmpdir(), 'agents-audit-'));
 
         try {
-            const staleContent = 'const oldValue = 1;\n'.repeat(600);
-            writeFixture(rootDir, 'src/large.ts', 'const nextValue = 1;\n'.repeat(600));
-            writeFixture(rootDir, 'src/newLarge.ts', 'const value = 1;\n'.repeat(600));
+            const staleContent = 'const oldValue = 1;\n'.repeat(950);
+            writeFixture(rootDir, 'src/large.ts', 'const nextValue = 1;\n'.repeat(950));
+            writeFixture(rootDir, 'src/newLarge.ts', 'const value = 1;\n'.repeat(950));
             writeFixture(
                 rootDir,
                 'scripts/audit/agents-review-manifest.json',
@@ -490,7 +534,7 @@ describe('auditAgentsConformance', () => {
         const rootDir = mkdtempSync(path.join(os.tmpdir(), 'agents-audit-'));
 
         try {
-            writeFixture(rootDir, 'src/large.ts', 'const value = 1;\n'.repeat(600));
+            writeFixture(rootDir, 'src/large.ts', 'const value = 1;\n'.repeat(950));
             writeFixture(rootDir, 'scripts/audit/agents-review-manifest.json', '{\n  "entries": []\n}\n');
 
             runAuditReviewCommandWithArgs({
@@ -527,8 +571,8 @@ describe('auditAgentsConformance', () => {
         const rootDir = mkdtempSync(path.join(os.tmpdir(), 'agents-audit-'));
 
         try {
-            const initialContent = 'const value = 1;\n'.repeat(600);
-            const nextContent = 'const nextValue = 2;\n'.repeat(600);
+            const initialContent = 'const value = 1;\n'.repeat(950);
+            const nextContent = 'const nextValue = 2;\n'.repeat(950);
             writeFixture(rootDir, 'src/large.ts', initialContent);
             writeFixture(rootDir, 'scripts/audit/agents-review-manifest.json', '{\n  "entries": []\n}\n');
 
@@ -570,13 +614,13 @@ describe('auditAgentsConformance', () => {
                 'src/view.tsx',
                 "function View(query: { useQuery: Function }, value: unknown) { return query.useQuery({ sessionId: value as SessionId }); }\n"
             );
-            writeFixture(rootDir, 'src/large.ts', 'const value = 1;\n'.repeat(600));
+            writeFixture(rootDir, 'src/large.ts', 'const value = 1;\n'.repeat(950));
 
             const report = auditAgentsConformance(rootDir);
 
             const actionableWorklist = formatAuditWorklist(report, { lane: 'actionable-review' });
             expect(actionableWorklist).toContain('Call-site cast review');
-            expect(actionableWorklist).not.toContain('Handwritten source files requiring 500+ LOC review');
+            expect(actionableWorklist).not.toContain('Handwritten source files requiring 900+ LOC review');
 
             const categoryWorklist = formatAuditWorklist(report, { category: 'handwritten-source-review' });
             expect(categoryWorklist).toContain('src/large.ts');

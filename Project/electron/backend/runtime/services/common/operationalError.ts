@@ -5,6 +5,8 @@ export type OperationalErrorCode =
     | 'not_found'
     | 'conversation_not_found'
     | 'thread_not_found'
+    | 'checkpoint_execution_target_unresolved'
+    | 'checkpoint_snapshot_capture_failed'
     | 'thread_mode_mismatch'
     | 'unsupported_tab'
     | 'auth_missing'

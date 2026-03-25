@@ -12,7 +12,7 @@ function sumViolations(categories: AuditCategoryReport[], lane: AuditCategoryRep
         .reduce((total, category) => total + category.violations.length, 0);
 }
 
-function isManualViolationUnresolved(violation: ReviewedAuditViolation): boolean {
+function isReviewViolationUnresolved(violation: ReviewedAuditViolation): boolean {
     return (
         violation.reviewStatus === undefined ||
         violation.reviewStatus === 'new' ||
@@ -35,8 +35,13 @@ function filterViolations(
         violations = violations.filter((violation) => violation.reviewStatus === 'stale');
     }
 
-    if (!options.includeReviewed && category.lane === 'manual-review' && !options.newOnly && !options.staleOnly) {
-        violations = violations.filter((violation) => isManualViolationUnresolved(violation));
+    if (
+        !options.includeReviewed &&
+        (category.lane === 'manual-review' || category.lane === 'actionable-review') &&
+        !options.newOnly &&
+        !options.staleOnly
+    ) {
+        violations = violations.filter((violation) => isReviewViolationUnresolved(violation));
     }
 
     return violations;
@@ -62,18 +67,21 @@ export function buildAuditSummary(categories: AuditCategoryReport[]): AuditSumma
     const manualReviewViolations = categories
         .filter((category) => category.lane === 'manual-review')
         .flatMap((category) => category.violations);
+    const actionableReviewViolations = categories
+        .filter((category) => category.lane === 'actionable-review')
+        .flatMap((category) => category.violations);
 
     const reviewedCleanCount = manualReviewViolations.filter((violation) => violation.reviewStatus === 'reviewed-clean').length;
     const acceptedRiskCount = manualReviewViolations.filter((violation) => violation.reviewStatus === 'accepted-risk').length;
     const staleReviewCount = manualReviewViolations.filter((violation) => violation.reviewStatus === 'stale').length;
-    const manualReviewOutstandingCount = manualReviewViolations.filter((violation) => isManualViolationUnresolved(violation)).length;
-    const unresolvedActionableCount = actionableReviewCount;
+    const manualReviewOutstandingCount = manualReviewViolations.filter((violation) => isReviewViolationUnresolved(violation)).length;
+    const unresolvedActionableCount = actionableReviewViolations.filter((violation) => isReviewViolationUnresolved(violation)).length;
     const unresolvedManualCount = manualReviewOutstandingCount;
 
     let overallStatus: AuditSummary['overallStatus'] = 'clean';
     if (blockingCount > 0) {
         overallStatus = 'blocking-violations-present';
-    } else if (manualReviewOutstandingCount > 0 || actionableReviewCount > 0) {
+    } else if (manualReviewOutstandingCount > 0 || unresolvedActionableCount > 0) {
         overallStatus = 'manual-review-outstanding';
     } else if (acceptedRiskCount > 0) {
         overallStatus = 'clean-except-accepted-risk';

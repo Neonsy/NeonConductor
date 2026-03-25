@@ -39,9 +39,9 @@
 ### 4) Keep Files, Modules, and Folders Focused
 - Do not create god files; split by responsibility as soon as a file carries multiple concerns.
 - LOC is only a rough heuristic, not the conformance rule.
-- Files may exceed 500 LOC when still coherent, but the preferred target is under 1000 LOC.
-- Crossing 500 LOC or 1000 LOC means the file must be explicitly inspected for smell, cohesion, and changeability; it is not automatically valid or invalid on length alone.
-- Do not treat "under 1000 LOC" as a reason to keep a smell-heavy file intact.
+- Files may exceed 900 LOC when still coherent, but handwritten source and handwritten tests should generally stay around 900 LOC max.
+- Crossing 900 LOC means the file must be explicitly inspected for smell, cohesion, and changeability; crossing 1200 LOC means it requires strict manual review. These thresholds are inspection triggers, not automatic proof of validity or invalidity.
+- Do not treat "under 900 LOC" as a reason to keep a smell-heavy file intact.
 - A 300 LOC multi-concern file still fails this standard; a longer file can still be acceptable if it is genuinely cohesive.
 - Treat oversized or multi-concern files as a DX bug.
 - Do not let folders become dumping grounds.

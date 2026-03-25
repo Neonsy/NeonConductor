@@ -11,6 +11,8 @@ const TRPC_CODE_BY_OPERATIONAL_ERROR_CODE = new Map<OperationalErrorCode, TRPCEr
     ['not_found', 'NOT_FOUND'],
     ['conversation_not_found', 'NOT_FOUND'],
     ['thread_not_found', 'NOT_FOUND'],
+    ['checkpoint_execution_target_unresolved', 'BAD_REQUEST'],
+    ['checkpoint_snapshot_capture_failed', 'INTERNAL_SERVER_ERROR'],
     ['thread_mode_mismatch', 'CONFLICT'],
     ['unsupported_tab', 'BAD_REQUEST'],
     ['auth_missing', 'UNAUTHORIZED'],

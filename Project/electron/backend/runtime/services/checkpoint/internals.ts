@@ -42,6 +42,7 @@ import {
     buildCleanupPreview,
     classifyCheckpointRetention,
 } from '@/app/backend/runtime/services/checkpoint/retention';
+import { errOp, okOp, type OperationalResult } from '@/app/backend/runtime/services/common/operationalError';
 import { workspaceContextService } from '@/app/backend/runtime/services/workspaceContext/service';
 
 type CheckpointSummary = NonNullable<CheckpointRollbackResult['checkpoint']>;
@@ -168,24 +169,27 @@ export async function createNativeCheckpointForResolvedTarget(input: {
     checkpointKind: CheckpointRecord['checkpointKind'];
     milestoneTitle?: string;
     summary?: string;
-}): Promise<CheckpointRecord> {
+}): Promise<OperationalResult<CheckpointRecord>> {
     if (input.runId) {
         const existing = await checkpointStore.getByRunId(input.profileId, input.runId);
         if (existing) {
-            return existing;
+            return okOp(existing);
         }
     }
 
     const executionTarget = resolveCheckpointExecutionTarget(input.workspaceContext);
     if (!executionTarget) {
-        throw new Error('Workspace execution target could not be resolved for checkpoint capture.');
+        return errOp(
+            'checkpoint_execution_target_unresolved',
+            'Workspace execution target could not be resolved for checkpoint capture.'
+        );
     }
 
     const snapshotResult = await captureExecutionTargetSnapshot({
         workspaceRootPath: executionTarget.absolutePath,
     });
     if (snapshotResult.isErr()) {
-        throw new Error(snapshotResult.error.detail);
+        return errOp('checkpoint_snapshot_capture_failed', snapshotResult.error.detail);
     }
 
     const checkpoint = await checkpointStore.create({
@@ -225,10 +229,13 @@ export async function createNativeCheckpointForResolvedTarget(input: {
             triggerKind: 'automatic',
             force: false,
         });
-        return checkpoint;
+        return okOp(checkpoint);
     } catch (error) {
         await checkpointStore.deleteById(input.profileId, checkpoint.id);
-        throw error;
+        return errOp(
+            'checkpoint_snapshot_capture_failed',
+            error instanceof Error ? error.message : 'Checkpoint snapshot capture could not be finalized.'
+        );
     }
 }
 

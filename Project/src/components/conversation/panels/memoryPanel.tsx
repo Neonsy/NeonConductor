@@ -17,6 +17,19 @@ interface MemoryPanelProps {
     retrievedMemory?: RetrievedMemorySummary;
 }
 
+export async function runProjectionRescan(input: {
+    refetch: () => Promise<unknown>;
+    clearFeedback: () => void;
+    reportError: (message: string) => void;
+}): Promise<void> {
+    input.clearFeedback();
+    try {
+        await input.refetch();
+    } catch (error) {
+        input.reportError(error instanceof Error ? error.message : 'Memory projection edits could not be rescanned.');
+    }
+}
+
 function readRuntimeRunOutcomeMetadata(metadata: Record<string, unknown>): {
     runStatus: 'completed' | 'error';
     runId: string;
@@ -154,6 +167,18 @@ export function MemoryPanel({
     const projectionStatus = projectionStatusQuery.data;
     const scannedEdits = scanProjectionEditsQuery.data;
     const retrievedMemoryById = new Map(retrievedMemory?.records.map((record) => [record.memoryId, record] as const) ?? []);
+    const handleRescanEdits = async () => {
+        await runProjectionRescan({
+            refetch: () => scanProjectionEditsQuery.refetch(),
+            clearFeedback: () => {
+                setFeedbackMessage(undefined);
+            },
+            reportError: (message) => {
+                setFeedbackTone('error');
+                setFeedbackMessage(message);
+            },
+        });
+    };
 
     return (
         <section className='border-border bg-card mb-3 rounded-2xl border p-3'>
@@ -182,8 +207,7 @@ export function MemoryPanel({
                         variant='outline'
                         disabled={scanProjectionEditsQuery.isFetching}
                         onClick={() => {
-                            setFeedbackMessage(undefined);
-                            void scanProjectionEditsQuery.refetch();
+                            void handleRescanEdits();
                         }}>
                         Rescan edits
                     </Button>

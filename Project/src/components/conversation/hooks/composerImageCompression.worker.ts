@@ -42,6 +42,36 @@ interface CompressionErrorMessage {
     message: string;
 }
 
+export async function handleCompressionRequest(input: {
+    requestId: string;
+    clientId: string;
+    file: File;
+    postMessage: (message: CompressionSuccessMessage | CompressionErrorMessage) => void;
+}): Promise<void> {
+    try {
+        const result = await compressImage(input.file, input.clientId);
+        if (result.isErr()) {
+            input.postMessage({
+                requestId: input.requestId,
+                status: 'error',
+                message: result.error.message,
+            });
+            return;
+        }
+
+        input.postMessage({
+            ...result.value,
+            requestId: input.requestId,
+        });
+    } catch (error) {
+        input.postMessage({
+            requestId: input.requestId,
+            status: 'error',
+            message: error instanceof Error ? error.message : 'Image compression failed unexpectedly.',
+        });
+    }
+}
+
 function fitDimensions(width: number, height: number, maxEdge: number): { width: number; height: number } {
     if (width <= maxEdge && height <= maxEdge) {
         return { width, height };
@@ -247,22 +277,13 @@ async function compressImage(file: File, clientId: string): Promise<ComposerImag
 self.onmessage = (event: MessageEvent<CompressionRequestMessage>) => {
     const { requestId, clientId, file } = event.data;
 
-    void compressImage(file, clientId).then((result) => {
-        if (result.isErr()) {
-            const message: CompressionErrorMessage = {
-                requestId,
-                status: 'error',
-                message: result.error.message,
-            };
+    void handleCompressionRequest({
+        requestId,
+        clientId,
+        file,
+        postMessage: (message) => {
             self.postMessage(message);
-            return;
-        }
-
-        const message: CompressionSuccessMessage = {
-            ...result.value,
-            requestId,
-        };
-        self.postMessage(message);
+        },
     });
 };
 

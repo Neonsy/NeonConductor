@@ -5,8 +5,10 @@ import {
 } from '@/app/backend/persistence/stores';
 import { settingsStore } from '@/app/backend/persistence/stores/profile/settingsStore';
 import { nowIso } from '@/app/backend/persistence/stores/shared/utils';
+import { isSupportedProviderSpecialistDefaultTarget } from '@/app/backend/runtime/contracts/specialistDefaults';
 import type { ProviderSpecialistDefaultRecord } from '@/app/backend/runtime/contracts/types/provider';
 import { appLog } from '@/app/main/logging';
+import { providerIds } from '@/shared/contracts';
 
 const SPECIALIST_DEFAULTS_KEY = 'specialist_defaults';
 
@@ -22,7 +24,11 @@ function toCodexModelId(modelId: string): string {
     return isCodexModelId(modelId) ? modelId.replace(/^openai\//, 'openai_codex/') : modelId;
 }
 
-function normalizeSpecialistDefaults(value: unknown): ProviderSpecialistDefaultRecord[] | undefined {
+function isProviderSpecialistDefaultProviderId(value: string): value is ProviderSpecialistDefaultRecord['providerId'] {
+    return providerIds.some((providerId) => providerId === value);
+}
+
+export function normalizeSpecialistDefaults(value: unknown): ProviderSpecialistDefaultRecord[] | undefined {
     if (!Array.isArray(value)) {
         return undefined;
     }
@@ -41,6 +47,13 @@ function normalizeSpecialistDefaults(value: unknown): ProviderSpecialistDefaultR
         if (!topLevelTab || !modeKey || !providerId || !modelId) {
             return undefined;
         }
+        const target = { topLevelTab, modeKey };
+        if (!isSupportedProviderSpecialistDefaultTarget(target)) {
+            return undefined;
+        }
+        if (!isProviderSpecialistDefaultProviderId(providerId)) {
+            return undefined;
+        }
 
         const nextProviderId = providerId === 'openai' && isCodexModelId(modelId) ? 'openai_codex' : providerId;
         const nextModelId = providerId === 'openai_codex' || nextProviderId === 'openai_codex' ? toCodexModelId(modelId) : modelId;
@@ -49,9 +62,9 @@ function normalizeSpecialistDefaults(value: unknown): ProviderSpecialistDefaultR
         }
 
         normalized.push({
-            topLevelTab: topLevelTab as ProviderSpecialistDefaultRecord['topLevelTab'],
-            modeKey: modeKey as ProviderSpecialistDefaultRecord['modeKey'],
-            providerId: nextProviderId as ProviderSpecialistDefaultRecord['providerId'],
+            topLevelTab: target.topLevelTab,
+            modeKey: target.modeKey,
+            providerId: nextProviderId,
             modelId: nextModelId,
         });
     }

@@ -141,9 +141,25 @@ vi.mock('@/web/trpc/client', () => ({
     },
 }));
 
-import { MemoryPanel } from '@/web/components/conversation/panels/memoryPanel';
+import { MemoryPanel, runProjectionRescan } from '@/web/components/conversation/panels/memoryPanel';
 
 describe('MemoryPanel', () => {
+    it('reports a controlled error when projection rescan fails', async () => {
+        const clearFeedback = vi.fn();
+        const reportError = vi.fn();
+
+        await runProjectionRescan({
+            refetch: vi.fn(async () => {
+                throw new Error('Rescan failed.');
+            }),
+            clearFeedback,
+            reportError,
+        });
+
+        expect(clearFeedback).toHaveBeenCalledTimes(1);
+        expect(reportError).toHaveBeenCalledWith('Rescan failed.');
+    });
+
     it('renders projection roots, projected memory status, and pending review actions', () => {
         const html = renderToStaticMarkup(
             createElement(MemoryPanel, {

@@ -179,7 +179,7 @@ export function refreshStaleReviewEntries(rootDir: string): ReviewManifestFile {
     return nextManifest;
 }
 
-export function annotateManualReviewCategories(input: {
+export function annotateReviewCategories(input: {
     rootDir: string;
     sourceFiles: AuditSourceFile[];
     categories: AuditCategoryReport[];
@@ -193,7 +193,7 @@ export function annotateManualReviewCategories(input: {
     );
 
     return input.categories.map((category) => {
-        if (category.lane !== 'manual-review') {
+        if (category.lane !== 'manual-review' && category.lane !== 'actionable-review') {
             return category;
         }
 

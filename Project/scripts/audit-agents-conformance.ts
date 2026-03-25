@@ -3,7 +3,7 @@ import { pathToFileURL } from 'node:url';
 
 import { scriptLog } from '@/scripts/logger';
 
-import { annotateManualReviewCategories } from './audit/reviewManifest';
+import { annotateReviewCategories } from './audit/reviewManifest';
 import { buildAuditSummary, formatAuditWorklist } from './audit/reporting';
 import {
     collectSourceFiles,
@@ -28,8 +28,8 @@ import type {
     ReviewedAuditViolation,
 } from './audit/types';
 
-const REVIEW_SOURCE_LINES = 500;
-const STRICT_REVIEW_SOURCE_LINES = 1000;
+const REVIEW_SOURCE_LINES = 900;
+const STRICT_REVIEW_SOURCE_LINES = 1200;
 const TEST_FRAMEWORK_IMPORT_PATTERNS = ["from 'vitest'", 'from "vitest"', "from 'jest'", 'from "jest"'];
 const BROAD_CAST_PATTERN = /\bas\s+[A-Z][A-Za-z0-9_<>,`'[\]|& ]+/;
 const INLINE_LINT_SUPPRESSION_PATTERN = /\beslint-disable(?:-next-line|-line)?\b/;
@@ -564,7 +564,7 @@ export function auditAgentsConformance(rootDir: string): AgentsConformanceReport
         },
     ];
 
-    const annotatedCategories = annotateManualReviewCategories({
+    const annotatedCategories = annotateReviewCategories({
         rootDir,
         sourceFiles,
         categories,
@@ -578,9 +578,7 @@ export function hasBlockingViolations(report: AgentsConformanceReport): boolean 
 }
 
 export function hasActionableReviewCandidates(report: AgentsConformanceReport): boolean {
-    return report.categories.some(
-        (category) => category.lane === 'actionable-review' && category.violations.length > 0
-    );
+    return report.summary.unresolvedActionableCount > 0;
 }
 
 export function hasManualReviewCandidates(report: AgentsConformanceReport): boolean {

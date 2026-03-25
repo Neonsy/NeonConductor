@@ -5,6 +5,7 @@ import path from 'node:path';
 
 import { conversationStore, memoryStore, runStore, threadStore } from '@/app/backend/persistence/stores';
 import { parseEntityId } from '@/app/backend/persistence/stores/shared/rowParsers';
+import { readEnumValue } from '@/app/backend/runtime/contracts/parsers/helpers';
 import type { MemoryRecord } from '@/app/backend/persistence/types';
 import { memoryStates, type EntityId } from '@/app/backend/runtime/contracts';
 import type {
@@ -234,13 +235,8 @@ function readExactValue(
     }
 }
 
-function readParsedState(attributes: Record<string, unknown>): MemoryRecord['state'] {
-    const state = readRequiredString(attributes, 'state');
-    if (!memoryStates.includes(state as MemoryRecord['state'])) {
-        throw new Error(`Invalid "state": expected one of ${memoryStates.join(', ')}.`);
-    }
-
-    return state as MemoryRecord['state'];
+export function readParsedState(attributes: Record<string, unknown>): MemoryRecord['state'] {
+    return readEnumValue(attributes['state'], 'state', memoryStates);
 }
 
 function parseMemoryProposal(memory: MemoryRecord, content: string): ParsedMemoryProposal {

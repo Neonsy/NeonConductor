@@ -60,6 +60,7 @@ import {
     captureExecutionTargetSnapshot,
     restoreExecutionTargetSnapshot,
 } from '@/app/backend/runtime/services/checkpoint/nativeSnapshot';
+import { errOp, okOp, type OperationalResult } from '@/app/backend/runtime/services/common/operationalError';
 import { workspaceContextService } from '@/app/backend/runtime/services/workspaceContext/service';
 
 type CheckpointCreateResult = {
@@ -78,13 +79,16 @@ export async function ensureCheckpointForRun(input: {
     topLevelTab: CheckpointRecord['topLevelTab'];
     modeKey: string;
     workspaceContext: ResolvedWorkspaceContext;
-}): Promise<CheckpointRecord | null> {
+}): Promise<OperationalResult<CheckpointRecord | null>> {
     if (!isMutatingCheckpointMode(input.topLevelTab, input.modeKey)) {
-        return null;
+        return okOp(null);
     }
 
     if (!resolveCheckpointExecutionTarget(input.workspaceContext)) {
-        throw new Error('Mutating run checkpoint capture requires a resolved execution target.');
+        return errOp(
+            'checkpoint_execution_target_unresolved',
+            'Mutating run checkpoint capture requires a resolved execution target.'
+        );
     }
 
     return createNativeCheckpointForResolvedTarget({
@@ -190,7 +194,7 @@ export async function createCheckpoint(input: CheckpointCreateInput): Promise<Ch
         };
     }
 
-    const checkpoint = await createNativeCheckpointForResolvedTarget({
+    const checkpointResult = await createNativeCheckpointForResolvedTarget({
         profileId: input.profileId,
         sessionId: run.sessionId,
         threadId: sessionThread.thread.id,
@@ -203,6 +207,12 @@ export async function createCheckpoint(input: CheckpointCreateInput): Promise<Ch
         milestoneTitle: input.milestoneTitle,
         summary: input.milestoneTitle,
     });
+    if (checkpointResult.isErr()) {
+        return {
+            created: false,
+        };
+    }
+    const checkpoint = checkpointResult.value;
 
     const diffResult = await captureRunDiffArtifact({
         profileId: input.profileId,
@@ -475,7 +485,7 @@ export async function rollbackCheckpoint(input: CheckpointRollbackInput): Promis
         };
     }
 
-    const safetyCheckpoint = await createNativeCheckpointForResolvedTarget({
+    const safetyCheckpointResult = await createNativeCheckpointForResolvedTarget({
         profileId: input.profileId,
         sessionId: checkpoint.sessionId,
         threadId: checkpoint.threadId,
@@ -486,6 +496,18 @@ export async function rollbackCheckpoint(input: CheckpointRollbackInput): Promis
         checkpointKind: 'safety',
         summary: `Safety checkpoint before restoring ${checkpoint.id}`,
     });
+    if (safetyCheckpointResult.isErr()) {
+        return {
+            rolledBack: false,
+            reason:
+                safetyCheckpointResult.error.code === 'checkpoint_execution_target_unresolved'
+                    ? 'workspace_unresolved'
+                    : 'snapshot_invalid',
+            message: safetyCheckpointResult.error.message,
+            preview,
+        };
+    }
+    const safetyCheckpoint = safetyCheckpointResult.value;
 
     const snapshotEntries = await checkpointSnapshotStore.listSnapshotEntries(checkpoint.id);
     if (snapshotEntries.length === 0 && checkpoint.snapshotFileCount > 0) {
@@ -585,7 +607,7 @@ export async function revertCheckpointChangeset(
         };
     }
 
-    const safetyCheckpoint = await createNativeCheckpointForResolvedTarget({
+    const safetyCheckpointResult = await createNativeCheckpointForResolvedTarget({
         profileId: input.profileId,
         sessionId: checkpoint.sessionId,
         threadId: checkpoint.threadId,
@@ -596,6 +618,19 @@ export async function revertCheckpointChangeset(
         checkpointKind: 'safety',
         summary: `Safety checkpoint before reverting changes from ${checkpoint.id}`,
     });
+    if (safetyCheckpointResult.isErr()) {
+        return {
+            reverted: false,
+            reason:
+                safetyCheckpointResult.error.code === 'checkpoint_execution_target_unresolved'
+                    ? 'workspace_unresolved'
+                    : 'snapshot_invalid',
+            message: safetyCheckpointResult.error.message,
+            preview,
+            changeset: preview.changeset,
+        };
+    }
+    const safetyCheckpoint = safetyCheckpointResult.value;
 
     const changesetRecord = await checkpointChangesetStore.getByCheckpointId(input.profileId, checkpoint.id);
     if (!changesetRecord) {

@@ -141,12 +141,15 @@ export const systemRouter = router({
         })
         .mutation(async ({ input }) => {
             if (!isSafeExternalUrl(input.url)) {
-                throw new Error(`Blocked external URL: ${input.url}`);
+                return {
+                    opened: false as const,
+                    reason: 'unsafe_url' as const,
+                };
             }
 
             await shell.openExternal(input.url);
             return {
-                opened: true,
+                opened: true as const,
             };
         }),
 });

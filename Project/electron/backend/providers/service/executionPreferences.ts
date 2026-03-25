@@ -31,9 +31,13 @@ function isOfficialOpenAIBaseUrl(baseUrl: string | null | undefined): boolean {
     return normalizeBaseUrl(baseUrl) === OFFICIAL_OPENAI_BASE_URL;
 }
 
-function normalizeStoredMode(value: string | undefined): OpenAIExecutionMode {
-    if (value && openAIExecutionModes.includes(value as OpenAIExecutionMode)) {
-        return value as OpenAIExecutionMode;
+export function isOpenAIExecutionMode(value: string): value is OpenAIExecutionMode {
+    return openAIExecutionModes.some((mode) => mode === value);
+}
+
+export function normalizeStoredMode(value: string | undefined): OpenAIExecutionMode {
+    if (value && isOpenAIExecutionMode(value)) {
+        return value;
     }
 
     return 'standard_http';
