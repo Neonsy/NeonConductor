@@ -59,6 +59,37 @@ describe('auditAgentsConformance', () => {
         }
     });
 
+    it('detects absolute machine-specific paths in project files and sibling repo docs', () => {
+        const repoRoot = mkdtempSync(path.join(os.tmpdir(), 'agents-audit-repo-'));
+        const workspaceRoot = path.join(repoRoot, 'NeonConductor');
+        const rootDir = path.join(workspaceRoot, 'Project');
+        const absoluteProjectPath = 'file:///M:/Neonsy/Projects/NeonConductor/Project/index.ts';
+        const absoluteReadmePath = '/m:/Neonsy/Projects/NeonConductor/Project/vite.config.ts';
+        mkdirSync(rootDir, { recursive: true });
+
+        try {
+            writeFixture(rootDir, 'src/view.ts', `const absolutePath = '${absoluteProjectPath}';\n`);
+            writeFixture(rootDir, 'README.md', `See [vite.config.ts](${absoluteReadmePath}).\n`);
+            writeFileSync(
+                path.join(workspaceRoot, 'AGENTS.md'),
+                '# AGENTS.md\n- bad path: C:\\Users\\Neon\\Projects\\NeonConductor\\Project\\file.ts\n',
+                'utf8'
+            );
+
+            const report = auditAgentsConformance(rootDir);
+
+            expect(report.absoluteMachinePaths).toHaveLength(3);
+            expect(report.absoluteMachinePaths.map((violation) => violation.path).sort()).toEqual([
+                '../AGENTS.md',
+                'README.md',
+                'src/view.ts',
+            ]);
+            expect(hasBlockingViolations(report)).toBe(true);
+        } finally {
+            rmSync(repoRoot, { recursive: true, force: true });
+        }
+    });
+
     it('excludes generated files and the canonical baseline migration from size-based review buckets', () => {
         const rootDir = mkdtempSync(path.join(os.tmpdir(), 'agents-audit-'));
 

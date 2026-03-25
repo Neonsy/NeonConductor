@@ -67,6 +67,7 @@ export interface AuditWorklistOptions {
 export interface AgentsConformanceReport {
     handwrittenSourceFilesRequiringReview: ReviewedAuditViolation[];
     handwrittenSourceFilesRequiringStrictReview: ReviewedAuditViolation[];
+    absoluteMachinePaths: ReviewedAuditViolation[];
     inlineLintSuppressions: ReviewedAuditViolation[];
     nonTestFrameworkImports: ReviewedAuditViolation[];
     forbiddenLayoutEffects: ReviewedAuditViolation[];

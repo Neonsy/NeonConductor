@@ -6,6 +6,7 @@ import { scriptLog } from '@/scripts/logger';
 import { annotateReviewCategories } from './audit/reviewManifest';
 import { buildAuditSummary, formatAuditWorklist } from './audit/reporting';
 import {
+    collectRepositoryTextFiles,
     collectSourceFiles,
     isElectronSourceFile,
     isGeneratedSourceFile,
@@ -33,7 +34,6 @@ const STRICT_REVIEW_SOURCE_LINES = 1200;
 const TEST_FRAMEWORK_IMPORT_PATTERNS = ["from 'vitest'", 'from "vitest"', "from 'jest'", 'from "jest"'];
 const BROAD_CAST_PATTERN = /\bas\s+[A-Z][A-Za-z0-9_<>,`'[\]|& ]+/;
 const INLINE_LINT_SUPPRESSION_PATTERN = /\beslint-disable(?:-next-line|-line)?\b/;
-
 function isAuditSupportFile(relativePath: string): boolean {
     return (
         relativePath === 'scripts/audit-agents-conformance.ts' ||
@@ -80,6 +80,66 @@ function collectPatternViolations(input: {
                     message: input.message,
                 });
             }
+        });
+    }
+
+    return violations;
+}
+
+function escapeRegExp(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function buildAbsoluteMachinePathPatterns(rootDir: string): RegExp[] {
+    const repositoryName = path.basename(path.resolve(rootDir, '..'));
+    const escapedRepositoryName = escapeRegExp(repositoryName);
+    const repositoryRootMarkerPattern = '(?:Project|Markdown|\\.github|AGENTS\\.md|README\\.md)';
+
+    return [
+        new RegExp(
+            `\\b[A-Za-z]:\\\\(?:[^\\\\\\r\\n"'\\\`]+\\\\)*${escapedRepositoryName}\\\\${repositoryRootMarkerPattern}(?:\\\\|$)`
+        ),
+        new RegExp(
+            `\\bfile:\\/\\/\\/[A-Za-z]:\\/(?:[^\\/\\r\\n"'\\\`]+\\/)*${escapedRepositoryName}\\/${repositoryRootMarkerPattern}(?:\\/|$)`
+        ),
+        new RegExp(
+            `\\/[A-Za-z]:\\/(?:[^\\/\\r\\n"'\\\`]+\\/)*${escapedRepositoryName}\\/${repositoryRootMarkerPattern}(?:\\/|$)`
+        ),
+        new RegExp(
+            `(?:^|[\\s("'\\\`])\\/(?:Users|home)\\/[^\\s"'\\\` )]+(?:\\/[^\\s"'\\\` )]+)*\\/${escapedRepositoryName}\\/${repositoryRootMarkerPattern}(?:\\/|$)`
+        ),
+    ];
+}
+
+function collectAbsoluteMachinePathViolations(input: {
+    rootDir: string;
+    files: ReturnType<typeof collectRepositoryTextFiles>;
+}): AuditViolation[] {
+    const violations: AuditViolation[] = [];
+    const absoluteMachinePathPatterns = buildAbsoluteMachinePathPatterns(input.rootDir);
+
+    for (const file of input.files) {
+        if (isAuditSupportFile(file.relativePath)) {
+            continue;
+        }
+
+        const lines = file.content.split(/\r?\n/);
+        lines.forEach((lineContent, index) => {
+            const hasAbsoluteMachinePath = absoluteMachinePathPatterns.some((pattern) => {
+                pattern.lastIndex = 0;
+                return pattern.test(lineContent);
+            });
+
+            if (!hasAbsoluteMachinePath) {
+                return;
+            }
+
+            violations.push({
+                path: file.relativePath,
+                line: index + 1,
+                message:
+                    'Absolute machine-specific filesystem paths are not allowed; use repository-relative links or derive paths from local runtime context.',
+            });
         });
     }
 
@@ -356,6 +416,7 @@ function buildReportFromCategories(categories: AuditCategoryReport[]): AgentsCon
     return {
         handwrittenSourceFilesRequiringReview: findViolations('handwritten-source-review'),
         handwrittenSourceFilesRequiringStrictReview: findViolations('handwritten-source-strict-review'),
+        absoluteMachinePaths: findViolations('absolute-machine-paths'),
         inlineLintSuppressions: findViolations('inline-lint-suppressions'),
         nonTestFrameworkImports: findViolations('non-test-framework-imports'),
         forbiddenLayoutEffects: findViolations('forbidden-layout-effects'),
@@ -410,6 +471,7 @@ function logReport(report: AgentsConformanceReport, rootDir: string, reportOnly:
 
 export function auditAgentsConformance(rootDir: string): AgentsConformanceReport {
     const sourceFiles = collectSourceFiles(rootDir);
+    const repositoryTextFiles = collectRepositoryTextFiles(rootDir);
     const handwrittenFiles = sourceFiles.filter(
         (file) => !isSizeReviewException(file.relativePath, file.content) && !isAuditSupportFile(file.relativePath)
     );
@@ -438,6 +500,15 @@ export function auditAgentsConformance(rootDir: string): AgentsConformanceReport
                     line: file.lineCount,
                     message: `Handwritten source file meets or exceeds ${String(STRICT_REVIEW_SOURCE_LINES)} lines and requires strict manual review.`,
                 })),
+        },
+        {
+            key: 'absolute-machine-paths',
+            label: 'Absolute machine path violations',
+            lane: 'blocking',
+            violations: collectAbsoluteMachinePathViolations({
+                rootDir,
+                files: repositoryTextFiles,
+            }),
         },
         {
             key: 'inline-lint-suppressions',

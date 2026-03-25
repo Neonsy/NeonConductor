@@ -1,9 +1,22 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 
 import type { AuditSourceFile } from './types';
 
 const SOURCE_FILE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs']);
+const REPOSITORY_TEXT_FILE_EXTENSIONS = new Set([
+    '.ts',
+    '.tsx',
+    '.js',
+    '.jsx',
+    '.mjs',
+    '.cjs',
+    '.md',
+    '.json',
+    '.json5',
+    '.yml',
+    '.yaml',
+]);
 const SKIPPED_DIRECTORIES = new Set(['node_modules', 'dist', 'dist-electron', '.git', '.turbo', 'release']);
 const SOURCE_ROOT_DIRECTORIES = ['src', 'electron', 'scripts'];
 
@@ -17,6 +30,10 @@ function shouldSkipDirectory(name: string): boolean {
 
 function isSourceFile(absolutePath: string): boolean {
     return SOURCE_FILE_EXTENSIONS.has(path.extname(absolutePath));
+}
+
+function isRepositoryTextFile(absolutePath: string): boolean {
+    return REPOSITORY_TEXT_FILE_EXTENSIONS.has(path.extname(absolutePath));
 }
 
 export function isTestFile(relativePath: string): boolean {
@@ -69,8 +86,13 @@ export function isElectronSourceFile(relativePath: string): boolean {
     return relativePath.startsWith('electron/');
 }
 
-export function collectSourceFiles(rootDir: string): AuditSourceFile[] {
+function collectFilesFromRoots(input: {
+    rootDir: string;
+    roots: string[];
+    shouldIncludeFile: (absolutePath: string) => boolean;
+}): AuditSourceFile[] {
     const files: AuditSourceFile[] = [];
+    const seenAbsolutePaths = new Set<string>();
 
     function walk(currentDirectory: string): void {
         for (const entry of readdirSync(currentDirectory, { withFileTypes: true })) {
@@ -84,13 +106,14 @@ export function collectSourceFiles(rootDir: string): AuditSourceFile[] {
             }
 
             const absolutePath = path.join(currentDirectory, entry.name);
-            if (!isSourceFile(absolutePath)) {
+            if (!input.shouldIncludeFile(absolutePath) || seenAbsolutePaths.has(absolutePath)) {
                 continue;
             }
 
             const content = readFileSync(absolutePath, 'utf8');
-            const relativePath = normalizeRelativePath(rootDir, absolutePath);
+            const relativePath = normalizeRelativePath(input.rootDir, absolutePath);
             const lineCount = content.length === 0 ? 0 : content.split(/\r?\n/).length;
+            seenAbsolutePaths.add(absolutePath);
 
             files.push({
                 absolutePath,
@@ -101,10 +124,33 @@ export function collectSourceFiles(rootDir: string): AuditSourceFile[] {
         }
     }
 
-    for (const sourceRoot of SOURCE_ROOT_DIRECTORIES) {
-        const sourceRootPath = path.join(rootDir, sourceRoot);
+    for (const absoluteRoot of input.roots) {
         try {
-            walk(sourceRootPath);
+            if (!existsSync(absoluteRoot)) {
+                continue;
+            }
+
+            const rootStat = statSync(absoluteRoot);
+            if (rootStat.isDirectory()) {
+                walk(absoluteRoot);
+                continue;
+            }
+
+            if (!input.shouldIncludeFile(absoluteRoot) || seenAbsolutePaths.has(absoluteRoot)) {
+                continue;
+            }
+
+            const content = readFileSync(absoluteRoot, 'utf8');
+            const relativePath = normalizeRelativePath(input.rootDir, absoluteRoot);
+            const lineCount = content.length === 0 ? 0 : content.split(/\r?\n/).length;
+            seenAbsolutePaths.add(absoluteRoot);
+
+            files.push({
+                absolutePath: absoluteRoot,
+                relativePath,
+                content,
+                lineCount,
+            });
         } catch (error) {
             if (
                 typeof error === 'object' &&
@@ -120,4 +166,39 @@ export function collectSourceFiles(rootDir: string): AuditSourceFile[] {
     }
 
     return files;
+}
+
+function resolveRepositoryRoot(rootDir: string): string {
+    const parentDir = path.resolve(rootDir, '..');
+    const parentMarkers = ['AGENTS.md', '.git', 'Markdown', '.github'];
+    return parentMarkers.some((marker) => existsSync(path.join(parentDir, marker))) ? parentDir : rootDir;
+}
+
+export function collectSourceFiles(rootDir: string): AuditSourceFile[] {
+    return collectFilesFromRoots({
+        rootDir,
+        roots: SOURCE_ROOT_DIRECTORIES.map((sourceRoot) => path.join(rootDir, sourceRoot)),
+        shouldIncludeFile: isSourceFile,
+    });
+}
+
+export function collectRepositoryTextFiles(rootDir: string): AuditSourceFile[] {
+    const repositoryRoot = resolveRepositoryRoot(rootDir);
+    const roots = [rootDir];
+
+    if (repositoryRoot !== rootDir) {
+        roots.push(
+            path.join(repositoryRoot, 'AGENTS.md'),
+            path.join(repositoryRoot, 'CLAUDE.md'),
+            path.join(repositoryRoot, 'Markdown'),
+            path.join(repositoryRoot, '.github'),
+            path.join(repositoryRoot, 'README.md')
+        );
+    }
+
+    return collectFilesFromRoots({
+        rootDir,
+        roots,
+        shouldIncludeFile: isRepositoryTextFile,
+    });
 }
