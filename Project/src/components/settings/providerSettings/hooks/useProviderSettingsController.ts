@@ -1,10 +1,9 @@
-import { useState } from 'react';
-
 import { createProviderSettingsActions } from '@/web/components/settings/providerSettings/hooks/providerSettingsActions';
 import { useKiloRoutingDraft } from '@/web/components/settings/providerSettings/hooks/useKiloRoutingDraft';
-import { useProviderSettingsAuthPolling } from '@/web/components/settings/providerSettings/hooks/useProviderSettingsAuthPolling';
-import { useProviderSettingsMutations } from '@/web/components/settings/providerSettings/hooks/useProviderSettingsMutations';
+import { useProviderSettingsAuthFlow } from '@/web/components/settings/providerSettings/hooks/useProviderSettingsAuthFlow';
+import { useProviderSettingsMutationModel } from '@/web/components/settings/providerSettings/hooks/useProviderSettingsMutationModel';
 import { useProviderSettingsQueries } from '@/web/components/settings/providerSettings/hooks/useProviderSettingsQueries';
+import { useProviderSettingsSelectionState } from '@/web/components/settings/providerSettings/hooks/useProviderSettingsSelectionState';
 import { prefetchProviderSettingsData } from '@/web/components/settings/providerSettings/providerSettingsPrefetch';
 import type { ActiveAuthFlow } from '@/web/components/settings/providerSettings/types';
 import { createFailClosedAsyncAction } from '@/web/lib/async/createFailClosedAsyncAction';
@@ -16,28 +15,102 @@ interface ProviderSettingsControllerOptions {
     initialProviderId?: RuntimeProviderId;
 }
 
+export interface ProviderSettingsControllerState {
+    feedback: {
+        message: string | undefined;
+        tone: 'error' | 'success' | 'info';
+    };
+    selection: {
+        providerItems: ReturnType<typeof useProviderSettingsQueries>['providerItems'];
+        selectedProviderId: ReturnType<typeof useProviderSettingsQueries>['selectedProviderId'];
+        selectedProvider: ReturnType<typeof useProviderSettingsQueries>['selectedProvider'];
+        selectProvider: (providerId: RuntimeProviderId) => void;
+        prefetchProvider: (providerId: RuntimeProviderId) => void;
+    };
+    providerStatus: {
+        authState: ReturnType<typeof useProviderSettingsQueries>['selectedAuthState'];
+        accountContext: ReturnType<typeof useProviderSettingsQueries>['kiloAccountContext'];
+        usageSummary: ReturnType<typeof useProviderSettingsQueries>['selectedProviderUsageSummary'];
+        openAISubscriptionUsage: ReturnType<typeof useProviderSettingsQueries>['openAISubscriptionUsage'];
+        openAISubscriptionRateLimits: ReturnType<typeof useProviderSettingsQueries>['openAISubscriptionRateLimits'];
+        isLoadingAccountContext: boolean;
+        isLoadingUsageSummary: boolean;
+        isLoadingOpenAIUsage: boolean;
+        isLoadingOpenAIRateLimits: boolean;
+        isRefreshingOpenAICodexUsage: boolean;
+        refreshOpenAICodexUsage: () => Promise<void>;
+    };
+    authentication: {
+        methods: NonNullable<ReturnType<typeof useProviderSettingsQueries>['selectedProvider']>['availableAuthMethods'];
+        credentialSummary: ReturnType<typeof useProviderSettingsQueries>['credentialSummary'];
+        executionPreference: NonNullable<
+            ReturnType<typeof useProviderSettingsQueries>['selectedProvider']
+        >['executionPreference'];
+        activeAuthFlow: ActiveAuthFlow | undefined;
+        isSavingApiKey: boolean;
+        isSavingConnectionProfile: boolean;
+        isSavingExecutionPreference: boolean;
+        isStartingAuth: boolean;
+        isPollingAuth: boolean;
+        isCancellingAuth: boolean;
+        isOpeningVerificationPage: boolean;
+        changeConnectionProfile: (value: string) => Promise<void>;
+        changeExecutionPreference: (value: 'standard_http' | 'realtime_websocket') => Promise<void>;
+        saveApiKey: (value: string) => Promise<void>;
+        saveBaseUrlOverride: (value: string) => Promise<void>;
+        loadStoredCredential: () => Promise<string | undefined>;
+        startOAuthDevice: () => Promise<void>;
+        startDeviceCode: () => Promise<void>;
+        pollNow: () => Promise<void>;
+        cancelFlow: () => Promise<void>;
+        openVerificationPage: () => Promise<void>;
+    };
+    models: {
+        selectedModelId: string;
+        options: ReturnType<typeof useProviderSettingsQueries>['modelOptions'];
+        catalogStateReason: ReturnType<typeof useProviderSettingsQueries>['catalogStateReason'];
+        catalogStateDetail: ReturnType<typeof useProviderSettingsQueries>['catalogStateDetail'];
+        isDefaultModel: boolean;
+        isSavingDefault: boolean;
+        isSyncingCatalog: boolean;
+        setSelectedModelId: (modelId: string) => void;
+        setDefaultModel: (modelId?: string) => Promise<void>;
+        syncCatalog: () => Promise<void>;
+    };
+    kilo: {
+        routingDraft: ReturnType<typeof useKiloRoutingDraft>['kiloRoutingDraft'];
+        modelProviders: ReturnType<typeof useProviderSettingsQueries>['kiloModelProviders'];
+        accountContext: ReturnType<typeof useProviderSettingsQueries>['kiloAccountContext'];
+        isLoadingRoutingPreference: boolean;
+        isLoadingModelProviders: boolean;
+        isSavingRoutingPreference: boolean;
+        isSavingOrganization: boolean;
+        changeRoutingMode: (value: 'dynamic' | 'pinned') => Promise<void>;
+        changeRoutingSort: (value: 'default' | 'price' | 'throughput' | 'latency') => Promise<void>;
+        changePinnedProvider: (value: string) => Promise<void>;
+        changeOrganization: (value?: string) => Promise<void>;
+    };
+}
+
 export function useProviderSettingsController(profileId: string, options?: ProviderSettingsControllerOptions) {
     const utils = trpc.useUtils();
-    const [requestedProviderId, setRequestedProviderId] = useState<RuntimeProviderId | undefined>(
-        () => options?.initialProviderId
-    );
-    const [requestedModelId, setRequestedModelId] = useState('');
-    const [activeAuthFlow, setActiveAuthFlow] = useState<ActiveAuthFlow | undefined>(undefined);
-    const [statusMessage, setStatusMessage] = useState<string | undefined>(undefined);
+    const selectionState = useProviderSettingsSelectionState(options);
 
     const queries = useProviderSettingsQueries({
         profileId,
-        requestedProviderId,
-        requestedModelId,
+        requestedProviderId: selectionState.requestedProviderId,
+        requestedModelId: selectionState.requestedModelId,
     });
     const selectedProviderId = queries.selectedProviderId;
 
-    const mutations = useProviderSettingsMutations({
+    const mutationModel = useProviderSettingsMutationModel({
         profileId,
         selectedProviderId,
-        setStatusMessage,
-        setActiveAuthFlow,
+        statusMessage: selectionState.statusMessage,
+        setStatusMessage: selectionState.setStatusMessage,
+        setActiveAuthFlow: selectionState.setActiveAuthFlow,
     });
+    const mutations = mutationModel.mutations;
     const ignoreMutationResult = <TInput, TResult>(mutateAsync: (input: TInput) => Promise<TResult>) => {
         return async (input: TInput): Promise<void> => {
             await mutateAsync(input);
@@ -46,9 +119,9 @@ export function useProviderSettingsController(profileId: string, options?: Provi
     const wrapFailClosedAction = <TArgs extends unknown[]>(action: (...args: TArgs) => Promise<void>) =>
         createFailClosedAsyncAction(action);
 
-    useProviderSettingsAuthPolling({
+    useProviderSettingsAuthFlow({
         profileId,
-        activeAuthFlow,
+        activeAuthFlow: selectionState.activeAuthFlow,
         isPolling: mutations.pollAuthMutation.isPending,
         pollAuth: ignoreMutationResult(mutations.pollAuthMutation.mutateAsync),
     });
@@ -57,9 +130,9 @@ export function useProviderSettingsController(profileId: string, options?: Provi
         profileId,
         selectedProviderId,
         selectedModelId: queries.selectedModelId,
-        preference: queries.kiloRoutingPreferenceQuery.data?.preference,
+        preference: queries.kiloRoutingPreference,
         providerOptions: queries.kiloModelProviders,
-        setStatusMessage,
+        setStatusMessage: selectionState.setStatusMessage,
         savePreference: async (saveInput) => {
             await mutations.setModelRoutingPreferenceMutation.mutateAsync(saveInput);
         },
@@ -75,7 +148,7 @@ export function useProviderSettingsController(profileId: string, options?: Provi
             providerId: selectedProviderId,
         });
         if (!result.credential) {
-            setStatusMessage('No stored credential is available for this provider.');
+            selectionState.setStatusMessage('No stored credential is available for this provider.');
             return undefined;
         }
 
@@ -87,11 +160,11 @@ export function useProviderSettingsController(profileId: string, options?: Provi
         selectedProviderId,
         selectedModelId: queries.selectedModelId,
         currentOptionProfileId: queries.selectedProvider?.connectionProfile.optionProfileId ?? 'default',
-        activeAuthFlow,
+        activeAuthFlow: selectionState.activeAuthFlow,
         kiloModelProviderIds: queries.kiloModelProviders.map((provider) => provider.providerId),
         kiloRoutingDraft,
-        setSelectedProviderId: setRequestedProviderId,
-        setStatusMessage,
+        setSelectedProviderId: selectionState.setRequestedProviderId,
+        setStatusMessage: selectionState.setStatusMessage,
         mutations: {
             setDefaultMutation: {
                 mutateAsync: ignoreMutationResult(mutations.setDefaultMutation.mutateAsync),
@@ -147,38 +220,10 @@ export function useProviderSettingsController(profileId: string, options?: Provi
         ]);
     };
 
-    const feedbackMessage =
-        mutations.setDefaultMutation.error?.message ??
-        mutations.setApiKeyMutation.error?.message ??
-        mutations.setConnectionProfileMutation.error?.message ??
-        mutations.setExecutionPreferenceMutation.error?.message ??
-        mutations.syncCatalogMutation.error?.message ??
-        mutations.setModelRoutingPreferenceMutation.error?.message ??
-        mutations.setOrganizationMutation.error?.message ??
-        mutations.startAuthMutation.error?.message ??
-        mutations.pollAuthMutation.error?.message ??
-        mutations.cancelAuthMutation.error?.message ??
-        statusMessage;
-    const feedbackTone =
-        (mutations.setDefaultMutation.error ??
-        mutations.setApiKeyMutation.error ??
-        mutations.setConnectionProfileMutation.error ??
-        mutations.setExecutionPreferenceMutation.error ??
-        mutations.syncCatalogMutation.error ??
-        mutations.setModelRoutingPreferenceMutation.error ??
-        mutations.setOrganizationMutation.error ??
-        mutations.startAuthMutation.error ??
-        mutations.pollAuthMutation.error ??
-        mutations.cancelAuthMutation.error)
-            ? ('error' as const)
-            : statusMessage
-              ? ('success' as const)
-              : ('info' as const);
-
     return {
         feedback: {
-            message: feedbackMessage,
-            tone: feedbackTone,
+            message: mutationModel.feedback.message,
+            tone: mutationModel.feedback.tone,
         },
         selection: {
             providerItems: queries.providerItems,
@@ -212,7 +257,7 @@ export function useProviderSettingsController(profileId: string, options?: Provi
             methods: queries.selectedProvider?.availableAuthMethods ?? [],
             credentialSummary: queries.credentialSummary,
             executionPreference: queries.selectedProvider?.executionPreference,
-            activeAuthFlow,
+            activeAuthFlow: selectionState.activeAuthFlow,
             isSavingApiKey: mutations.setApiKeyMutation.isPending,
             isSavingConnectionProfile: mutations.setConnectionProfileMutation.isPending,
             isSavingExecutionPreference: mutations.setExecutionPreferenceMutation.isPending,
@@ -239,7 +284,7 @@ export function useProviderSettingsController(profileId: string, options?: Provi
             isDefaultModel: queries.selectedIsDefaultModel,
             isSavingDefault: mutations.setDefaultMutation.isPending,
             isSyncingCatalog: mutations.syncCatalogMutation.isPending,
-            setSelectedModelId: setRequestedModelId,
+            setSelectedModelId: selectionState.setRequestedModelId,
             setDefaultModel: wrapFailClosedAction(actions.setDefaultModel),
             syncCatalog: wrapFailClosedAction(actions.syncCatalog),
         },
@@ -256,5 +301,5 @@ export function useProviderSettingsController(profileId: string, options?: Provi
             changePinnedProvider: wrapFailClosedAction(actions.changePinnedProvider),
             changeOrganization: wrapFailClosedAction(actions.changeOrganization),
         },
-    };
+    } satisfies ProviderSettingsControllerState;
 }

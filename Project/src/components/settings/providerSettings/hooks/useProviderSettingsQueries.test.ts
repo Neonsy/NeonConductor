@@ -1,9 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
-    listProvidersUseQuery,
-    getDefaultsUseQuery,
-    listModelsUseQuery,
+    getControlPlaneUseQuery,
     getAuthStateUseQuery,
     getCredentialSummaryUseQuery,
     getModelRoutingPreferenceUseQuery,
@@ -13,9 +11,7 @@ const {
     getOpenAISubscriptionUsageUseQuery,
     getOpenAISubscriptionRateLimitsUseQuery,
 } = vi.hoisted(() => ({
-    listProvidersUseQuery: vi.fn(),
-    getDefaultsUseQuery: vi.fn(),
-    listModelsUseQuery: vi.fn(),
+    getControlPlaneUseQuery: vi.fn(),
     getAuthStateUseQuery: vi.fn(),
     getCredentialSummaryUseQuery: vi.fn(),
     getModelRoutingPreferenceUseQuery: vi.fn(),
@@ -38,20 +34,10 @@ vi.mock('@/web/components/modelSelection/modelCapabilities', () => ({
     })),
 }));
 
-vi.mock('@/web/components/settings/providerSettings/selection', () => ({
-    resolveSelectedProviderId: vi.fn(
-        (providers: Array<{ id: string }>, requestedProviderId: string | undefined) =>
-            requestedProviderId ?? providers[0]?.id
-    ),
-    resolveSelectedModelId: vi.fn(() => 'openai_codex/gpt-5-codex'),
-}));
-
 vi.mock('@/web/trpc/client', () => ({
     trpc: {
         provider: {
-            listProviders: { useQuery: listProvidersUseQuery },
-            getDefaults: { useQuery: getDefaultsUseQuery },
-            listModels: { useQuery: listModelsUseQuery },
+            getControlPlane: { useQuery: getControlPlaneUseQuery },
             getAuthState: { useQuery: getAuthStateUseQuery },
             getCredentialSummary: { useQuery: getCredentialSummaryUseQuery },
             getModelRoutingPreference: { useQuery: getModelRoutingPreferenceUseQuery },
@@ -70,15 +56,15 @@ function createProvider(id: 'openai' | 'openai_codex') {
     return {
         id,
         label: id === 'openai' ? 'OpenAI' : 'OpenAI Codex',
-        isDefault: false,
+        isDefault: id === 'openai',
         authState: 'authenticated',
-        authMethod: id === 'openai' ? 'api_key' : 'oauth_pkce',
-        availableAuthMethods: id === 'openai' ? ['api_key'] : ['oauth_pkce'],
+        authMethod: id === 'openai' ? 'api_key' : 'oauth_device',
+        availableAuthMethods: id === 'openai' ? ['api_key'] : ['oauth_device'],
         connectionProfile: {
             optionProfileId: 'default',
             label: 'Default',
             options: [{ value: 'default', label: 'Default' }],
-            resolvedBaseUrl: null,
+            resolvedBaseUrl: id === 'openai' ? 'https://api.openai.com/v1' : null,
         },
         apiKeyCta: { label: 'Create key', url: 'https://example.com' },
         features: {
@@ -92,24 +78,47 @@ function createProvider(id: 'openai' | 'openai_codex') {
     };
 }
 
+function createModel(id: string, label: string) {
+    return {
+        id,
+        label,
+    };
+}
+
 describe('useProviderSettingsQueries', () => {
     beforeEach(() => {
         vi.clearAllMocks();
 
-        listProvidersUseQuery.mockReturnValue({
+        getControlPlaneUseQuery.mockReturnValue({
             data: {
-                providers: [createProvider('openai'), createProvider('openai_codex')],
-            },
-        });
-        getDefaultsUseQuery.mockReturnValue({
-            data: {
-                defaults: {
-                    providerId: 'openai',
-                    modelId: 'openai/gpt-5',
+                providerControl: {
+                    defaults: {
+                        providerId: 'openai',
+                        modelId: 'openai/gpt-5',
+                    },
+                    specialistDefaults: [],
+                    entries: [
+                        {
+                            provider: createProvider('openai'),
+                            models: [createModel('openai/gpt-5', 'GPT-5')],
+                            catalogState: {
+                                reason: null,
+                                invalidModelCount: 0,
+                            },
+                        },
+                        {
+                            provider: createProvider('openai_codex'),
+                            models: [createModel('openai_codex/gpt-5-codex', 'GPT-5 Codex')],
+                            catalogState: {
+                                reason: 'catalog_sync_failed',
+                                detail: 'Auth required before syncing the Codex catalog.',
+                                invalidModelCount: 1,
+                            },
+                        },
+                    ],
                 },
             },
         });
-        listModelsUseQuery.mockReturnValue({ data: { models: [] } });
         getAuthStateUseQuery.mockReturnValue({ data: { found: false } });
         getCredentialSummaryUseQuery.mockReturnValue({ data: { credential: null } });
         getModelRoutingPreferenceUseQuery.mockReturnValue({ data: undefined });
@@ -118,6 +127,22 @@ describe('useProviderSettingsQueries', () => {
         getUsageSummaryUseQuery.mockReturnValue({ data: { summaries: [] } });
         getOpenAISubscriptionUsageUseQuery.mockReturnValue({ data: undefined });
         getOpenAISubscriptionRateLimitsUseQuery.mockReturnValue({ data: undefined });
+    });
+
+    it('resolves provider and model selection from the provider control snapshot', () => {
+        const result = useProviderSettingsQueries({
+            profileId: 'profile_default',
+            requestedProviderId: undefined,
+            requestedModelId: '',
+        });
+
+        expect(getControlPlaneUseQuery).toHaveBeenCalledWith(
+            { profileId: 'profile_default' },
+            expect.any(Object)
+        );
+        expect(result.selectedProviderId).toBe('openai');
+        expect(result.selectedModelId).toBe('openai/gpt-5');
+        expect(result.modelOptions).toHaveLength(1);
     });
 
     it('enables Codex-only focus refetch when OpenAI Codex is selected', () => {
@@ -164,5 +189,16 @@ describe('useProviderSettingsQueries', () => {
                 refetchOnWindowFocus: false,
             })
         );
+    });
+
+    it('propagates catalog state details from the provider control snapshot', () => {
+        const result = useProviderSettingsQueries({
+            profileId: 'profile_default',
+            requestedProviderId: 'openai_codex',
+            requestedModelId: '',
+        });
+
+        expect(result.catalogStateReason).toBe('catalog_sync_failed');
+        expect(result.catalogStateDetail).toBe('Auth required before syncing the Codex catalog.');
     });
 });

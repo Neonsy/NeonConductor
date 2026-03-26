@@ -1,6 +1,9 @@
 import { ProviderAuthenticationSection } from '@/web/components/settings/providerSettings/authenticationSection';
 import { ProviderDefaultModelSection } from '@/web/components/settings/providerSettings/defaultModelSection';
-import { useProviderSettingsController } from '@/web/components/settings/providerSettings/hooks/useProviderSettingsController';
+import {
+    useProviderSettingsController,
+    type ProviderSettingsControllerState,
+} from '@/web/components/settings/providerSettings/hooks/useProviderSettingsController';
 import { KiloRoutingSection } from '@/web/components/settings/providerSettings/kiloRoutingSection';
 import { ProviderSidebar } from '@/web/components/settings/providerSettings/providerSidebar';
 import { ProviderStatusSection } from '@/web/components/settings/providerSettings/providerStatusSection';
@@ -25,8 +28,8 @@ function KiloProviderContent({
     selectedProvider,
 }: {
     profileId: string;
-    controller: ReturnType<typeof useProviderSettingsController>;
-    selectedProvider: NonNullable<ReturnType<typeof useProviderSettingsController>['selection']['selectedProvider']>;
+    controller: ProviderSettingsControllerState;
+    selectedProvider: NonNullable<ProviderSettingsControllerState['selection']['selectedProvider']>;
 }) {
     const shouldShowRoutingSection =
         selectedProvider.features.supportsKiloRouting &&
@@ -154,8 +157,8 @@ function DirectProviderContent({
     selectedProvider,
 }: {
     profileId: string;
-    controller: ReturnType<typeof useProviderSettingsController>;
-    selectedProvider: NonNullable<ReturnType<typeof useProviderSettingsController>['selection']['selectedProvider']>;
+    controller: ProviderSettingsControllerState;
+    selectedProvider: NonNullable<ProviderSettingsControllerState['selection']['selectedProvider']>;
 }) {
     return (
         <div className='flex w-full min-w-0 flex-col gap-4'>

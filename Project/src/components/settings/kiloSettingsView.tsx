@@ -3,7 +3,10 @@ import { useEffect, useRef } from 'react';
 import { ProviderAuthenticationSection } from '@/web/components/settings/providerSettings/authenticationSection';
 import { ProviderDefaultModelSection } from '@/web/components/settings/providerSettings/defaultModelSection';
 import { formatDateTime, formatInteger } from '@/web/components/settings/providerSettings/helpers';
-import { useProviderSettingsController } from '@/web/components/settings/providerSettings/hooks/useProviderSettingsController';
+import {
+    useProviderSettingsController,
+    type ProviderSettingsControllerState,
+} from '@/web/components/settings/providerSettings/hooks/useProviderSettingsController';
 import { KiloAccountSection } from '@/web/components/settings/providerSettings/kiloAccountSection';
 import { KiloRoutingSection } from '@/web/components/settings/providerSettings/kiloRoutingSection';
 import { ProviderSpecialistDefaultsSection } from '@/web/components/settings/providerSettings/specialistDefaultsSection';
@@ -95,9 +98,9 @@ function KiloAccountAccessScreen({
     selectedProvider,
 }: {
     profileId: string;
-    controller: ReturnType<typeof useProviderSettingsController>;
+    controller: ProviderSettingsControllerState;
     effectiveAuthState: string;
-    selectedProvider: NonNullable<ReturnType<typeof useProviderSettingsController>['selection']['selectedProvider']>;
+    selectedProvider: NonNullable<ProviderSettingsControllerState['selection']['selectedProvider']>;
 }) {
     const accountContext = controller.kilo.accountContext;
     const activeOrganization = accountContext?.organizations.find((organization) => organization.isActive);
@@ -240,7 +243,7 @@ function KiloGatewayModelsScreen({
     controller,
 }: {
     profileId: string;
-    controller: ReturnType<typeof useProviderSettingsController>;
+    controller: ProviderSettingsControllerState;
 }) {
     return (
         <div className='space-y-5'>
@@ -281,7 +284,7 @@ function KiloGatewayModelsScreen({
     );
 }
 
-function KiloRoutingScreen({ controller }: { controller: ReturnType<typeof useProviderSettingsController> }) {
+function KiloRoutingScreen({ controller }: { controller: ProviderSettingsControllerState }) {
     const shouldShowRoutingSection =
         controller.selection.selectedProvider?.features.supportsKiloRouting === true &&
         controller.models.selectedModelId.trim().length > 0 &&

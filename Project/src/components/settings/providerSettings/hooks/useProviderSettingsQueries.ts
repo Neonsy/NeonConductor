@@ -1,16 +1,5 @@
-import { buildModelPickerOption } from '@/web/components/modelSelection/modelCapabilities';
-import {
-    resolveSelectedModelId,
-    resolveSelectedProviderId,
-} from '@/web/components/settings/providerSettings/selection';
-import type { ProviderAuthStateView, ProviderListItem } from '@/web/components/settings/providerSettings/types';
-import {
-    findProviderControlEntry,
-    getProviderControlDefaults,
-    listProviderControlProviders,
-} from '@/web/lib/providerControl/selectors';
-import { PROGRESSIVE_QUERY_OPTIONS } from '@/web/lib/query/progressiveQueryOptions';
-import { trpc } from '@/web/trpc/client';
+import { useProviderSettingsReadModel } from '@/web/components/settings/providerSettings/hooks/useProviderSettingsReadModel';
+import { useProviderSettingsSupplementalQueries } from '@/web/components/settings/providerSettings/hooks/useProviderSettingsSupplementalQueries';
 
 import type { RuntimeProviderId } from '@/shared/contracts';
 
@@ -21,164 +10,19 @@ interface UseProviderSettingsQueriesInput {
 }
 
 export function useProviderSettingsQueries(input: UseProviderSettingsQueriesInput) {
-    const controlPlaneQuery = trpc.provider.getControlPlane.useQuery(
-        { profileId: input.profileId },
-        PROGRESSIVE_QUERY_OPTIONS
-    );
-    const providerControl = controlPlaneQuery.data?.providerControl;
-    const providers = listProviderControlProviders(providerControl);
-    const defaults = getProviderControlDefaults(providerControl);
-    const resolvedSelectedProviderId = resolveSelectedProviderId(providers, input.requestedProviderId);
-    const selectedProviderEntry = findProviderControlEntry(providerControl, resolvedSelectedProviderId);
-
-    const authStateQuery = trpc.provider.getAuthState.useQuery(
-        {
-            profileId: input.profileId,
-            providerId: resolvedSelectedProviderId ?? 'openai',
-        },
-        {
-            enabled: Boolean(resolvedSelectedProviderId),
-            ...PROGRESSIVE_QUERY_OPTIONS,
-        }
-    );
-
-    const credentialSummaryQuery = trpc.provider.getCredentialSummary.useQuery(
-        {
-            profileId: input.profileId,
-            providerId: resolvedSelectedProviderId ?? 'openai',
-        },
-        {
-            enabled: Boolean(resolvedSelectedProviderId),
-            ...PROGRESSIVE_QUERY_OPTIONS,
-        }
-    );
-    const selectedProvider = providers.find((provider) => provider.id === resolvedSelectedProviderId);
-    const models = selectedProviderEntry?.models ?? [];
-    const selectedModelId = resolveSelectedModelId({
-        selectedProviderId: resolvedSelectedProviderId,
-        selectedModelId: input.requestedModelId,
-        models,
-        defaults,
+    const readModel = useProviderSettingsReadModel({
+        profileId: input.profileId,
+        requestedProviderId: input.requestedProviderId,
+        requestedModelId: input.requestedModelId,
+    });
+    const supplementalQueries = useProviderSettingsSupplementalQueries({
+        profileId: input.profileId,
+        selectedProviderId: readModel.selectedProviderId,
+        selectedModelId: readModel.selectedModelId,
     });
 
-    const kiloRoutingPreferenceQuery = trpc.provider.getModelRoutingPreference.useQuery(
-        {
-            profileId: input.profileId,
-            providerId: 'kilo',
-            modelId: selectedModelId,
-        },
-        {
-            enabled: resolvedSelectedProviderId === 'kilo' && selectedModelId.trim().length > 0,
-            ...PROGRESSIVE_QUERY_OPTIONS,
-        }
-    );
-
-    const kiloModelProvidersQuery = trpc.provider.listModelProviders.useQuery(
-        {
-            profileId: input.profileId,
-            providerId: 'kilo',
-            modelId: selectedModelId,
-        },
-        {
-            enabled: resolvedSelectedProviderId === 'kilo' && selectedModelId.trim().length > 0,
-            ...PROGRESSIVE_QUERY_OPTIONS,
-        }
-    );
-
-    const accountContextQuery = trpc.provider.getAccountContext.useQuery(
-        {
-            profileId: input.profileId,
-            providerId: resolvedSelectedProviderId ?? 'kilo',
-        },
-        {
-            enabled: resolvedSelectedProviderId === 'kilo',
-            ...PROGRESSIVE_QUERY_OPTIONS,
-        }
-    );
-
-    const usageSummaryQuery = trpc.provider.getUsageSummary.useQuery(
-        {
-            profileId: input.profileId,
-        },
-        {
-            enabled: Boolean(resolvedSelectedProviderId),
-            ...PROGRESSIVE_QUERY_OPTIONS,
-        }
-    );
-
-    const openAISubscriptionUsageQuery = trpc.provider.getOpenAISubscriptionUsage.useQuery(
-        {
-            profileId: input.profileId,
-        },
-        {
-            enabled: resolvedSelectedProviderId === 'openai_codex',
-            ...PROGRESSIVE_QUERY_OPTIONS,
-            refetchOnWindowFocus: resolvedSelectedProviderId === 'openai_codex',
-        }
-    );
-
-    const openAISubscriptionRateLimitsQuery = trpc.provider.getOpenAISubscriptionRateLimits.useQuery(
-        {
-            profileId: input.profileId,
-        },
-        {
-            enabled: resolvedSelectedProviderId === 'openai_codex',
-            ...PROGRESSIVE_QUERY_OPTIONS,
-            refetchOnWindowFocus: resolvedSelectedProviderId === 'openai_codex',
-        }
-    );
-
-    const providerItems: ProviderListItem[] = providers;
-    const modelOptions = models.map((model) =>
-        buildModelPickerOption({
-            model,
-            ...(selectedProvider ? { provider: selectedProvider } : {}),
-            compatibilityContext: {
-                surface: 'settings',
-            },
-        })
-    );
-    const selectedAuthState: ProviderAuthStateView | undefined = authStateQuery.data?.found
-        ? authStateQuery.data.state
-        : undefined;
-    const credentialSummary = credentialSummaryQuery.data?.credential;
-    const kiloAccountContext =
-        accountContextQuery.data?.providerId === 'kilo' ? accountContextQuery.data.kiloAccountContext : undefined;
-    const selectedProviderUsageSummary = usageSummaryQuery.data?.summaries.find(
-        (summary) => summary.providerId === resolvedSelectedProviderId
-    );
-    const selectedIsDefaultProvider = defaults?.providerId === resolvedSelectedProviderId;
-    const selectedIsDefaultModel = selectedIsDefaultProvider && defaults?.modelId === selectedModelId;
-    const kiloModelProviders = kiloModelProvidersQuery.data?.providers ?? [];
-    const catalogStateReason = selectedProviderEntry?.catalogState.reason ?? null;
-    const catalogStateDetail = selectedProviderEntry?.catalogState.detail;
-
     return {
-        providerItems,
-        defaults,
-        selectedProviderId: resolvedSelectedProviderId,
-        selectedProvider,
-        models,
-        modelOptions,
-        selectedModelId,
-        selectedAuthState,
-        credentialSummary,
-        kiloModelProviders,
-        kiloAccountContext,
-        selectedProviderUsageSummary,
-        selectedIsDefaultModel,
-        catalogStateReason,
-        catalogStateDetail,
-        openAISubscriptionUsage: openAISubscriptionUsageQuery.data?.usage,
-        openAISubscriptionRateLimits: openAISubscriptionRateLimitsQuery.data?.rateLimits,
-        controlPlaneQuery,
-        authStateQuery,
-        credentialSummaryQuery,
-        kiloRoutingPreferenceQuery,
-        kiloModelProvidersQuery,
-        accountContextQuery,
-        usageSummaryQuery,
-        openAISubscriptionUsageQuery,
-        openAISubscriptionRateLimitsQuery,
+        ...readModel,
+        ...supplementalQueries,
     };
 }
