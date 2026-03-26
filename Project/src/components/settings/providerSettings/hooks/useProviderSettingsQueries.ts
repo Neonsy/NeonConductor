@@ -4,6 +4,11 @@ import {
     resolveSelectedProviderId,
 } from '@/web/components/settings/providerSettings/selection';
 import type { ProviderAuthStateView, ProviderListItem } from '@/web/components/settings/providerSettings/types';
+import {
+    findProviderControlEntry,
+    getProviderControlDefaults,
+    listProviderControlProviders,
+} from '@/web/lib/providerControl/selectors';
 import { PROGRESSIVE_QUERY_OPTIONS } from '@/web/lib/query/progressiveQueryOptions';
 import { trpc } from '@/web/trpc/client';
 
@@ -16,28 +21,15 @@ interface UseProviderSettingsQueriesInput {
 }
 
 export function useProviderSettingsQueries(input: UseProviderSettingsQueriesInput) {
-    const providersQuery = trpc.provider.listProviders.useQuery(
+    const controlPlaneQuery = trpc.provider.getControlPlane.useQuery(
         { profileId: input.profileId },
         PROGRESSIVE_QUERY_OPTIONS
     );
-    const defaultsQuery = trpc.provider.getDefaults.useQuery(
-        { profileId: input.profileId },
-        PROGRESSIVE_QUERY_OPTIONS
-    );
-    const providers = providersQuery.data?.providers ?? [];
-    const defaults = defaultsQuery.data?.defaults;
+    const providerControl = controlPlaneQuery.data?.providerControl;
+    const providers = listProviderControlProviders(providerControl);
+    const defaults = getProviderControlDefaults(providerControl);
     const resolvedSelectedProviderId = resolveSelectedProviderId(providers, input.requestedProviderId);
-
-    const listModelsQuery = trpc.provider.listModels.useQuery(
-        {
-            profileId: input.profileId,
-            providerId: resolvedSelectedProviderId ?? 'openai',
-        },
-        {
-            enabled: Boolean(resolvedSelectedProviderId),
-            ...PROGRESSIVE_QUERY_OPTIONS,
-        }
-    );
+    const selectedProviderEntry = findProviderControlEntry(providerControl, resolvedSelectedProviderId);
 
     const authStateQuery = trpc.provider.getAuthState.useQuery(
         {
@@ -61,7 +53,7 @@ export function useProviderSettingsQueries(input: UseProviderSettingsQueriesInpu
         }
     );
     const selectedProvider = providers.find((provider) => provider.id === resolvedSelectedProviderId);
-    const models = listModelsQuery.data?.models ?? [];
+    const models = selectedProviderEntry?.models ?? [];
     const selectedModelId = resolveSelectedModelId({
         selectedProviderId: resolvedSelectedProviderId,
         selectedModelId: input.requestedModelId,
@@ -158,7 +150,8 @@ export function useProviderSettingsQueries(input: UseProviderSettingsQueriesInpu
     const selectedIsDefaultProvider = defaults?.providerId === resolvedSelectedProviderId;
     const selectedIsDefaultModel = selectedIsDefaultProvider && defaults?.modelId === selectedModelId;
     const kiloModelProviders = kiloModelProvidersQuery.data?.providers ?? [];
-    const catalogStateDetail = listModelsQuery.data && 'detail' in listModelsQuery.data ? listModelsQuery.data.detail : undefined;
+    const catalogStateReason = selectedProviderEntry?.catalogState.reason ?? null;
+    const catalogStateDetail = selectedProviderEntry?.catalogState.detail;
 
     return {
         providerItems,
@@ -174,13 +167,11 @@ export function useProviderSettingsQueries(input: UseProviderSettingsQueriesInpu
         kiloAccountContext,
         selectedProviderUsageSummary,
         selectedIsDefaultModel,
-        catalogStateReason: listModelsQuery.data?.reason ?? null,
+        catalogStateReason,
         catalogStateDetail,
         openAISubscriptionUsage: openAISubscriptionUsageQuery.data?.usage,
         openAISubscriptionRateLimits: openAISubscriptionRateLimitsQuery.data?.rateLimits,
-        providersQuery,
-        defaultsQuery,
-        listModelsQuery,
+        controlPlaneQuery,
         authStateQuery,
         credentialSummaryQuery,
         kiloRoutingPreferenceQuery,

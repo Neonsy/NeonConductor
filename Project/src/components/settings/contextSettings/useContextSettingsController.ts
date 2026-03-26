@@ -14,6 +14,10 @@ import {
 } from '@/web/components/settings/contextSettingsDrafts';
 import { resolveSelectedProfileId } from '@/web/components/settings/profileSettings/selection';
 import { createFailClosedAsyncAction } from '@/web/lib/async/createFailClosedAsyncAction';
+import {
+    findProviderControlEntry,
+    getProviderControlDefaults,
+} from '@/web/lib/providerControl/selectors';
 import { PROGRESSIVE_QUERY_OPTIONS } from '@/web/lib/query/progressiveQueryOptions';
 import { trpc } from '@/web/trpc/client';
 
@@ -46,14 +50,15 @@ export function useContextSettingsController({ activeProfileId }: UseContextSett
         { enabled: resolvedSelectedProfileId.length > 0, ...PROGRESSIVE_QUERY_OPTIONS }
     );
 
-    const defaultProviderId = shellBootstrapQuery.data?.defaults.providerId;
-    const defaultModelId = shellBootstrapQuery.data?.defaults.modelId;
+    const providerControl = shellBootstrapQuery.data?.providerControl;
+    const defaults = getProviderControlDefaults(providerControl);
+    const defaultProviderId = defaults?.providerId;
+    const defaultModelId = defaults?.modelId;
     const effectiveProviderId: RuntimeProviderId = isProviderId(defaultProviderId) ? defaultProviderId : 'openai';
     const effectiveModelId = defaultModelId ?? 'openai/gpt-5';
-    const defaultModel = shellBootstrapQuery.data?.providerModels.find(
-        (model) => model.providerId === defaultProviderId && model.id === defaultModelId
-    );
-    const defaultProvider = shellBootstrapQuery.data?.providers.find((provider) => provider.id === defaultProviderId);
+    const defaultProviderEntry = findProviderControlEntry(providerControl, effectiveProviderId);
+    const defaultModel = defaultProviderEntry?.models.find((model) => model.id === defaultModelId);
+    const defaultProvider = defaultProviderEntry?.provider;
 
     const resolvedContextStateQueryInput = {
         profileId: resolvedSelectedProfileId,

@@ -3,6 +3,8 @@ import { trpc } from '@/web/trpc/client';
 import type { ProviderAuthStateRecord, ProviderModelRecord } from '@/app/backend/persistence/types';
 import type {
     KiloModelProviderOption,
+    ProviderControlEntry,
+    ProviderControlSnapshot,
     ProviderConnectionProfileResult,
     ProviderListItem,
 } from '@/app/backend/providers/service/types';
@@ -16,6 +18,7 @@ import type {
 type TrpcUtils = ReturnType<typeof trpc.useUtils>;
 type ProviderListData = Awaited<ReturnType<TrpcUtils['provider']['listProviders']['fetch']>>;
 type ProviderDefaultsData = Awaited<ReturnType<TrpcUtils['provider']['getDefaults']['fetch']>>;
+type ProviderControlData = Awaited<ReturnType<TrpcUtils['provider']['getControlPlane']['fetch']>>;
 type ProviderModelsData = Awaited<ReturnType<TrpcUtils['provider']['listModels']['fetch']>>;
 type ProviderAuthStateData = Awaited<ReturnType<TrpcUtils['provider']['getAuthState']['fetch']>>;
 type ProviderAccountContextData = Awaited<ReturnType<TrpcUtils['provider']['getAccountContext']['fetch']>>;
@@ -60,12 +63,98 @@ function patchProviderAuthState(
     };
 }
 
-function replaceProviderModels(
-    currentModels: ProviderModelRecord[],
-    nextModels: ProviderModelRecord[],
-    providerId: RuntimeProviderId
-): ProviderModelRecord[] {
-    return [...currentModels.filter((model) => model.providerId !== providerId), ...nextModels];
+function patchProviderControlEntry(
+    currentEntry: ProviderControlEntry,
+    input: {
+        providerId: RuntimeProviderId;
+        provider?: ProviderListItem;
+        models?: ProviderModelRecord[];
+        catalogStateReason?: EmptyCatalogStateReason;
+        catalogStateDetail?: string;
+        authState?: ProviderAuthStateRecord;
+        connectionProfile?: ProviderConnectionProfileResult;
+        executionPreference?: ProviderListItem['executionPreference'];
+    }
+): ProviderControlEntry {
+    if (currentEntry.provider.id !== input.providerId) {
+        return currentEntry;
+    }
+
+    const provider =
+        input.provider ??
+        {
+            ...currentEntry.provider,
+            ...(input.connectionProfile ? { connectionProfile: input.connectionProfile } : {}),
+            ...(input.executionPreference ? { executionPreference: input.executionPreference } : {}),
+            ...(input.authState
+                ? {
+                      authState: input.authState.authState,
+                      authMethod: input.authState.authMethod,
+                  }
+                : {}),
+        };
+    const models = input.models ?? currentEntry.models;
+    const invalidModelCount = currentEntry.catalogState.invalidModelCount;
+    const catalogState =
+        input.models !== undefined
+            ? models.length > 0
+                ? {
+                      reason: null,
+                      invalidModelCount,
+                  }
+                : {
+                      reason: input.catalogStateReason ?? 'catalog_empty_after_normalization',
+                      ...(input.catalogStateDetail ? { detail: input.catalogStateDetail } : {}),
+                      invalidModelCount,
+                  }
+            : currentEntry.catalogState;
+
+    return {
+        provider: {
+            ...provider,
+            isDefault: provider.id === currentEntry.provider.id ? provider.isDefault : currentEntry.provider.isDefault,
+        },
+        models,
+        catalogState,
+    };
+}
+
+function patchProviderControlSnapshot(
+    current: ProviderControlSnapshot | undefined,
+    input: {
+        providerId: RuntimeProviderId;
+        provider?: ProviderListItem;
+        defaults?: { providerId: string; modelId: string };
+        specialistDefaults?: ProviderSpecialistDefaultRecord[];
+        models?: ProviderModelRecord[];
+        catalogStateReason?: EmptyCatalogStateReason;
+        catalogStateDetail?: string;
+        authState?: ProviderAuthStateRecord;
+        connectionProfile?: ProviderConnectionProfileResult;
+        executionPreference?: ProviderListItem['executionPreference'];
+    }
+): ProviderControlSnapshot | undefined {
+    if (!current) {
+        return current;
+    }
+
+    const nextDefaults = input.defaults ?? current.defaults;
+    const nextEntries = current.entries.map((entry) => {
+        const nextEntry = patchProviderControlEntry(entry, input);
+        return {
+            ...nextEntry,
+            provider: {
+                ...nextEntry.provider,
+                isDefault: nextEntry.provider.id === nextDefaults.providerId,
+            },
+        };
+    });
+
+    return {
+        entries: nextEntries,
+        defaults: nextDefaults,
+        specialistDefaults: input.specialistDefaults ?? current.specialistDefaults,
+    };
 }
 
 export function patchProviderCache(input: {
@@ -116,6 +205,34 @@ export function patchProviderCache(input: {
                 specialistDefaults: input.specialistDefaults ?? current?.specialistDefaults ?? [],
             })
         );
+    }
+
+    if (
+        input.provider ||
+        input.defaults ||
+        input.specialistDefaults ||
+        input.models ||
+        authState ||
+        input.connectionProfile ||
+        input.executionPreference
+    ) {
+        const getControlPlaneCache = (input.utils.provider as {
+            getControlPlane?: { setData: TrpcUtils['provider']['getControlPlane']['setData'] };
+        }).getControlPlane;
+        getControlPlaneCache?.setData({ profileId: input.profileId }, (current: ProviderControlData | undefined) => {
+            if (!current) {
+                return current;
+            }
+
+            const nextProviderControl = patchProviderControlSnapshot(current.providerControl, input);
+            if (!nextProviderControl) {
+                return current;
+            }
+
+            return {
+                providerControl: nextProviderControl,
+            } satisfies ProviderControlData;
+        });
     }
 
     if (input.models) {
@@ -235,6 +352,7 @@ export function patchProviderCache(input: {
         input.specialistDefaults ||
         input.models ||
         authState ||
+        input.connectionProfile ||
         input.executionPreference
     ) {
         input.utils.runtime.getShellBootstrap.setData(
@@ -244,40 +362,14 @@ export function patchProviderCache(input: {
                     return current;
                 }
 
-                const nextProviders = current.providers.map((provider) => {
-                    const replacedProvider = input.provider && provider.id === input.provider.id ? input.provider : provider;
-                    const withExecutionPreference =
-                        input.executionPreference && replacedProvider.id === input.providerId
-                            ? {
-                                  ...replacedProvider,
-                                  executionPreference: input.executionPreference,
-                              }
-                            : replacedProvider;
-                    if (authState && withExecutionPreference.id === input.providerId) {
-                        return {
-                            ...withExecutionPreference,
-                            authState: authState.authState,
-                            authMethod: authState.authMethod,
-                        };
-                    }
-
-                    return withExecutionPreference;
-                });
+                const providerControl = patchProviderControlSnapshot(current.providerControl, input);
+                if (!providerControl) {
+                    return current;
+                }
 
                 return {
                     ...current,
-                    providers: nextProviders,
-                    ...(input.defaults ? { defaults: input.defaults } : {}),
-                    ...(input.specialistDefaults ? { specialistDefaults: input.specialistDefaults } : {}),
-                    ...(input.models
-                        ? {
-                              providerModels: replaceProviderModels(
-                                  current.providerModels,
-                                  input.models,
-                                  input.providerId
-                              ),
-                          }
-                        : {}),
+                    providerControl,
                 };
             }
         );

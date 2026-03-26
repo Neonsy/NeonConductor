@@ -1,4 +1,4 @@
-import type { ProviderRecord } from '@/app/backend/persistence/types';
+import type { ProviderModelRecord, ProviderRecord } from '@/app/backend/persistence/types';
 import type { ProviderCatalogStrategy } from '@/app/backend/providers/registry';
 import type {
     ProviderConnectionProfile,
@@ -29,6 +29,33 @@ export interface ProviderListItem extends ProviderRecord {
         supportsCustomBaseUrl: boolean;
         supportsOrganizationScope: boolean;
     };
+}
+
+export type ProviderCatalogStateReason =
+    | 'provider_not_found'
+    | 'catalog_sync_failed'
+    | 'catalog_empty_after_normalization'
+    | null;
+
+export interface ProviderCatalogState {
+    reason: ProviderCatalogStateReason;
+    detail?: string;
+    invalidModelCount: number;
+}
+
+export interface ProviderControlEntry {
+    provider: ProviderListItem;
+    models: ProviderModelRecord[];
+    catalogState: ProviderCatalogState;
+}
+
+export interface ProviderControlSnapshot {
+    entries: ProviderControlEntry[];
+    defaults: {
+        providerId: string;
+        modelId: string;
+    };
+    specialistDefaults: import('@/app/backend/runtime/contracts/types/provider').ProviderSpecialistDefaultRecord[];
 }
 
 export interface ProviderSyncResult {

@@ -4,7 +4,7 @@ import { prefetchProviderSettingsData } from '@/web/components/settings/provider
 
 describe('providerSettingsPrefetch', () => {
     it('warms provider-specific settings data for OpenAI Codex without blocking render', async () => {
-        const listModelsPrefetch = vi.fn().mockResolvedValue(undefined);
+        const controlPlanePrefetch = vi.fn().mockResolvedValue(undefined);
         const authStatePrefetch = vi.fn().mockResolvedValue(undefined);
         const connectionProfilePrefetch = vi.fn().mockResolvedValue(undefined);
         const usageSummaryPrefetch = vi.fn().mockResolvedValue(undefined);
@@ -17,7 +17,7 @@ describe('providerSettingsPrefetch', () => {
             providerId: 'openai_codex',
             trpcUtils: {
                 provider: {
-                    listModels: { prefetch: listModelsPrefetch },
+                    getControlPlane: { prefetch: controlPlanePrefetch },
                     getAuthState: { prefetch: authStatePrefetch },
                     getConnectionProfile: { prefetch: connectionProfilePrefetch },
                     getUsageSummary: { prefetch: usageSummaryPrefetch },
@@ -30,9 +30,8 @@ describe('providerSettingsPrefetch', () => {
 
         await Promise.resolve();
 
-        expect(listModelsPrefetch).toHaveBeenCalledWith({
+        expect(controlPlanePrefetch).toHaveBeenCalledWith({
             profileId: 'profile_default',
-            providerId: 'openai_codex',
         });
         expect(authStatePrefetch).toHaveBeenCalledWith({
             profileId: 'profile_default',

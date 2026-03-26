@@ -6,6 +6,12 @@ import {
     isEntityId,
 } from '@/web/components/conversation/shell/workspace/helpers';
 import { useConversationRunTarget } from '@/web/components/conversation/shell/workspace/useConversationRunTarget';
+import {
+    getProviderControlDefaults,
+    getProviderControlSpecialistDefaults,
+    listProviderControlModels,
+    listProviderControlProviders,
+} from '@/web/lib/providerControl/selectors';
 import { PROGRESSIVE_QUERY_OPTIONS } from '@/web/lib/query/progressiveQueryOptions';
 import { trpc } from '@/web/trpc/client';
 
@@ -28,18 +34,17 @@ interface UseConversationShellRunTargetStateInput {
 }
 
 export function useConversationShellRunTargetState(input: UseConversationShellRunTargetStateInput) {
+    const providerControl = input.shellBootstrapData?.providerControl;
     const preferredWorkspacePreference = findConversationWorkspacePreference({
         workspacePreferences: input.shellBootstrapData?.workspacePreferences,
         preferredWorkspaceFingerprint: input.selectedThreadWorkspaceFingerprint ?? input.selectedWorkspaceFingerprint,
     });
 
     return useConversationRunTarget({
-        providers: input.shellBootstrapData?.providers ?? [],
-        providerModels: input.shellBootstrapData?.providerModels ?? [],
-        defaults: input.shellBootstrapData?.defaults,
-        ...(input.shellBootstrapData?.specialistDefaults
-            ? { specialistDefaults: input.shellBootstrapData.specialistDefaults }
-            : {}),
+        providers: listProviderControlProviders(providerControl),
+        providerModels: listProviderControlModels(providerControl),
+        defaults: getProviderControlDefaults(providerControl),
+        specialistDefaults: getProviderControlSpecialistDefaults(providerControl),
         ...(preferredWorkspacePreference ? { workspacePreference: preferredWorkspacePreference } : {}),
         ...(input.mainViewDraftTarget ? { mainViewDraft: input.mainViewDraftTarget } : {}),
         runs: input.runs,

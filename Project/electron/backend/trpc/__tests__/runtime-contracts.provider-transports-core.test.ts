@@ -100,8 +100,9 @@ describe('runtime contracts: provider and account flows', () => {
         );
 
         const shellBootstrap = await caller.runtime.getShellBootstrap({ profileId });
-        expect(shellBootstrap.providerModels.some((model) => model.id === 'moonshotai/kimi-k2.5')).toBe(true);
-        expect(shellBootstrap.providerModels.some((model) => model.id === 'stale/startup-model')).toBe(false);
+        const shellModels = shellBootstrap.providerControl.entries.flatMap((entry) => entry.models);
+        expect(shellModels.some((model) => model.id === 'moonshotai/kimi-k2.5')).toBe(true);
+        expect(shellModels.some((model) => model.id === 'stale/startup-model')).toBe(false);
     });
 
     it('persists the resolved native transport selected from model protocol metadata', async () => {

@@ -1,5 +1,5 @@
-import type { ProviderModelRecord, ThreadTagRecord } from '@/app/backend/persistence/types';
-import type { ProviderListItem } from '@/app/backend/providers/service/types';
+import type { ThreadTagRecord } from '@/app/backend/persistence/types';
+import type { ProviderControlSnapshot } from '@/app/backend/providers/service/types';
 import type {
     ContextBudget,
     ExecutionPreset,
@@ -8,7 +8,6 @@ import type {
     ToolCapability,
 } from '@/app/backend/runtime/contracts/enums';
 import type { EntityId } from '@/app/backend/runtime/contracts/ids';
-import type { ProviderSpecialistDefaultRecord } from '@/app/backend/runtime/contracts/types/provider';
 import type { ProfileInput } from '@/app/backend/runtime/contracts/types/common';
 import type { SandboxRecord } from '@/app/backend/runtime/contracts/types/sandbox';
 import type { RuntimeProviderId, TopLevelTab } from '@/shared/contracts';
@@ -55,18 +54,12 @@ export interface ToolCatalogEntry {
 
 export interface RuntimeShellBootstrap {
     lastSequence: number;
-    providers: ProviderListItem[];
-    providerModels: ProviderModelRecord[];
+    providerControl: ProviderControlSnapshot;
     threadTags: ThreadTagRecord[];
     executionPreset: ExecutionPreset;
     workspaceRoots: WorkspaceRootRecord[];
     workspacePreferences: WorkspacePreferenceRecord[];
     sandboxes: SandboxRecord[];
-    defaults: {
-        providerId: string;
-        modelId: string;
-    };
-    specialistDefaults: ProviderSpecialistDefaultRecord[];
 }
 
 export interface WindowStateSubscriptionInput {

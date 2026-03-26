@@ -120,31 +120,50 @@ test('AppRouter exposes system, runtime, tooling, and registry procedure contrac
     }>();
     expectTypeOf<AppRouterOutputs['runtime']['getShellBootstrap']>().toExtend<{
         lastSequence: number;
-        providers: Array<{
-            executionPreference?: {
+        providerControl: {
+            entries: Array<{
+                provider: {
+                    executionPreference?: {
+                        providerId: string;
+                        mode: 'standard_http' | 'realtime_websocket';
+                        canUseRealtimeWebSocket: boolean;
+                        disabledReason?: 'provider_not_supported' | 'api_key_required' | 'base_url_not_supported';
+                    };
+                };
+                models: Array<{
+                    id: string;
+                    supportsPromptCache?: boolean;
+                    supportsRealtimeWebSocket?: boolean;
+                    apiFamily?:
+                        | 'openai_compatible'
+                        | 'kilo_gateway'
+                        | 'provider_native'
+                        | 'anthropic_messages'
+                        | 'google_generativeai';
+                    routedApiFamily?:
+                        | 'openai_compatible'
+                        | 'provider_native'
+                        | 'anthropic_messages'
+                        | 'google_generativeai';
+                    toolProtocol?:
+                        | 'openai_responses'
+                        | 'openai_chat_completions'
+                        | 'kilo_gateway'
+                        | 'provider_native'
+                        | 'anthropic_messages'
+                        | 'google_generativeai';
+                    providerSettings?: Record<string, unknown>;
+                }>;
+            }>;
+            defaults: { providerId: string; modelId: string };
+            specialistDefaults: Array<{
+                topLevelTab: 'agent' | 'orchestrator';
+                modeKey: 'ask' | 'code' | 'debug' | 'orchestrate';
                 providerId: string;
-                mode: 'standard_http' | 'realtime_websocket';
-                canUseRealtimeWebSocket: boolean;
-                disabledReason?: 'provider_not_supported' | 'api_key_required' | 'base_url_not_supported';
-            };
-        }>;
-        providerModels: Array<{
-            id: string;
-            supportsPromptCache?: boolean;
-            supportsRealtimeWebSocket?: boolean;
-            apiFamily?: 'openai_compatible' | 'kilo_gateway' | 'provider_native' | 'anthropic_messages' | 'google_generativeai';
-            routedApiFamily?: 'openai_compatible' | 'provider_native' | 'anthropic_messages' | 'google_generativeai';
-            toolProtocol?: 'openai_responses' | 'openai_chat_completions' | 'kilo_gateway' | 'provider_native' | 'anthropic_messages' | 'google_generativeai';
-            providerSettings?: Record<string, unknown>;
-        }>;
+                modelId: string;
+            }>;
+        };
         threadTags: Array<{ threadId: string; tagId: string }>;
-        defaults: { providerId: string; modelId: string };
-        specialistDefaults: Array<{
-            topLevelTab: 'agent' | 'orchestrator';
-            modeKey: 'ask' | 'code' | 'debug' | 'orchestrate';
-            providerId: string;
-            modelId: string;
-        }>;
         workspacePreferences: Array<{
             preferredVcs?: 'auto' | 'jj' | 'git';
             preferredPackageManager?: 'auto' | 'pnpm' | 'npm' | 'yarn' | 'bun';

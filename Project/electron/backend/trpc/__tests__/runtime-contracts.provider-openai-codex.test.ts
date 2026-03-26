@@ -217,7 +217,9 @@ describe('runtime contracts: provider and account flows', () => {
         expect(gpt54.runtime.apiFamily).toBe('openai_compatible');
 
         const shellBootstrap = await caller.runtime.getShellBootstrap({ profileId });
-        const shellGpt54 = shellBootstrap.providerModels.find((model) => model.id === 'openai/gpt-5.4');
+        const shellGpt54 = shellBootstrap.providerControl.entries
+            .flatMap((entry) => entry.models)
+            .find((model) => model.id === 'openai/gpt-5.4');
         expect(shellGpt54).toBeDefined();
         if (!shellGpt54) {
             throw new Error('Expected openai/gpt-5.4 in runtime shell bootstrap.');
@@ -276,7 +278,9 @@ describe('runtime contracts: provider and account flows', () => {
         expect(claude.runtime.routedApiFamily).toBe('anthropic_messages');
 
         const shellBootstrap = await caller.runtime.getShellBootstrap({ profileId });
-        const shellClaude = shellBootstrap.providerModels.find((model) => model.id === 'anthropic/claude-sonnet-4.5');
+        const shellClaude = shellBootstrap.providerControl.entries
+            .flatMap((entry) => entry.models)
+            .find((model) => model.id === 'anthropic/claude-sonnet-4.5');
         expect(shellClaude).toBeDefined();
         if (!shellClaude) {
             throw new Error('Expected anthropic/claude-sonnet-4.5 in runtime shell bootstrap.');

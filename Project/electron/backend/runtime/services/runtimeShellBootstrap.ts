@@ -12,10 +12,7 @@ class RuntimeShellBootstrapServiceImpl implements RuntimeShellBootstrapService {
     async getShellBootstrap(profileId: string): Promise<RuntimeShellBootstrap> {
         const [
             lastSequence,
-            providers,
-            providerModels,
-            defaults,
-            specialistDefaults,
+            providerControlResult,
             threadTags,
             executionPreset,
             workspaceRoots,
@@ -24,10 +21,7 @@ class RuntimeShellBootstrapServiceImpl implements RuntimeShellBootstrapService {
         ] =
             await Promise.all([
             runtimeEventStore.getLastSequence(),
-            providerManagementService.listProviders(profileId),
-            providerManagementService.listModelsByProfile(profileId),
-            providerManagementService.getDefaults(profileId),
-            providerManagementService.getSpecialistDefaults(profileId),
+            providerManagementService.getControlPlane(profileId),
             tagStore.listThreadTagsByProfile(profileId),
             getExecutionPreset(profileId),
             workspaceRootStore.listByProfile(profileId),
@@ -35,12 +29,13 @@ class RuntimeShellBootstrapServiceImpl implements RuntimeShellBootstrapService {
             sandboxStore.listByProfile(profileId),
         ]);
 
+        if (providerControlResult.isErr()) {
+            throw new Error(providerControlResult.error.message);
+        }
+
         return {
             lastSequence,
-            providers,
-            providerModels,
-            defaults,
-            specialistDefaults,
+            providerControl: providerControlResult.value,
             threadTags,
             executionPreset,
             workspaceRoots,

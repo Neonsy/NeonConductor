@@ -16,6 +16,16 @@ import { publicProcedure } from '@/app/backend/trpc/init';
 import { isProviderNotFoundCode, mapAuthErrorToOperationalCode, throwWithCode } from '@/app/backend/trpc/routers/provider/shared';
 
 export const providerQueryProcedures = {
+    getControlPlane: publicProcedure.input(providerListProvidersInputSchema).query(async ({ input }) => {
+        const result = await providerManagementService.getControlPlane(input.profileId);
+        if (result.isErr()) {
+            throwWithCode(result.error.code, result.error.message);
+        }
+
+        return {
+            providerControl: result.value,
+        };
+    }),
     listProviders: publicProcedure.input(providerListProvidersInputSchema).query(async ({ input }) => {
         return { providers: await providerManagementService.listProviders(input.profileId) };
     }),

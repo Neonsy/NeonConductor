@@ -3,6 +3,12 @@ import { useState } from 'react';
 import { buildModelPickerOption } from '@/web/components/modelSelection/modelCapabilities';
 import { ModelPicker } from '@/web/components/modelSelection/modelPicker';
 import { SettingsFeedbackBanner } from '@/web/components/settings/shared/settingsFeedbackBanner';
+import {
+    getProviderControlDefaults,
+    getProviderControlSpecialistDefaults,
+    listProviderControlModels,
+    listProviderControlProviders,
+} from '@/web/lib/providerControl/selectors';
 import { PROGRESSIVE_QUERY_OPTIONS } from '@/web/lib/query/progressiveQueryOptions';
 import { trpc } from '@/web/trpc/client';
 
@@ -68,29 +74,16 @@ export function ProviderSpecialistDefaultsSection({ profileId }: ProviderSpecial
             }
 
             setStatusMessage(`${variables.topLevelTab}.${variables.modeKey} default updated.`);
-            utils.provider.getDefaults.setData({ profileId }, (current) =>
-                current
-                    ? {
-                          ...current,
-                          specialistDefaults: result.specialistDefaults,
-                      }
-                    : current
-            );
-            utils.runtime.getShellBootstrap.setData({ profileId }, (current) =>
-                current
-                    ? {
-                          ...current,
-                          specialistDefaults: result.specialistDefaults,
-                      }
-                    : current
-            );
+            utils.provider.getControlPlane.invalidate({ profileId }).catch(() => undefined);
+            utils.runtime.getShellBootstrap.invalidate({ profileId }).catch(() => undefined);
         },
     });
 
-    const providers = (shellBootstrapQuery.data?.providers ?? []).filter((provider) => isRuntimeProviderId(provider.id));
-    const providerModels = shellBootstrapQuery.data?.providerModels ?? [];
-    const defaults = shellBootstrapQuery.data?.defaults;
-    const specialistDefaults = shellBootstrapQuery.data?.specialistDefaults ?? [];
+    const providerControl = shellBootstrapQuery.data?.providerControl;
+    const providers = listProviderControlProviders(providerControl).filter((provider) => isRuntimeProviderId(provider.id));
+    const providerModels = listProviderControlModels(providerControl);
+    const defaults = getProviderControlDefaults(providerControl);
+    const specialistDefaults = getProviderControlSpecialistDefaults(providerControl);
     const sectionGroups = [
         {
             label: 'Agent',

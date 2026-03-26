@@ -414,7 +414,9 @@ describe('runtime contracts: provider kilo catalog flows', () => {
         expect(getKiloRoutedApiFamily(minimax)).toBe('openai_compatible');
 
         const shellBootstrap = await caller.runtime.getShellBootstrap({ profileId });
-        const shellMiniMax = shellBootstrap.providerModels.find((model) => model.id === 'minimax/minimax-m2.5:free');
+        const shellMiniMax = shellBootstrap.providerControl.entries
+            .flatMap((entry) => entry.models)
+            .find((model) => model.id === 'minimax/minimax-m2.5:free');
         expect(shellMiniMax).toBeDefined();
     });
 

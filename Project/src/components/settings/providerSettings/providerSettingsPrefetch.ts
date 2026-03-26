@@ -5,8 +5,8 @@ interface ProviderSettingsPrefetchInput {
     providerId: RuntimeProviderId;
     trpcUtils: {
         provider: {
-            listModels: {
-                prefetch: (input: { profileId: string; providerId: RuntimeProviderId }) => Promise<void>;
+            getControlPlane: {
+                prefetch: (input: { profileId: string }) => Promise<void>;
             };
             getAuthState: {
                 prefetch: (input: { profileId: string; providerId: RuntimeProviderId }) => Promise<void>;
@@ -32,9 +32,8 @@ interface ProviderSettingsPrefetchInput {
 
 export function prefetchProviderSettingsData(input: ProviderSettingsPrefetchInput): void {
     const tasks: Array<Promise<void>> = [
-        input.trpcUtils.provider.listModels.prefetch({
+        input.trpcUtils.provider.getControlPlane.prefetch({
             profileId: input.profileId,
-            providerId: input.providerId,
         }),
         input.trpcUtils.provider.getAuthState.prefetch({
             profileId: input.profileId,

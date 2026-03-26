@@ -66,7 +66,7 @@ describe('runtime contracts: provider selection defaults', () => {
         });
 
         const shellBootstrap = await caller.runtime.getShellBootstrap({ profileId });
-        expect(shellBootstrap.specialistDefaults).toContainEqual({
+        expect(shellBootstrap.providerControl.specialistDefaults).toContainEqual({
             topLevelTab: 'agent',
             modeKey: 'code',
             providerId: 'openai',

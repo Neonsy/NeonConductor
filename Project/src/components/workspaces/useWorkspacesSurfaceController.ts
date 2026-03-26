@@ -1,4 +1,9 @@
 import { trpc } from '@/web/trpc/client';
+import {
+    getProviderControlDefaults,
+    listProviderControlModels,
+    listProviderControlProviders,
+} from '@/web/lib/providerControl/selectors';
 import { PROGRESSIVE_QUERY_OPTIONS } from '@/web/lib/query/progressiveQueryOptions';
 import { createFailClosedAsyncAction } from '@/web/lib/async/createFailClosedAsyncAction';
 
@@ -92,10 +97,11 @@ export function useWorkspacesSurfaceController(input: WorkspacesSurfaceControlle
         },
     });
 
-    const providers = shellBootstrapQuery.data?.providers ?? [];
-    const providerModels = shellBootstrapQuery.data?.providerModels ?? [];
+    const providerControl = shellBootstrapQuery.data?.providerControl;
+    const providers = listProviderControlProviders(providerControl);
+    const providerModels = listProviderControlModels(providerControl);
     const workspacePreferences = shellBootstrapQuery.data?.workspacePreferences ?? [];
-    const runtimeDefaults = shellBootstrapQuery.data?.defaults;
+    const runtimeDefaults = getProviderControlDefaults(providerControl);
     const selectedWorkspace = input.selectedWorkspaceFingerprint
         ? input.workspaceRoots.find((workspaceRoot) => workspaceRoot.fingerprint === input.selectedWorkspaceFingerprint)
         : undefined;

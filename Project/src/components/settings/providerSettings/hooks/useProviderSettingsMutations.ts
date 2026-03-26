@@ -2,16 +2,21 @@ import { methodLabel } from '@/web/components/settings/providerSettings/helpers'
 import { patchProviderCache } from '@/web/components/settings/providerSettings/providerSettingsCache';
 import type { ActiveAuthFlow } from '@/web/components/settings/providerSettings/types';
 import { trpc } from '@/web/trpc/client';
+import { isOneOf } from '@/web/lib/typeGuards/isOneOf';
 
 import type { ProviderAuthStateRecord } from '@/app/backend/persistence/types';
 
-import type { RuntimeProviderId } from '@/shared/contracts';
+import { providerIds, type RuntimeProviderId } from '@/shared/contracts';
 
 interface UseProviderSettingsMutationsInput {
     profileId: string;
     selectedProviderId: RuntimeProviderId | undefined;
     setStatusMessage: (value: string | undefined) => void;
     setActiveAuthFlow: (value: ActiveAuthFlow | undefined) => void;
+}
+
+function isRuntimeProviderId(value: string): value is RuntimeProviderId {
+    return isOneOf(value, providerIds);
 }
 
 export function useProviderSettingsMutations(input: UseProviderSettingsMutationsInput) {
@@ -50,24 +55,18 @@ export function useProviderSettingsMutations(input: UseProviderSettingsMutations
             }
 
             input.setStatusMessage('Default provider/model updated.');
-            utils.provider.getDefaults.setData({ profileId: input.profileId }, (current) => ({
+            if (!isRuntimeProviderId(result.defaultProviderId)) {
+                input.setStatusMessage('Default update returned an unsupported provider.');
+                return;
+            }
+            patchProviderCache({
+                utils,
+                profileId: input.profileId,
+                providerId: result.defaultProviderId,
                 defaults: {
                     providerId: result.defaultProviderId,
                     modelId: result.defaultModelId,
                 },
-                specialistDefaults: current?.specialistDefaults ?? [],
-            }));
-            utils.provider.listProviders.setData({ profileId: input.profileId }, (current) => {
-                if (!current) {
-                    return current;
-                }
-
-                return {
-                    providers: current.providers.map((provider) => ({
-                        ...provider,
-                        isDefault: provider.id === result.defaultProviderId,
-                    })),
-                };
             });
             void utils.runtime.getShellBootstrap.invalidate({ profileId: input.profileId });
         },

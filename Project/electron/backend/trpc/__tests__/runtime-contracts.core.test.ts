@@ -56,9 +56,9 @@ describe('runtime contracts: core flows', () => {
         expect(snapshot.providerSecrets).toEqual([]);
         expect(shellBootstrap.lastSequence).toBeGreaterThanOrEqual(0);
         expect(shellBootstrap.threadTags).toEqual([]);
-        expect(shellBootstrap.providers.length).toBeGreaterThan(0);
-        expect(shellBootstrap.providerModels.length).toBeGreaterThan(0);
-        expect(shellBootstrap.specialistDefaults).toEqual([]);
+        expect(shellBootstrap.providerControl.entries.length).toBeGreaterThan(0);
+        expect(shellBootstrap.providerControl.entries.flatMap((entry) => entry.models).length).toBeGreaterThan(0);
+        expect(shellBootstrap.providerControl.specialistDefaults).toEqual([]);
         expect(defaults.defaults.providerId).toBe('kilo');
         expect(promptLayers.settings.topLevelInstructions.chat).toBe('');
         expect(promptLayers.settings.builtInModes.chat[0]?.modeKey).toBe('chat');

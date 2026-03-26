@@ -19,15 +19,6 @@ function buildProviderSettingsControllerKey(profileId: string, selectedProviderI
     return `${profileId}:${selectedProviderId}`;
 }
 
-function sortProviderItems(providers: ReturnType<typeof useProviderSettingsController>['selection']['providerItems']) {
-    const kiloProvider = providers.find((provider) => provider.id === 'kilo');
-    const directProviders = providers
-        .filter((provider) => provider.id !== 'kilo')
-        .toSorted((left, right) => left.label.localeCompare(right.label));
-
-    return kiloProvider ? [kiloProvider, ...directProviders] : directProviders;
-}
-
 function KiloProviderContent({
     profileId,
     controller,
@@ -255,13 +246,12 @@ function ProviderSettingsViewBody({ profileId, selectedProviderId, onProviderCha
         profileId,
         selectedProviderId ? { initialProviderId: selectedProviderId } : undefined
     );
-    const providerItems = sortProviderItems(controller.selection.providerItems);
     const selectedProvider = controller.selection.selectedProvider;
 
     return (
         <section className='grid h-full min-h-0 min-w-0 overflow-hidden xl:grid-cols-[264px_minmax(0,1fr)]'>
             <ProviderSidebar
-                providers={providerItems}
+                providers={controller.selection.providerItems}
                 selectedProviderId={selectedProvider?.id}
                 onSelectProvider={(providerId) => {
                     if (onProviderChange) {

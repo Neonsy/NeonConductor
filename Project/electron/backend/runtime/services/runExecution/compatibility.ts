@@ -62,6 +62,34 @@ interface PrepareRunnableCandidateInput {
     attachments?: ComposerImageAttachmentInput[];
 }
 
+function buildInvalidPersistedModelError(input: {
+    providerId: RuntimeProviderId;
+    modelId: string;
+    detail: string;
+    toolProtocol?: string;
+    apiFamily?: string;
+}) {
+    const message = `Model "${input.modelId}" has invalid persisted runtime metadata and cannot be used until the provider catalog is refreshed or corrected.`;
+    const isProviderNativeRow = input.toolProtocol === 'provider_native' || input.apiFamily === 'provider_native';
+
+    return {
+        code: 'runtime_option_invalid' as const,
+        message,
+        action: isProviderNativeRow
+            ? {
+                  code: 'provider_native_unsupported' as const,
+                  providerId: input.providerId,
+                  modelId: input.modelId,
+              }
+            : {
+                  code: 'runtime_options_invalid' as const,
+                  providerId: input.providerId,
+                  modelId: input.modelId,
+                  detail: 'generic' as const,
+              },
+    };
+}
+
 export async function prepareRunnableCandidate(
     input: PrepareRunnableCandidateInput
 ): Promise<RunExecutionResult<RunnableCandidatePreparationResult>> {
@@ -76,8 +104,8 @@ export async function prepareRunnableCandidate(
         });
     }
 
-    const modelCapabilities = await providerStore.getModelCapabilities(input.profileId, input.providerId, input.modelId);
-    if (!modelCapabilities) {
+    const modelReadState = await providerStore.getModelReadState(input.profileId, input.providerId, input.modelId);
+    if (!modelReadState) {
         return okRunExecution({
             kind: 'incompatible',
             error: {
@@ -91,6 +119,25 @@ export async function prepareRunnableCandidate(
             },
         });
     }
+    if (modelReadState.kind === 'invalid') {
+        const diagnostic = modelReadState.diagnostic;
+        return okRunExecution({
+            kind: 'incompatible',
+            error: buildInvalidPersistedModelError({
+                providerId: input.providerId,
+                modelId: input.modelId,
+                detail: diagnostic.detail,
+                ...(diagnostic.toolProtocol ? { toolProtocol: diagnostic.toolProtocol } : {}),
+                ...(diagnostic.apiFamily ? { apiFamily: diagnostic.apiFamily } : {}),
+            }),
+        });
+    }
+
+    const modelCapabilities = {
+        features: modelReadState.model.features,
+        runtime: modelReadState.model.runtime,
+        ...(modelReadState.model.promptFamily ? { promptFamily: modelReadState.model.promptFamily } : {}),
+    };
 
     const capabilityValidation = validateRunCapabilities({
         providerId: input.providerId,

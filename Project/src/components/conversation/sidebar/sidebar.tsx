@@ -10,6 +10,11 @@ import { useSidebarWorkspaceDeleteController } from '@/web/components/conversati
 import { WorkspaceDeleteDialog } from '@/web/components/conversation/sidebar/sections/workspaceDeleteDialog';
 import { WorkspaceLifecycleDialog } from '@/web/components/conversation/sidebar/sections/workspaceLifecycleDialog';
 import { Button } from '@/web/components/ui/button';
+import {
+    getProviderControlDefaults,
+    listProviderControlModels,
+    listProviderControlProviders,
+} from '@/web/lib/providerControl/selectors';
 import { SECONDARY_QUERY_OPTIONS } from '@/web/lib/query/secondaryQueryOptions';
 import { trpc } from '@/web/trpc/client';
 
@@ -108,10 +113,11 @@ export function ConversationSidebar({
 }: ConversationSidebarProps) {
     const shellBootstrapQuery = trpc.runtime.getShellBootstrap.useQuery({ profileId }, SECONDARY_QUERY_OPTIONS);
     const [feedbackMessage, setFeedbackMessage] = useState<string | undefined>(undefined);
-    const providers = shellBootstrapQuery.data?.providers ?? [];
-    const providerModels = shellBootstrapQuery.data?.providerModels ?? [];
+    const providerControl = shellBootstrapQuery.data?.providerControl;
+    const providers = listProviderControlProviders(providerControl);
+    const providerModels = listProviderControlModels(providerControl);
     const workspacePreferences = shellBootstrapQuery.data?.workspacePreferences ?? [];
-    const defaults = shellBootstrapQuery.data?.defaults;
+    const defaults = getProviderControlDefaults(providerControl);
     const desktopBridge = typeof window !== 'undefined' ? window.neonDesktop : undefined;
     const threadDraftController = useSidebarThreadDraftController({
         preferredWorkspaceFingerprint,

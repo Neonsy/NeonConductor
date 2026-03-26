@@ -2,6 +2,7 @@ import { skipToken } from '@tanstack/react-query';
 
 import type { ResolvedContextState, ResolvedContextStateInput } from '@/app/backend/runtime/contracts/types/context';
 import type { EntityId } from '@/shared/contracts';
+import { listProviderControlProviders } from '@/web/lib/providerControl/selectors';
 import { trpc } from '@/web/trpc/client';
 import { useConversationShellComposer } from '@/web/components/conversation/hooks/useConversationShellComposer';
 import { buildModelPickerOption } from '@/web/components/modelSelection/modelCapabilities';
@@ -46,7 +47,9 @@ interface UseConversationShellComposerSetupInput {
 }
 
 export function buildConversationComposerModelOptions(input: {
-    providers: NonNullable<ConversationQueries['shellBootstrapQuery']['data']>['providers'] | undefined;
+    providers:
+        | NonNullable<ConversationQueries['shellBootstrapQuery']['data']>['providerControl']['entries'][number]['provider'][]
+        | undefined;
     modelsByProvider: ConversationRunTargetState['modelsByProvider'];
     activeModeRequiresNativeTools: boolean;
     modeKey: string;
@@ -198,7 +201,7 @@ export function useConversationShellComposerSetup(input: UseConversationShellCom
     });
 
     const composerModelOptions = buildConversationComposerModelOptions({
-        providers: input.queries.shellBootstrapQuery.data?.providers,
+        providers: listProviderControlProviders(input.queries.shellBootstrapQuery.data?.providerControl),
         modelsByProvider: input.runTargetState.modelsByProvider,
         activeModeRequiresNativeTools: input.activeModeRequiresNativeTools,
         modeKey: input.modeKey,

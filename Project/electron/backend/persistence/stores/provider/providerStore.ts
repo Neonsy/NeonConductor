@@ -1,6 +1,10 @@
 import { getPersistence } from '@/app/backend/persistence/db';
 import { settingsStore } from '@/app/backend/persistence/stores/profile/settingsStore';
-import { providerCatalogStore } from '@/app/backend/persistence/stores/provider/providerCatalogStore';
+import {
+    providerCatalogStore,
+    type InvalidProviderModelDiagnostic,
+    type PersistedProviderModelReadState,
+} from '@/app/backend/persistence/stores/provider/providerCatalogStore';
 import { parseEnumValue } from '@/app/backend/persistence/stores/shared/rowParsers';
 import { isJsonRecord, isJsonString, isJsonUnknownArray } from '@/app/backend/persistence/stores/shared/utils';
 import type { ProviderModelRecord, ProviderRecord } from '@/app/backend/persistence/types';
@@ -150,6 +154,21 @@ export class ProviderStore {
 
     async getModel(profileId: string, providerId: RuntimeProviderId, modelId: string): Promise<ProviderModelRecord | null> {
         return providerCatalogStore.getModel(profileId, providerId, modelId);
+    }
+
+    async getModelReadState(
+        profileId: string,
+        providerId: RuntimeProviderId,
+        modelId: string
+    ): Promise<PersistedProviderModelReadState | null> {
+        return providerCatalogStore.getModelReadState(profileId, providerId, modelId);
+    }
+
+    async listInvalidModelDiagnostics(
+        profileId: string,
+        providerId: RuntimeProviderId
+    ): Promise<InvalidProviderModelDiagnostic[]> {
+        return providerCatalogStore.listInvalidModelDiagnostics(profileId, providerId);
     }
 
     async getModelCapabilities(profileId: string, providerId: RuntimeProviderId, modelId: string) {

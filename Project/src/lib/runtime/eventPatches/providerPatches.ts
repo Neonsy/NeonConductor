@@ -13,7 +13,6 @@ import {
     readProviderModels,
     readRoutingPreference,
     readString,
-    replaceProviderModels,
 } from './readers';
 
 export function applyProviderRuntimeEventPatch(
@@ -58,32 +57,6 @@ export function applyProviderRuntimeEventPatch(
         ...(preference ? { routingPreference: preference } : {}),
         ...(providers ? { routingProviders: providers } : {}),
         ...(modelId ? { routingModelId: modelId } : {}),
-    });
-
-    utils.runtime.getShellBootstrap.setData({ profileId }, (current) => {
-        if (!current) {
-            return current;
-        }
-
-        const nextProviders = current.providers.map((candidate) => {
-            const providerValue = provider && candidate.id === provider.id ? provider : candidate;
-            if (state && providerValue.id === providerId) {
-                return {
-                    ...providerValue,
-                    authState: state.authState,
-                    authMethod: state.authMethod,
-                };
-            }
-
-            return providerValue;
-        });
-
-        return {
-            ...current,
-            providers: nextProviders,
-            ...(defaults ? { defaults } : {}),
-            ...(models ? { providerModels: replaceProviderModels(current.providerModels, models) } : {}),
-        };
     });
 
     return true;
