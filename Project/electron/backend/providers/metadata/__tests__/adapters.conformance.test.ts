@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetPersistenceForTests } from '@/app/backend/persistence/db';
 import { getProviderMetadataAdapter } from '@/app/backend/providers/metadata/adapters';
 import type { ProviderCatalogSyncSuccess } from '@/app/backend/providers/types';
+import { kiloFrontierModelId } from '@/shared/kiloModels';
 
 function expectConforms(result: ProviderCatalogSyncSuccess) {
     expect(result.ok).toBe(true);
@@ -84,7 +85,7 @@ describe('provider metadata adapter conformance', () => {
                         json: () => ({
                             data: [
                                 {
-                                    id: 'kilo/auto',
+                                    id: kiloFrontierModelId,
                                     name: 'Kilo Auto',
                                     owned_by: 'kilo',
                                     context_length: 200000,

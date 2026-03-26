@@ -193,6 +193,7 @@ export class RunExecutionService {
             ...(prepared.resolvedAuth.organizationId
                 ? { organizationId: prepared.resolvedAuth.organizationId }
                 : {}),
+            ...(prepared.kiloModeHeader ? { kiloModeHeader: prepared.kiloModeHeader } : {}),
             ...(prepared.kiloRouting ? { kiloRouting: prepared.kiloRouting } : {}),
             ...(prepared.runContext ? { contextMessages: prepared.runContext.messages } : {}),
             ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),

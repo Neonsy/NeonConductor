@@ -200,6 +200,7 @@ export async function streamKiloRuntime(
         token,
         ...(input.organizationId ? { organizationId: input.organizationId } : {}),
         modelId: input.modelId,
+        ...(input.kiloModeHeader ? { kiloModeHeader: input.kiloModeHeader } : {}),
         ...(input.runtime.toolProtocol === 'kilo_gateway' ? { routedApiFamily: input.runtime.routedApiFamily } : {}),
         ...(input.cache.applied && input.cache.key
             ? {

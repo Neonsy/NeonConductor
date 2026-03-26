@@ -181,7 +181,7 @@ describe('useConversationRunTarget', () => {
             ],
             defaults: {
                 providerId: 'kilo',
-                modelId: 'kilo/auto',
+                modelId: kiloFrontierModelId,
             },
             runs: [],
             requiresTools: false,

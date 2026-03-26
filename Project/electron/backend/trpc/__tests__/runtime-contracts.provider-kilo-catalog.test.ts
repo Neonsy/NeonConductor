@@ -347,7 +347,7 @@ describe('runtime contracts: provider kilo catalog flows', () => {
         );
     });
 
-    it('drops synced Kilo catalog rows when their routed family is unknown', async () => {
+    it('keeps synced Kilo catalog rows that fall back to the shared openai-compatible family', async () => {
         const caller = createCaller();
         vi.stubGlobal(
             'fetch',
@@ -360,8 +360,8 @@ describe('runtime contracts: provider kilo catalog flows', () => {
                         json: () => ({
                             data: [
                                 {
-                                    id: 'minimax/minimax-m2.1:free',
-                                    name: 'MiniMax M2.1',
+                                    id: 'minimax/minimax-m2.5:free',
+                                    name: 'MiniMax M2.5',
                                     owned_by: 'minimax',
                                     context_length: 200000,
                                     supported_parameters: ['tools'],
@@ -406,15 +406,16 @@ describe('runtime contracts: provider kilo catalog flows', () => {
             providerId: 'kilo',
         });
         expect(syncResult.ok).toBe(true);
-        expect(syncResult.modelCount).toBe(0);
+        expect(syncResult.modelCount).toBe(1);
 
         const models = await caller.provider.listModels({ profileId, providerId: 'kilo' });
-        const minimax = models.models.find((model) => model.id === 'minimax/minimax-m2.1:free');
-        expect(minimax).toBeUndefined();
+        const minimax = models.models.find((model) => model.id === 'minimax/minimax-m2.5:free');
+        expect(minimax).toBeDefined();
+        expect(getKiloRoutedApiFamily(minimax)).toBe('openai_compatible');
 
         const shellBootstrap = await caller.runtime.getShellBootstrap({ profileId });
-        const shellMiniMax = shellBootstrap.providerModels.find((model) => model.id === 'minimax/minimax-m2.1:free');
-        expect(shellMiniMax).toBeUndefined();
+        const shellMiniMax = shellBootstrap.providerModels.find((model) => model.id === 'minimax/minimax-m2.5:free');
+        expect(shellMiniMax).toBeDefined();
     });
 
     it('surfaces catalog sync failure details when the first kilo model sync produces no persisted catalog', async () => {
@@ -460,8 +461,8 @@ describe('runtime contracts: provider kilo catalog flows', () => {
 
         await providerCatalogStore.replaceModels(profileId, 'kilo', [
             {
-                modelId: 'minimax/minimax-m2.1:free',
-                label: 'MiniMax M2.1',
+                modelId: 'minimax/minimax-m2.5:free',
+                label: 'MiniMax M2.5',
                 upstreamProvider: 'minimax',
                 isFree: true,
                 features: {
@@ -555,7 +556,7 @@ describe('runtime contracts: provider kilo catalog flows', () => {
                         statusText: 'OK',
                         json: () => ({
                             data: {
-                                defaultModelId: 'minimax/minimax-m2.1:free',
+                                defaultModelId: 'minimax/minimax-m2.5:free',
                             },
                         }),
                     });
@@ -603,7 +604,7 @@ describe('runtime contracts: provider kilo catalog flows', () => {
         const defaults = await caller.provider.getDefaults({ profileId });
         expect(defaults.defaults).toEqual({
             providerId: 'kilo',
-            modelId: 'minimax/minimax-m2.1:free',
+            modelId: 'minimax/minimax-m2.5:free',
         });
         expect(defaults.specialistDefaults).toEqual([]);
     });

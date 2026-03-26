@@ -11,6 +11,7 @@ import type {
     RuntimeReasoningSummary,
     RuntimeRunOptions,
 } from '@/app/backend/runtime/contracts';
+import type { KiloModeHeader } from '@/shared/kiloModels';
 
 export type ProviderModelModality = 'text' | 'audio' | 'image' | 'video' | 'pdf';
 export type ProviderToolProtocol =
@@ -319,6 +320,7 @@ export interface ProviderRuntimeInput {
     apiKey?: string;
     accessToken?: string;
     organizationId?: string;
+    kiloModeHeader?: KiloModeHeader;
     kiloRouting?:
         | {
               mode: 'dynamic';

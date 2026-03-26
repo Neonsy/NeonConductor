@@ -12,6 +12,7 @@ import type { ResolvedKiloRouting, RunCacheResolution, RunContextMessage, StartR
 import { runtimeUpsertEvent } from '@/app/backend/runtime/services/runtimeEventEnvelope';
 import { runtimeEventLogService } from '@/app/backend/runtime/services/runtimeEventLog';
 import type { ResolvedWorkspaceContext } from '@/app/backend/runtime/contracts';
+import type { KiloModeHeader } from '@/shared/kiloModels';
 
 export async function runToTerminalState(input: {
     profileId: string;
@@ -33,6 +34,7 @@ export async function runToTerminalState(input: {
     apiKey?: string;
     accessToken?: string;
     organizationId?: string;
+    kiloModeHeader?: KiloModeHeader;
     kiloRouting?: ResolvedKiloRouting;
     contextMessages?: RunContextMessage[];
     workspaceFingerprint?: string;

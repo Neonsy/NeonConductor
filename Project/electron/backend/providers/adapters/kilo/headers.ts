@@ -12,6 +12,7 @@ import {
     HEADER_TASK_ID,
 } from '@/app/backend/providers/kiloGatewayClient/constants';
 import type { ProviderRuntimeInput, ProviderRoutedApiFamily } from '@/app/backend/providers/types';
+import { isKiloAutoModelId } from '@/shared/kiloModels';
 
 export function resolveKiloRuntimeAuthToken(input: ProviderRuntimeInput): ProviderAdapterResult<string> {
     const token = input.accessToken ?? input.apiKey;
@@ -41,6 +42,7 @@ export function buildKiloRuntimeHeaders(input: {
     modelId: string;
     cacheKey?: string;
     routedApiFamily?: ProviderRoutedApiFamily;
+    kiloModeHeader?: ProviderRuntimeInput['kiloModeHeader'];
 }): Record<string, string> {
     const headers: Record<string, string> = {
         Authorization: `Bearer ${input.token}`,
@@ -55,8 +57,8 @@ export function buildKiloRuntimeHeaders(input: {
         headers[HEADER_ORGANIZATION_ID] = input.organizationId;
     }
 
-    if (input.modelId === 'kilo/auto') {
-        headers[HEADER_MODE] = 'code';
+    if (input.kiloModeHeader && isKiloAutoModelId(input.modelId)) {
+        headers[HEADER_MODE] = input.kiloModeHeader;
     }
 
     if (input.cacheKey) {

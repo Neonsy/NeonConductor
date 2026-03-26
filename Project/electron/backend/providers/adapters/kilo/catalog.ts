@@ -1,10 +1,11 @@
 import {
-    buildProviderIdSet,
     buildModelsByProviderIndex,
-    normalizeKiloModel,
+    classifyKiloModel,
+    type KiloRejectedModelDiagnostic,
 } from '@/app/backend/providers/adapters/kilo/modelNormalization';
 import { kiloGatewayClient } from '@/app/backend/providers/kiloGatewayClient';
-import type { ProviderCatalogSyncResult } from '@/app/backend/providers/types';
+import type { ProviderCatalogModel, ProviderCatalogSyncResult } from '@/app/backend/providers/types';
+import { appLog } from '@/app/main/logging';
 
 interface SyncKiloCatalogInput {
     profileId: string;
@@ -59,33 +60,53 @@ export async function syncKiloCatalog(input: SyncKiloCatalogInput): Promise<Prov
         const models = modelsResult.value;
         const providers = providersResult.value;
         const modelsByProvider = modelsByProviderResult.isOk() ? modelsByProviderResult.value : [];
-
-        const providerIds = buildProviderIdSet(providers);
         const modelsByProviderIndex = buildModelsByProviderIndex(modelsByProvider);
-        const normalizedModels = models.flatMap((model) => {
-            try {
-                const entry = normalizeKiloModel(model, {
-                    providerIds,
-                    modelsByProviderIndex,
-                });
-                if (entry.upstreamProvider && modelsByProviderIndex.has(entry.upstreamProvider)) {
-                    const hasMembership = modelsByProviderIndex.get(entry.upstreamProvider)?.has(entry.modelId) ?? false;
-                    return [
-                        {
-                            ...entry,
-                            raw: {
-                                ...entry.raw,
-                                modelsByProviderMembership: hasMembership,
-                            },
-                        },
-                    ];
-                }
+        const normalizedModels: ProviderCatalogModel[] = [];
+        const rejectedModels: KiloRejectedModelDiagnostic[] = [];
 
-                return [entry];
-            } catch {
-                return [];
+        for (const model of models) {
+            const classification = classifyKiloModel(model, {
+                modelsByProviderIndex,
+            });
+            if (classification.status === 'rejected') {
+                rejectedModels.push(classification.diagnostic);
+                appLog.warn({
+                    tag: 'provider.kilo',
+                    message: 'Rejected Kilo catalog model during runtime classification.',
+                    modelId: classification.diagnostic.modelId,
+                    reason: classification.diagnostic.reason,
+                    detail: classification.diagnostic.detail,
+                    upstreamProvider: classification.diagnostic.upstreamProvider ?? null,
+                    promptFamily: classification.diagnostic.promptFamily ?? null,
+                });
+                continue;
             }
-        });
+
+            const entry = classification.model;
+            if (entry.upstreamProvider && modelsByProviderIndex.has(entry.upstreamProvider)) {
+                const hasMembership = modelsByProviderIndex.get(entry.upstreamProvider)?.has(entry.modelId) ?? false;
+                normalizedModels.push({
+                    ...entry,
+                    raw: {
+                        ...entry.raw,
+                        modelsByProviderMembership: hasMembership,
+                    },
+                });
+                continue;
+            }
+
+            normalizedModels.push(entry);
+        }
+
+        if (models.length > 0 && normalizedModels.length === 0) {
+            return {
+                ok: false,
+                status: 'error',
+                providerId: 'kilo',
+                reason: 'sync_failed',
+                detail: 'Kilo catalog sync rejected every discovered model during runtime classification.',
+            };
+        }
 
         return {
             ok: true,
@@ -95,9 +116,11 @@ export async function syncKiloCatalog(input: SyncKiloCatalogInput): Promise<Prov
             providerPayload: {
                 providers,
                 modelsByProvider,
+                rejectedModels,
             },
             modelPayload: {
                 models,
+                rejectedModels,
             },
         };
     } catch (error) {

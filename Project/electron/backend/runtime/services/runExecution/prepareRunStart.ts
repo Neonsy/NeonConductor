@@ -11,6 +11,7 @@ import { resolveRunAuth } from '@/app/backend/runtime/services/runExecution/reso
 import { resolveRuntimeProtocol } from '@/app/backend/runtime/services/runExecution/protocol';
 import { resolveFirstRunnableRunTarget } from '@/app/backend/runtime/services/runExecution/resolveRunnableTarget';
 import { resolveRunTarget } from '@/app/backend/runtime/services/runExecution/resolveRunTarget';
+import { resolveKiloModeHeader } from '@/app/backend/runtime/services/runExecution/kiloMode';
 import { resolveRuntimeToolsForMode } from '@/app/backend/runtime/services/runExecution/tools';
 import type { ProviderServiceErrorCode } from '@/app/backend/providers/service/errors';
 import type {
@@ -253,6 +254,8 @@ export async function prepareRunStart(input: StartRunInput): Promise<RunExecutio
                     mode: 'dynamic' as const,
                     sort: 'default',
                 };
+    const kiloModeHeader =
+        activeTarget.providerId === 'kilo' ? resolveKiloModeHeader(resolvedModeResult.value.mode) : undefined;
 
     return okRunExecution({
         resolvedMode: resolvedModeResult.value,
@@ -266,6 +269,7 @@ export async function prepareRunStart(input: StartRunInput): Promise<RunExecutio
             : {}),
         toolDefinitions,
         ...(runContext ? { runContext } : {}),
+        ...(kiloModeHeader ? { kiloModeHeader } : {}),
         ...(kiloRouting ? { kiloRouting } : {}),
     });
 }

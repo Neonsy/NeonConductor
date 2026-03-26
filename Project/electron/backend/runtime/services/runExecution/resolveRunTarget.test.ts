@@ -64,7 +64,7 @@ describe('resolveRunTarget', () => {
                 topLevelTab: 'agent',
                 modeKey: 'code',
                 providerId: 'kilo',
-                modelId: 'kilo/auto',
+                modelId: kiloFrontierModelId,
             },
         ]);
         providerStoreMock.modelExists.mockResolvedValue(true);

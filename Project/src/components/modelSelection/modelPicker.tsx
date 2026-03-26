@@ -181,19 +181,19 @@ function sortGroupedOptions(options: ModelPickerOption[]): ModelGroup[] {
 
 function getModelDescription(option: ModelPickerOption): string {
     if (option.id === kiloFrontierModelId) {
-        return 'Recommended starting point with automatic Kilo routing to the best model for the task.';
+        return 'Automatic Kilo routing to the best model for the task.';
     }
 
     if (option.id === kiloBalancedModelId) {
-        return 'Automatic Kilo routing tuned for a balanced mix of price and performance.';
+        return 'Automatic Kilo routing tuned for lower-cost mixed routing.';
     }
 
     if (option.id === kiloFreeModelId) {
-        return 'Automatic Kilo routing limited to free models.';
+        return 'Automatic Kilo routing limited to the Kilo free tier.';
     }
 
     if (option.id === kiloSmallModelId) {
-        return 'Automatic Kilo routing tuned toward smaller, coding-oriented models.';
+        return 'Automatic Kilo routing tuned for smaller background and utility work.';
     }
 
     if (option.providerId === 'kilo') {

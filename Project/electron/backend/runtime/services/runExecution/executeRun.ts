@@ -47,6 +47,7 @@ import { memoryRuntimeService } from '@/app/backend/runtime/services/memory/runt
 import { threadTitleService } from '@/app/backend/runtime/services/threadTitle/service';
 import { toolExecutionService } from '@/app/backend/runtime/services/toolExecution/service';
 import type { ToolExecutionResult } from '@/app/backend/runtime/services/toolExecution/types';
+import type { KiloModeHeader } from '@/shared/kiloModels';
 
 interface RunUsageWriteInput {
     runId: string;
@@ -175,6 +176,7 @@ export interface ExecuteRunInput {
     apiKey?: string;
     accessToken?: string;
     organizationId?: string;
+    kiloModeHeader?: KiloModeHeader;
     kiloRouting?:
         | {
               mode: 'dynamic';
@@ -534,6 +536,7 @@ export async function executeRun(input: ExecuteRunInput): Promise<RunExecutionRe
             ...(input.apiKey ? { apiKey: input.apiKey } : {}),
             ...(input.accessToken ? { accessToken: input.accessToken } : {}),
             ...(input.organizationId ? { organizationId: input.organizationId } : {}),
+            ...(input.kiloModeHeader ? { kiloModeHeader: input.kiloModeHeader } : {}),
             ...(input.kiloRouting ? { kiloRouting: input.kiloRouting } : {}),
             runtimeOptions: {
                 ...input.runtimeOptions,

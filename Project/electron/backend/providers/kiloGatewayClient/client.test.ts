@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { KiloGatewayClient } from '@/app/backend/providers/kiloGatewayClient/client';
+import { kiloFrontierModelId } from '@/shared/kiloModels';
 
 describe('KiloGatewayClient', () => {
     afterEach(() => {
@@ -221,22 +222,22 @@ describe('KiloGatewayClient', () => {
                     status: 200,
                     statusText: 'OK',
                     json: () => ({
-                        data: [
-                            {
-                                id: 'kilo/auto',
-                                name: 'Kilo Auto Free',
-                                owned_by: 'openai',
-                                supported_parameters: [],
+                            data: [
+                                {
+                                    id: kiloFrontierModelId,
+                                    name: 'Kilo Auto Free',
+                                    owned_by: 'openai',
+                                    supported_parameters: [],
                                 architecture: {
                                     input_modalities: ['text'],
                                     output_modalities: ['text'],
                                 },
-                            },
-                            {
-                                id: 'kilo/auto',
-                                name: 'Kilo Auto Free',
-                                owned_by: 'anthropic',
-                                supported_parameters: ['reasoning'],
+                                },
+                                {
+                                    id: kiloFrontierModelId,
+                                    name: 'Kilo Auto Free',
+                                    owned_by: 'anthropic',
+                                    supported_parameters: ['reasoning'],
                                 architecture: {
                                     input_modalities: ['text'],
                                     output_modalities: ['text'],
@@ -262,7 +263,7 @@ describe('KiloGatewayClient', () => {
 
         expect(result.value).toHaveLength(1);
         expect(result.value[0]).toMatchObject({
-            id: 'kilo/auto',
+            id: kiloFrontierModelId,
             upstreamProvider: 'anthropic',
             supportedParameters: ['reasoning'],
         });

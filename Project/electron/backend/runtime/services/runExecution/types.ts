@@ -26,6 +26,7 @@ import type {
     ProviderRuntimeDescriptor,
     ProviderRuntimeTransportFamily,
 } from '@/app/backend/providers/types';
+import type { KiloModeHeader } from '@/shared/kiloModels';
 
 export interface StartRunInput {
     profileId: string;
@@ -150,6 +151,7 @@ export interface PreparedRunStart {
     openAIExecutionMode?: OpenAIExecutionMode;
     toolDefinitions: ProviderRuntimeToolDefinition[];
     runContext?: RunContext;
+    kiloModeHeader?: KiloModeHeader;
     kiloRouting?: ResolvedKiloRouting;
     workspaceContext?: ResolvedWorkspaceContext;
 }
