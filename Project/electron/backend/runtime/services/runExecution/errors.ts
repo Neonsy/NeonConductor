@@ -6,6 +6,7 @@ export type RunExecutionErrorCode =
     | 'invalid_mode'
     | 'mode_not_available'
     | 'mode_policy_invalid'
+    | 'execution_target_unavailable'
     | 'runtime_option_invalid'
     | 'invalid_payload'
     | 'cache_resolution_failed'

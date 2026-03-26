@@ -108,10 +108,19 @@ export class RunExecutionService {
             allowLazySandboxCreation: input.topLevelTab !== 'chat',
         });
         if (!workspaceContext) {
-            return {
-                accepted: false,
-                reason: 'not_found',
-            };
+            return toRejectedStartResult(
+                {
+                    code: 'execution_target_unavailable',
+                    message: 'Workspace execution target could not be resolved for this session.',
+                    action: {
+                        code: 'execution_target_unavailable',
+                        target: 'workspace',
+                        ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
+                        detail: 'workspace_not_resolved',
+                    },
+                },
+                input
+            );
         }
         if (
             input.topLevelTab !== 'chat' &&
@@ -121,9 +130,15 @@ export class RunExecutionService {
         ) {
             return toRejectedStartResult(
                 {
-                    code: 'provider_request_unavailable',
+                    code: 'execution_target_unavailable',
                     message:
                         'Managed sandbox could not be materialized. Switch this thread to local workspace mode to allow shared-path editing.',
+                    action: {
+                        code: 'execution_target_unavailable',
+                        target: 'sandbox',
+                        ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
+                        detail: 'sandbox_not_materialized',
+                    },
                 },
                 input
             );

@@ -1,90 +1,71 @@
 import { providerStore } from '@/app/backend/persistence/stores';
+import { providerIds } from '@/app/backend/runtime/contracts';
 import type {
     ComposerImageAttachmentInput,
     ModeDefinition,
-    RuntimeProviderId,
     RuntimeRunOptions,
     TopLevelTab,
 } from '@/app/backend/runtime/contracts';
-import { assessRunTargetCompatibility } from '@/app/backend/runtime/services/runExecution/compatibility';
-import type { ResolvedRunAuth, ResolvedRunTarget } from '@/app/backend/runtime/services/runExecution/types';
+import { errRunExecution, okRunExecution, type RunExecutionResult } from '@/app/backend/runtime/services/runExecution/errors';
+import { prepareRunnableCandidate } from '@/app/backend/runtime/services/runExecution/compatibility';
+import type { PreparedRunnableCandidate, ResolvedRunTarget } from '@/app/backend/runtime/services/runExecution/types';
 
-export interface RunnableRunTarget {
-    target: ResolvedRunTarget;
-    auth: ResolvedRunAuth;
-}
-
-interface CompatibleRunTargetInput {
+interface ResolveRunnableRunTargetInput {
     profileId: string;
     topLevelTab: TopLevelTab;
     mode: ModeDefinition;
     runtimeOptions: RuntimeRunOptions;
     attachments?: ComposerImageAttachmentInput[];
-    preferredTarget?: { providerId: RuntimeProviderId; modelId: string };
-    excluded?: { providerId: RuntimeProviderId; modelId: string };
+    preferredTarget?: ResolvedRunTarget;
 }
 
-async function tryResolveCompatibleTarget(
-    input: CompatibleRunTargetInput,
-    candidate: { providerId: RuntimeProviderId; modelId: string }
-): Promise<RunnableRunTarget | null> {
-    if (
-        input.excluded &&
-        input.excluded.providerId === candidate.providerId &&
-        input.excluded.modelId === candidate.modelId
-    ) {
-        return null;
+async function* enumerateRunTargetCandidates(input: ResolveRunnableRunTargetInput): AsyncGenerator<ResolvedRunTarget> {
+    if (input.preferredTarget) {
+        yield input.preferredTarget;
     }
 
-    const assessment = await assessRunTargetCompatibility({
-        profileId: input.profileId,
-        providerId: candidate.providerId,
-        modelId: candidate.modelId,
-        topLevelTab: input.topLevelTab,
-        mode: input.mode,
-        runtimeOptions: input.runtimeOptions,
-        ...(input.attachments ? { attachments: input.attachments } : {}),
-    });
-    if (!assessment.compatible) {
-        return null;
-    }
+    for (const providerId of providerIds) {
+        const models = await providerStore.listModels(input.profileId, providerId);
+        for (const model of models) {
+            if (
+                input.preferredTarget &&
+                input.preferredTarget.providerId === providerId &&
+                input.preferredTarget.modelId === model.id
+            ) {
+                continue;
+            }
 
-    return {
-        target: {
-            providerId: candidate.providerId,
-            modelId: candidate.modelId,
-        },
-        auth: assessment.auth,
-    };
+            yield {
+                providerId,
+                modelId: model.id,
+            };
+        }
+    }
 }
 
 export async function resolveFirstRunnableRunTarget(
-    input: CompatibleRunTargetInput
-): Promise<RunnableRunTarget | null> {
-    if (input.preferredTarget) {
-        const preferred = await tryResolveCompatibleTarget(input, input.preferredTarget);
-        if (preferred) {
-            return preferred;
-        }
-    }
-
-    const providers = await providerStore.listProviders();
-    for (const provider of providers) {
-        const models = await providerStore.listModels(input.profileId, provider.id);
-        if (models.length === 0) {
-            continue;
-        }
-
-        for (const model of models) {
-            const compatible = await tryResolveCompatibleTarget(input, {
-                providerId: provider.id,
-                modelId: model.id,
+    input: ResolveRunnableRunTargetInput
+): Promise<RunExecutionResult<PreparedRunnableCandidate | null>> {
+    for await (const candidateTarget of enumerateRunTargetCandidates(input)) {
+        const preparedCandidateResult = await prepareRunnableCandidate({
+            profileId: input.profileId,
+            providerId: candidateTarget.providerId,
+            modelId: candidateTarget.modelId,
+            topLevelTab: input.topLevelTab,
+            mode: input.mode,
+            runtimeOptions: input.runtimeOptions,
+            ...(input.attachments ? { attachments: input.attachments } : {}),
+        });
+        if (preparedCandidateResult.isErr()) {
+            return errRunExecution(preparedCandidateResult.error.code, preparedCandidateResult.error.message, {
+                ...(preparedCandidateResult.error.action ? { action: preparedCandidateResult.error.action } : {}),
             });
-            if (compatible) {
-                return compatible;
-            }
+        }
+
+        if (preparedCandidateResult.value.kind === 'prepared') {
+            return okRunExecution(preparedCandidateResult.value.candidate);
         }
     }
 
-    return null;
+    return okRunExecution(null);
 }

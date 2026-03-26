@@ -53,6 +53,10 @@ export function formatRuntimeCapabilityIssue(input: {
     });
 
     switch (issue?.code) {
+        case 'execution_target_unavailable':
+            return input.surface === 'run_rejection'
+                ? 'This run could not prepare its workspace or sandbox target. Fix the execution target and try again.'
+                : fallbackMessage;
         case 'provider_not_runnable':
             if (input.surface === 'settings_option' && providerLabel) {
                 return `Connect ${providerLabel} before using this model in runs.`;

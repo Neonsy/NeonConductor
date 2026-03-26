@@ -1,46 +1,107 @@
-import { kiloRoutingPreferenceStore, providerStore } from '@/app/backend/persistence/stores';
+import { kiloRoutingPreferenceStore } from '@/app/backend/persistence/stores';
 import type { ProviderRuntimeInput } from '@/app/backend/providers/types';
-import { getExecutionPreferenceState } from '@/app/backend/providers/service/executionPreferences';
 import { resolveRunCache } from '@/app/backend/runtime/services/runExecution/cacheKey';
-import { validateRunCapabilities } from '@/app/backend/runtime/services/runExecution/capabilities';
+import { prepareRunnableCandidate } from '@/app/backend/runtime/services/runExecution/compatibility';
 import { buildRunContext } from '@/app/backend/runtime/services/runExecution/contextBuilder';
-import type { RunExecutionErrorCode, RunExecutionResult } from '@/app/backend/runtime/services/runExecution/errors';
+import type { RunExecutionResult } from '@/app/backend/runtime/services/runExecution/errors';
 import { errRunExecution, okRunExecution } from '@/app/backend/runtime/services/runExecution/errors';
-import { resolveModeExecution } from '@/app/backend/runtime/services/runExecution/mode';
-import { resolveRunAuth } from '@/app/backend/runtime/services/runExecution/resolveRunAuth';
-import { resolveRuntimeProtocol } from '@/app/backend/runtime/services/runExecution/protocol';
-import { resolveFirstRunnableRunTarget } from '@/app/backend/runtime/services/runExecution/resolveRunnableTarget';
-import { resolveRunTarget } from '@/app/backend/runtime/services/runExecution/resolveRunTarget';
 import { resolveKiloModeHeader } from '@/app/backend/runtime/services/runExecution/kiloMode';
+import { resolveModeExecution, type ResolvedModeExecution } from '@/app/backend/runtime/services/runExecution/mode';
+import { resolveFirstRunnableRunTarget } from '@/app/backend/runtime/services/runExecution/resolveRunnableTarget';
+import {
+    resolveRequestedOrDefaultRunTarget,
+    verifyResolvedRunTargetAvailability,
+} from '@/app/backend/runtime/services/runExecution/resolveRunTarget';
 import { resolveRuntimeToolsForMode } from '@/app/backend/runtime/services/runExecution/tools';
-import type { ProviderServiceErrorCode } from '@/app/backend/providers/service/errors';
-import type {
-    PreparedRunStart,
-    ResolvedRunAuth,
-    ResolvedRunTarget,
-    StartRunInput,
-} from '@/app/backend/runtime/services/runExecution/types';
+import type { PreparedRunStart, PreparedRunnableCandidate, StartRunInput } from '@/app/backend/runtime/services/runExecution/types';
 
-function mapProviderServiceErrorCodeToRunExecutionCode(
-    code: ProviderServiceErrorCode
-): RunExecutionErrorCode {
-    if (code === 'request_failed') {
-        return 'provider_request_failed';
+async function resolvePreparedCandidate(input: {
+    startInput: StartRunInput;
+    mode: ResolvedModeExecution;
+}): Promise<RunExecutionResult<PreparedRunnableCandidate>> {
+    const { startInput, mode } = input;
+    const explicitTargetRequested = startInput.providerId !== undefined || startInput.modelId !== undefined;
+    const requestedTargetResult = await resolveRequestedOrDefaultRunTarget({
+        profileId: startInput.profileId,
+        topLevelTab: startInput.topLevelTab,
+        modeKey: startInput.modeKey,
+        ...(startInput.providerId ? { providerId: startInput.providerId } : {}),
+        ...(startInput.modelId ? { modelId: startInput.modelId } : {}),
+    });
+
+    if (explicitTargetRequested) {
+        if (requestedTargetResult.isErr()) {
+            return errRunExecution(requestedTargetResult.error.code, requestedTargetResult.error.message, {
+                ...(requestedTargetResult.error.action ? { action: requestedTargetResult.error.action } : {}),
+            });
+        }
+
+        const verifiedTargetResult = await verifyResolvedRunTargetAvailability({
+            profileId: startInput.profileId,
+            target: requestedTargetResult.value,
+        });
+        if (verifiedTargetResult.isErr()) {
+            return errRunExecution(verifiedTargetResult.error.code, verifiedTargetResult.error.message, {
+                ...(verifiedTargetResult.error.action ? { action: verifiedTargetResult.error.action } : {}),
+            });
+        }
+
+        const preparedCandidateResult = await prepareRunnableCandidate({
+            profileId: startInput.profileId,
+            providerId: verifiedTargetResult.value.providerId,
+            modelId: verifiedTargetResult.value.modelId,
+            topLevelTab: startInput.topLevelTab,
+            mode: mode.mode,
+            runtimeOptions: startInput.runtimeOptions,
+            ...(startInput.attachments ? { attachments: startInput.attachments } : {}),
+        });
+        if (preparedCandidateResult.isErr()) {
+            return errRunExecution(preparedCandidateResult.error.code, preparedCandidateResult.error.message, {
+                ...(preparedCandidateResult.error.action ? { action: preparedCandidateResult.error.action } : {}),
+            });
+        }
+
+        if (preparedCandidateResult.value.kind === 'incompatible') {
+            return errRunExecution(
+                preparedCandidateResult.value.error.code,
+                preparedCandidateResult.value.error.message,
+                {
+                    ...(preparedCandidateResult.value.error.action
+                        ? { action: preparedCandidateResult.value.error.action }
+                        : {}),
+                }
+            );
+        }
+
+        return okRunExecution(preparedCandidateResult.value.candidate);
     }
 
-    if (code === 'request_unavailable') {
-        return 'provider_request_unavailable';
+    const fallbackResult = await resolveFirstRunnableRunTarget({
+        profileId: startInput.profileId,
+        topLevelTab: startInput.topLevelTab,
+        mode: mode.mode,
+        runtimeOptions: startInput.runtimeOptions,
+        ...(startInput.attachments ? { attachments: startInput.attachments } : {}),
+        ...(requestedTargetResult.isOk() ? { preferredTarget: requestedTargetResult.value } : {}),
+    });
+    if (fallbackResult.isErr()) {
+        return errRunExecution(fallbackResult.error.code, fallbackResult.error.message, {
+            ...(fallbackResult.error.action ? { action: fallbackResult.error.action } : {}),
+        });
+    }
+    if (!fallbackResult.value) {
+        return errRunExecution(
+            'provider_model_missing',
+            'No compatible runnable provider/model found for this run.',
+            {
+                action: {
+                    code: 'model_unavailable',
+                },
+            }
+        );
     }
 
-    if (code === 'provider_model_missing') {
-        return 'provider_model_missing';
-    }
-
-    if (code === 'invalid_payload') {
-        return 'invalid_payload';
-    }
-
-    return 'provider_not_supported';
+    return okRunExecution(fallbackResult.value);
 }
 
 export async function prepareRunStart(input: StartRunInput): Promise<RunExecutionResult<PreparedRunStart>> {
@@ -56,142 +117,17 @@ export async function prepareRunStart(input: StartRunInput): Promise<RunExecutio
         });
     }
 
-    const explicitTargetRequested = input.providerId !== undefined || input.modelId !== undefined;
-    let resolvedAuth: ResolvedRunAuth;
-    let activeTarget: ResolvedRunTarget;
-
-    if (explicitTargetRequested) {
-        const resolvedTargetResult = await resolveRunTarget({
-            profileId: input.profileId,
-            topLevelTab: input.topLevelTab,
-            modeKey: input.modeKey,
-            ...(input.providerId ? { providerId: input.providerId } : {}),
-            ...(input.modelId ? { modelId: input.modelId } : {}),
-        });
-        if (resolvedTargetResult.isErr()) {
-            return errRunExecution(resolvedTargetResult.error.code, resolvedTargetResult.error.message, {
-                ...(resolvedTargetResult.error.action ? { action: resolvedTargetResult.error.action } : {}),
-            });
-        }
-
-        activeTarget = resolvedTargetResult.value;
-
-        const resolvedAuthResult = await resolveRunAuth({
-            profileId: input.profileId,
-            providerId: activeTarget.providerId,
-        });
-        if (resolvedAuthResult.isErr()) {
-            return errRunExecution(resolvedAuthResult.error.code, resolvedAuthResult.error.message, {
-                ...(resolvedAuthResult.error.action ? { action: resolvedAuthResult.error.action } : {}),
-            });
-        }
-
-        resolvedAuth = resolvedAuthResult.value;
-    } else {
-        const preferredTargetResult = await resolveRunTarget({
-            profileId: input.profileId,
-            topLevelTab: input.topLevelTab,
-            modeKey: input.modeKey,
-        });
-        const fallback = await resolveFirstRunnableRunTarget({
-            profileId: input.profileId,
-            topLevelTab: input.topLevelTab,
-            mode: resolvedModeResult.value.mode,
-            runtimeOptions: input.runtimeOptions,
-            ...(input.attachments ? { attachments: input.attachments } : {}),
-            ...(preferredTargetResult.isOk() ? { preferredTarget: preferredTargetResult.value } : {}),
-        });
-        if (!fallback) {
-            return errRunExecution(
-                'provider_model_missing',
-                'No compatible runnable provider/model found for this run.',
-                {
-                    action: {
-                        code: 'model_unavailable',
-                    },
-                }
-            );
-        }
-
-        activeTarget = fallback.target;
-        resolvedAuth = fallback.auth;
-    }
-
-    const modelCapabilities = await providerStore.getModelCapabilities(
-        input.profileId,
-        activeTarget.providerId,
-        activeTarget.modelId
-    );
-    if (!modelCapabilities) {
-        return errRunExecution(
-            'provider_model_missing',
-            `Model "${activeTarget.modelId}" is missing runtime capabilities.`,
-            {
-                action: {
-                    code: 'model_unavailable',
-                    providerId: activeTarget.providerId,
-                    modelId: activeTarget.modelId,
-                },
-            }
-        );
-    }
-
-    const capabilityValidation = validateRunCapabilities({
-        providerId: activeTarget.providerId,
-        modelId: activeTarget.modelId,
-        modelCapabilities,
-        runtimeOptions: input.runtimeOptions,
-        topLevelTab: input.topLevelTab,
-        mode: resolvedModeResult.value.mode,
+    const preparedCandidateResult = await resolvePreparedCandidate({
+        startInput: input,
+        mode: resolvedModeResult.value,
     });
-    if (capabilityValidation.isErr()) {
-        return errRunExecution(capabilityValidation.error.code, capabilityValidation.error.message, {
-            ...(capabilityValidation.error.action ? { action: capabilityValidation.error.action } : {}),
-        });
-    }
-    if (input.attachments && input.attachments.length > 0 && !modelCapabilities.features.supportsVision) {
-        return errRunExecution(
-            'runtime_option_invalid',
-            `Model "${activeTarget.modelId}" does not support image input. Select a vision-capable model before attaching images.`,
-            {
-                action: {
-                    code: 'model_vision_required',
-                    providerId: activeTarget.providerId,
-                    modelId: activeTarget.modelId,
-                },
-            }
-        );
-    }
-
-    const openAIExecutionPreferenceResult =
-        activeTarget.providerId === 'openai'
-            ? await getExecutionPreferenceState(input.profileId, activeTarget.providerId)
-            : null;
-    if (openAIExecutionPreferenceResult?.isErr()) {
-        return errRunExecution(
-            mapProviderServiceErrorCodeToRunExecutionCode(openAIExecutionPreferenceResult.error.code),
-            openAIExecutionPreferenceResult.error.message
-        );
-    }
-
-    const runtimeProtocolResult = await resolveRuntimeProtocol({
-        profileId: input.profileId,
-        providerId: activeTarget.providerId,
-        modelId: activeTarget.modelId,
-        modelCapabilities,
-        authMethod: resolvedAuth.authMethod,
-        runtimeOptions: input.runtimeOptions,
-        topLevelTab: input.topLevelTab,
-        ...(openAIExecutionPreferenceResult?.isOk()
-            ? { openAIExecutionMode: openAIExecutionPreferenceResult.value.mode }
-            : {}),
-    });
-    if (runtimeProtocolResult.isErr()) {
-        return errRunExecution(runtimeProtocolResult.error.code, runtimeProtocolResult.error.message, {
-            ...(runtimeProtocolResult.error.action ? { action: runtimeProtocolResult.error.action } : {}),
+    if (preparedCandidateResult.isErr()) {
+        return errRunExecution(preparedCandidateResult.error.code, preparedCandidateResult.error.message, {
+            ...(preparedCandidateResult.error.action ? { action: preparedCandidateResult.error.action } : {}),
         });
     }
 
+    const preparedCandidate = preparedCandidateResult.value;
     const toolDefinitions = await resolveRuntimeToolsForMode({
         mode: resolvedModeResult.value.mode,
     });
@@ -201,8 +137,8 @@ export async function prepareRunStart(input: StartRunInput): Promise<RunExecutio
         prompt: input.prompt,
         ...(input.attachments ? { attachments: input.attachments } : {}),
         topLevelTab: input.topLevelTab,
-        providerId: activeTarget.providerId,
-        modelId: activeTarget.modelId,
+        providerId: preparedCandidate.target.providerId,
+        modelId: preparedCandidate.target.modelId,
         ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
         resolvedMode: resolvedModeResult.value,
     });
@@ -217,9 +153,9 @@ export async function prepareRunStart(input: StartRunInput): Promise<RunExecutio
         profileId: input.profileId,
         sessionId: input.sessionId,
         ...(runContext ? { cacheScopeKey: runContext.digest } : {}),
-        providerId: activeTarget.providerId,
-        modelId: activeTarget.modelId,
-        modelCapabilities,
+        providerId: preparedCandidate.target.providerId,
+        modelId: preparedCandidate.target.modelId,
+        modelCapabilities: preparedCandidate.modelCapabilities,
         runtimeOptions: input.runtimeOptions,
     });
     if (resolvedCacheResult.isErr()) {
@@ -229,11 +165,11 @@ export async function prepareRunStart(input: StartRunInput): Promise<RunExecutio
     }
 
     const kiloRoutingPreference =
-        activeTarget.providerId === 'kilo'
-            ? await kiloRoutingPreferenceStore.getPreference(input.profileId, activeTarget.modelId)
+        preparedCandidate.target.providerId === 'kilo'
+            ? await kiloRoutingPreferenceStore.getPreference(input.profileId, preparedCandidate.target.modelId)
             : null;
     const kiloRouting: ProviderRuntimeInput['kiloRouting'] =
-        activeTarget.providerId !== 'kilo'
+        preparedCandidate.target.providerId !== 'kilo'
             ? undefined
             : kiloRoutingPreference
               ? kiloRoutingPreference.routingMode === 'dynamic'
@@ -255,18 +191,16 @@ export async function prepareRunStart(input: StartRunInput): Promise<RunExecutio
                     sort: 'default',
                 };
     const kiloModeHeader =
-        activeTarget.providerId === 'kilo' ? resolveKiloModeHeader(resolvedModeResult.value.mode) : undefined;
+        preparedCandidate.target.providerId === 'kilo' ? resolveKiloModeHeader(resolvedModeResult.value.mode) : undefined;
 
     return okRunExecution({
         resolvedMode: resolvedModeResult.value,
-        activeTarget,
-        runtimeDescriptor: runtimeProtocolResult.value.runtime,
-        resolvedAuth,
+        activeTarget: preparedCandidate.target,
+        runtimeDescriptor: preparedCandidate.runtimeDescriptor,
+        resolvedAuth: preparedCandidate.resolvedAuth,
         resolvedCache: resolvedCacheResult.value,
-        initialTransport: runtimeProtocolResult.value.transport,
-        ...(openAIExecutionPreferenceResult?.isOk()
-            ? { openAIExecutionMode: openAIExecutionPreferenceResult.value.mode }
-            : {}),
+        initialTransport: preparedCandidate.initialTransport,
+        ...(preparedCandidate.openAIExecutionMode ? { openAIExecutionMode: preparedCandidate.openAIExecutionMode } : {}),
         toolDefinitions,
         ...(runContext ? { runContext } : {}),
         ...(kiloModeHeader ? { kiloModeHeader } : {}),

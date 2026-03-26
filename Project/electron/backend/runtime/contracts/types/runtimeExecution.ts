@@ -4,6 +4,12 @@ export type RuntimeCompatibilityState = 'compatible' | 'warning' | 'incompatible
 
 export type RuntimeCompatibilityIssue =
     | {
+          code: 'execution_target_unavailable';
+          target: 'workspace' | 'sandbox';
+          workspaceFingerprint?: string;
+          detail?: 'sandbox_not_materialized' | 'workspace_not_resolved' | 'generic';
+      }
+    | {
           code: 'provider_not_runnable';
           providerId?: RuntimeProviderId | string;
       }

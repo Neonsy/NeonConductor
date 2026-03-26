@@ -322,8 +322,13 @@ describe('runtime contracts: conversation and runs', () => {
             throw new Error('Expected sandbox materialization failure to reject the run.');
         }
         expect(started.reason).toBe('rejected');
-        expect(started.code).toBe('provider_request_unavailable');
+        expect(started.code).toBe('execution_target_unavailable');
         expect(started.message).toContain('Managed sandbox');
+        expect(started.action).toEqual({
+            code: 'execution_target_unavailable',
+            target: 'sandbox',
+            detail: 'sandbox_not_materialized',
+        });
     });
 
     it('supports session lifecycle with run execution, abort, and revert', async () => {

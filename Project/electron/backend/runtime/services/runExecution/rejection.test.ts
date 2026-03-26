@@ -71,4 +71,25 @@ describe('toRejectedStartResult', () => {
             topLevelTab: 'agent',
         });
     });
+
+    it('derives execution-target actions for execution-target failures', () => {
+        const rejected = toRejectedStartResult(
+            {
+                code: 'execution_target_unavailable',
+                message: 'Workspace execution target could not be resolved for this session.',
+            },
+            {
+                providerId: 'openai',
+                modelId: 'openai/gpt-5',
+                topLevelTab: 'agent',
+                modeKey: 'code',
+            }
+        );
+
+        expect(rejected.action).toEqual({
+            code: 'execution_target_unavailable',
+            target: 'workspace',
+            detail: 'generic',
+        });
+    });
 });

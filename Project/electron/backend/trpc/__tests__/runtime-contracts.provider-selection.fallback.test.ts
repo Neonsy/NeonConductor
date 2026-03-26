@@ -170,4 +170,143 @@ describe('runtime contracts: provider selection fallback flows', () => {
             })
         ).rejects.toThrow('runtimeOptions.cache.key');
     });
+
+    it('skips a preferred realtime candidate for omitted-target chat runs and selects the next compatible model', async () => {
+        const caller = createCaller();
+        const completionFetchMock = vi.fn().mockResolvedValue({
+            ok: true,
+            status: 200,
+            statusText: 'OK',
+            json: () => ({
+                choices: [{ message: { content: 'Fallback after realtime chat rejection' } }],
+                usage: { prompt_tokens: 8, completion_tokens: 12, total_tokens: 20 },
+            }),
+        });
+        vi.stubGlobal('fetch', completionFetchMock);
+
+        const configured = await caller.provider.setApiKey({
+            profileId,
+            providerId: 'openai',
+            apiKey: 'openai-realtime-chat-fallback-key',
+        });
+        expect(configured.success).toBe(true);
+        const moonshotConfigured = await caller.provider.setApiKey({
+            profileId,
+            providerId: 'moonshot',
+            apiKey: 'moonshot-realtime-chat-fallback-key',
+        });
+        expect(moonshotConfigured.success).toBe(true);
+
+        const defaultChanged = await caller.provider.setDefault({
+            profileId,
+            providerId: 'openai',
+            modelId: 'openai/gpt-realtime',
+        });
+        expect(defaultChanged.success).toBe(true);
+
+        const preference = await caller.provider.setExecutionPreference({
+            profileId,
+            providerId: 'openai',
+            mode: 'realtime_websocket',
+        });
+        expect(preference.executionPreference.mode).toBe('realtime_websocket');
+
+        const created = await createSessionInScope(caller, profileId, {
+            scope: 'detached',
+            title: 'Implicit realtime chat fallback thread',
+            kind: 'local',
+        });
+
+        const started = await caller.session.startRun({
+            profileId,
+            sessionId: created.session.id,
+            prompt: 'Fallback away from realtime chat',
+            topLevelTab: 'chat',
+            modeKey: 'chat',
+            runtimeOptions: defaultRuntimeOptions,
+        });
+        expect(started.accepted).toBe(true);
+        if (!started.accepted) {
+            throw new Error('Expected omitted-target chat fallback to succeed.');
+        }
+
+        await waitForRunStatus(caller, profileId, created.session.id, 'completed');
+        const runs = await caller.session.listRuns({ profileId, sessionId: created.session.id });
+        expect(runs.runs[0]?.providerId).toBe('moonshot');
+        expect(runs.runs[0]?.modelId).not.toBe('openai/gpt-realtime');
+    });
+
+    it('skips a preferred realtime candidate when the OpenAI base URL is incompatible and continues fallback', async () => {
+        const caller = createCaller();
+        const completionFetchMock = vi.fn().mockResolvedValue({
+            ok: true,
+            status: 200,
+            statusText: 'OK',
+            json: () => ({
+                choices: [{ message: { content: 'Fallback after custom base URL rejection' } }],
+                usage: { prompt_tokens: 8, completion_tokens: 12, total_tokens: 20 },
+            }),
+        });
+        vi.stubGlobal('fetch', completionFetchMock);
+
+        const configured = await caller.provider.setApiKey({
+            profileId,
+            providerId: 'openai',
+            apiKey: 'openai-realtime-custom-base-url-fallback-key',
+        });
+        expect(configured.success).toBe(true);
+        const moonshotConfigured = await caller.provider.setApiKey({
+            profileId,
+            providerId: 'moonshot',
+            apiKey: 'moonshot-realtime-custom-base-url-fallback-key',
+        });
+        expect(moonshotConfigured.success).toBe(true);
+
+        const defaultChanged = await caller.provider.setDefault({
+            profileId,
+            providerId: 'openai',
+            modelId: 'openai/gpt-realtime',
+        });
+        expect(defaultChanged.success).toBe(true);
+
+        const updatedProfile = await caller.provider.setConnectionProfile({
+            profileId,
+            providerId: 'openai',
+            optionProfileId: 'default',
+            baseUrlOverride: 'https://custom-openai-gateway.example/v1',
+        });
+        expect(updatedProfile.connectionProfile.resolvedBaseUrl).toBe('https://custom-openai-gateway.example/v1');
+
+        const preference = await caller.provider.setExecutionPreference({
+            profileId,
+            providerId: 'openai',
+            mode: 'realtime_websocket',
+        });
+        expect(preference.executionPreference.mode).toBe('realtime_websocket');
+
+        const created = await createSessionInScope(caller, profileId, {
+            scope: 'detached',
+            title: 'Implicit realtime custom base URL fallback thread',
+            kind: 'local',
+            topLevelTab: 'chat',
+        });
+
+        const started = await caller.session.startRun({
+            profileId,
+            sessionId: created.session.id,
+            prompt: 'Fallback away from realtime custom base URL',
+            topLevelTab: 'chat',
+            modeKey: 'chat',
+            runtimeOptions: defaultRuntimeOptions,
+        });
+        expect(started.accepted).toBe(true);
+        if (!started.accepted) {
+            throw new Error('Expected omitted-target custom-base-url fallback to succeed.');
+        }
+
+        await waitForRunStatus(caller, profileId, created.session.id, 'completed');
+        const runs = await caller.session.listRuns({ profileId, sessionId: created.session.id });
+        expect(runs.runs[0]?.providerId).toBe('moonshot');
+        expect(runs.runs[0]?.modelId).not.toBe('openai/gpt-realtime');
+    });
 });

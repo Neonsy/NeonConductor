@@ -23,17 +23,44 @@ function tryAssertProviderId(value: string): RuntimeProviderId | undefined {
     return supportedProviderIdResult.value;
 }
 
-export async function resolveRunTarget(input: {
+export async function resolveRequestedOrDefaultRunTarget(input: {
     profileId: string;
     providerId?: string;
     modelId?: string;
     topLevelTab?: TopLevelTab;
     modeKey?: string;
 }): Promise<RunExecutionResult<ResolvedRunTarget>> {
+    let providerId: RuntimeProviderId | undefined;
+    if (input.providerId) {
+        const assertedProviderId = tryAssertProviderId(input.providerId);
+        if (!assertedProviderId) {
+            return errRunExecution('provider_not_supported', `Provider "${input.providerId}" is not supported.`);
+        }
+        providerId = assertedProviderId;
+    }
+
+    let modelId = input.modelId;
+    if (!providerId && modelId) {
+        const inferredProviderToken = modelId.split('/')[0] ?? '';
+        const inferredProviderId = tryAssertProviderId(inferredProviderToken);
+        if (!inferredProviderId) {
+            return errRunExecution('provider_not_supported', `Provider "${inferredProviderToken}" is not supported.`);
+        }
+        providerId = inferredProviderId;
+    }
+
+    if (providerId && modelId) {
+        return okRunExecution({
+            providerId,
+            modelId: canonicalizeProviderModelId(providerId, modelId),
+        });
+    }
+
     const [defaults, specialistDefaults] = await Promise.all([
         providerStore.getDefaults(input.profileId),
         providerStore.getSpecialistDefaults(input.profileId),
     ]);
+
     const specialistTarget =
         input.topLevelTab && input.modeKey
             ? {
@@ -46,56 +73,40 @@ export async function resolveRunTarget(input: {
             ? findProviderSpecialistDefault(specialistDefaults, specialistTarget)
             : undefined;
 
-    let providerId: RuntimeProviderId | undefined;
-    if (input.providerId) {
-        const assertedProviderId = tryAssertProviderId(input.providerId);
-        if (!assertedProviderId) {
-            return errRunExecution('provider_not_supported', `Provider "${input.providerId}" is not supported.`);
-        }
-        providerId = assertedProviderId;
-    }
-
-    let modelId = input.modelId;
-
-    if (!providerId && modelId) {
-        const inferred = modelId.split('/')[0] ?? '';
-        const inferredProviderId = tryAssertProviderId(inferred);
-        if (!inferredProviderId) {
-            return errRunExecution('provider_not_supported', `Provider "${inferred}" is not supported.`);
-        }
-        providerId = inferredProviderId;
-    }
-
-    if (providerId && modelId) {
-        modelId = canonicalizeProviderModelId(providerId, modelId);
-    }
-
+    const defaultProviderId = specialistDefault?.providerId ?? defaults.providerId;
+    providerId = tryAssertProviderId(defaultProviderId);
     if (!providerId) {
-        providerId = tryAssertProviderId(specialistDefault?.providerId ?? defaults.providerId);
+        return errRunExecution('provider_not_supported', `Provider "${defaultProviderId}" is not supported.`);
     }
 
-    if (providerId && !modelId) {
-        if (specialistDefault?.providerId === providerId && specialistDefault.modelId.trim().length > 0) {
-            modelId = canonicalizeProviderModelId(providerId, specialistDefault.modelId);
-        } else if (defaults.providerId === providerId && defaults.modelId.trim().length > 0) {
-            modelId = canonicalizeProviderModelId(providerId, defaults.modelId);
-        }
-    }
+    const defaultModelId =
+        specialistDefault?.providerId === providerId && specialistDefault.modelId.trim().length > 0
+            ? specialistDefault.modelId
+            : defaults.providerId === providerId && defaults.modelId.trim().length > 0
+              ? defaults.modelId
+              : '';
 
-    if (!providerId || !modelId) {
+    if (defaultModelId.trim().length === 0) {
         return errRunExecution('provider_model_missing', 'No explicit provider/model target could be resolved.');
-    }
-
-    const modelExists = await providerStore.modelExists(input.profileId, providerId, modelId);
-    if (!modelExists) {
-        return errRunExecution(
-            'provider_model_not_available',
-            `Model "${modelId}" is not available for provider "${providerId}".`
-        );
     }
 
     return okRunExecution({
         providerId,
-        modelId,
+        modelId: canonicalizeProviderModelId(providerId, defaultModelId),
     });
+}
+
+export async function verifyResolvedRunTargetAvailability(input: {
+    profileId: string;
+    target: ResolvedRunTarget;
+}): Promise<RunExecutionResult<ResolvedRunTarget>> {
+    const modelExists = await providerStore.modelExists(input.profileId, input.target.providerId, input.target.modelId);
+    if (!modelExists) {
+        return errRunExecution(
+            'provider_model_not_available',
+            `Model "${input.target.modelId}" is not available for provider "${input.target.providerId}".`
+        );
+    }
+
+    return okRunExecution(input.target);
 }

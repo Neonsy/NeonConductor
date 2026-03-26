@@ -33,6 +33,7 @@ export type OperationalErrorCode =
     | 'invalid_mode'
     | 'mode_not_available'
     | 'mode_policy_invalid'
+    | 'execution_target_unavailable'
     | 'cache_resolution_failed'
     | 'invariant_violation'
     | 'data_corruption';

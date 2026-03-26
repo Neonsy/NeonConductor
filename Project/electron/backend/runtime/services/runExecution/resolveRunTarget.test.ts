@@ -12,9 +12,12 @@ vi.mock('@/app/backend/persistence/stores', () => ({
     providerStore: providerStoreMock,
 }));
 
-import { resolveRunTarget } from '@/app/backend/runtime/services/runExecution/resolveRunTarget';
+import {
+    resolveRequestedOrDefaultRunTarget,
+    verifyResolvedRunTargetAvailability,
+} from '@/app/backend/runtime/services/runExecution/resolveRunTarget';
 
-describe('resolveRunTarget', () => {
+describe('resolveRunTarget boundaries', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         providerStoreMock.getDefaults.mockResolvedValue({
@@ -24,13 +27,22 @@ describe('resolveRunTarget', () => {
         providerStoreMock.getSpecialistDefaults.mockResolvedValue([]);
     });
 
-    it('fails closed when an explicit model is unavailable for the provider', async () => {
+    it('fails closed when a verified explicit model is unavailable for the provider', async () => {
         providerStoreMock.modelExists.mockResolvedValue(false);
 
-        const result = await resolveRunTarget({
+        const resolvedTarget = await resolveRequestedOrDefaultRunTarget({
             profileId: 'profile_default',
             providerId: 'openai',
             modelId: 'openai/gpt-missing',
+        });
+        expect(resolvedTarget.isOk()).toBe(true);
+        if (resolvedTarget.isErr()) {
+            throw new Error(resolvedTarget.error.message);
+        }
+
+        const result = await verifyResolvedRunTargetAvailability({
+            profileId: 'profile_default',
+            target: resolvedTarget.value,
         });
 
         expect(result.isErr()).toBe(true);
@@ -42,9 +54,7 @@ describe('resolveRunTarget', () => {
     });
 
     it('uses the saved default only when the caller omitted both provider and model', async () => {
-        providerStoreMock.modelExists.mockResolvedValue(true);
-
-        const result = await resolveRunTarget({
+        const result = await resolveRequestedOrDefaultRunTarget({
             profileId: 'profile_default',
         });
 
@@ -67,9 +77,7 @@ describe('resolveRunTarget', () => {
                 modelId: kiloFrontierModelId,
             },
         ]);
-        providerStoreMock.modelExists.mockResolvedValue(true);
-
-        const result = await resolveRunTarget({
+        const result = await resolveRequestedOrDefaultRunTarget({
             profileId: 'profile_default',
             topLevelTab: 'agent',
             modeKey: 'code',
@@ -82,6 +90,25 @@ describe('resolveRunTarget', () => {
         expect(result.value).toEqual({
             providerId: 'kilo',
             modelId: kiloFrontierModelId,
+        });
+    });
+
+    it('does not depend on shared-default lookup when the caller provides an explicit target', async () => {
+        const result = await resolveRequestedOrDefaultRunTarget({
+            profileId: 'profile_default',
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
+        });
+
+        expect(result.isOk()).toBe(true);
+        if (result.isErr()) {
+            throw new Error(result.error.message);
+        }
+        expect(providerStoreMock.getDefaults).not.toHaveBeenCalled();
+        expect(providerStoreMock.getSpecialistDefaults).not.toHaveBeenCalled();
+        expect(result.value).toEqual({
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
         });
     });
 });

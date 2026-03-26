@@ -23,6 +23,7 @@ import type {
 import type { RunExecutionErrorCode } from '@/app/backend/runtime/services/runExecution/errors';
 import type { ProviderRuntimeToolDefinition } from '@/app/backend/providers/types';
 import type {
+    ProviderModelCapabilities,
     ProviderRuntimeDescriptor,
     ProviderRuntimeTransportFamily,
 } from '@/app/backend/providers/types';
@@ -127,6 +128,15 @@ export interface RunTransportResolution {
     selected: ProviderRuntimeTransportFamily;
     degraded: boolean;
     degradedReason?: string;
+}
+
+export interface PreparedRunnableCandidate {
+    target: ResolvedRunTarget;
+    resolvedAuth: ResolvedRunAuth;
+    modelCapabilities: ProviderModelCapabilities;
+    runtimeDescriptor: ProviderRuntimeDescriptor;
+    initialTransport: RunTransportResolution;
+    openAIExecutionMode?: OpenAIExecutionMode;
 }
 
 export type ResolvedKiloRouting =

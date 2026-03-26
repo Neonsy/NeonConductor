@@ -50,6 +50,12 @@ function inferAction(
                 modeKey: input.modeKey,
                 topLevelTab: input.topLevelTab,
             };
+        case 'execution_target_unavailable':
+            return {
+                code: 'execution_target_unavailable',
+                target: 'workspace',
+                detail: 'generic',
+            };
         case 'runtime_option_invalid':
         case 'cache_resolution_failed':
         case 'invalid_payload':
