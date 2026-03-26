@@ -31,7 +31,7 @@ export function WorkspaceDeleteDialog({
             title='Clear workspace threads'
             message={
                 workspaceLabel
-                    ? `Delete threads for ${workspaceLabel}. Favorites are protected unless you explicitly include them.`
+                    ? `Delete threads for ${workspaceLabel}. The workspace stays registered. Favorites are protected unless you explicitly include them.`
                     : ''
             }
             confirmLabel='Delete threads'
@@ -47,7 +47,7 @@ export function WorkspaceDeleteDialog({
                     </p>
                     <p className='text-muted-foreground mt-1 text-xs'>
                         {favoriteThreadCount} favorite{favoriteThreadCount === 1 ? '' : 's'} detected out of {totalThreadCount}{' '}
-                        total workspace threads.
+                        total workspace threads. This removes threads only, not the workspace itself.
                     </p>
                 </div>
                 {favoriteThreadCount > 0 ? (

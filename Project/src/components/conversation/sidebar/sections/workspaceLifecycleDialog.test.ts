@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { resolveWorkspaceLifecycleDraft } from '@/web/components/conversation/sidebar/sections/workspaceLifecycleDialog';
+import { resolveWorkspaceLifecycleDraft } from '@/web/components/conversation/sidebar/useWorkspaceLifecycleDraftState';
 
 import type { ProviderModelRecord } from '@/app/backend/persistence/types';
 import type { ProviderListItem } from '@/app/backend/providers/service/types';

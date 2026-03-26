@@ -5,6 +5,7 @@ import { setResolvedContextStateCache } from '@/web/components/context/contextSt
 import { useConversationShellBranchWorkflowFlow } from '@/web/components/conversation/hooks/useConversationShellBranchWorkflowFlow';
 import { useConversationShellEditFlow } from '@/web/components/conversation/hooks/useConversationShellEditFlow';
 import { useConversationShellRoutingBadge } from '@/web/components/conversation/hooks/useConversationShellRoutingBadge';
+import type { ThreadEntrySubmitResult } from '@/web/components/conversation/sidebar/sidebarTypes';
 import { buildConversationPlanOrchestrator } from '@/web/components/conversation/shell/composition/buildConversationPlanOrchestrator';
 import { buildConversationWorkspacePanelProps } from '@/web/components/conversation/shell/composition/buildConversationWorkspacePanelProps';
 import { buildConversationWorkspacePanels } from '@/web/components/conversation/shell/composition/buildConversationWorkspacePanels';
@@ -14,6 +15,11 @@ import { useConversationShellSync } from '@/web/components/conversation/shell/us
 import { createConversationThread } from '@/web/components/conversation/shell/workspace/createConversationThread';
 import { isEntityId, isProviderId } from '@/web/components/conversation/shell/workspace/helpers';
 import { useConversationWorkspaceActions } from '@/web/components/conversation/shell/workspace/useConversationWorkspaceActions';
+import {
+    getProviderControlDefaults,
+    listProviderControlModels,
+    listProviderControlProviders,
+} from '@/web/lib/providerControl/selectors';
 
 import type { ResolvedContextState } from '@/app/backend/runtime/contracts/types/context';
 import type { RunRecord, SessionSummaryRecord, ThreadListRecord } from '@/app/backend/persistence/types';
@@ -235,8 +241,8 @@ export function useConversationShellViewControllers(input: UseConversationShellV
         topLevelTab: TopLevelTab;
         providerId?: RuntimeProviderId;
         modelId?: string;
-    }): Promise<void> => {
-        await createConversationThread(
+    }): Promise<ThreadEntrySubmitResult> => {
+        return await createConversationThread(
             {
                 profileId,
                 topLevelTab,
@@ -262,6 +268,7 @@ export function useConversationShellViewControllers(input: UseConversationShellV
             threadCreationInput
         );
     });
+    const providerControl = queries.shellBootstrapQuery.data?.providerControl;
     const workspaceSectionState = buildConversationWorkspaceSectionState({
         topLevelTab,
         modeKey,
@@ -293,17 +300,24 @@ export function useConversationShellViewControllers(input: UseConversationShellV
         sidebarPaneProps: {
             profileId,
             topLevelTab,
+            threadListQueryInput: queries.listThreadsInput,
             isCollapsed: isSidebarCollapsed,
             onToggleCollapsed: onToggleSidebarCollapsed,
             workspaceRoots: queries.shellBootstrapQuery.data?.workspaceRoots ?? [],
+            providers: listProviderControlProviders(providerControl),
+            providerModels: listProviderControlModels(providerControl),
+            workspacePreferences: queries.shellBootstrapQuery.data?.workspacePreferences ?? [],
+            defaults: getProviderControlDefaults(providerControl),
             ...(selectedWorkspaceFingerprint ? { preferredWorkspaceFingerprint: selectedWorkspaceFingerprint } : {}),
             buckets: queries.listBucketsQuery.data?.buckets ?? [],
             threads: selectionState.visibleThreads,
             sessions: queries.sessionsQuery.data?.sessions ?? [],
             tags: queries.listTagsQuery.data?.tags ?? [],
+            threadTags: queries.shellBootstrapQuery.data?.threadTags ?? [],
             threadTagIdsByThread: selectionState.threadTagIdsByThread,
             selectedThreadId: selectionState.selectedThread?.id,
             selectedSessionId,
+            selectedRunId,
             selectedTagIds: uiState.selectedTagIds,
             scopeFilter: uiState.scopeFilter,
             workspaceFilter: uiState.workspaceFilter,

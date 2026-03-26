@@ -1,21 +1,7 @@
 import { buildBranchRows, type ThreadRenderRow } from '@/web/components/conversation/sidebar/sidebarBranchRows';
+import type { SidebarBrowserState } from '@/web/components/conversation/sidebar/sidebarTypes';
 
 import type { ConversationRecord, TagRecord, ThreadListRecord } from '@/app/backend/persistence/types';
-
-export interface ConversationSidebarModel {
-    workspaceOptions: string[];
-    tagLabelById: Map<string, string>;
-    selectedThread: ThreadListRecord | undefined;
-    workspaceGroups: Array<{
-        label: string;
-        workspaceFingerprint: string;
-        absolutePath?: string;
-        favoriteCount: number;
-        threadCount: number;
-        rows: ThreadRenderRow[];
-    }>;
-    playgroundRows: ThreadRenderRow[];
-}
 
 interface GroupedThreadRowsSection {
     label: string;
@@ -79,6 +65,27 @@ function buildWorkspaceRows(threads: ThreadListRecord[]): ThreadRenderRow[] {
     return rows;
 }
 
+function compareWorkspaceFingerprints(
+    left: string,
+    right: string,
+    workspaceLabelByFingerprint: Map<string, string>
+): number {
+    const leftLabel = workspaceLabelByFingerprint.get(left) ?? left;
+    const rightLabel = workspaceLabelByFingerprint.get(right) ?? right;
+    const labelCompare = leftLabel.localeCompare(rightLabel, undefined, {
+        sensitivity: 'base',
+        numeric: true,
+    });
+    if (labelCompare !== 0) {
+        return labelCompare;
+    }
+
+    return left.localeCompare(right, undefined, {
+        sensitivity: 'base',
+        numeric: true,
+    });
+}
+
 export function buildConversationSidebarModel(input: {
     buckets: ConversationRecord[];
     threads: ThreadListRecord[];
@@ -90,23 +97,42 @@ export function buildConversationSidebarModel(input: {
     }>;
     selectedThreadId?: string;
     groupView: 'workspace' | 'branch';
-}): ConversationSidebarModel {
+}): SidebarBrowserState {
     const workspaceLabelByFingerprint = new Map(
         input.workspaceRoots.map((workspaceRoot) => [workspaceRoot.fingerprint, workspaceRoot.label] as const)
     );
+    for (const bucket of input.buckets) {
+        if (bucket.scope === 'workspace' && bucket.workspaceFingerprint) {
+            workspaceLabelByFingerprint.set(
+                bucket.workspaceFingerprint,
+                workspaceLabelByFingerprint.get(bucket.workspaceFingerprint) ?? bucket.title
+            );
+        }
+    }
     const workspacePathByFingerprint = new Map(
         input.workspaceRoots.map((workspaceRoot) => [workspaceRoot.fingerprint, workspaceRoot.absolutePath] as const)
     );
-    const workspaceOptions = [
+    const rootedWorkspaceFingerprints = input.workspaceRoots.map((workspaceRoot) => workspaceRoot.fingerprint);
+    const discoveredWorkspaceFingerprints = [
         ...new Set([
-            ...input.workspaceRoots.map((workspaceRoot) => workspaceRoot.fingerprint),
             ...input.buckets
                 .filter((bucket) => bucket.scope === 'workspace')
                 .map((bucket) => bucket.workspaceFingerprint),
+            ...input.threads
+                .filter((thread) => thread.anchorKind === 'workspace' && typeof thread.anchorId === 'string')
+                .map((thread) => thread.anchorId),
         ]),
     ]
-        .filter((fingerprint): fingerprint is string => Boolean(fingerprint))
-        .sort((left, right) => left.localeCompare(right));
+        .filter((workspaceFingerprint): workspaceFingerprint is string => {
+            if (typeof workspaceFingerprint !== 'string') {
+                return false;
+            }
+
+            return !rootedWorkspaceFingerprints.includes(workspaceFingerprint);
+        })
+        .sort((left, right) => compareWorkspaceFingerprints(left, right, workspaceLabelByFingerprint));
+    const orderedWorkspaceFingerprints = [...rootedWorkspaceFingerprints, ...discoveredWorkspaceFingerprints];
+    const workspaceOptions = orderedWorkspaceFingerprints;
 
     const tagLabelById = new Map(input.tags.map((tag) => [tag.id, tag.label]));
     const selectedThread = input.selectedThreadId
@@ -114,11 +140,13 @@ export function buildConversationSidebarModel(input: {
         : undefined;
 
     const grouped = new Map<string, GroupedThreadRowsSection>();
-    for (const workspaceRoot of input.workspaceRoots) {
-        grouped.set(`ws:${workspaceRoot.fingerprint}`, {
-            label: workspaceRoot.label,
-            workspaceFingerprint: workspaceRoot.fingerprint,
-            ...(workspaceRoot.absolutePath ? { absolutePath: workspaceRoot.absolutePath } : {}),
+    for (const workspaceFingerprint of orderedWorkspaceFingerprints) {
+        const workspaceRoot = input.workspaceRoots.find((candidate) => candidate.fingerprint === workspaceFingerprint);
+        const absolutePath = workspaceRoot?.absolutePath ?? workspacePathByFingerprint.get(workspaceFingerprint);
+        grouped.set(`ws:${workspaceFingerprint}`, {
+            label: workspaceRoot?.label ?? workspaceLabelByFingerprint.get(workspaceFingerprint) ?? workspaceFingerprint,
+            workspaceFingerprint,
+            ...(absolutePath ? { absolutePath } : {}),
             favoriteCount: 0,
             threadCount: 0,
             rows: [],
@@ -126,24 +154,6 @@ export function buildConversationSidebarModel(input: {
     }
 
     const playgroundThreads = input.threads.filter((thread) => thread.anchorKind !== 'workspace');
-    for (const thread of input.threads) {
-        if (thread.anchorKind !== 'workspace' || !thread.anchorId) {
-            continue;
-        }
-
-        const anchorKey = `ws:${thread.anchorId}`;
-        if (!grouped.has(anchorKey)) {
-            const absolutePath = workspacePathByFingerprint.get(thread.anchorId);
-            grouped.set(anchorKey, {
-                label: workspaceLabelByFingerprint.get(thread.anchorId) ?? thread.anchorId,
-                workspaceFingerprint: thread.anchorId,
-                ...(absolutePath ? { absolutePath } : {}),
-                favoriteCount: 0,
-                threadCount: 0,
-                rows: [],
-            });
-        }
-    }
 
     for (const [anchorKey, group] of grouped.entries()) {
         const anchorThreads = input.threads.filter(

@@ -72,7 +72,9 @@ export function SidebarInlineThreadDraft({
         <div className='border-border bg-card/65 space-y-3 rounded-3xl border p-3'>
             <div className='space-y-1'>
                 <p className='text-sm font-semibold'>New thread in {workspaceLabel}</p>
-                <p className='text-muted-foreground text-xs'>Keep it lightweight here. The composer owns the run controls.</p>
+                <p className='text-muted-foreground text-xs'>
+                    Create a thread in this workspace. The composer owns the run controls after the thread opens.
+                </p>
             </div>
 
             <label className='block space-y-1.5'>

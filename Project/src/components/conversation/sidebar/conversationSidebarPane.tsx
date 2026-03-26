@@ -1,35 +1,35 @@
 import { startTransition, useTransition } from 'react';
 
-import { isEntityId } from '@/web/components/conversation/shell/workspace/helpers';
 import { resolveTabSwitchNotice } from '@/web/components/conversation/shell/workspace/tabSwitch';
 import { ConversationSidebar } from '@/web/components/conversation/sidebar/sidebar';
-import {
-    patchThreadListRecord,
-    removeDeletedSidebarRecords,
-    replaceThreadTagRelations,
-    upsertTagRecord,
-} from '@/web/components/conversation/sidebar/sidebarCache';
-import {
-    sidebarMutationFailure,
-    sidebarMutationSuccess,
-} from '@/web/components/conversation/sidebar/sidebarMutationResult';
+import type { ThreadEntrySubmitResult } from '@/web/components/conversation/sidebar/sidebarTypes';
 import { trpc } from '@/web/trpc/client';
 
 import type {
     ConversationRecord,
+    ProviderModelRecord,
     TagRecord,
     ThreadListRecord,
-    ThreadRecord,
     ThreadTagRecord,
 } from '@/app/backend/persistence/types';
 import type { SessionSummaryRecord } from '@/app/backend/persistence/types';
+import type { ProviderListItem } from '@/app/backend/providers/service/types';
+import type { WorkspacePreferenceRecord } from '@/app/backend/runtime/contracts/types/runtime';
 
-import type { EntityId, TopLevelTab } from '@/shared/contracts';
-import type { RuntimeProviderId } from '@/shared/contracts';
+import type { EntityId, RuntimeProviderId, TopLevelTab } from '@/shared/contracts';
 
 interface ConversationSidebarPaneProps {
     profileId: string;
     topLevelTab: TopLevelTab;
+    threadListQueryInput: {
+        profileId: string;
+        activeTab: TopLevelTab;
+        showAllModes: boolean;
+        groupView: 'workspace' | 'branch';
+        scope?: 'workspace' | 'detached';
+        workspaceFingerprint?: string;
+        sort?: 'latest' | 'alphabetical';
+    };
     isCollapsed: boolean;
     onToggleCollapsed: () => void;
     workspaceRoots: Array<{
@@ -37,14 +37,25 @@ interface ConversationSidebarPaneProps {
         label: string;
         absolutePath: string;
     }>;
+    providers: ProviderListItem[];
+    providerModels: ProviderModelRecord[];
+    workspacePreferences: WorkspacePreferenceRecord[];
+    defaults:
+        | {
+              providerId: string;
+              modelId: string;
+          }
+        | undefined;
     preferredWorkspaceFingerprint?: string;
     buckets: ConversationRecord[];
     threads: ThreadListRecord[];
     sessions: SessionSummaryRecord[];
     tags: TagRecord[];
+    threadTags: ThreadTagRecord[];
     threadTagIdsByThread: Map<string, string[]>;
     selectedThreadId: string | undefined;
     selectedSessionId: string | undefined;
+    selectedRunId: string | undefined;
     selectedTagIds: string[];
     scopeFilter: 'all' | 'workspace' | 'detached';
     workspaceFilter: string | undefined;
@@ -75,7 +86,7 @@ interface ConversationSidebarPaneProps {
         topLevelTab: TopLevelTab;
         providerId?: RuntimeProviderId;
         modelId?: string;
-    }) => Promise<void>;
+    }) => Promise<ThreadEntrySubmitResult>;
     upsertTag: (input: { profileId: string; label: string }) => Promise<{ tag: TagRecord }>;
     setThreadTags: (input: {
         profileId: string;
@@ -86,7 +97,7 @@ interface ConversationSidebarPaneProps {
         profileId: string;
         threadId: EntityId<'thr'>;
         isFavorite: boolean;
-    }) => Promise<{ updated: boolean; thread?: ThreadRecord }>;
+    }) => Promise<{ updated: boolean; thread?: import('@/app/backend/persistence/types').ThreadRecord }>;
     deleteWorkspaceThreads: (input: {
         profileId: string;
         workspaceFingerprint: string;
@@ -102,17 +113,24 @@ interface ConversationSidebarPaneProps {
 export function ConversationSidebarPane({
     profileId,
     topLevelTab,
+    threadListQueryInput,
     isCollapsed,
     onToggleCollapsed,
     workspaceRoots,
+    providers,
+    providerModels,
+    workspacePreferences,
+    defaults,
     preferredWorkspaceFingerprint,
     buckets,
     threads,
     sessions,
     tags,
+    threadTags,
     threadTagIdsByThread,
     selectedThreadId,
     selectedSessionId,
+    selectedRunId,
     selectedTagIds,
     scopeFilter,
     workspaceFilter,
@@ -144,29 +162,28 @@ export function ConversationSidebarPane({
 }: ConversationSidebarPaneProps) {
     const utils = trpc.useUtils();
     const [, startSelectionTransition] = useTransition();
-    const selectedThread = threads.find((thread) => thread.id === selectedThreadId);
-    const threadListQueryInput = {
-        profileId,
-        activeTab: topLevelTab,
-        showAllModes,
-        groupView,
-        ...(scopeFilter !== 'all' ? { scope: scopeFilter } : {}),
-        ...(workspaceFilter ? { workspaceFingerprint: workspaceFilter } : {}),
-        sort,
-    };
+
     return (
         <ConversationSidebar
             profileId={profileId}
+            threadListQueryInput={threadListQueryInput}
             isCollapsed={isCollapsed}
             onToggleCollapsed={onToggleCollapsed}
             buckets={buckets}
             threads={threads}
             sessions={sessions}
             tags={tags}
+            threadTags={threadTags}
             threadTagIdsByThread={threadTagIdsByThread}
             workspaceRoots={workspaceRoots}
+            providers={providers}
+            providerModels={providerModels}
+            workspacePreferences={workspacePreferences}
+            defaults={defaults}
             {...(preferredWorkspaceFingerprint ? { preferredWorkspaceFingerprint } : {})}
             {...(selectedThreadId ? { selectedThreadId } : {})}
+            {...(selectedSessionId ? { selectedSessionId } : {})}
+            {...(selectedRunId ? { selectedRunId } : {})}
             selectedTagIds={selectedTagIds}
             scopeFilter={scopeFilter}
             {...(workspaceFilter ? { workspaceFilter } : {})}
@@ -177,7 +194,6 @@ export function ConversationSidebarPane({
             isDeletingWorkspaceThreads={isDeletingWorkspaceThreads}
             isCreatingThread={isCreatingThread}
             {...(statusMessage ? { statusMessage, statusTone } : {})}
-            onSelectWorkspaceFingerprint={onSelectWorkspaceFingerprint}
             onSelectThread={(threadId) => {
                 startSelectionTransition(() => {
                     const targetThread = threads.find((thread) => thread.id === threadId);
@@ -195,6 +211,9 @@ export function ConversationSidebarPane({
                     onSelectThreadId(threadId);
                 });
             }}
+            onSelectThreadId={onSelectThreadId}
+            onSelectSessionId={onSelectSessionId}
+            onSelectRunId={onSelectRunId}
             onPreviewThread={(threadId) => {
                 const latestSession = sessions
                     .filter((session) => session.threadId === threadId)
@@ -219,64 +238,6 @@ export function ConversationSidebarPane({
                         current.includes(tagId) ? current.filter((value) => value !== tagId) : [...current, tagId]
                     );
                 });
-            }}
-            onToggleThreadFavorite={async (threadId, nextFavorite) => {
-                const failureMessage = 'Favorite status could not be updated.';
-                if (!isEntityId(threadId, 'thr')) {
-                    return sidebarMutationFailure(failureMessage);
-                }
-
-                const currentThread = threads.find((thread) => thread.id === threadId);
-                if (!currentThread) {
-                    return sidebarMutationFailure(failureMessage);
-                }
-
-                const previousThreadList = utils.conversation.listThreads.getData(threadListQueryInput);
-                utils.conversation.listThreads.setData(threadListQueryInput, (current) => {
-                    if (!current) {
-                        return current;
-                    }
-
-                    return {
-                        ...current,
-                        threads: patchThreadListRecord(current.threads, {
-                            ...currentThread,
-                            isFavorite: nextFavorite,
-                        }),
-                    };
-                });
-
-                try {
-                    const result = await setThreadFavorite({
-                        profileId,
-                        threadId,
-                        isFavorite: nextFavorite,
-                    });
-                    if (!result.updated || !result.thread) {
-                        if (previousThreadList) {
-                            utils.conversation.listThreads.setData(threadListQueryInput, previousThreadList);
-                        }
-                        return sidebarMutationFailure(failureMessage);
-                    }
-                    const updatedThread = result.thread;
-
-                    utils.conversation.listThreads.setData(threadListQueryInput, (current) => {
-                        if (!current) {
-                            return current;
-                        }
-
-                        return {
-                            ...current,
-                            threads: patchThreadListRecord(current.threads, updatedThread),
-                        };
-                    });
-                    return sidebarMutationSuccess();
-                } catch (error) {
-                    if (previousThreadList) {
-                        utils.conversation.listThreads.setData(threadListQueryInput, previousThreadList);
-                    }
-                    return sidebarMutationFailure(error instanceof Error ? error.message : failureMessage);
-                }
             }}
             onScopeFilterChange={(scope) => {
                 startTransition(() => {
@@ -303,182 +264,12 @@ export function ConversationSidebarPane({
                     onGroupViewChange(nextGroupView);
                 });
             }}
+            onSelectWorkspaceFingerprint={onSelectWorkspaceFingerprint}
             onCreateThread={onCreateThread}
-            onAddTagToThread={async (threadId, label) => {
-                const failureMessage = 'Thread tags could not be updated.';
-                if (!isEntityId(threadId, 'thr')) {
-                    return sidebarMutationFailure(failureMessage);
-                }
-                const previousTags = utils.conversation.listTags.getData({ profileId });
-                const previousShellBootstrap = utils.runtime.getShellBootstrap.getData({ profileId });
-
-                try {
-                    const upserted = await upsertTag({
-                        profileId,
-                        label,
-                    });
-                    const existingTagIds = threadTagIdsByThread.get(threadId) ?? [];
-                    const nextTagIds = [...new Set([...existingTagIds, upserted.tag.id])];
-                    const validTagIds = nextTagIds.filter((tagId): tagId is EntityId<'tag'> =>
-                        isEntityId(tagId, 'tag')
-                    );
-                    if (validTagIds.length !== nextTagIds.length) {
-                        return sidebarMutationFailure('The selected tag could not be applied to this thread.');
-                    }
-
-                    utils.conversation.listTags.setData({ profileId }, (current) => {
-                        if (!current) {
-                            return current;
-                        }
-
-                        return {
-                            tags: upsertTagRecord(current.tags, upserted.tag),
-                        };
-                    });
-                    utils.runtime.getShellBootstrap.setData({ profileId }, (current) => {
-                        if (!current) {
-                            return current;
-                        }
-
-                        const optimisticThreadTags: ThreadTagRecord[] = validTagIds.map((tagId) => ({
-                            profileId,
-                            threadId,
-                            tagId,
-                            createdAt: new Date().toISOString(),
-                        }));
-
-                        return {
-                            ...current,
-                            threadTags: replaceThreadTagRelations(current.threadTags, threadId, optimisticThreadTags),
-                        };
-                    });
-
-                    const result = await setThreadTags({
-                        profileId,
-                        threadId,
-                        tagIds: validTagIds,
-                    });
-                    utils.runtime.getShellBootstrap.setData({ profileId }, (current) => {
-                        if (!current) {
-                            return current;
-                        }
-
-                        return {
-                            ...current,
-                            threadTags: replaceThreadTagRelations(current.threadTags, threadId, result.threadTags),
-                        };
-                    });
-                    return sidebarMutationSuccess();
-                } catch (error) {
-                    if (previousTags) {
-                        utils.conversation.listTags.setData({ profileId }, previousTags);
-                    }
-                    if (previousShellBootstrap) {
-                        utils.runtime.getShellBootstrap.setData({ profileId }, previousShellBootstrap);
-                    }
-                    return sidebarMutationFailure(error instanceof Error ? error.message : failureMessage);
-                }
-            }}
-            onDeleteWorkspaceThreads={async ({ workspaceFingerprint, includeFavoriteThreads }) => {
-                const failureMessage = 'Workspace threads could not be deleted.';
-                const previousBucketList = utils.conversation.listBuckets.getData({ profileId });
-                const previousThreadList = utils.conversation.listThreads.getData(threadListQueryInput);
-                const previousTagList = utils.conversation.listTags.getData({ profileId });
-                const previousShellBootstrap = utils.runtime.getShellBootstrap.getData({ profileId });
-                const previousSessionList = utils.session.list.getData({ profileId });
-
-                try {
-                    const result = await deleteWorkspaceThreads({
-                        profileId,
-                        workspaceFingerprint,
-                        includeFavorites: includeFavoriteThreads,
-                    });
-                    if (selectedThreadId && result.deletedThreadIds.includes(selectedThreadId)) {
-                        onSelectThreadId(undefined);
-                        onSelectSessionId(undefined);
-                        onSelectRunId(undefined);
-                    } else if (selectedSessionId && result.sessionIds.includes(selectedSessionId)) {
-                        onSelectSessionId(undefined);
-                        onSelectRunId(undefined);
-                    } else if (
-                        selectedThread &&
-                        selectedThread.workspaceFingerprint === workspaceFingerprint &&
-                        result.deletedThreadIds.length > 0
-                    ) {
-                        onSelectSessionId(undefined);
-                        onSelectRunId(undefined);
-                    }
-
-                    const deletedSidebarRecords = removeDeletedSidebarRecords({
-                        buckets,
-                        threads,
-                        tags,
-                        threadTags: previousShellBootstrap?.threadTags ?? [],
-                        deletedThreadIds: result.deletedThreadIds,
-                        deletedTagIds: result.deletedTagIds,
-                        deletedConversationIds: result.deletedConversationIds,
-                    });
-                    utils.conversation.listBuckets.setData(
-                        { profileId },
-                        {
-                            buckets: deletedSidebarRecords.buckets,
-                        }
-                    );
-                    utils.conversation.listThreads.setData(threadListQueryInput, (current) => {
-                        if (!current) {
-                            return current;
-                        }
-
-                        return {
-                            ...current,
-                            threads: deletedSidebarRecords.threads,
-                        };
-                    });
-                    utils.conversation.listTags.setData(
-                        { profileId },
-                        {
-                            tags: deletedSidebarRecords.tags,
-                        }
-                    );
-                    if (previousShellBootstrap) {
-                        utils.runtime.getShellBootstrap.setData(
-                            { profileId },
-                            {
-                                ...previousShellBootstrap,
-                                threadTags: deletedSidebarRecords.threadTags,
-                            }
-                        );
-                    }
-                    if (previousSessionList) {
-                        utils.session.list.setData(
-                            { profileId },
-                            {
-                                sessions: previousSessionList.sessions.filter(
-                                    (session) => !result.sessionIds.includes(session.id)
-                                ),
-                            }
-                        );
-                    }
-                    return sidebarMutationSuccess();
-                } catch (error) {
-                    if (previousBucketList) {
-                        utils.conversation.listBuckets.setData({ profileId }, previousBucketList);
-                    }
-                    if (previousThreadList) {
-                        utils.conversation.listThreads.setData(threadListQueryInput, previousThreadList);
-                    }
-                    if (previousTagList) {
-                        utils.conversation.listTags.setData({ profileId }, previousTagList);
-                    }
-                    if (previousShellBootstrap) {
-                        utils.runtime.getShellBootstrap.setData({ profileId }, previousShellBootstrap);
-                    }
-                    if (previousSessionList) {
-                        utils.session.list.setData({ profileId }, previousSessionList);
-                    }
-                    return sidebarMutationFailure(error instanceof Error ? error.message : failureMessage);
-                }
-            }}
+            upsertTag={upsertTag}
+            setThreadTags={setThreadTags}
+            setThreadFavorite={setThreadFavorite}
+            deleteWorkspaceThreads={deleteWorkspaceThreads}
         />
     );
 }

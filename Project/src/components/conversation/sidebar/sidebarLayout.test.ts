@@ -74,35 +74,11 @@ vi.mock('@/web/trpc/client', () => ({
             },
         },
         runtime: {
-            getShellBootstrap: {
+            inspectWorkspaceEnvironment: {
                 useQuery: () => ({
-                    data: {
-                        providers: [
-                            {
-                                id: 'kilo',
-                                label: 'Kilo',
-                                authState: 'authenticated',
-                                authMethod: 'oauth',
-                                isDefault: true,
-                            },
-                        ],
-                        providerModels: [
-                            {
-                                id: 'kilo-auto/frontier',
-                                providerId: 'kilo',
-                                label: 'Kilo Auto Frontier',
-                                supportsTools: true,
-                                supportsVision: false,
-                                supportsReasoning: true,
-                                toolProtocol: 'kilo_gateway',
-                            },
-                        ],
-                        workspacePreferences: [],
-                        defaults: {
-                            providerId: 'kilo',
-                            modelId: 'kilo-auto/frontier',
-                        },
-                    },
+                    data: undefined,
+                    error: undefined,
+                    isLoading: false,
                 }),
             },
             registerWorkspaceRoot: {
@@ -132,12 +108,20 @@ describe('conversation sidebar layout', () => {
         const html = renderToStaticMarkup(
             createElement(ConversationSidebar, {
                 profileId: 'profile_default',
+                threadListQueryInput: {
+                    profileId: 'profile_default',
+                    activeTab: 'chat',
+                    showAllModes: false,
+                    groupView: 'workspace',
+                    sort: 'latest',
+                },
                 isCollapsed: false,
                 onToggleCollapsed: vi.fn(),
                 buckets,
                 threads,
                 sessions,
                 tags,
+                threadTags: [],
                 threadTagIdsByThread: new Map([['thr_root', ['tag_ui']]]),
                 workspaceRoots: [
                     {
@@ -146,6 +130,59 @@ describe('conversation sidebar layout', () => {
                         absolutePath: 'C:\\Alpha',
                     },
                 ],
+                providers: [
+                    {
+                        id: 'kilo',
+                        label: 'Kilo',
+                        authState: 'authenticated',
+                        authMethod: 'oauth_pkce',
+                        connectionProfile: {
+                            providerId: 'kilo',
+                            optionProfileId: 'gateway',
+                            label: 'Gateway',
+                            options: [{ value: 'gateway', label: 'Gateway' }],
+                            resolvedBaseUrl: null,
+                        },
+                        apiKeyCta: { label: 'Create key', url: 'https://example.com' },
+                        isDefault: true,
+                        availableAuthMethods: ['device_code'],
+                        features: {
+                            supportsKiloRouting: true,
+                            catalogStrategy: 'dynamic',
+                            supportsModelProviderListing: true,
+                            supportsConnectionOptions: false,
+                            supportsCustomBaseUrl: false,
+                            supportsOrganizationScope: true,
+                        },
+                        supportsByok: false,
+                    },
+                ],
+                providerModels: [
+                    {
+                        id: 'kilo-auto/frontier',
+                        providerId: 'kilo',
+                        label: 'Kilo Auto Frontier',
+                        features: {
+                            supportsTools: true,
+                            supportsReasoning: true,
+                            supportsVision: false,
+                            supportsAudioInput: false,
+                            supportsAudioOutput: false,
+                            inputModalities: ['text'],
+                            outputModalities: ['text'],
+                        },
+                        runtime: {
+                            toolProtocol: 'kilo_gateway',
+                            apiFamily: 'kilo_gateway',
+                            routedApiFamily: 'openai_compatible',
+                        },
+                    },
+                ],
+                workspacePreferences: [],
+                defaults: {
+                    providerId: 'kilo',
+                    modelId: 'kilo-auto/frontier',
+                },
                 preferredWorkspaceFingerprint: 'ws_alpha',
                 selectedTagIds: [],
                 scopeFilter: 'all',
@@ -156,17 +193,37 @@ describe('conversation sidebar layout', () => {
                 isDeletingWorkspaceThreads: false,
                 isCreatingThread: false,
                 onSelectThread: vi.fn(),
+                onSelectThreadId: vi.fn(),
+                onSelectSessionId: vi.fn(),
+                onSelectRunId: vi.fn(),
                 onToggleTagFilter: vi.fn(),
-                onToggleThreadFavorite: vi.fn(async () => ({ ok: true as const })),
                 onScopeFilterChange: vi.fn(),
                 onWorkspaceFilterChange: vi.fn(),
                 onSortChange: vi.fn(),
                 onShowAllModesChange: vi.fn(),
                 onGroupViewChange: vi.fn(),
                 onSelectWorkspaceFingerprint: vi.fn(),
-                onAddTagToThread: vi.fn(async () => ({ ok: true as const })),
-                onDeleteWorkspaceThreads: vi.fn(async () => ({ ok: true as const })),
-                onCreateThread: vi.fn(async () => {}),
+                upsertTag: vi.fn(async () => ({
+                    tag: {
+                        id: 'tag_ui',
+                        profileId: 'profile_default',
+                        label: 'UI',
+                        createdAt: '2026-03-12T09:00:00.000Z',
+                        updatedAt: '2026-03-12T09:00:00.000Z',
+                    },
+                })),
+                setThreadTags: vi.fn(async () => ({ threadTags: [] })),
+                setThreadFavorite: vi.fn(async () => ({ updated: true })),
+                deleteWorkspaceThreads: vi.fn(async () => ({
+                    deletedThreadIds: [],
+                    deletedTagIds: [],
+                    deletedConversationIds: [],
+                    sessionIds: [],
+                })),
+                onCreateThread: vi.fn(async () => ({
+                    kind: 'created_with_starter_session' as const,
+                    workspaceFingerprint: 'ws_alpha',
+                })),
             })
         );
 

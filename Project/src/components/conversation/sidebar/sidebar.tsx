@@ -3,41 +3,67 @@ import { useState } from 'react';
 
 import { SidebarRailHeader } from '@/web/components/conversation/sidebar/sections/sidebarRailHeader';
 import { SidebarThreadBrowser } from '@/web/components/conversation/sidebar/sections/sidebarThreadBrowser';
-import type { SidebarMutationResult } from '@/web/components/conversation/sidebar/sidebarMutationResult';
-import { useSidebarThreadDraftController } from '@/web/components/conversation/sidebar/useSidebarThreadDraftController';
-import { useSidebarWorkspaceCreateController } from '@/web/components/conversation/sidebar/useSidebarWorkspaceCreateController';
-import { useSidebarWorkspaceDeleteController } from '@/web/components/conversation/sidebar/useSidebarWorkspaceDeleteController';
 import { WorkspaceDeleteDialog } from '@/web/components/conversation/sidebar/sections/workspaceDeleteDialog';
 import { WorkspaceLifecycleDialog } from '@/web/components/conversation/sidebar/sections/workspaceLifecycleDialog';
+import type { ThreadEntrySubmitResult } from '@/web/components/conversation/sidebar/sidebarTypes';
+import { useSidebarMutationController } from '@/web/components/conversation/sidebar/useSidebarMutationController';
+import { useSidebarWorkspaceCreateController } from '@/web/components/conversation/sidebar/useSidebarWorkspaceCreateController';
+import { useSidebarWorkspaceDeleteController } from '@/web/components/conversation/sidebar/useSidebarWorkspaceDeleteController';
+import { useThreadEntryDraftState } from '@/web/components/conversation/sidebar/useThreadEntryDraftState';
+import { useWorkspaceLifecycleDraftState } from '@/web/components/conversation/sidebar/useWorkspaceLifecycleDraftState';
 import { Button } from '@/web/components/ui/button';
-import {
-    getProviderControlDefaults,
-    listProviderControlModels,
-    listProviderControlProviders,
-} from '@/web/lib/providerControl/selectors';
-import { SECONDARY_QUERY_OPTIONS } from '@/web/lib/query/secondaryQueryOptions';
-import { trpc } from '@/web/trpc/client';
 
-import type { ConversationRecord, TagRecord, ThreadListRecord } from '@/app/backend/persistence/types';
-import type { SessionSummaryRecord } from '@/app/backend/persistence/types';
-import type { RuntimeProviderId, TopLevelTab } from '@/shared/contracts';
+import type {
+    ConversationRecord,
+    ProviderModelRecord,
+    SessionSummaryRecord,
+    TagRecord,
+    ThreadListRecord,
+    ThreadRecord,
+    ThreadTagRecord,
+} from '@/app/backend/persistence/types';
+import type { ProviderListItem } from '@/app/backend/providers/service/types';
+import type { WorkspacePreferenceRecord } from '@/app/backend/runtime/contracts/types/runtime';
+
+import type { EntityId, RuntimeProviderId, TopLevelTab } from '@/shared/contracts';
 
 interface ConversationSidebarProps {
     profileId: string;
+    threadListQueryInput: {
+        profileId: string;
+        activeTab: TopLevelTab;
+        showAllModes: boolean;
+        groupView: 'workspace' | 'branch';
+        scope?: 'workspace' | 'detached';
+        workspaceFingerprint?: string;
+        sort?: 'latest' | 'alphabetical';
+    };
     isCollapsed: boolean;
     onToggleCollapsed: () => void;
     buckets: ConversationRecord[];
     threads: ThreadListRecord[];
     sessions: SessionSummaryRecord[];
     tags: TagRecord[];
+    threadTags: ThreadTagRecord[];
     threadTagIdsByThread: Map<string, string[]>;
     workspaceRoots: Array<{
         fingerprint: string;
         label: string;
         absolutePath: string;
     }>;
+    providers: ProviderListItem[];
+    providerModels: ProviderModelRecord[];
+    workspacePreferences: WorkspacePreferenceRecord[];
+    defaults:
+        | {
+              providerId: string;
+              modelId: string;
+          }
+        | undefined;
     preferredWorkspaceFingerprint?: string;
     selectedThreadId?: string;
+    selectedSessionId?: string;
+    selectedRunId?: string;
     selectedTagIds: string[];
     scopeFilter: 'all' | 'workspace' | 'detached';
     workspaceFilter?: string;
@@ -50,20 +76,17 @@ interface ConversationSidebarProps {
     statusMessage?: string;
     statusTone?: 'info' | 'error';
     onSelectThread: (threadId: string) => void;
+    onSelectThreadId: (threadId: string | undefined) => void;
+    onSelectSessionId: (sessionId: string | undefined) => void;
+    onSelectRunId: (runId: string | undefined) => void;
     onPreviewThread?: (threadId: string) => void;
     onToggleTagFilter: (tagId: string) => void;
-    onToggleThreadFavorite: (threadId: string, nextFavorite: boolean) => Promise<SidebarMutationResult>;
     onScopeFilterChange: (scope: 'all' | 'workspace' | 'detached') => void;
     onWorkspaceFilterChange: (workspaceFingerprint?: string) => void;
     onSortChange: (sort: 'latest' | 'alphabetical') => void;
     onShowAllModesChange: (showAllModes: boolean) => void;
     onGroupViewChange: (groupView: 'workspace' | 'branch') => void;
     onSelectWorkspaceFingerprint: (workspaceFingerprint: string | undefined) => void;
-    onAddTagToThread: (threadId: string, label: string) => Promise<SidebarMutationResult>;
-    onDeleteWorkspaceThreads: (input: {
-        workspaceFingerprint: string;
-        includeFavoriteThreads: boolean;
-    }) => Promise<SidebarMutationResult>;
     onCreateThread: (input: {
         workspaceFingerprint: string;
         workspaceAbsolutePath: string;
@@ -71,21 +94,50 @@ interface ConversationSidebarProps {
         topLevelTab: TopLevelTab;
         providerId?: RuntimeProviderId;
         modelId?: string;
-    }) => Promise<void>;
+    }) => Promise<ThreadEntrySubmitResult>;
+    upsertTag: (input: { profileId: string; label: string }) => Promise<{ tag: TagRecord }>;
+    setThreadTags: (input: {
+        profileId: string;
+        threadId: EntityId<'thr'>;
+        tagIds: EntityId<'tag'>[];
+    }) => Promise<{ threadTags: ThreadTagRecord[] }>;
+    setThreadFavorite: (input: {
+        profileId: string;
+        threadId: EntityId<'thr'>;
+        isFavorite: boolean;
+    }) => Promise<{ updated: boolean; thread?: ThreadRecord }>;
+    deleteWorkspaceThreads: (input: {
+        profileId: string;
+        workspaceFingerprint: string;
+        includeFavorites?: boolean;
+    }) => Promise<{
+        deletedThreadIds: string[];
+        deletedTagIds: string[];
+        deletedConversationIds: string[];
+        sessionIds: string[];
+    }>;
 }
 
 export function ConversationSidebar({
     profileId,
+    threadListQueryInput,
     isCollapsed,
     onToggleCollapsed,
     buckets,
     threads,
     sessions,
     tags,
+    threadTags,
     threadTagIdsByThread,
     workspaceRoots,
+    providers,
+    providerModels,
+    workspacePreferences,
+    defaults,
     preferredWorkspaceFingerprint,
     selectedThreadId,
+    selectedSessionId,
+    selectedRunId,
     selectedTagIds,
     scopeFilter,
     workspaceFilter,
@@ -98,56 +150,138 @@ export function ConversationSidebar({
     statusMessage,
     statusTone = 'info',
     onSelectThread,
+    onSelectThreadId,
+    onSelectSessionId,
+    onSelectRunId,
     onPreviewThread,
     onToggleTagFilter,
-    onToggleThreadFavorite,
     onScopeFilterChange,
     onWorkspaceFilterChange,
     onSortChange,
     onShowAllModesChange,
     onGroupViewChange,
     onSelectWorkspaceFingerprint,
-    onAddTagToThread,
-    onDeleteWorkspaceThreads,
     onCreateThread,
+    upsertTag,
+    setThreadTags,
+    setThreadFavorite,
+    deleteWorkspaceThreads,
 }: ConversationSidebarProps) {
-    const shellBootstrapQuery = trpc.runtime.getShellBootstrap.useQuery({ profileId }, SECONDARY_QUERY_OPTIONS);
     const [feedbackMessage, setFeedbackMessage] = useState<string | undefined>(undefined);
-    const providerControl = shellBootstrapQuery.data?.providerControl;
-    const providers = listProviderControlProviders(providerControl);
-    const providerModels = listProviderControlModels(providerControl);
-    const workspacePreferences = shellBootstrapQuery.data?.workspacePreferences ?? [];
-    const defaults = getProviderControlDefaults(providerControl);
     const desktopBridge = typeof window !== 'undefined' ? window.neonDesktop : undefined;
-    const threadDraftController = useSidebarThreadDraftController({
+    const threadDraftController = useThreadEntryDraftState({
         preferredWorkspaceFingerprint,
-        workspaceRoots,
         workspacePreferences,
         providers,
         providerModels,
         defaults,
-        onSelectWorkspaceFingerprint,
-        onCreateThread,
-        onFeedbackMessageChange: setFeedbackMessage,
     });
-    const workspaceCreateController = useSidebarWorkspaceCreateController({
+    const workspaceLifecycleDraft = useWorkspaceLifecycleDraftState({
         profileId,
         providers,
         providerModels,
         workspacePreferences,
         defaults,
         desktopBridge,
-        onSelectWorkspaceFingerprint,
+    });
+    const workspaceCreateController = useSidebarWorkspaceCreateController({
+        profileId,
         onCreateThread,
-        onFeedbackMessageChange: setFeedbackMessage,
-        onStarterThreadFallback: threadDraftController.startInlineThreadDraft,
+    });
+    const mutationController = useSidebarMutationController({
+        profileId,
+        threadListQueryInput,
+        buckets,
+        threads,
+        tags,
+        threadTags,
+        threadTagIdsByThread,
+        selectedThreadId,
+        selectedSessionId,
+        selectedRunId,
+        onSelectThreadId,
+        onSelectSessionId,
+        onSelectRunId,
+        upsertTag,
+        setThreadTags,
+        setThreadFavorite,
+        deleteWorkspaceThreads,
     });
     const workspaceDeleteController = useSidebarWorkspaceDeleteController({
         profileId,
         isDeletingWorkspaceThreads,
-        onDeleteWorkspaceThreads,
+        onDeleteWorkspaceThreads: mutationController.deleteWorkspaceThreadsForSidebar,
         onFeedbackMessageChange: setFeedbackMessage,
     });
+
+    async function handleWorkspaceCreateSubmit() {
+        workspaceLifecycleDraft.clearStatusMessage();
+        setFeedbackMessage(undefined);
+
+        const result = await workspaceCreateController.submitWorkspaceCreate({
+            absolutePath: workspaceLifecycleDraft.draft.absolutePath,
+            label: workspaceLifecycleDraft.draft.label,
+            defaultTopLevelTab: workspaceLifecycleDraft.draft.defaultTopLevelTab,
+            defaultProviderId: workspaceLifecycleDraft.draft.defaultProviderId,
+            defaultModelId: workspaceLifecycleDraft.selectedModelId,
+        });
+
+        if (result.kind === 'failed') {
+            workspaceLifecycleDraft.setStatusMessage(result.message);
+            return;
+        }
+
+        workspaceLifecycleDraft.closeDraft();
+
+        if (result.kind === 'created_without_starter_thread') {
+            onSelectWorkspaceFingerprint(result.workspaceRoot.fingerprint);
+            threadDraftController.openInlineThreadDraft(result.draftState);
+            setFeedbackMessage(result.message);
+            return;
+        }
+
+        if (result.threadEntryResult.kind === 'created_without_starter_session') {
+            setFeedbackMessage(result.threadEntryResult.message);
+        }
+    }
+
+    async function handleInlineThreadSubmit() {
+        if (!threadDraftController.inlineThreadDraft) {
+            return;
+        }
+
+        const workspaceRoot = workspaceRoots.find(
+            (workspace) => workspace.fingerprint === threadDraftController.inlineThreadDraft?.workspaceFingerprint
+        );
+        if (!workspaceRoot) {
+            setFeedbackMessage('The selected workspace could not be resolved for the new thread.');
+            return;
+        }
+
+        setFeedbackMessage(undefined);
+        const result = await onCreateThread({
+            workspaceFingerprint: threadDraftController.inlineThreadDraft.workspaceFingerprint,
+            workspaceAbsolutePath: workspaceRoot.absolutePath,
+            title: threadDraftController.inlineThreadDraft.title,
+            topLevelTab: threadDraftController.inlineThreadDraft.topLevelTab,
+            ...(threadDraftController.inlineThreadDraft.providerId && threadDraftController.inlineThreadDraft.modelId
+                ? {
+                      providerId: threadDraftController.inlineThreadDraft.providerId,
+                      modelId: threadDraftController.inlineThreadDraft.modelId,
+                  }
+                : {}),
+        });
+
+        if (result.kind === 'failed') {
+            setFeedbackMessage(result.message);
+            return;
+        }
+
+        threadDraftController.cancelInlineThread();
+        if (result.kind === 'created_without_starter_session') {
+            setFeedbackMessage(result.message);
+        }
+    }
 
     return (
         <>
@@ -169,7 +303,7 @@ export function ConversationSidebar({
                                 className='h-10 w-10 rounded-2xl'
                                 aria-label='Add workspace'
                                 title='Add workspace'
-                                onClick={workspaceCreateController.openWorkspaceCreate}>
+                                onClick={workspaceLifecycleDraft.openDraft}>
                                 <FolderPlus className='h-4 w-4' />
                             </Button>
                         ) : (
@@ -178,7 +312,7 @@ export function ConversationSidebar({
                                 size='sm'
                                 variant='secondary'
                                 className='h-9 w-full rounded-xl whitespace-nowrap'
-                                onClick={workspaceCreateController.openWorkspaceCreate}>
+                                onClick={workspaceLifecycleDraft.openDraft}>
                                 Add workspace
                             </Button>
                         )
@@ -229,7 +363,7 @@ export function ConversationSidebar({
                         onToggleTagFilter={onToggleTagFilter}
                         onToggleThreadFavorite={async (threadId, nextFavorite) => {
                             setFeedbackMessage(undefined);
-                            const result = await onToggleThreadFavorite(threadId, nextFavorite);
+                            const result = await mutationController.toggleThreadFavorite(threadId, nextFavorite);
                             if (!result.ok) {
                                 setFeedbackMessage(result.message);
                             }
@@ -239,9 +373,16 @@ export function ConversationSidebar({
                             workspaceDeleteController.requestWorkspaceDelete(workspaceFingerprint, workspaceLabel);
                         }}
                         onRequestNewThread={(workspaceFingerprint) => {
-                            threadDraftController.startInlineThreadDraft(
-                                threadDraftController.getRequestWorkspaceFingerprint(workspaceFingerprint)
-                            );
+                            const requestedWorkspaceFingerprint =
+                                threadDraftController.getRequestWorkspaceFingerprint(workspaceFingerprint);
+                            if (!requestedWorkspaceFingerprint) {
+                                setFeedbackMessage('Choose a workspace before creating a workspace thread.');
+                                return;
+                            }
+
+                            setFeedbackMessage(undefined);
+                            onSelectWorkspaceFingerprint(requestedWorkspaceFingerprint);
+                            threadDraftController.startInlineThreadDraft(requestedWorkspaceFingerprint);
                         }}
                         onInlineThreadTitleChange={threadDraftController.setInlineThreadTitle}
                         onInlineThreadTopLevelTabChange={threadDraftController.setInlineThreadTopLevelTab}
@@ -253,7 +394,7 @@ export function ConversationSidebar({
                         onInlineThreadModelChange={threadDraftController.setInlineThreadModel}
                         onCancelInlineThread={threadDraftController.cancelInlineThread}
                         onSubmitInlineThread={() => {
-                            void threadDraftController.submitInlineThread();
+                            void handleInlineThreadSubmit();
                         }}
                         onSelectWorkspaceFingerprint={onSelectWorkspaceFingerprint}
                         onScopeFilterChange={onScopeFilterChange}
@@ -263,7 +404,7 @@ export function ConversationSidebar({
                         onGroupViewChange={onGroupViewChange}
                         onAddTagToThread={async (threadId, label) => {
                             setFeedbackMessage(undefined);
-                            const result = await onAddTagToThread(threadId, label);
+                            const result = await mutationController.addTagToThread(threadId, label);
                             if (!result.ok) {
                                 setFeedbackMessage(result.message);
                             }
@@ -274,20 +415,29 @@ export function ConversationSidebar({
             </aside>
 
             <WorkspaceLifecycleDialog
-                open={workspaceCreateController.open}
-                profileId={profileId}
+                open={workspaceLifecycleDraft.open}
+                draft={workspaceLifecycleDraft.draft}
                 providers={providers}
-                providerModels={providerModels}
-                workspacePreferences={workspacePreferences}
-                defaults={defaults}
+                modelOptions={workspaceLifecycleDraft.modelOptions}
+                selectedModelId={workspaceLifecycleDraft.selectedModelId}
                 busy={workspaceCreateController.busy}
-                isPickingDirectory={workspaceCreateController.isPickingDirectory}
-                {...(workspaceCreateController.statusMessage
-                    ? { statusMessage: workspaceCreateController.statusMessage }
+                isPickingDirectory={workspaceLifecycleDraft.isPickingDirectory}
+                {...(workspaceLifecycleDraft.statusMessage
+                    ? { statusMessage: workspaceLifecycleDraft.statusMessage }
                     : {})}
-                onClose={workspaceCreateController.closeWorkspaceCreate}
-                onBrowseDirectory={workspaceCreateController.browseDirectory}
-                onSubmit={workspaceCreateController.submitWorkspaceCreate}
+                environmentPreview={{
+                    isLoading: workspaceLifecycleDraft.environmentQuery.isLoading,
+                    errorMessage: workspaceLifecycleDraft.environmentQuery.error?.message,
+                    snapshot: workspaceLifecycleDraft.environmentQuery.data?.snapshot,
+                }}
+                onClose={workspaceLifecycleDraft.closeDraft}
+                onBrowseDirectory={workspaceLifecycleDraft.browseDirectory}
+                onLabelChange={workspaceLifecycleDraft.setLabel}
+                onAbsolutePathChange={workspaceLifecycleDraft.setAbsolutePath}
+                onDefaultTopLevelTabChange={workspaceLifecycleDraft.setDefaultTopLevelTab}
+                onDefaultProviderIdChange={workspaceLifecycleDraft.setDefaultProviderId}
+                onDefaultModelIdChange={workspaceLifecycleDraft.setDefaultModelId}
+                onSubmit={handleWorkspaceCreateSubmit}
             />
 
             <WorkspaceDeleteDialog

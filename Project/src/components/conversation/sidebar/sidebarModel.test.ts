@@ -122,6 +122,29 @@ describe('buildConversationSidebarModel', () => {
         expect(populatedGroup?.rows.map((row) => row.depth)).toEqual([0, 1]);
     });
 
+    it('keeps workspace root order first and appends discovered workspaces after it', () => {
+        const model = buildConversationSidebarModel({
+            buckets,
+            threads: [
+                ...threads,
+                {
+                    ...threads[0]!,
+                    id: 'thr_workspace_c',
+                    conversationId: 'conv_3',
+                    workspaceFingerprint: 'ws_c',
+                    anchorId: 'ws_c',
+                    title: 'Workspace C thread',
+                },
+            ],
+            tags,
+            workspaceRoots,
+            groupView: 'workspace',
+        });
+
+        expect(model.workspaceGroups.map((group) => group.workspaceFingerprint)).toEqual(['ws_a', 'ws_b', 'ws_c']);
+        expect(model.workspaceOptions).toEqual(['ws_a', 'ws_b', 'ws_c']);
+    });
+
     it('keeps delegated orchestrator child lanes nested in workspace view', () => {
         const model = buildConversationSidebarModel({
             buckets,
