@@ -7,18 +7,15 @@ import { useConversationShellEditFlow } from '@/web/components/conversation/hook
 import { useConversationShellRoutingBadge } from '@/web/components/conversation/hooks/useConversationShellRoutingBadge';
 import { buildConversationPlanOrchestrator } from '@/web/components/conversation/shell/composition/buildConversationPlanOrchestrator';
 import { buildConversationWorkspaceProjection } from '@/web/components/conversation/shell/composition/buildConversationWorkspaceProjection';
+import { buildConversationDialogProps } from '@/web/components/conversation/shell/buildConversationDialogProps';
+import { buildConversationSidebarPaneProps } from '@/web/components/conversation/shell/buildConversationSidebarPaneProps';
+import { buildConversationWorkspaceSectionProps } from '@/web/components/conversation/shell/buildConversationWorkspaceSectionProps';
 import { setOrchestratorLatestCache } from '@/web/components/conversation/shell/planCache';
-import { useConversationShellSync } from '@/web/components/conversation/shell/useConversationShellSync';
 import type { UseConversationShellViewControllersInput } from '@/web/components/conversation/shell/useConversationShellViewControllers.types';
 import { createConversationThread } from '@/web/components/conversation/shell/workspace/createConversationThread';
 import { isEntityId, isProviderId } from '@/web/components/conversation/shell/workspace/helpers';
 import { useConversationWorkspaceActions } from '@/web/components/conversation/shell/workspace/useConversationWorkspaceActions';
 import type { ThreadEntrySubmitResult } from '@/web/components/conversation/sidebar/sidebarTypes';
-import {
-    getProviderControlDefaults,
-    listProviderControlModels,
-    listProviderControlProviders,
-} from '@/web/lib/providerControl/selectors';
 
 import type { RunRecord, SessionSummaryRecord, ThreadListRecord } from '@/app/backend/persistence/types';
 
@@ -41,7 +38,6 @@ export function useConversationShellViewControllers(input: UseConversationShellV
         onTopLevelTabChange,
         onSelectedWorkspaceFingerprintChange,
         onProfileChange,
-        onBootChromeReadyChange,
         isSidebarCollapsed,
         onToggleSidebarCollapsed,
         tabSwitchNotice,
@@ -65,7 +61,6 @@ export function useConversationShellViewControllers(input: UseConversationShellV
         runtimeOptions,
         contextStateQueryInput,
         contextStateQuery,
-        contextStateQueryEnabled,
         composerMediaSettings,
         composer,
         sessionActions,
@@ -146,25 +141,6 @@ export function useConversationShellViewControllers(input: UseConversationShellV
             });
         },
     });
-    useConversationShellSync({
-        profileId,
-        modeKey,
-        topLevelTab,
-        selectedSessionId,
-        selectedRunId,
-        hasSelectedSession,
-        streamState,
-        contextStateQueryEnabled,
-        contextStateQueryInput,
-        uiState,
-        queries,
-        selectionState,
-        runTargetState,
-        utils,
-        onSelectedWorkspaceFingerprintChange,
-        onBootChromeReadyChange,
-    });
-
     const sidebarStatusMessage = queries.listBucketsQuery.isPending
         ? 'Loading conversation groups...'
         : queries.listTagsQuery.isPending
@@ -264,7 +240,6 @@ export function useConversationShellViewControllers(input: UseConversationShellV
             );
         }
     );
-    const providerControl = queries.shellBootstrapQuery.data?.providerControl;
     const workspacePanel = buildConversationWorkspaceProjection({
         profileId,
         profiles,
@@ -383,83 +358,47 @@ export function useConversationShellViewControllers(input: UseConversationShellV
     });
 
     return {
-        sidebarPaneProps: {
+        sidebarPaneProps: buildConversationSidebarPaneProps({
             profileId,
             topLevelTab,
-            threadListQueryInput: queries.listThreadsInput,
-            isCollapsed: isSidebarCollapsed,
-            onToggleCollapsed: onToggleSidebarCollapsed,
-            workspaceRoots: queries.shellBootstrapQuery.data?.workspaceRoots ?? [],
-            providers: listProviderControlProviders(providerControl),
-            providerModels: listProviderControlModels(providerControl),
-            workspacePreferences: queries.shellBootstrapQuery.data?.workspacePreferences ?? [],
-            defaults: getProviderControlDefaults(providerControl),
-            ...(selectedWorkspaceFingerprint ? { preferredWorkspaceFingerprint: selectedWorkspaceFingerprint } : {}),
-            buckets: queries.listBucketsQuery.data?.buckets ?? [],
-            threads: selectionState.visibleThreads,
-            sessions: queries.sessionsQuery.data?.sessions ?? [],
-            tags: queries.listTagsQuery.data?.tags ?? [],
-            threadTags: queries.shellBootstrapQuery.data?.threadTags ?? [],
-            threadTagIdsByThread: selectionState.threadTagIdsByThread,
-            selectedThreadId: selectionState.selectedThread?.id,
+            selectedWorkspaceFingerprint,
+            isSidebarCollapsed,
+            onToggleSidebarCollapsed,
+            queries,
+            mutations,
+            uiState,
+            selectionState,
             selectedSessionId,
             selectedRunId,
-            selectedTagIds: uiState.selectedTagIds,
-            scopeFilter: uiState.scopeFilter,
-            workspaceFilter: uiState.workspaceFilter,
-            sort: uiState.sort ?? 'latest',
-            showAllModes: uiState.showAllModes,
-            groupView: uiState.groupView,
-            isAddingTag: mutations.upsertTagMutation.isPending || mutations.setThreadTagsMutation.isPending,
-            isDeletingWorkspaceThreads: mutations.deleteWorkspaceThreadsMutation.isPending,
-            isCreatingThread: mutations.createThreadMutation.isPending || mutations.createSessionMutation.isPending,
-            ...(sidebarStatusMessage ? { statusMessage: sidebarStatusMessage } : {}),
-            ...(sidebarStatusTone ? { statusTone: sidebarStatusTone } : {}),
             onTopLevelTabChange,
-            onSetTabSwitchNotice: setTabSwitchNotice,
-            onSelectThreadId: uiState.setSelectedThreadId,
-            onSelectSessionId: uiState.setSelectedSessionId,
-            onSelectRunId: uiState.setSelectedRunId,
-            onSelectTagIds: uiState.setSelectedTagIds,
-            onScopeFilterChange: uiState.setScopeFilter,
-            onWorkspaceFilterChange: uiState.setWorkspaceFilter,
-            onSortChange: uiState.setSort,
-            onShowAllModesChange: uiState.setShowAllModes,
-            onGroupViewChange: uiState.setGroupView,
-            onCreateThread: handleCreateThread,
-            onSelectWorkspaceFingerprint: (workspaceFingerprint: string | undefined) => {
-                onSelectedWorkspaceFingerprintChange?.(workspaceFingerprint);
-                uiState.setSelectedThreadId(undefined);
-                uiState.setSelectedSessionId(undefined);
-                uiState.setSelectedRunId(undefined);
-            },
-            upsertTag: mutations.upsertTagMutation.mutateAsync,
-            setThreadTags: mutations.setThreadTagsMutation.mutateAsync,
-            setThreadFavorite: mutations.setThreadFavoriteMutation.mutateAsync,
-            deleteWorkspaceThreads: mutations.deleteWorkspaceThreadsMutation.mutateAsync,
-        },
-        workspaceSectionProps: {
-            header: {
-                selectedThread: shellViewModel.selectedThread,
-                streamState,
-                ...(streamErrorMessage !== undefined ? { streamErrorMessage } : {}),
-                lastSequence: queries.shellBootstrapQuery.data?.lastSequence ?? 0,
-                tabSwitchNotice,
-                topLevelTab,
-                isSidebarCollapsed,
-            },
+            onSelectedWorkspaceFingerprintChange,
+            setTabSwitchNotice,
+            handleCreateThread,
+            sidebarStatusMessage,
+            sidebarStatusTone,
+        }),
+        workspaceSectionProps: buildConversationWorkspaceSectionProps({
+            shellViewModel,
+            queries,
+            streamState,
+            streamErrorMessage,
+            tabSwitchNotice,
+            topLevelTab,
+            isSidebarCollapsed,
+            onToggleSidebarCollapsed,
+            onTopLevelTabChange,
             panel: workspacePanel,
-            onToggleSidebar: onToggleSidebarCollapsed,
-            onTopLevelTabChange,
-        },
-        messageEditDialogProps: {
-            ...editFlow.dialogProps,
-            busy: mutations.editSessionMutation.isPending || mutations.setEditPreferenceMutation.isPending,
-        },
-        branchWorkflowDialogProps: {
-            ...branchWorkflowFlow.dialogProps,
-            busy: mutations.branchFromMessageWithWorkflowMutation.isPending,
-        },
+        }),
+        ...buildConversationDialogProps({
+            messageEditDialogProps: {
+                ...editFlow.dialogProps,
+                busy: mutations.editSessionMutation.isPending || mutations.setEditPreferenceMutation.isPending,
+            },
+            branchWorkflowDialogProps: {
+                ...branchWorkflowFlow.dialogProps,
+                busy: mutations.branchFromMessageWithWorkflowMutation.isPending,
+            },
+        }),
     } as const;
 }
 

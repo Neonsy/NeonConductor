@@ -1,16 +1,16 @@
 import { skipToken } from '@tanstack/react-query';
 
-
 import { useConversationShellComposer } from '@/web/components/conversation/hooks/useConversationShellComposer';
 import { useConversationShellSessionActions } from '@/web/components/conversation/hooks/useConversationShellSessionActions';
 import { useConversationShellViewModel } from '@/web/components/conversation/hooks/useConversationShellViewModel';
+import type { BranchWorkflowDialogProps } from '@/web/components/conversation/panels/branchWorkflowDialog';
+import type { MessageEditDialogProps } from '@/web/components/conversation/panels/messageEditDialog';
 import { useConversationUiState } from '@/web/components/conversation/hooks/useConversationUiState';
 import { useConversationMutations } from '@/web/components/conversation/shell/actions/useConversationMutations';
 import { useConversationQueries } from '@/web/components/conversation/shell/queries/useConversationQueries';
 import type { useConversationShellSelectionState } from '@/web/components/conversation/shell/useConversationShellSelectionState';
 import type { ConversationModeOption } from '@/web/components/conversation/shell/workspace/helpers';
 import type { useConversationRunTarget } from '@/web/components/conversation/shell/workspace/useConversationRunTarget';
-import type { ConversationShellBootChromeReadiness } from '@/web/components/runtime/bootReadiness';
 import type { RuntimeStreamConnectionState } from '@/web/lib/runtime/eventStream';
 import { trpc } from '@/web/trpc/client';
 
@@ -24,7 +24,6 @@ import type {
     TopLevelTab,
 } from '@/shared/contracts';
 import type { ResolvedContextState, ResolvedContextStateInput } from '@/shared/contracts/types/context';
-
 
 import type React from 'react';
 
@@ -55,7 +54,7 @@ export type ConversationShellMainViewDraftTarget =
       }
     | undefined;
 
-export interface UseConversationShellViewControllersInput {
+export interface ShellRuntimeControllerState {
     profileId: string;
     profiles: Array<{ id: string; name: string }>;
     selectedProfileId: string | undefined;
@@ -67,7 +66,6 @@ export interface UseConversationShellViewControllersInput {
     onTopLevelTabChange: (nextTab: TopLevelTab) => void;
     onSelectedWorkspaceFingerprintChange: ((workspaceFingerprint: string | undefined) => void) | undefined;
     onProfileChange: (profileId: string) => void;
-    onBootChromeReadyChange: ((readiness: ConversationShellBootChromeReadiness) => void) | undefined;
     isSidebarCollapsed: boolean;
     onToggleSidebarCollapsed: () => void;
     tabSwitchNotice: string | undefined;
@@ -95,7 +93,6 @@ export interface UseConversationShellViewControllersInput {
     contextStateQuery: ReturnType<typeof trpc.context.getResolvedState.useQuery> & {
         data: ResolvedContextState | undefined;
     };
-    contextStateQueryEnabled: boolean;
     composerMediaSettings:
         | {
               maxImageAttachmentsPerMessage?: number;
@@ -118,4 +115,49 @@ export interface UseConversationShellViewControllersInput {
     selectedModelCompatibilityReason: string | undefined;
     applySessionWorkspaceUpdate: (sessionUpdate: ConversationSessionWorkspaceUpdate) => void;
     applyPlanWorkspaceUpdate: (planResult: ConversationPlanWorkspaceUpdateResult) => void;
+}
+
+export type UseConversationShellViewControllersInput = ShellRuntimeControllerState;
+
+export interface ShellSidebarCompositionInput {
+    profileId: string;
+    topLevelTab: TopLevelTab;
+    selectedWorkspaceFingerprint: string | undefined;
+    isSidebarCollapsed: boolean;
+    onToggleSidebarCollapsed: () => void;
+    queries: ConversationQueries;
+    mutations: ConversationMutations;
+    uiState: ConversationUiState;
+    selectionState: ConversationSelectionState;
+    selectedSessionId: SessionSummaryRecord['id'] | undefined;
+    selectedRunId: RunRecord['id'] | undefined;
+    onTopLevelTabChange: (nextTab: TopLevelTab) => void;
+    onSelectedWorkspaceFingerprintChange: ((workspaceFingerprint: string | undefined) => void) | undefined;
+    setTabSwitchNotice: (message: string | undefined) => void;
+    handleCreateThread: (input: {
+        workspaceFingerprint: string;
+        workspaceAbsolutePath: string;
+        title: string;
+        topLevelTab: TopLevelTab;
+        providerId?: RuntimeProviderId;
+        modelId?: string;
+    }) => Promise<import('@/web/components/conversation/sidebar/sidebarTypes').ThreadEntrySubmitResult>;
+}
+
+export interface ShellWorkspaceCompositionInput {
+    shellViewModel: ConversationViewModel;
+    queries: ConversationQueries;
+    streamState: RuntimeStreamConnectionState;
+    streamErrorMessage: string | undefined;
+    tabSwitchNotice: string | undefined;
+    topLevelTab: TopLevelTab;
+    isSidebarCollapsed: boolean;
+    onToggleSidebarCollapsed: () => void;
+    onTopLevelTabChange: (nextTab: TopLevelTab) => void;
+    panel: import('@/web/components/conversation/sessions/workspace/workspacePanelModel').SessionWorkspacePanelProps;
+}
+
+export interface ShellDialogCompositionInput {
+    messageEditDialogProps: MessageEditDialogProps;
+    branchWorkflowDialogProps: BranchWorkflowDialogProps;
 }

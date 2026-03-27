@@ -74,7 +74,7 @@ function ProfileManagementScreen({
     controller: ReturnType<typeof useProfileSettingsController>;
     activeProfileId: string;
 }) {
-    const selectedProfile = controller.selectedProfile;
+    const selectedProfile = controller.library.selectedProfile;
     if (!selectedProfile) {
         return null;
     }
@@ -85,14 +85,14 @@ function ProfileManagementScreen({
                 eyebrow='Profiles'
                 title='Profile Management'
                 description='Rename, duplicate, activate, delete, and create profiles without nesting another persistent rail inside Settings.'
-                selectedProfileId={controller.selectedProfileId}
-                profiles={controller.profiles}
+                selectedProfileId={controller.selection.selectedProfileId}
+                profiles={controller.selection.profiles}
                 onSelectProfile={(profileId) => {
-                    controller.setSelectedProfileId(profileId);
+                    controller.selection.setSelectedProfileId(profileId);
                 }}
             />
 
-            <SettingsFeedbackBanner message={controller.feedbackMessage} tone={controller.feedbackTone} />
+            <SettingsFeedbackBanner message={controller.feedback.message} tone={controller.feedback.tone} />
 
             <section className='border-border/70 bg-card/55 space-y-4 rounded-[24px] border p-5'>
                 <div className='space-y-1'>
@@ -111,9 +111,9 @@ function ProfileManagementScreen({
                         id='profile-rename-input'
                         name='profileRename'
                         type='text'
-                        value={controller.renameValue}
+                        value={controller.library.renameValue}
                         onChange={(event) => {
-                            controller.setRenameValue(event.target.value);
+                            controller.library.setRenameValue(event.target.value);
                         }}
                         className='border-border bg-background h-10 rounded-xl border px-3 text-sm'
                         autoComplete='off'
@@ -124,12 +124,12 @@ function ProfileManagementScreen({
                         size='sm'
                         variant='outline'
                         disabled={
-                            controller.renameMutation.isPending ||
-                            controller.renameValue.trim().length === 0 ||
-                            controller.renameValue.trim() === selectedProfile.name
+                            controller.library.renameMutation.isPending ||
+                            controller.library.renameValue.trim().length === 0 ||
+                            controller.library.renameValue.trim() === selectedProfile.name
                         }
                         onClick={() => {
-                            void controller.renameProfile();
+                            void controller.library.renameProfile();
                         }}>
                         Rename
                     </Button>
@@ -137,9 +137,9 @@ function ProfileManagementScreen({
                         type='button'
                         size='sm'
                         variant='outline'
-                        disabled={controller.duplicateMutation.isPending}
+                        disabled={controller.library.duplicateMutation.isPending}
                         onClick={() => {
-                            void controller.duplicateProfile();
+                            void controller.library.duplicateProfile();
                         }}>
                         Duplicate
                     </Button>
@@ -150,9 +150,9 @@ function ProfileManagementScreen({
                         type='button'
                         size='sm'
                         variant='outline'
-                        disabled={controller.setActiveMutation.isPending || selectedProfile.id === activeProfileId}
+                        disabled={controller.library.setActiveMutation.isPending || selectedProfile.id === activeProfileId}
                         onClick={() => {
-                            void controller.activateProfile();
+                            void controller.library.activateProfile();
                         }}>
                         {selectedProfile.id === activeProfileId ? 'Active' : 'Set Active'}
                     </Button>
@@ -161,14 +161,14 @@ function ProfileManagementScreen({
                         type='button'
                         size='sm'
                         variant='outline'
-                        disabled={controller.cannotDeleteLastProfile || controller.deleteMutation.isPending}
+                        disabled={controller.library.cannotDeleteLastProfile || controller.library.deleteMutation.isPending}
                         onClick={() => {
-                            controller.setConfirmDeleteOpen(true);
+                            controller.library.setConfirmDeleteOpen(true);
                         }}>
                         Delete
                     </Button>
                     <span className='text-muted-foreground text-xs'>
-                        {controller.cannotDeleteLastProfile
+                        {controller.library.cannotDeleteLastProfile
                             ? 'Cannot delete the last remaining profile.'
                             : 'Deletion removes local profile-scoped data.'}
                     </span>
@@ -176,11 +176,11 @@ function ProfileManagementScreen({
             </section>
 
             <ProfileCreateSection
-                value={controller.newProfileName}
-                isPending={controller.createMutation.isPending}
-                onValueChange={controller.setNewProfileName}
+                value={controller.library.newProfileName}
+                isPending={controller.library.createMutation.isPending}
+                onValueChange={controller.library.setNewProfileName}
                 onCreate={() => {
-                    void controller.createProfile();
+                    void controller.library.createProfile();
                 }}
             />
         </div>
@@ -188,33 +188,20 @@ function ProfileManagementScreen({
 }
 
 function ProfileExecutionScreen({ controller }: { controller: ReturnType<typeof useProfileSettingsController> }) {
-    const executionPreset =
-        controller.executionPresetQuery.data?.preset === 'privacy' ||
-        controller.executionPresetQuery.data?.preset === 'standard' ||
-        controller.executionPresetQuery.data?.preset === 'yolo'
-            ? controller.executionPresetQuery.data.preset
-            : 'standard';
-    const editPreference =
-        controller.editPreferenceQuery.data?.value === 'ask' ||
-        controller.editPreferenceQuery.data?.value === 'truncate' ||
-        controller.editPreferenceQuery.data?.value === 'branch'
-            ? controller.editPreferenceQuery.data.value
-            : 'ask';
-
     return (
         <div className='space-y-5'>
             <ProfileSectionHeader
                 eyebrow='Profiles'
                 title='Execution Defaults'
                 description='Keep profile-level runtime approvals and edit-flow defaults together instead of burying them in profile management.'
-                selectedProfileId={controller.selectedProfileId}
-                profiles={controller.profiles}
+                selectedProfileId={controller.selection.selectedProfileId}
+                profiles={controller.selection.profiles}
                 onSelectProfile={(profileId) => {
-                    controller.setSelectedProfileId(profileId);
+                    controller.selection.setSelectedProfileId(profileId);
                 }}
             />
 
-            <SettingsFeedbackBanner message={controller.feedbackMessage} tone={controller.feedbackTone} />
+            <SettingsFeedbackBanner message={controller.feedback.message} tone={controller.feedback.tone} />
 
             <section className='border-border/70 bg-card/55 space-y-4 rounded-[24px] border p-5'>
                 <div className='space-y-1'>
@@ -226,15 +213,15 @@ function ProfileExecutionScreen({ controller }: { controller: ReturnType<typeof 
                 <select
                     aria-label='Execution preset'
                     className='border-border bg-background h-10 w-full max-w-sm rounded-xl border px-3 text-sm'
-                    value={executionPreset}
-                    disabled={controller.setExecutionPresetMutation.isPending}
+                    value={controller.preferences.executionPreset}
+                    disabled={controller.preferences.setExecutionPresetMutation.isPending}
                     onChange={(event) => {
                         const nextPreset = event.target.value;
                         if (nextPreset !== 'privacy' && nextPreset !== 'standard' && nextPreset !== 'yolo') {
                             return;
                         }
 
-                        void controller.updateExecutionPreset(nextPreset);
+                        void controller.preferences.updateExecutionPreset(nextPreset);
                     }}>
                     <option value='privacy'>Privacy: ask on every tool</option>
                     <option value='standard'>Standard: allow safe workspace reads</option>
@@ -252,15 +239,15 @@ function ProfileExecutionScreen({ controller }: { controller: ReturnType<typeof 
                 <select
                     aria-label='Conversation edit behavior'
                     className='border-border bg-background h-10 w-full max-w-sm rounded-xl border px-3 text-sm'
-                    value={editPreference}
-                    disabled={controller.setEditPreferenceMutation.isPending}
+                    value={controller.preferences.editPreference}
+                    disabled={controller.preferences.setEditPreferenceMutation.isPending}
                     onChange={(event) => {
                         const nextValue = event.target.value;
                         if (nextValue !== 'ask' && nextValue !== 'truncate' && nextValue !== 'branch') {
                             return;
                         }
 
-                        void controller.updateEditPreference(nextValue);
+                        void controller.preferences.updateEditPreference(nextValue);
                     }}>
                     <option value='ask'>Ask every time</option>
                     <option value='truncate'>Always truncate</option>
@@ -276,26 +263,20 @@ function ProfileConversationNamingScreen({
 }: {
     controller: ReturnType<typeof useProfileSettingsController>;
 }) {
-    const threadTitleMode =
-        controller.threadTitlePreferenceQuery.data?.mode === 'template' ||
-        controller.threadTitlePreferenceQuery.data?.mode === 'ai_optional'
-            ? controller.threadTitlePreferenceQuery.data.mode
-            : 'template';
-
     return (
         <div className='space-y-5'>
             <ProfileSectionHeader
                 eyebrow='Profiles'
                 title='Conversation Naming'
                 description='Control how new conversation names are generated. The future utility-model surface will replace the raw model override below.'
-                selectedProfileId={controller.selectedProfileId}
-                profiles={controller.profiles}
+                selectedProfileId={controller.selection.selectedProfileId}
+                profiles={controller.selection.profiles}
                 onSelectProfile={(profileId) => {
-                    controller.setSelectedProfileId(profileId);
+                    controller.selection.setSelectedProfileId(profileId);
                 }}
             />
 
-            <SettingsFeedbackBanner message={controller.feedbackMessage} tone={controller.feedbackTone} />
+            <SettingsFeedbackBanner message={controller.feedback.message} tone={controller.feedback.tone} />
 
             <section className='border-border/70 bg-card/55 space-y-4 rounded-[24px] border p-5'>
                 <div className='space-y-1'>
@@ -308,15 +289,15 @@ function ProfileConversationNamingScreen({
                 <select
                     aria-label='Conversation naming mode'
                     className='border-border bg-background h-10 w-full max-w-sm rounded-xl border px-3 text-sm'
-                    value={threadTitleMode}
-                    disabled={controller.setThreadTitlePreferenceMutation.isPending}
+                    value={controller.preferences.threadTitleMode}
+                    disabled={controller.preferences.setThreadTitlePreferenceMutation.isPending}
                     onChange={(event) => {
                         const nextMode = event.target.value;
                         if (nextMode !== 'template' && nextMode !== 'ai_optional') {
                             return;
                         }
 
-                        void controller.updateThreadTitleMode(nextMode);
+                        void controller.preferences.updateThreadTitleMode(nextMode);
                     }}>
                     <option value='template'>Template only</option>
                     <option value='ai_optional'>Template + optional AI refine</option>
@@ -328,9 +309,9 @@ function ProfileConversationNamingScreen({
                         id='thread-title-model-input'
                         name='threadTitleAiModel'
                         type='text'
-                        value={controller.threadTitleAiModelInput}
+                        value={controller.preferences.threadTitleAiModelInput}
                         onChange={(event) => {
-                            controller.setThreadTitleAiModelInput(event.target.value);
+                            controller.preferences.setThreadTitleAiModelInput(event.target.value);
                         }}
                         className='border-border bg-background h-10 w-full max-w-sm rounded-xl border px-3 text-sm'
                         autoComplete='off'
@@ -342,11 +323,11 @@ function ProfileConversationNamingScreen({
                     size='sm'
                     variant='outline'
                     disabled={
-                        controller.setThreadTitlePreferenceMutation.isPending ||
-                        controller.threadTitleAiModelInput.trim().length === 0
+                        controller.preferences.setThreadTitlePreferenceMutation.isPending ||
+                        controller.preferences.threadTitleAiModelInput.trim().length === 0
                     }
                     onClick={() => {
-                        void controller.saveThreadTitleAiModel();
+                        void controller.preferences.saveThreadTitleAiModel();
                     }}>
                     Save AI Model
                 </Button>
@@ -404,17 +385,17 @@ export function ProfileSettingsView({
             </div>
 
             <ConfirmDialog
-                open={controller.confirmDeleteOpen}
+                open={controller.library.confirmDeleteOpen}
                 title='Delete Profile'
                 message='Delete this profile and all local profile-scoped runtime data? This cannot be undone.'
                 confirmLabel='Delete profile'
                 destructive
-                busy={controller.deleteMutation.isPending}
+                busy={controller.library.deleteMutation.isPending}
                 onCancel={() => {
-                    controller.setConfirmDeleteOpen(false);
+                    controller.library.setConfirmDeleteOpen(false);
                 }}
                 onConfirm={() => {
-                    void controller.deleteProfile();
+                    void controller.library.deleteProfile();
                 }}
             />
         </section>

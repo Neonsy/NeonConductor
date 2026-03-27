@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-interface MessageEditDialogProps {
+export interface MessageEditDialogProps {
     open: boolean;
     initialText: string;
     preferredResolution: 'ask' | 'truncate' | 'branch';
