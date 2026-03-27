@@ -6,9 +6,7 @@ import { useConversationShellBranchWorkflowFlow } from '@/web/components/convers
 import { useConversationShellEditFlow } from '@/web/components/conversation/hooks/useConversationShellEditFlow';
 import { useConversationShellRoutingBadge } from '@/web/components/conversation/hooks/useConversationShellRoutingBadge';
 import { buildConversationPlanOrchestrator } from '@/web/components/conversation/shell/composition/buildConversationPlanOrchestrator';
-import { buildConversationWorkspacePanelProps } from '@/web/components/conversation/shell/composition/buildConversationWorkspacePanelProps';
-import { buildConversationWorkspacePanels } from '@/web/components/conversation/shell/composition/buildConversationWorkspacePanels';
-import { buildConversationWorkspaceSectionState } from '@/web/components/conversation/shell/composition/buildConversationWorkspaceSectionState';
+import { buildConversationWorkspaceProjection } from '@/web/components/conversation/shell/composition/buildConversationWorkspaceProjection';
 import { setOrchestratorLatestCache } from '@/web/components/conversation/shell/planCache';
 import { useConversationShellSync } from '@/web/components/conversation/shell/useConversationShellSync';
 import type { UseConversationShellViewControllersInput } from '@/web/components/conversation/shell/useConversationShellViewControllers.types';
@@ -25,7 +23,7 @@ import {
 import type { RunRecord, SessionSummaryRecord, ThreadListRecord } from '@/app/backend/persistence/types';
 
 
-import type { RuntimeProviderId, TopLevelTab } from '@/shared/contracts';
+import type { EntityId, RuntimeProviderId, TopLevelTab } from '@/shared/contracts';
 import { DEFAULT_COMPOSER_MAX_IMAGE_ATTACHMENTS_PER_MESSAGE } from '@/shared/contracts';
 import type { ResolvedContextState } from '@/shared/contracts/types/context';
 
@@ -267,31 +265,121 @@ export function useConversationShellViewControllers(input: UseConversationShellV
         }
     );
     const providerControl = queries.shellBootstrapQuery.data?.providerControl;
-    const workspaceSectionState = buildConversationWorkspaceSectionState({
-        topLevelTab,
-        modeKey,
-        shellViewModel,
-        queries,
-        runTargetState,
-    });
-    const workspacePanels = buildConversationWorkspacePanels({
+    const workspacePanel = buildConversationWorkspaceProjection({
         profileId,
-        topLevelTab,
+        profiles,
+        selectedProfileId,
         selectedSessionId,
         selectedRunId,
+        topLevelTab,
         modeKey,
+        modes,
+        reasoningEffort: effectiveReasoningEffort,
+        selectedModelSupportsReasoning,
+        ...(supportedReasoningEfforts !== undefined ? { supportedReasoningEfforts } : {}),
+        composerModelOptions,
         shellViewModel,
         queries,
         mutations,
-        planOrchestrator,
+        composer,
+        sessionActions,
+        editFlow,
+        branchFromMessage: branchWorkflowFlow.onBranchFromMessage,
         workspaceActions,
-        onSelectThreadId: uiState.setSelectedThreadId,
-        onSelectSessionId: uiState.setSelectedSessionId,
-        onSelectRunId: uiState.setSelectedRunId,
-        onTopLevelTabChange,
+        planOrchestrator,
+        selectedProviderId: selectedComposerProviderId,
+        selectedModelId: selectedComposerModelId,
+        canAttachImages,
+        ...(imageAttachmentBlockedReason ? { imageAttachmentBlockedReason } : {}),
+        ...(routingBadge !== undefined ? { routingBadge } : {}),
+        ...(selectedModelCompatibilityState ? { selectedModelCompatibilityState } : {}),
+        ...(selectedModelCompatibilityReason ? { selectedModelCompatibilityReason } : {}),
+        ...(contextStateQuery.data ? { contextState: contextStateQuery.data } : {}),
+        hasSelectedSession,
+        maxImageAttachmentsPerMessage:
+            composerMediaSettings?.maxImageAttachmentsPerMessage ??
+            DEFAULT_COMPOSER_MAX_IMAGE_ATTACHMENTS_PER_MESSAGE,
+        onProfileChange,
+        onModeChange,
+        onReasoningEffortChange: setRequestedReasoningEffort,
+        onSelectRun: uiState.setSelectedRunId,
+        onProviderChange: (providerId: string) => {
+            if (!isProviderId(providerId)) {
+                return;
+            }
+            const nextModelId =
+                composerModelOptions.find(
+                    (option) => option.providerId === providerId && option.compatibilityState === 'compatible'
+                )?.id ?? composerModelOptions.find((option) => option.providerId === providerId)?.id;
+            if (!selectedSessionId) {
+                setMainViewDraftTarget({
+                    providerId,
+                    ...(nextModelId ? { modelId: nextModelId } : {}),
+                });
+                return;
+            }
+            sessionActions.onProviderChange(providerId, nextModelId);
+        },
+        onModelChange: (modelId: string) => {
+            if (!selectedSessionId) {
+                const nextProviderId = runTargetState.selectedProviderIdForComposer;
+                setMainViewDraftTarget({
+                    ...(nextProviderId ? { providerId: nextProviderId } : {}),
+                    modelId,
+                });
+                return;
+            }
+            if (!runTargetState.selectedProviderIdForComposer) {
+                return;
+            }
+            sessionActions.onModelChange(runTargetState.selectedProviderIdForComposer, modelId);
+        },
+        onCompactContext: () => {
+            const currentSessionId = selectedSessionId;
+            if (!hasSelectedSession || !currentSessionId || contextStateQueryInput === skipToken) {
+                return Promise.resolve({
+                    tone: 'error' as const,
+                    message: 'Context compaction is unavailable because no session is selected.',
+                });
+            }
+
+            return mutations.compactSessionMutation
+                .mutateAsync({
+                    profileId,
+                    sessionId: currentSessionId,
+                    providerId: contextStateQueryInput.providerId,
+                    modelId: contextStateQueryInput.modelId,
+                    topLevelTab,
+                    modeKey,
+                    ...(shellViewModel.selectedThread?.workspaceFingerprint
+                        ? { workspaceFingerprint: shellViewModel.selectedThread.workspaceFingerprint }
+                        : {}),
+                })
+                .then((result: { resolvedState: ResolvedContextState }) => {
+                    setResolvedContextStateCache({
+                        utils,
+                        queryInput: contextStateQueryInput,
+                        state: result.resolvedState,
+                    });
+                    return {
+                        tone: 'success' as const,
+                        message: 'Context compacted for the current session.',
+                    };
+                })
+                .catch((error: unknown) => ({
+                    tone: 'error' as const,
+                    message: error instanceof Error ? error.message : 'Context compaction failed.',
+                }));
+        },
+        focusComposerRequestKey,
         executionStrategy,
         onExecutionStrategyChange: handleExecutionStrategyChange,
-        ...(contextStateQuery.data ? { contextState: contextStateQuery.data } : {}),
+        onSelectChildThread: (threadId: EntityId<'thr'>) => {
+            onTopLevelTabChange('agent');
+            uiState.setSelectedThreadId(threadId);
+            uiState.setSelectedSessionId(undefined);
+            uiState.setSelectedRunId(undefined);
+        },
     });
 
     return {
@@ -360,115 +448,7 @@ export function useConversationShellViewControllers(input: UseConversationShellV
                 topLevelTab,
                 isSidebarCollapsed,
             },
-            panel: buildConversationWorkspacePanelProps({
-                profileId,
-                profiles,
-                selectedProfileId,
-                selectedSessionId,
-                selectedRunId,
-                topLevelTab,
-                modeKey,
-                modes,
-                reasoningEffort: effectiveReasoningEffort,
-                selectedModelSupportsReasoning,
-                ...(supportedReasoningEfforts !== undefined ? { supportedReasoningEfforts } : {}),
-                composerModelOptions,
-                shellViewModel,
-                queries,
-                mutations,
-                composer,
-                sessionActions,
-                editFlow,
-                branchFromMessage: branchWorkflowFlow.onBranchFromMessage,
-                workspaceActions,
-                workspaceSectionState,
-                workspacePanels,
-                selectedProviderId: selectedComposerProviderId,
-                selectedModelId: selectedComposerModelId,
-                canAttachImages,
-                ...(imageAttachmentBlockedReason ? { imageAttachmentBlockedReason } : {}),
-                ...(routingBadge !== undefined ? { routingBadge } : {}),
-                ...(selectedModelCompatibilityState ? { selectedModelCompatibilityState } : {}),
-                ...(selectedModelCompatibilityReason ? { selectedModelCompatibilityReason } : {}),
-                ...(contextStateQuery.data ? { contextState: contextStateQuery.data } : {}),
-                hasSelectedSession,
-                maxImageAttachmentsPerMessage:
-                    composerMediaSettings?.maxImageAttachmentsPerMessage ??
-                    DEFAULT_COMPOSER_MAX_IMAGE_ATTACHMENTS_PER_MESSAGE,
-                onProfileChange,
-                onModeChange,
-                onReasoningEffortChange: setRequestedReasoningEffort,
-                onSelectRun: uiState.setSelectedRunId,
-                onProviderChange: (providerId: string) => {
-                    if (!isProviderId(providerId)) {
-                        return;
-                    }
-                    const nextModelId =
-                        composerModelOptions.find(
-                            (option) => option.providerId === providerId && option.compatibilityState === 'compatible'
-                        )?.id ?? composerModelOptions.find((option) => option.providerId === providerId)?.id;
-                    if (!selectedSessionId) {
-                        setMainViewDraftTarget({
-                            providerId,
-                            ...(nextModelId ? { modelId: nextModelId } : {}),
-                        });
-                        return;
-                    }
-                    sessionActions.onProviderChange(providerId, nextModelId);
-                },
-                onModelChange: (modelId: string) => {
-                    if (!selectedSessionId) {
-                        const nextProviderId = runTargetState.selectedProviderIdForComposer;
-                        setMainViewDraftTarget({
-                            ...(nextProviderId ? { providerId: nextProviderId } : {}),
-                            modelId,
-                        });
-                        return;
-                    }
-                    if (!runTargetState.selectedProviderIdForComposer) {
-                        return;
-                    }
-                    sessionActions.onModelChange(runTargetState.selectedProviderIdForComposer, modelId);
-                },
-                onCompactContext: () => {
-                    const currentSessionId = selectedSessionId;
-                    if (!hasSelectedSession || !currentSessionId || contextStateQueryInput === skipToken) {
-                        return Promise.resolve({
-                            tone: 'error' as const,
-                            message: 'Context compaction is unavailable because no session is selected.',
-                        });
-                    }
-
-                    return mutations.compactSessionMutation
-                        .mutateAsync({
-                            profileId,
-                            sessionId: currentSessionId,
-                            providerId: contextStateQueryInput.providerId,
-                            modelId: contextStateQueryInput.modelId,
-                            topLevelTab,
-                            modeKey,
-                            ...(shellViewModel.selectedThread?.workspaceFingerprint
-                                ? { workspaceFingerprint: shellViewModel.selectedThread.workspaceFingerprint }
-                                : {}),
-                        })
-                        .then((result: { resolvedState: ResolvedContextState }) => {
-                            setResolvedContextStateCache({
-                                utils,
-                                queryInput: contextStateQueryInput,
-                                state: result.resolvedState,
-                            });
-                            return {
-                                tone: 'success' as const,
-                                message: 'Context compacted for the current session.',
-                            };
-                        })
-                        .catch((error: unknown) => ({
-                            tone: 'error' as const,
-                            message: error instanceof Error ? error.message : 'Context compaction failed.',
-                        }));
-                },
-                focusComposerRequestKey,
-            }),
+            panel: workspacePanel,
             onToggleSidebar: onToggleSidebarCollapsed,
             onTopLevelTabChange,
         },

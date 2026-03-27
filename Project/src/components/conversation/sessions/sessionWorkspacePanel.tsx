@@ -1,210 +1,90 @@
-import { PendingPermissionsPanel } from '@/web/components/conversation/panels/pendingPermissionsPanel';
-import { RunChangeSummaryPanel } from '@/web/components/conversation/panels/runChangeSummaryPanel';
-import { WorkspaceStatusPanel } from '@/web/components/conversation/panels/workspaceStatusPanel';
-import type { SessionWorkspacePanelProps } from '@/web/components/conversation/sessions/workspace/workspacePanelModel';
+import {
+    buildWorkspaceShellProjection,
+    type SessionWorkspacePanelProps,
+} from '@/web/components/conversation/sessions/workspace/workspacePanelModel';
 import { WorkspacePrimaryColumn } from '@/web/components/conversation/sessions/workspace/workspacePrimaryColumn';
 import { WorkspaceSelectionHeader } from '@/web/components/conversation/sessions/workspace/workspaceSelectionHeader';
 import { WorkspaceShell } from '@/web/components/conversation/sessions/workspace/workspaceShell';
-import type { WorkspaceInspectorSection } from '@/web/components/conversation/sessions/workspaceShellModel';
 
 export type { SessionWorkspacePanelProps } from '@/web/components/conversation/sessions/workspace/workspacePanelModel';
 
-export function SessionWorkspacePanel({
-    profileId,
-    profiles,
-    selectedProfileId,
-    sessions,
-    runs,
-    messages,
-    partsByMessageId,
-    selectedSessionId,
-    selectedRunId,
-    selectedWorkspaceFingerprint,
-    selectedSandboxId,
-    optimisticUserMessage,
-    executionPreset,
-    workspaceScope,
-    pendingPermissions,
-    permissionWorkspaces,
-    pendingImages,
-    isCreatingSession,
-    isStartingRun,
-    isResolvingPermission,
-    canCreateSession,
-    selectedProviderId,
-    selectedModelId,
-    topLevelTab,
-    activeModeKey,
-    modes,
-    reasoningEffort,
-    selectedModelSupportsReasoning,
-    supportedReasoningEfforts,
-    maxImageAttachmentsPerMessage,
-    canAttachImages,
-    imageAttachmentBlockedReason,
-    routingBadge,
-    selectedModelCompatibilityState,
-    selectedModelCompatibilityReason,
-    selectedProviderStatus,
-    selectedModelLabel,
-    selectedUsageSummary,
-    registrySummary,
-    agentContextSummary,
-    runDiffOverview,
-    modelOptions,
-    runErrorMessage,
-    contextState,
-    attachedRules,
-    missingAttachedRuleKeys,
-    attachedSkills,
-    missingAttachedSkillKeys,
-    canCompactContext,
-    isCompactingContext,
-    executionEnvironmentPanel,
-    modeExecutionPanel,
-    contextAssetsPanel,
-    memoryPanel,
-    diffCheckpointPanel,
-    promptResetKey,
-    focusComposerRequestKey,
-    controlsDisabled,
-    submitDisabled,
-    onSelectSession,
-    onSelectRun,
-    onProfileChange,
-    onProviderChange,
-    onModelChange,
-    onReasoningEffortChange,
-    onModeChange,
-    onCreateSession,
-    onPromptEdited,
-    onAddImageFiles,
-    onRemovePendingImage,
-    onRetryPendingImage,
-    onSubmitPrompt,
-    onCompactContext,
-    onResolvePermission,
-    onEditMessage,
-    onBranchFromMessage,
-}: SessionWorkspacePanelProps) {
-    const selectedSession = sessions.find((session) => session.id === selectedSessionId) ?? sessions[0];
-    const selectedRun = runs.find((run) => run.id === selectedRunId) ?? runs[0];
-    const pendingPermissionCount = pendingPermissions.length;
-    const compactConnectionLabel = selectedProviderStatus
-        ? `${selectedProviderStatus.label} · ${selectedProviderStatus.authState.replaceAll('_', ' ')}`
-        : undefined;
-
-    const inspectorSections: WorkspaceInspectorSection[] = [
-        {
-            id: 'workspace-status',
-            label: 'Workspace status',
-            description: 'Run state, workspace scope, provider readiness, and local telemetry.',
-            content: (
-                <WorkspaceStatusPanel
-                    run={selectedRun}
-                    executionPreset={executionPreset}
-                    workspaceScope={workspaceScope}
-                    provider={selectedProviderStatus}
-                    modelLabel={selectedModelLabel}
-                    usageSummary={selectedUsageSummary}
-                    routingBadge={routingBadge}
-                    registrySummary={registrySummary}
-                    agentContextSummary={agentContextSummary}
-                />
-            ),
-        },
-        ...(executionEnvironmentPanel
-            ? [
-                  {
-                      id: 'execution-environment',
-                      label: 'Execution environment',
-                      description: 'Workspace targeting and execution-scope details.',
-                      content: executionEnvironmentPanel,
-                  } satisfies WorkspaceInspectorSection,
-              ]
-            : []),
-        ...(modeExecutionPanel
-            ? [
-                  {
-                      id: 'plan-and-orchestration',
-                      label: 'Plan and orchestration',
-                      description: 'Plan approval, root orchestration strategy, and delegated worker lane status.',
-                      content: modeExecutionPanel,
-                  } satisfies WorkspaceInspectorSection,
-              ]
-            : []),
-        {
-            id: 'run-changes',
-            label: 'Run changes',
-            description: 'Diff summaries and run-level changes for the selected run.',
-            content: (
-                <RunChangeSummaryPanel
-                    {...(selectedRunId ? { selectedRunId } : {})}
-                    {...(runDiffOverview ? { overview: runDiffOverview } : {})}
-                />
-            ),
-        },
-        {
-            id: 'pending-permissions',
-            label: 'Pending permissions',
-            description: 'Approvals stay in the inspector until an action needs them.',
-            badge: pendingPermissionCount > 0 ? `${String(pendingPermissionCount)} waiting` : 'None waiting',
-            tone: pendingPermissionCount > 0 ? 'attention' : 'default',
-            content: (
-                <PendingPermissionsPanel
-                    requests={pendingPermissions}
-                    {...(permissionWorkspaces ? { workspaceByFingerprint: permissionWorkspaces } : {})}
-                    busy={isResolvingPermission}
-                    onResolve={onResolvePermission}
-                />
-            ),
-        },
-        ...(contextAssetsPanel
-            ? [
-                  {
-                      id: 'context-assets',
-                      label: 'Context assets',
-                      description: 'Preset-aware manual rules and explicit skill context for this session.',
-                      content: contextAssetsPanel,
-                  } satisfies WorkspaceInspectorSection,
-              ]
-            : []),
-        ...(memoryPanel
-            ? [
-                  {
-                      id: 'memory',
-                      label: 'Memory',
-                      description: 'Projected memory files, reviewable edits, and scope-aware memory status.',
-                      content: memoryPanel,
-                  } satisfies WorkspaceInspectorSection,
-              ]
-            : []),
-        ...(diffCheckpointPanel
-            ? [
-                  {
-                      id: 'checkpoints',
-                      label: 'Checkpoints',
-                      description: 'Checkpoint and diff recovery data for the current session.',
-                      content: diffCheckpointPanel,
-                  } satisfies WorkspaceInspectorSection,
-              ]
-            : []),
-    ];
+export function SessionWorkspacePanel(input: SessionWorkspacePanelProps) {
+    const workspaceShell = input.workspaceShell ?? buildWorkspaceShellProjection(input);
+    const {
+        profileId,
+        profiles,
+        selectedProfileId,
+        selectedWorkspaceFingerprint,
+        selectedSandboxId,
+        messages,
+        partsByMessageId,
+        runs,
+        selectedSessionId,
+        optimisticUserMessage,
+        pendingImages,
+        isStartingRun,
+        selectedProviderId,
+        selectedModelId,
+        topLevelTab,
+        activeModeKey,
+        modes,
+        reasoningEffort,
+        selectedModelSupportsReasoning,
+        supportedReasoningEfforts,
+        maxImageAttachmentsPerMessage,
+        canAttachImages,
+        imageAttachmentBlockedReason,
+        routingBadge,
+        selectedModelCompatibilityState,
+        selectedModelCompatibilityReason,
+        selectedProviderStatus,
+        modelOptions,
+        runErrorMessage,
+        contextState,
+        attachedRules,
+        missingAttachedRuleKeys,
+        attachedSkills,
+        missingAttachedSkillKeys,
+        canCompactContext,
+        isCompactingContext,
+        promptResetKey,
+        focusComposerRequestKey,
+        controlsDisabled,
+        submitDisabled,
+        onSelectSession,
+        onSelectRun,
+        onProfileChange,
+        onProviderChange,
+        onModelChange,
+        onReasoningEffortChange,
+        onModeChange,
+        onCreateSession,
+        onPromptEdited,
+        onAddImageFiles,
+        onRemovePendingImage,
+        onRetryPendingImage,
+        onSubmitPrompt,
+        onCompactContext,
+        onEditMessage,
+        onBranchFromMessage,
+    } = input;
 
     return (
         <WorkspaceShell
-            inspectorSections={inspectorSections}
+            inspectorSections={workspaceShell.inspector.sections}
             renderHeader={({ isInspectorOpen, toggleInspector }) => (
                 <WorkspaceSelectionHeader
-                    sessions={sessions}
-                    runs={runs}
-                    selectedSession={selectedSession}
-                    selectedRun={selectedRun}
-                    {...(compactConnectionLabel ? { compactConnectionLabel } : {})}
-                    {...(routingBadge ? { routingBadge } : {})}
-                    pendingPermissionCount={pendingPermissionCount}
-                    canCreateSession={canCreateSession}
-                    isCreatingSession={isCreatingSession}
+                    sessions={workspaceShell.header.sessions}
+                    runs={workspaceShell.header.runs}
+                    selectedSession={workspaceShell.header.selectedSession}
+                    selectedRun={workspaceShell.header.selectedRun}
+                    {...(workspaceShell.header.compactConnectionLabel
+                        ? { compactConnectionLabel: workspaceShell.header.compactConnectionLabel }
+                        : {})}
+                    {...(workspaceShell.header.routingBadge ? { routingBadge: workspaceShell.header.routingBadge } : {})}
+                    pendingPermissionCount={workspaceShell.header.pendingPermissionCount}
+                    canCreateSession={workspaceShell.header.canCreateSession}
+                    isCreatingSession={workspaceShell.header.isCreatingSession}
                     isInspectorOpen={isInspectorOpen}
                     onCreateSession={onCreateSession}
                     onSelectSession={onSelectSession}

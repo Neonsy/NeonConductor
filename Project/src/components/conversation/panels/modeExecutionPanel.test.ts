@@ -3,7 +3,10 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ModeExecutionPanel } from '@/web/components/conversation/panels/modeExecutionPanel';
-import { resolveModeExecutionDraftState } from '@/web/components/conversation/panels/modeExecutionPanelState';
+import {
+    resolveModeExecutionDraftState,
+    resolveModeExecutionOrchestratorPanelState,
+} from '@/web/components/conversation/panels/modeExecutionPanelState';
 
 describe('resolveModeExecutionDraftState', () => {
     it('keeps keyed plan drafts instead of replacing them with refreshed plan data', () => {
@@ -88,5 +91,55 @@ describe('resolveModeExecutionDraftState', () => {
         expect(html).toContain('Parallel');
         expect(html).toContain('Open worker lane');
         expect(html).toContain('Active run run_1');
+    });
+
+    it('resolves an explicit orchestrator-facing panel model from the raw inputs', () => {
+        const panelState = resolveModeExecutionOrchestratorPanelState({
+            topLevelTab: 'orchestrator',
+            selectedExecutionStrategy: 'delegate',
+            canConfigureExecutionStrategy: true,
+            orchestratorView: {
+                run: {
+                    id: 'orch_1',
+                    status: 'running',
+                    executionStrategy: 'parallel',
+                },
+                steps: [
+                    {
+                        id: 'step_1',
+                        sequence: 1,
+                        description: 'Delegate to worker lane',
+                        status: 'running',
+                        childThreadId: 'thr_1',
+                        childSessionId: 'sess_1',
+                        activeRunId: 'run_1',
+                    },
+                ],
+            },
+        });
+
+        expect(panelState).toEqual({
+            activeExecutionStrategy: 'parallel',
+            canAbortOrchestrator: true,
+            canConfigureExecutionStrategy: true,
+            isVisible: true,
+            isRootOrchestratorThread: true,
+            runId: 'orch_1',
+            runStatus: 'running',
+            runningStepCount: 1,
+            showStrategyControls: true,
+            steps: [
+                {
+                    id: 'step_1',
+                    sequence: 1,
+                    description: 'Delegate to worker lane',
+                    status: 'running',
+                    childThreadId: 'thr_1',
+                    childSessionId: 'sess_1',
+                    activeRunId: 'run_1',
+                    canOpenWorkerLane: true,
+                },
+            ],
+        });
     });
 });

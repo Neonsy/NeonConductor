@@ -22,7 +22,18 @@ import type {
     TopLevelTab,
 } from '@/shared/contracts';
 
+import { createElement } from 'react';
 import type { ReactNode } from 'react';
+
+import { PendingPermissionsPanel } from '@/web/components/conversation/panels/pendingPermissionsPanel';
+import { RunChangeSummaryPanel } from '@/web/components/conversation/panels/runChangeSummaryPanel';
+import { WorkspaceStatusPanel } from '@/web/components/conversation/panels/workspaceStatusPanel';
+import type {
+    WorkspaceHeaderModel,
+    WorkspaceInspectorModel,
+    WorkspaceInspectorSection,
+    WorkspaceShellProjection,
+} from '@/web/components/conversation/sessions/workspaceShellModel';
 
 export interface PendingImageView {
     clientId: string;
@@ -138,6 +149,7 @@ export interface SessionWorkspacePanelProps {
     contextAssetsPanel?: ReactNode;
     memoryPanel?: ReactNode;
     diffCheckpointPanel?: ReactNode;
+    workspaceShell?: WorkspaceShellProjection;
     promptResetKey?: number;
     focusComposerRequestKey?: number;
     controlsDisabled?: boolean;
@@ -169,4 +181,129 @@ export interface SessionWorkspacePanelProps {
     ) => void;
     onEditMessage?: (entry: MessageFlowMessage) => void;
     onBranchFromMessage?: (entry: MessageFlowMessage) => void;
+}
+
+export function buildWorkspaceHeaderModel(input: SessionWorkspacePanelProps): WorkspaceHeaderModel {
+    const selectedSession = input.sessions.find((session) => session.id === input.selectedSessionId) ?? input.sessions[0];
+    const selectedRun = input.runs.find((run) => run.id === input.selectedRunId) ?? input.runs[0];
+    const compactConnectionLabel = input.selectedProviderStatus
+        ? `${input.selectedProviderStatus.label} · ${input.selectedProviderStatus.authState.replaceAll('_', ' ')}`
+        : undefined;
+
+    return {
+        sessions: input.sessions,
+        runs: input.runs,
+        selectedSession,
+        selectedRun,
+        ...(compactConnectionLabel ? { compactConnectionLabel } : {}),
+        ...(input.routingBadge ? { routingBadge: input.routingBadge } : {}),
+        pendingPermissionCount: input.pendingPermissions.length,
+        canCreateSession: input.canCreateSession,
+        isCreatingSession: input.isCreatingSession,
+    };
+}
+
+export function buildWorkspaceInspectorModel(input: SessionWorkspacePanelProps): WorkspaceInspectorModel {
+    const header = buildWorkspaceHeaderModel(input);
+    const pendingPermissionCount = header.pendingPermissionCount;
+
+    return {
+        sections: [
+            {
+                id: 'workspace-status',
+                label: 'Workspace status',
+                description: 'Run state, workspace scope, provider readiness, and local telemetry.',
+                content: createElement(WorkspaceStatusPanel, {
+                    run: header.selectedRun,
+                    executionPreset: input.executionPreset,
+                    workspaceScope: input.workspaceScope,
+                    provider: input.selectedProviderStatus,
+                    modelLabel: input.selectedModelLabel,
+                    usageSummary: input.selectedUsageSummary,
+                    routingBadge: input.routingBadge,
+                    registrySummary: input.registrySummary,
+                    agentContextSummary: input.agentContextSummary,
+                }),
+            },
+            ...(input.executionEnvironmentPanel
+                ? [
+                      {
+                          id: 'execution-environment',
+                          label: 'Execution environment',
+                          description: 'Workspace targeting and execution-scope details.',
+                          content: input.executionEnvironmentPanel,
+                      } satisfies WorkspaceInspectorSection,
+                  ]
+                : []),
+            ...(input.modeExecutionPanel
+                ? [
+                      {
+                          id: 'plan-and-orchestration',
+                          label: 'Plan and orchestration',
+                          description: 'Plan approval, root orchestration strategy, and delegated worker lane status.',
+                          content: input.modeExecutionPanel,
+                      } satisfies WorkspaceInspectorSection,
+                  ]
+                : []),
+            {
+                id: 'run-changes',
+                label: 'Run changes',
+                description: 'Diff summaries and run-level changes for the selected run.',
+                content: createElement(RunChangeSummaryPanel, {
+                    ...(input.selectedRunId ? { selectedRunId: input.selectedRunId } : {}),
+                    ...(input.runDiffOverview ? { overview: input.runDiffOverview } : {}),
+                }),
+            },
+            {
+                id: 'pending-permissions',
+                label: 'Pending permissions',
+                description: 'Approvals stay in the inspector until an action needs them.',
+                badge: pendingPermissionCount > 0 ? `${String(pendingPermissionCount)} waiting` : 'None waiting',
+                tone: pendingPermissionCount > 0 ? 'attention' : 'default',
+                content: createElement(PendingPermissionsPanel, {
+                    requests: input.pendingPermissions,
+                    ...(input.permissionWorkspaces ? { workspaceByFingerprint: input.permissionWorkspaces } : {}),
+                    busy: input.isResolvingPermission,
+                    onResolve: input.onResolvePermission,
+                }),
+            },
+            ...(input.contextAssetsPanel
+                ? [
+                      {
+                          id: 'context-assets',
+                          label: 'Context assets',
+                          description: 'Preset-aware manual rules and explicit skill context for this session.',
+                          content: input.contextAssetsPanel,
+                      } satisfies WorkspaceInspectorSection,
+                  ]
+                : []),
+            ...(input.memoryPanel
+                ? [
+                      {
+                          id: 'memory',
+                          label: 'Memory',
+                          description: 'Projected memory files, reviewable edits, and scope-aware memory status.',
+                          content: input.memoryPanel,
+                      } satisfies WorkspaceInspectorSection,
+                  ]
+                : []),
+            ...(input.diffCheckpointPanel
+                ? [
+                      {
+                          id: 'checkpoints',
+                          label: 'Checkpoints',
+                          description: 'Checkpoint and diff recovery data for the current session.',
+                          content: input.diffCheckpointPanel,
+                      } satisfies WorkspaceInspectorSection,
+                  ]
+                : []),
+        ],
+    };
+}
+
+export function buildWorkspaceShellProjection(input: SessionWorkspacePanelProps): WorkspaceShellProjection {
+    return {
+        header: buildWorkspaceHeaderModel(input),
+        inspector: buildWorkspaceInspectorModel(input),
+    };
 }

@@ -1,4 +1,4 @@
-import type { EntityId } from '@/shared/contracts';
+import type { EntityId, OrchestratorExecutionStrategy, TopLevelTab } from '@/shared/contracts';
 
 interface PlanQuestionView {
     id: string;
@@ -26,6 +26,78 @@ export interface ModeExecutionDraftState {
     summaryDraft: string;
     itemsDraft: string;
     answerByQuestionId: Record<string, string>;
+}
+
+export interface ModeExecutionOrchestratorStepView {
+    id: EntityId<'step'>;
+    sequence: number;
+    description: string;
+    status: 'pending' | 'running' | 'completed' | 'failed' | 'aborted';
+    childThreadId?: EntityId<'thr'>;
+    childSessionId?: EntityId<'sess'>;
+    activeRunId?: EntityId<'run'>;
+    runId?: EntityId<'run'>;
+    canOpenWorkerLane: boolean;
+}
+
+export interface ModeExecutionOrchestratorPanelState {
+    activeExecutionStrategy: OrchestratorExecutionStrategy;
+    canAbortOrchestrator: boolean;
+    canConfigureExecutionStrategy: boolean;
+    isVisible: boolean;
+    isRootOrchestratorThread: boolean;
+    runId: EntityId<'orch'>;
+    runStatus: 'running' | 'completed' | 'aborted' | 'failed';
+    runningStepCount: number;
+    showStrategyControls: boolean;
+    steps: ModeExecutionOrchestratorStepView[];
+}
+
+export function resolveModeExecutionOrchestratorPanelState(input: {
+    topLevelTab: TopLevelTab;
+    selectedExecutionStrategy: OrchestratorExecutionStrategy;
+    canConfigureExecutionStrategy: boolean;
+    orchestratorView:
+        | {
+              run: {
+                  id: EntityId<'orch'>;
+                  status: 'running' | 'completed' | 'aborted' | 'failed';
+                  executionStrategy: OrchestratorExecutionStrategy;
+              };
+              steps: Array<{
+                  id: EntityId<'step'>;
+                  sequence: number;
+                  description: string;
+                  status: 'pending' | 'running' | 'completed' | 'failed' | 'aborted';
+                  childThreadId?: EntityId<'thr'>;
+                  childSessionId?: EntityId<'sess'>;
+                  activeRunId?: EntityId<'run'>;
+                  runId?: EntityId<'run'>;
+              }>;
+          }
+        | undefined;
+}): ModeExecutionOrchestratorPanelState | undefined {
+    if (input.topLevelTab !== 'orchestrator' || !input.orchestratorView) {
+        return undefined;
+    }
+
+    const activeExecutionStrategy = input.orchestratorView.run.executionStrategy;
+
+    return {
+        activeExecutionStrategy,
+        canAbortOrchestrator: input.orchestratorView.run.status === 'running',
+        canConfigureExecutionStrategy: input.canConfigureExecutionStrategy,
+        isVisible: true,
+        isRootOrchestratorThread: input.canConfigureExecutionStrategy,
+        runId: input.orchestratorView.run.id,
+        runStatus: input.orchestratorView.run.status,
+        runningStepCount: input.orchestratorView.steps.filter((step) => step.status === 'running').length,
+        showStrategyControls: input.canConfigureExecutionStrategy,
+        steps: input.orchestratorView.steps.map((step) => ({
+            ...step,
+            canOpenWorkerLane: Boolean(step.childThreadId),
+        })),
+    };
 }
 
 export function resolveModeExecutionDraftState(input: {

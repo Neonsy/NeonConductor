@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { MarkdownContent } from '@/web/components/content/markdown/markdownContent';
 import {
     resolveModeExecutionDraftState,
+    resolveModeExecutionOrchestratorPanelState,
     type ModeExecutionDraftState,
     type ModeExecutionPlanView,
 } from '@/web/components/conversation/panels/modeExecutionPanelState';
@@ -13,24 +14,7 @@ import type { EntityId, OrchestratorExecutionStrategy, TopLevelTab } from '@/sha
 
 type PlanView = ModeExecutionPlanView;
 
-interface OrchestratorView {
-    run: {
-        id: EntityId<'orch'>;
-        status: 'running' | 'completed' | 'aborted' | 'failed';
-        executionStrategy: OrchestratorExecutionStrategy;
-        activeStepIndex?: number;
-    };
-    steps: Array<{
-        id: EntityId<'step'>;
-        sequence: number;
-        description: string;
-        status: 'pending' | 'running' | 'completed' | 'failed' | 'aborted';
-        childThreadId?: EntityId<'thr'>;
-        childSessionId?: EntityId<'sess'>;
-        activeRunId?: EntityId<'run'>;
-        runId?: EntityId<'run'>;
-    }>;
-}
+type OrchestratorView = Parameters<typeof resolveModeExecutionOrchestratorPanelState>[0]['orchestratorView'];
 
 export interface ModeExecutionPanelProps {
     topLevelTab: TopLevelTab;
@@ -62,6 +46,12 @@ export function ModeExecutionPanel({
         activePlan,
         draftState,
     });
+    const orchestratorPanelState = resolveModeExecutionOrchestratorPanelState({
+        topLevelTab,
+        selectedExecutionStrategy,
+        canConfigureExecutionStrategy,
+        orchestratorView,
+    });
     const {
         isPlanMutating,
         isOrchestratorMutating,
@@ -85,9 +75,6 @@ export function ModeExecutionPanel({
         .filter((item) => item.length > 0)
         .map((item) => `- ${item}`)
         .join('\n');
-    const activeExecutionStrategy = orchestratorView?.run.executionStrategy ?? selectedExecutionStrategy;
-    const runningStepCount = orchestratorView?.steps.filter((step) => step.status === 'running').length ?? 0;
-
     return (
         <section className='border-border bg-card rounded-2xl border p-3'>
             {modeKey === 'plan' ? (
@@ -284,7 +271,7 @@ export function ModeExecutionPanel({
                 </div>
             ) : null}
 
-            {topLevelTab === 'orchestrator' && orchestratorView ? (
+            {orchestratorPanelState ? (
                 <div className='mt-3 space-y-2'>
                     <div className='flex items-center justify-between'>
                         <p className='text-sm font-semibold'>Orchestrator Run</p>
@@ -292,32 +279,34 @@ export function ModeExecutionPanel({
                             type='button'
                             size='sm'
                             variant='outline'
-                            disabled={isOrchestratorMutating || orchestratorView.run.status !== 'running'}
+                            disabled={
+                                isOrchestratorMutating || !orchestratorPanelState.canAbortOrchestrator
+                            }
                             onClick={() => {
-                                onAbortOrchestrator(orchestratorView.run.id);
+                                onAbortOrchestrator(orchestratorPanelState.runId);
                             }}>
                             Abort
                         </Button>
                     </div>
                     <p className='text-xs'>
-                        Status: <span className='font-medium'>{orchestratorView.run.status}</span>
+                        Status: <span className='font-medium'>{orchestratorPanelState.runStatus}</span>
                     </p>
                     <p className='text-xs'>
-                        Strategy: <span className='font-medium'>{activeExecutionStrategy}</span>
+                        Strategy: <span className='font-medium'>{orchestratorPanelState.activeExecutionStrategy}</span>
                     </p>
                     <p className='text-muted-foreground text-xs'>
-                        {activeExecutionStrategy === 'parallel'
-                            ? `${String(runningStepCount)} child lane${runningStepCount === 1 ? '' : 's'} running. A child failure aborts sibling workers and fails the root run.`
+                        {orchestratorPanelState.activeExecutionStrategy === 'parallel'
+                            ? `${String(orchestratorPanelState.runningStepCount)} child lane${orchestratorPanelState.runningStepCount === 1 ? '' : 's'} running. A child failure aborts sibling workers and fails the root run.`
                             : 'The root delegator starts one child worker lane at a time. A child failure stops the strategy immediately.'}
                     </p>
                     <div className='space-y-1'>
-                        {orchestratorView.steps.map((step) => (
+                        {orchestratorPanelState.steps.map((step) => (
                             <div key={step.id} className='bg-background rounded border px-3 py-2 text-xs'>
                                 <div className='mb-2 flex items-center justify-between gap-3'>
                                     <p className='font-medium'>
                                         {String(step.sequence)}. {step.status}
                                     </p>
-                                    {step.childThreadId ? (
+                                    {step.canOpenWorkerLane ? (
                                         <Button
                                             type='button'
                                             size='sm'
