@@ -16,7 +16,10 @@ import { createEntityId } from '@/app/backend/runtime/identity/entityIds';
 import { errOp, okOp, type OperationalResult } from '@/app/backend/runtime/services/common/operationalError';
 import { contextPolicyService } from '@/app/backend/runtime/services/context/policyService';
 import { tokenCountingService } from '@/app/backend/runtime/services/context/tokenCountingService';
-import { memoryRetrievalService } from '@/app/backend/runtime/services/memory/retrieval';
+import {
+    memoryRetrievalService,
+    type RetrieveRelevantMemoryResult,
+} from '@/app/backend/runtime/services/memory/retrieval';
 import {
     appendPromptMessage,
     createTextMessage,
@@ -608,7 +611,7 @@ class SessionContextService {
                 replayMessages.some((message) => message.parts.some((part) => part.type === 'image')) ||
                 Boolean(input.attachments && input.attachments.length > 0),
         });
-        const retrievedMemory = await memoryRetrievalService.retrieveRelevantMemory({
+        const retrievedMemoryResult: RetrieveRelevantMemoryResult = await memoryRetrievalService.retrieveRelevantMemory({
             profileId: input.profileId,
             sessionId: input.sessionId,
             topLevelTab: input.topLevelTab,
@@ -617,7 +620,7 @@ class SessionContextService {
             ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
             ...(input.runId ? { runId: input.runId } : {}),
         });
-        const combinedSystemMessages = [...input.systemMessages, ...retrievedMemory.messages];
+        const combinedSystemMessages = [...input.systemMessages, ...retrievedMemoryResult.messages];
         let compaction = await sessionContextCompactionStore.get(input.profileId, input.sessionId);
 
         let prepared = await this.estimateMessages({
@@ -684,7 +687,7 @@ class SessionContextService {
             ...(prepared.estimate ? { estimate: prepared.estimate } : {}),
             policy,
             ...(compaction ? { compaction } : {}),
-            ...(retrievedMemory.summary ? { retrievedMemory: retrievedMemory.summary } : {}),
+            ...(retrievedMemoryResult.summary ? { retrievedMemory: retrievedMemoryResult.summary } : {}),
         });
     }
 }
