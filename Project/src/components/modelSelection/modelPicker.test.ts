@@ -3,11 +3,11 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import type { ModelPickerOption } from '@/web/components/modelSelection/modelCapabilities';
+import { ModelPicker } from '@/web/components/modelSelection/modelPicker';
 import {
     getModelLabelCollisionIndex,
     getOptionDisplayText,
-    ModelPicker,
-} from '@/web/components/modelSelection/modelPicker';
+} from '@/web/components/modelSelection/modelPickerReadModel';
 
 import { kiloBalancedModelId, kiloFrontierModelId, kiloSmallModelId } from '@/shared/kiloModels';
 
