@@ -73,6 +73,14 @@ describe('directGeminiRequestBuilder', () => {
     it('recognizes Gemini-compatible paths and validates auth', () => {
         const missingApiKeyInput = createRuntimeInput();
         delete missingApiKeyInput.apiKey;
+        const validAuthResult = validateDirectGeminiAuth({
+            runtimeInput: createRuntimeInput(),
+            config: {
+                providerId: 'openai',
+                modelPrefix: 'openai/',
+                label: 'OpenAI',
+            },
+        });
 
         expect(
             supportsDirectGeminiRuntimeContext({
@@ -80,6 +88,10 @@ describe('directGeminiRequestBuilder', () => {
                 resolvedBaseUrl: 'https://generativelanguage.googleapis.com/v1beta',
             })
         ).toBe(true);
+        expect(validAuthResult.isOk()).toBe(true);
+        if (validAuthResult.isOk()) {
+            expect(validAuthResult.value).toBe('test-key');
+        }
         expect(
             validateDirectGeminiAuth({
                 runtimeInput: missingApiKeyInput,

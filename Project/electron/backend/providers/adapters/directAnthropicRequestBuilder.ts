@@ -273,12 +273,13 @@ function buildAnthropicBetaHeader(input: ProviderRuntimeInput): string | undefin
 export function validateDirectAnthropicAuth(input: {
     runtimeInput: ProviderRuntimeInput;
     config: DirectFamilyRuntimeConfig;
-}): ProviderAdapterResult<void> {
-    if (!input.runtimeInput.apiKey) {
+}): ProviderAdapterResult<string> {
+    const apiKey = input.runtimeInput.apiKey;
+    if (!apiKey) {
         return errProviderAdapter('auth_missing', `${input.config.label} Anthropic runtime requires an API key.`);
     }
 
-    return okProviderAdapter(undefined);
+    return okProviderAdapter(apiKey);
 }
 
 export function buildDirectAnthropicRequest(input: {
@@ -286,15 +287,13 @@ export function buildDirectAnthropicRequest(input: {
     config: DirectFamilyRuntimeConfig;
     resolvedBaseUrl: string;
     stream: boolean;
+    apiKey: string;
 }): {
     url: string;
     headers: Record<string, string>;
     body: Record<string, unknown>;
 } {
-    const apiKey = input.runtimeInput.apiKey;
-    if (!apiKey) {
-        throw new Error('Anthropic direct runtime requires an API key.');
-    }
+    const apiKey = input.apiKey;
     const headers: Record<string, string> = {
         'x-api-key': apiKey,
         'anthropic-version': ANTHROPIC_API_VERSION,

@@ -317,12 +317,13 @@ export function buildDirectGeminiBody(input: ProviderRuntimeInput, modelPrefix: 
 export function validateDirectGeminiAuth(input: {
     runtimeInput: ProviderRuntimeInput;
     config: DirectFamilyRuntimeConfig;
-}): ProviderAdapterResult<void> {
-    if (!input.runtimeInput.apiKey) {
+}): ProviderAdapterResult<string> {
+    const apiKey = input.runtimeInput.apiKey;
+    if (!apiKey) {
         return errProviderAdapter('auth_missing', `${input.config.label} Gemini runtime requires an API key.`);
     }
 
-    return okProviderAdapter(undefined);
+    return okProviderAdapter(apiKey);
 }
 
 export function buildDirectGeminiRequest(input: {
@@ -330,15 +331,13 @@ export function buildDirectGeminiRequest(input: {
     config: DirectFamilyRuntimeConfig;
     resolvedBaseUrl: string;
     stream: boolean;
+    apiKey: string;
 }): {
     url: string;
     headers: Record<string, string>;
     body: Record<string, unknown>;
 } {
-    const apiKey = input.runtimeInput.apiKey;
-    if (!apiKey) {
-        throw new Error('Gemini direct runtime requires an API key.');
-    }
+    const apiKey = input.apiKey;
     const upstreamModelId = toUpstreamModelId(input.runtimeInput.modelId, input.config.modelPrefix);
     const requestBody = buildDirectGeminiBody(input.runtimeInput, input.config.modelPrefix);
 

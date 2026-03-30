@@ -69,6 +69,14 @@ describe('directAnthropicRequestBuilder', () => {
     it('recognizes Anthropic-compatible runtime paths and validates auth', () => {
         const missingApiKeyInput = createRuntimeInput();
         delete missingApiKeyInput.apiKey;
+        const validAuthResult = validateDirectAnthropicAuth({
+            runtimeInput: createRuntimeInput(),
+            config: {
+                providerId: 'openai',
+                modelPrefix: 'openai/',
+                label: 'OpenAI',
+            },
+        });
 
         expect(
             supportsDirectAnthropicRuntimeContext({
@@ -76,6 +84,10 @@ describe('directAnthropicRequestBuilder', () => {
                 resolvedBaseUrl: 'https://api.anthropic.com/v1',
             })
         ).toBe(true);
+        expect(validAuthResult.isOk()).toBe(true);
+        if (validAuthResult.isOk()) {
+            expect(validAuthResult.value).toBe('test-key');
+        }
         expect(
             validateDirectAnthropicAuth({
                 runtimeInput: missingApiKeyInput,

@@ -465,6 +465,14 @@
       "note": "Throw guards impossible post-write reload failure after successful changeset persistence."
     },
     {
+      "path": "electron/backend/persistence/stores/provider/providerCatalogMapper.ts",
+      "category": "manual-non-parser-throws",
+      "contentHash": "832446d2cda9416f",
+      "status": "accepted-risk",
+      "reviewedAt": "2026-03-30",
+      "note": "Throws guard impossible persisted catalog rows that reference models without valid runtime descriptors during mapper readback."
+    },
+    {
       "path": "electron/backend/persistence/stores/runtime/checkpointSnapshotStore.ts",
       "category": "manual-non-parser-throws",
       "contentHash": "981177b2658a7069",

@@ -23,6 +23,7 @@ export interface DirectFamilyRuntimeRequestInput {
     config: DirectFamilyRuntimeConfig;
     resolvedBaseUrl: string;
     stream: boolean;
+    apiKey: string;
 }
 
 export interface DirectFamilyRuntimeConsumeInput {
@@ -53,7 +54,7 @@ export interface DirectFamilyRuntimeHandler {
     validateAuth: (input: {
         runtimeInput: ProviderRuntimeInput;
         config: DirectFamilyRuntimeConfig;
-    }) => ProviderAdapterResult<void>;
+    }) => ProviderAdapterResult<string>;
     buildRequest: (input: DirectFamilyRuntimeRequestInput) => DirectFamilyRuntimeRequest;
     consumeStreamResponse: (input: DirectFamilyRuntimeConsumeInput) => Promise<ProviderAdapterResult<void>>;
     emitPayload: (input: DirectFamilyRuntimePayloadInput) => Promise<ProviderAdapterResult<void>>;

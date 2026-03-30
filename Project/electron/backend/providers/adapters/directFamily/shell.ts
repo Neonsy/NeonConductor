@@ -83,6 +83,8 @@ export async function streamDirectFamilyRuntimeWithHandler(
         );
     }
 
+    const apiKey = authResult.value;
+
     await emitRuntimeLifecycleSelection({
         handlers,
         transportSelection: {
@@ -114,12 +116,14 @@ export async function streamDirectFamilyRuntimeWithHandler(
         config,
         resolvedBaseUrl,
         stream: true,
+        apiKey,
     });
     const fallbackRequest = familyHandler.buildRequest({
         runtimeInput: input,
         config,
         resolvedBaseUrl,
         stream: false,
+        apiKey,
     });
 
     const execution = await executeHttpFallback({
