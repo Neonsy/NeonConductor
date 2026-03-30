@@ -28,8 +28,17 @@ export function resolveRuntimeFamilyExecutionPath(toolProtocol: ProviderToolProt
 }
 
 export function supportsCatalogRuntimeFamily(input: RuntimeFamilyCatalogInput): boolean {
-    const toolProtocol = input.model.runtime.toolProtocol;
+    const runtime = input.model.runtime;
+    if (!runtime) {
+        return false;
+    }
+
+    const toolProtocol = runtime.toolProtocol;
     const definition = runtimeFamilyDefinitions[toolProtocol];
+    if (!definition) {
+        return false;
+    }
+
     return definition.supportsCatalogModel(input);
 }
 
@@ -45,5 +54,12 @@ export async function resolveRuntimeFamilyProtocol(
 
     const toolProtocol = input.modelCapabilities.runtime.toolProtocol;
     const definition = runtimeFamilyDefinitions[toolProtocol];
+    if (!definition) {
+        return errRunExecution(
+            'runtime_option_invalid',
+            `Model "${input.modelId}" references unsupported runtime protocol "${toolProtocol}".`
+        );
+    }
+
     return definition.resolveProtocol(input);
 }
