@@ -8,6 +8,7 @@ import type {
     ContextCompactionSource,
     MemoryCausalLinkRecord as RuntimeMemoryCausalLinkRecord,
     MemoryDerivedSummary as RuntimeMemoryDerivedSummary,
+    MemoryEvidenceRecord as RuntimeMemoryEvidenceRecord,
     MemoryCreatedByKind,
     MemoryTemporalFactRecord as RuntimeMemoryTemporalFactRecord,
     MemoryScopeKind,
@@ -96,6 +97,8 @@ export interface MemoryRecord {
     createdAt: string;
     updatedAt: string;
 }
+
+export type MemoryEvidenceRecord = RuntimeMemoryEvidenceRecord;
 
 export type MemoryTemporalFactRecord = RuntimeMemoryTemporalFactRecord;
 

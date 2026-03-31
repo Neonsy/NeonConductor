@@ -9,7 +9,9 @@ import {
     getPersistence,
     getDefaultProfileId,
     marketplaceStore,
+    messageStore,
     memoryStore,
+    memoryEvidenceStore,
     mcpStore,
     modeStore,
     permissionStore,
@@ -160,6 +162,12 @@ describe('persistence stores: runtime domain', () => {
             },
             transport: {},
         });
+        const message = await messageStore.createMessage({
+            profileId,
+            sessionId: session.session.id,
+            runId: run.id,
+            role: 'assistant',
+        });
 
         const globalMemory = await memoryStore.create({
             profileId,
@@ -199,6 +207,25 @@ describe('persistence stores: runtime domain', () => {
             threadId,
             runId: run.id,
         });
+        await getPersistence().db.transaction().execute(async (transaction) => {
+            await memoryEvidenceStore.createManyInTransaction(transaction, {
+                profileId,
+                memoryId: globalMemory.id,
+                evidence: [
+                    {
+                        kind: 'run',
+                        label: `Run ${run.id}`,
+                        sourceRunId: run.id,
+                    },
+                    {
+                        kind: 'message',
+                        label: 'Captured user prompt',
+                        sourceRunId: run.id,
+                        sourceMessageId: message.id,
+                    },
+                ],
+            });
+        });
 
         const listed = await memoryStore.listByProfile({ profileId });
         expect(new Set(listed.map((memory) => memory.id))).toEqual(
@@ -211,6 +238,7 @@ describe('persistence stores: runtime domain', () => {
             workspaceFingerprint,
         });
         expect(workspaceFiltered.map((memory) => memory.id)).toEqual([workspaceMemory.id]);
+        expect(await memoryEvidenceStore.listByMemoryId(profileId, globalMemory.id)).toHaveLength(2);
 
         const disabled = await memoryStore.disable(profileId, workspaceMemory.id);
         expect(disabled?.state).toBe('disabled');
@@ -316,6 +344,19 @@ describe('persistence stores: runtime domain', () => {
             threadId: runOwnerThreadId,
             runId: runOwnerRun.id,
         });
+        await getPersistence().db.transaction().execute(async (transaction) => {
+            await memoryEvidenceStore.createManyInTransaction(transaction, {
+                profileId,
+                memoryId: runScopedMemory.id,
+                evidence: [
+                    {
+                        kind: 'run',
+                        label: `Run ${runOwnerRun.id}`,
+                        sourceRunId: runOwnerRun.id,
+                    },
+                ],
+            });
+        });
         const threadScopedMemory = await memoryStore.create({
             profileId,
             memoryType: 'procedural',
@@ -330,6 +371,7 @@ describe('persistence stores: runtime domain', () => {
         const deletedRun = await runStore.deleteById(runOwnerRun.id);
         expect(deletedRun).toBe(true);
         expect(await memoryStore.getById(profileId, runScopedMemory.id)).toBeNull();
+        expect(await memoryEvidenceStore.listByMemoryId(profileId, runScopedMemory.id)).toEqual([]);
 
         const deletedThreads = await threadStore.deleteWorkspaceThreads({
             profileId,
@@ -340,6 +382,126 @@ describe('persistence stores: runtime domain', () => {
             expect.arrayContaining([runOwnerThreadId, threadOwnerThreadId])
         );
         expect(await memoryStore.getById(profileId, threadScopedMemory.id)).toBeNull();
+    });
+
+    it('keeps evidence rows while nulling deleted source references and rejects invalid evidence shapes', async () => {
+        const profileId = getDefaultProfileId();
+        const workspaceFingerprint = 'wsf_memory_store_evidence_sources';
+        const workspaceConversation = await conversationStore.createOrGetBucket({
+            profileId,
+            scope: 'workspace',
+            workspaceFingerprint,
+            title: 'Memory Evidence Workspace',
+        });
+        expect(workspaceConversation.isOk()).toBe(true);
+        if (workspaceConversation.isErr()) {
+            throw new Error(workspaceConversation.error.message);
+        }
+
+        const thread = await threadStore.create({
+            profileId,
+            conversationId: workspaceConversation.value.id,
+            title: 'Memory Evidence Thread',
+            topLevelTab: 'agent',
+        });
+        expect(thread.isOk()).toBe(true);
+        if (thread.isErr()) {
+            throw new Error(thread.error.message);
+        }
+
+        const session = await sessionStore.create(profileId, thread.value.id, 'local');
+        expect(session.created).toBe(true);
+        if (!session.created) {
+            throw new Error(session.reason);
+        }
+
+        const run = await runStore.create({
+            profileId,
+            sessionId: session.session.id,
+            prompt: 'Memory evidence source run',
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
+            authMethod: 'api_key',
+            runtimeOptions: {
+                reasoning: {
+                    effort: 'medium',
+                    summary: 'auto',
+                    includeEncrypted: true,
+                },
+                cache: {
+                    strategy: 'auto',
+                },
+                transport: {
+                    family: 'auto',
+                },
+            },
+            cache: {
+                applied: false,
+            },
+            transport: {},
+        });
+        const message = await messageStore.createMessage({
+            profileId,
+            sessionId: session.session.id,
+            runId: run.id,
+            role: 'assistant',
+        });
+        const messagePart = await messageStore.createPart({
+            messageId: message.id,
+            partType: 'text',
+            payload: {
+                text: 'Evidence source text.',
+            },
+        });
+
+        const globalMemory = await memoryStore.create({
+            profileId,
+            memoryType: 'semantic',
+            scopeKind: 'global',
+            createdByKind: 'user',
+            title: 'Evidence memory',
+            bodyMarkdown: 'Evidence-backed body',
+        });
+        await getPersistence().db.transaction().execute(async (transaction) => {
+            await memoryEvidenceStore.createManyInTransaction(transaction, {
+                profileId,
+                memoryId: globalMemory.id,
+                evidence: [
+                    {
+                        kind: 'message_part',
+                        label: 'Assistant source text',
+                        sourceRunId: run.id,
+                        sourceMessageId: message.id,
+                        sourceMessagePartId: messagePart.id,
+                    },
+                ],
+            });
+        });
+
+        await expect(
+            getPersistence().db.transaction().execute(async (transaction) => {
+                await memoryEvidenceStore.createManyInTransaction(transaction, {
+                    profileId,
+                    memoryId: globalMemory.id,
+                    evidence: [
+                        {
+                            kind: 'run',
+                            label: 'Invalid run evidence',
+                            sourceMessageId: message.id,
+                        },
+                    ],
+                });
+            })
+        ).rejects.toThrow();
+
+        const deletedRun = await runStore.deleteById(run.id);
+        expect(deletedRun).toBe(true);
+
+        const evidenceAfterRunDelete = await memoryEvidenceStore.listByMemoryId(profileId, globalMemory.id);
+        expect(evidenceAfterRunDelete).toHaveLength(1);
+        expect(evidenceAfterRunDelete[0]?.sourceRunId).toBeUndefined();
+        expect(evidenceAfterRunDelete[0]?.sourceMessageId).toBeUndefined();
+        expect(evidenceAfterRunDelete[0]?.sourceMessagePartId).toBeUndefined();
     });
 
     it('enforces scope invariants at the database layer', async () => {

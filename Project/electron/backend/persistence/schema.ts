@@ -71,6 +71,21 @@ export interface MemoryRecordsTable {
     updated_at: string;
 }
 
+export interface MemoryEvidenceRecordsTable {
+    id: string;
+    profile_id: string;
+    memory_id: string;
+    sequence: number;
+    evidence_kind: 'run' | 'message' | 'message_part' | 'tool_result_artifact';
+    label: string;
+    excerpt_text: string | null;
+    source_run_id: string | null;
+    source_message_id: string | null;
+    source_message_part_id: string | null;
+    metadata_json: string;
+    created_at: string;
+}
+
 export interface MemoryTemporalFactsTable {
     id: string;
     profile_id: string;
@@ -820,6 +835,7 @@ export interface DatabaseSchema {
     session_attached_skills: SessionAttachedSkillsTable;
     session_attached_rules: SessionAttachedRulesTable;
     memory_records: MemoryRecordsTable;
+    memory_evidence_records: MemoryEvidenceRecordsTable;
     memory_temporal_facts: MemoryTemporalFactsTable;
     memory_causal_links: MemoryCausalLinksTable;
     runs: RunsTable;

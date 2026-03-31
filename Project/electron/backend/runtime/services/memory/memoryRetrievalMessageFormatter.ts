@@ -6,6 +6,8 @@ import type { RetrievedMemoryRecord } from '@/app/backend/runtime/contracts';
 
 const MAX_RETRIEVED_MEMORY_TEXT_LENGTH = 6_000;
 const MEMORY_ENTRY_TEXT_LIMIT = 1_000;
+const MAX_EVIDENCE_LINES_PER_MEMORY = 2;
+const MAX_EVIDENCE_EXCERPT_LENGTH = 180;
 
 function normalizeWhitespace(value: string): string {
     return value.replace(/\s+/g, ' ').trim();
@@ -37,6 +39,15 @@ function describeMemoryProvenance(memory: MemoryRecord): string {
     return segments.join(', ');
 }
 
+function formatEvidenceExcerpt(value: string): string {
+    const normalized = normalizeWhitespace(value);
+    if (normalized.length <= MAX_EVIDENCE_EXCERPT_LENGTH) {
+        return normalized;
+    }
+
+    return `${normalized.slice(0, MAX_EVIDENCE_EXCERPT_LENGTH - 3)}...`;
+}
+
 export function formatRetrievedMemoryMessage(
     records: RetrievedMemoryRecord[],
     memoriesById: Map<string, MemoryRecord>
@@ -65,6 +76,10 @@ export function formatRetrievedMemoryMessage(
             `Scope: ${memory.scopeKind}`,
             `Match reason: ${record.matchReason}`,
             `Provenance: ${describeMemoryProvenance(memory)}`,
+            ...record.supportingEvidence.slice(0, MAX_EVIDENCE_LINES_PER_MEMORY).map((evidence) => {
+                const excerpt = evidence.excerptText ? ` - ${formatEvidenceExcerpt(evidence.excerptText)}` : '';
+                return `Evidence: ${evidence.label}${excerpt}`;
+            }),
             ...(record.annotations && record.annotations.length > 0 ? [`Notes: ${record.annotations.join(' ')}`] : []),
             'Details:',
             excerpt,
@@ -82,4 +97,3 @@ export function formatRetrievedMemoryMessage(
         injectedTextLength: text.length,
     };
 }
-

@@ -1,6 +1,7 @@
 import type { MemoryRecord } from '@/app/backend/persistence/types';
 import type {
     EntityId,
+    MemoryEvidenceSummary,
     RetrievedMemoryMatchReason,
     RetrievedMemoryRecord,
     RetrievedMemorySummary,
@@ -64,10 +65,20 @@ export interface RankedMemoryRetrievalDecision extends RetrievedMemoryDecision {
 export interface MemoryRetrievalAssemblyInput {
     profileId: string;
     decisions: RankedMemoryRetrievalDecision[];
+    evidenceByMemoryId: Map<EntityId<'mem'>, MemoryEvidenceSummary[]>;
 }
 
 export interface MemoryRetrievalAssemblyResult {
     summary?: RetrievedMemorySummary;
     records: RetrievedMemoryRecord[];
     messages: RunContextMessage[];
+}
+
+export interface MemoryRetrievalEvidenceStageInput {
+    profileId: string;
+    decisions: RankedMemoryRetrievalDecision[];
+}
+
+export interface MemoryRetrievalEvidenceStageResult {
+    evidenceByMemoryId: Map<EntityId<'mem'>, MemoryEvidenceSummary[]>;
 }

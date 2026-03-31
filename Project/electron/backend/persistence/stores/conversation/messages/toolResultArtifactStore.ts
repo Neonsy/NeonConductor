@@ -79,7 +79,7 @@ async function removeArtifactFile(filePath: string): Promise<void> {
 }
 
 export class ToolResultArtifactStore {
-    private async listByMessagePartIds(messagePartIds: string[]): Promise<ToolResultArtifactRecord[]> {
+    async listByMessagePartIds(messagePartIds: string[]): Promise<ToolResultArtifactRecord[]> {
         if (messagePartIds.length === 0) {
             return [];
         }

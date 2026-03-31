@@ -175,6 +175,15 @@ describe('MemoryPanel', () => {
                             scopeKind: 'thread',
                             matchReason: 'exact_thread',
                             order: 1,
+                            supportingEvidence: [
+                                {
+                                    id: 'mev_1',
+                                    kind: 'message_part',
+                                    label: 'Assistant output',
+                                    excerptText: 'Recovered implementation details.',
+                                    sourceMessagePartId: 'part_1',
+                                },
+                            ],
                             annotations: ['Current fact has temporal history.'],
                             derivedSummary: {
                                 temporalStatus: 'current',
@@ -199,6 +208,7 @@ describe('MemoryPanel', () => {
         expect(html).toContain('system');
         expect(html).toContain('completed run');
         expect(html).toContain('exact_thread');
+        expect(html).toContain('Evidence: Assistant output - Recovered implementation details.');
         expect(html).toContain('retrieved');
         expect(html).toContain('history');
         expect(html).toContain('linked run');

@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { messageStore, memoryStore, runStore, runUsageStore, sessionStore } from '@/app/backend/persistence/stores';
+import {
+    messageStore,
+    memoryEvidenceStore,
+    memoryStore,
+    runStore,
+    runUsageStore,
+    sessionStore,
+    toolResultArtifactStore,
+} from '@/app/backend/persistence/stores';
 import { memoryRuntimeService } from '@/app/backend/runtime/services/memory/runtime';
 import {
     createCaller,
@@ -57,7 +65,7 @@ describe('memoryRuntimeService', () => {
                 text: 'Finished the implementation and verified the tests.',
             },
         });
-        await messageStore.createPart({
+        const toolResultPart = await messageStore.createPart({
             messageId: assistantMessage.id,
             partType: 'tool_result',
             payload: {
@@ -66,6 +74,21 @@ describe('memoryRuntimeService', () => {
                 outputText: 'ok',
                 isError: false,
             },
+        });
+        await toolResultArtifactStore.create({
+            messagePartId: toolResultPart.id,
+            profileId,
+            sessionId: created.session.id,
+            runId: run.id,
+            toolName: 'run_command',
+            artifactKind: 'command_output',
+            contentType: 'text/plain',
+            rawText: 'ok',
+            totalBytes: 2,
+            totalLines: 1,
+            previewText: 'ok',
+            previewStrategy: 'head_only',
+            metadata: {},
         });
         await runUsageStore.upsert({
             runId: run.id,
@@ -101,6 +124,8 @@ describe('memoryRuntimeService', () => {
         expect(firstCapture.value.memory?.bodyMarkdown).toContain(
             'Finished the implementation and verified the tests.'
         );
+        const firstEvidence = await memoryEvidenceStore.listByMemoryId(profileId, firstCapture.value.memory!.id);
+        expect(firstEvidence.map((evidence) => evidence.kind)).toEqual(['run', 'message_part', 'tool_result_artifact']);
 
         const secondCapture = await memoryRuntimeService.captureFinishedRunMemory({
             profileId,
@@ -178,6 +203,13 @@ describe('memoryRuntimeService', () => {
         expect(refreshedCapture.value.action).toBe('superseded');
         expect(refreshedCapture.value.previousMemory?.id).toBe(initialCapture.value.memory.id);
         expect(refreshedCapture.value.memory?.bodyMarkdown).toContain('total 96 tokens');
+        const replacementEvidence = await memoryEvidenceStore.listByMemoryId(profileId, refreshedCapture.value.memory!.id);
+        const previousEvidence = await memoryEvidenceStore.listByMemoryId(
+            profileId,
+            refreshedCapture.value.previousMemory!.id
+        );
+        expect(replacementEvidence.length).toBeGreaterThan(0);
+        expect(previousEvidence.length).toBeGreaterThan(0);
 
         const memories = await memoryStore.listByProfile({
             profileId,

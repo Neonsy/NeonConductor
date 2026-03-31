@@ -1,4 +1,7 @@
+import type { Kysely, Transaction } from 'kysely';
+
 import { getPersistence } from '@/app/backend/persistence/db';
+import type { DatabaseSchema } from '@/app/backend/persistence/schema';
 import { parseEntityId, parseEnumValue, parseJsonRecord } from '@/app/backend/persistence/stores/shared/rowParsers';
 import { nowIso } from '@/app/backend/persistence/stores/shared/utils';
 import type { MemoryRecord } from '@/app/backend/persistence/types';
@@ -14,6 +17,8 @@ import {
     type MemoryType,
 } from '@/app/backend/runtime/contracts';
 import { createEntityId } from '@/app/backend/runtime/identity/entityIds';
+
+type MemoryStoreDb = Kysely<DatabaseSchema> | Transaction<DatabaseSchema>;
 
 function mapMemoryRecord(row: {
     id: string;
@@ -86,9 +91,47 @@ interface UpdateMemoryEditableFieldsInput {
 }
 
 export class MemoryStore {
+    private getDb(): Kysely<DatabaseSchema> {
+        return getPersistence().db;
+    }
+
+    private async insertMemoryRecord(
+        db: MemoryStoreDb,
+        input: CreateMemoryRecordInput,
+        options?: {
+            memoryId?: EntityId<'mem'>;
+            timestamp?: string;
+        }
+    ): Promise<MemoryRecord> {
+        const timestamp = options?.timestamp ?? nowIso();
+        const inserted = await db
+            .insertInto('memory_records')
+            .values({
+                id: options?.memoryId ?? createEntityId('mem'),
+                profile_id: input.profileId,
+                memory_type: input.memoryType,
+                scope_kind: input.scopeKind,
+                state: input.state ?? 'active',
+                workspace_fingerprint: input.workspaceFingerprint ?? null,
+                thread_id: input.threadId ?? null,
+                run_id: input.runId ?? null,
+                created_by_kind: input.createdByKind,
+                title: input.title,
+                body_markdown: input.bodyMarkdown,
+                summary_text: input.summaryText ?? null,
+                metadata_json: JSON.stringify(input.metadata ?? {}),
+                superseded_by_memory_id: null,
+                created_at: timestamp,
+                updated_at: timestamp,
+            })
+            .returningAll()
+            .executeTakeFirstOrThrow();
+
+        return mapMemoryRecord(inserted);
+    }
+
     async getById(profileId: string, memoryId: EntityId<'mem'>): Promise<MemoryRecord | null> {
-        const { db } = getPersistence();
-        const row = await db
+        const row = await this.getDb()
             .selectFrom('memory_records')
             .selectAll()
             .where('profile_id', '=', profileId)
@@ -107,8 +150,7 @@ export class MemoryStore {
         threadId?: EntityId<'thr'>;
         runId?: EntityId<'run'>;
     }): Promise<MemoryRecord[]> {
-        const { db } = getPersistence();
-        let query = db.selectFrom('memory_records').selectAll().where('profile_id', '=', input.profileId);
+        let query = this.getDb().selectFrom('memory_records').selectAll().where('profile_id', '=', input.profileId);
 
         if (input.memoryType) {
             query = query.where('memory_type', '=', input.memoryType);
@@ -134,37 +176,18 @@ export class MemoryStore {
     }
 
     async create(input: CreateMemoryRecordInput): Promise<MemoryRecord> {
-        const { db } = getPersistence();
-        const timestamp = nowIso();
-        const inserted = await db
-            .insertInto('memory_records')
-            .values({
-                id: createEntityId('mem'),
-                profile_id: input.profileId,
-                memory_type: input.memoryType,
-                scope_kind: input.scopeKind,
-                state: input.state ?? 'active',
-                workspace_fingerprint: input.workspaceFingerprint ?? null,
-                thread_id: input.threadId ?? null,
-                run_id: input.runId ?? null,
-                created_by_kind: input.createdByKind,
-                title: input.title,
-                body_markdown: input.bodyMarkdown,
-                summary_text: input.summaryText ?? null,
-                metadata_json: JSON.stringify(input.metadata ?? {}),
-                superseded_by_memory_id: null,
-                created_at: timestamp,
-                updated_at: timestamp,
-            })
-            .returningAll()
-            .executeTakeFirstOrThrow();
+        return this.insertMemoryRecord(this.getDb(), input);
+    }
 
-        return mapMemoryRecord(inserted);
+    async createInTransaction(
+        transaction: Transaction<DatabaseSchema>,
+        input: CreateMemoryRecordInput
+    ): Promise<MemoryRecord> {
+        return this.insertMemoryRecord(transaction, input);
     }
 
     async disable(profileId: string, memoryId: EntityId<'mem'>): Promise<MemoryRecord | null> {
-        const { db } = getPersistence();
-        const updated = await db
+        const updated = await this.getDb()
             .updateTable('memory_records')
             .set({
                 state: 'disabled',
@@ -180,8 +203,7 @@ export class MemoryStore {
     }
 
     async updateEditableFields(input: UpdateMemoryEditableFieldsInput): Promise<MemoryRecord | null> {
-        const { db } = getPersistence();
-        const updated = await db
+        const updated = await this.getDb()
             .updateTable('memory_records')
             .set({
                 title: input.title,
@@ -203,62 +225,53 @@ export class MemoryStore {
         previousMemoryId: EntityId<'mem'>;
         replacement: CreateMemoryRecordInput;
     }): Promise<{ previous: MemoryRecord; replacement: MemoryRecord } | null> {
-        const { db } = getPersistence();
+        return this.getDb().transaction().execute(async (transaction) =>
+            this.supersedeInTransaction(transaction, input)
+        );
+    }
 
-        return db.transaction().execute(async (transaction) => {
-            const existing = await transaction
-                .selectFrom('memory_records')
-                .selectAll()
-                .where('profile_id', '=', input.profileId)
-                .where('id', '=', input.previousMemoryId)
-                .executeTakeFirst();
+    async supersedeInTransaction(
+        transaction: Transaction<DatabaseSchema>,
+        input: {
+            profileId: string;
+            previousMemoryId: EntityId<'mem'>;
+            replacement: CreateMemoryRecordInput;
+        }
+    ): Promise<{ previous: MemoryRecord; replacement: MemoryRecord } | null> {
+        const existing = await transaction
+            .selectFrom('memory_records')
+            .selectAll()
+            .where('profile_id', '=', input.profileId)
+            .where('id', '=', input.previousMemoryId)
+            .executeTakeFirst();
 
-            if (!existing) {
-                return null;
-            }
+        if (!existing) {
+            return null;
+        }
 
-            const timestamp = nowIso();
-            const replacementId = createEntityId('mem');
-            const inserted = await transaction
-                .insertInto('memory_records')
-                .values({
-                    id: replacementId,
-                    profile_id: input.replacement.profileId,
-                    memory_type: input.replacement.memoryType,
-                    scope_kind: input.replacement.scopeKind,
-                    state: input.replacement.state ?? 'active',
-                    workspace_fingerprint: input.replacement.workspaceFingerprint ?? null,
-                    thread_id: input.replacement.threadId ?? null,
-                    run_id: input.replacement.runId ?? null,
-                    created_by_kind: input.replacement.createdByKind,
-                    title: input.replacement.title,
-                    body_markdown: input.replacement.bodyMarkdown,
-                    summary_text: input.replacement.summaryText ?? null,
-                    metadata_json: JSON.stringify(input.replacement.metadata ?? {}),
-                    superseded_by_memory_id: null,
-                    created_at: timestamp,
-                    updated_at: timestamp,
-                })
-                .returningAll()
-                .executeTakeFirstOrThrow();
-
-            const updated = await transaction
-                .updateTable('memory_records')
-                .set({
-                    state: 'superseded',
-                    superseded_by_memory_id: replacementId,
-                    updated_at: timestamp,
-                })
-                .where('profile_id', '=', input.profileId)
-                .where('id', '=', input.previousMemoryId)
-                .returningAll()
-                .executeTakeFirstOrThrow();
-
-            return {
-                previous: mapMemoryRecord(updated),
-                replacement: mapMemoryRecord(inserted),
-            };
+        const timestamp = nowIso();
+        const replacementId = createEntityId('mem');
+        const replacement = await this.insertMemoryRecord(transaction, input.replacement, {
+            memoryId: replacementId,
+            timestamp,
         });
+
+        const updated = await transaction
+            .updateTable('memory_records')
+            .set({
+                state: 'superseded',
+                superseded_by_memory_id: replacementId,
+                updated_at: timestamp,
+            })
+            .where('profile_id', '=', input.profileId)
+            .where('id', '=', input.previousMemoryId)
+            .returningAll()
+            .executeTakeFirstOrThrow();
+
+        return {
+            previous: mapMemoryRecord(updated),
+            replacement,
+        };
     }
 }
 

@@ -349,6 +349,25 @@ describe('runtime contracts: memory', () => {
             apiKey: 'openai-memory-injection-key',
         });
         expect(configured.success).toBe(true);
+        const evidenceSource = await createSessionInScope(caller, profileId, {
+            scope: 'detached',
+            title: 'Evidence source thread',
+            kind: 'local',
+            topLevelTab: 'chat',
+        });
+        const evidenceRun = await runStore.create({
+            profileId,
+            sessionId: evidenceSource.session.id,
+            prompt: 'Evidence source run',
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
+            authMethod: 'api_key',
+            runtimeOptions: defaultRuntimeOptions,
+            cache: {
+                applied: false,
+            },
+            transport: {},
+        });
 
         await caller.memory.create({
             profileId,
@@ -360,6 +379,13 @@ describe('runtime contracts: memory', () => {
             metadata: {
                 topLevelTab: 'shared',
             },
+            evidence: [
+                {
+                    kind: 'run',
+                    label: 'Cross-tab evidence run',
+                    sourceRunId: evidenceRun.id,
+                },
+            ],
         });
 
         const scenarios = [
@@ -408,9 +434,13 @@ describe('runtime contracts: memory', () => {
                 throw new Error(`Expected ${scenario.topLevelTab} retrieval run to start.`);
             }
             expect(
-                started.resolvedContextState.retrievedMemory?.records.some(
-                    (record) => record.title === 'Cross-tab retrieval memory'
-                )
+                started.resolvedContextState.retrievedMemory?.records.some((record) => {
+                    if (record.title !== 'Cross-tab retrieval memory') {
+                        return false;
+                    }
+
+                    return record.supportingEvidence[0]?.label === 'Cross-tab evidence run';
+                })
             ).toBe(true);
 
             await waitForRunStatus(caller, profileId, created.session.id, 'completed');

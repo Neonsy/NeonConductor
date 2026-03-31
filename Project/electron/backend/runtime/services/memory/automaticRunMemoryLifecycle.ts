@@ -1,5 +1,13 @@
-import type { MessagePartRecord, MessageRecord, MemoryRecord, RunRecord, RunUsageRecord } from '@/app/backend/persistence/types';
-import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
+import type {
+    MessagePartRecord,
+    MessageRecord,
+    MemoryEvidenceRecord,
+    MemoryRecord,
+    RunRecord,
+    RunUsageRecord,
+    ToolResultArtifactRecord,
+} from '@/app/backend/persistence/types';
+import type { MemoryEvidenceCreateInput, RuntimeProviderId } from '@/app/backend/runtime/contracts';
 
 type FinishedRunStatus = 'completed' | 'error';
 export type AutomaticRunMemoryAction = 'created' | 'superseded' | 'noop' | 'skipped';
@@ -32,15 +40,19 @@ interface AutomaticRunMemoryLifecycleInput {
     usage: RunUsageRecord | null;
     messages: MessageRecord[];
     parts: MessagePartRecord[];
+    toolArtifacts: ToolResultArtifactRecord[];
     runScopedMemories: MemoryRecord[];
+    runScopedEvidenceByMemoryId: Map<string, MemoryEvidenceRecord[]>;
 }
 
 export interface AutomaticRunMemorySnapshot {
     activeAutomaticMemory?: MemoryRecord;
+    activeAutomaticMemoryEvidence: MemoryEvidenceCreateInput[];
     title: string;
     summaryText: string;
     bodyMarkdown: string;
     metadata: RuntimeRunOutcomeMemoryMetadata;
+    evidence: MemoryEvidenceCreateInput[];
 }
 
 export interface AutomaticRunMemoryDecision {
@@ -64,6 +76,15 @@ function readToolName(part: MessagePartRecord): string | undefined {
 
 function readToolError(part: MessagePartRecord): boolean {
     return part.payload['isError'] === true;
+}
+
+function truncateEvidenceExcerpt(value: string, maxLength = 240): string {
+    const normalized = value.replace(/\s+/g, ' ').trim();
+    if (normalized.length <= maxLength) {
+        return normalized;
+    }
+
+    return `${normalized.slice(0, Math.max(0, maxLength - 3))}...`;
 }
 
 export function isAutomaticRunOutcomeMemory(memory: MemoryRecord): boolean {
@@ -115,6 +136,37 @@ function collectAssistantText(
     return undefined;
 }
 
+function selectAssistantEvidencePart(
+    messages: MessageRecord[],
+    partsByMessageId: Map<string, MessagePartRecord[]>
+): MessagePartRecord | undefined {
+    const assistantMessages = messages.filter((message) => message.role === 'assistant');
+    for (let index = assistantMessages.length - 1; index >= 0; index -= 1) {
+        const assistantMessage = assistantMessages[index];
+        if (!assistantMessage) {
+            continue;
+        }
+
+        const parts = partsByMessageId.get(assistantMessage.id) ?? [];
+        for (let partIndex = parts.length - 1; partIndex >= 0; partIndex -= 1) {
+            const part = parts[partIndex];
+            if (!part) {
+                continue;
+            }
+
+            if (part.partType !== 'text' && part.partType !== 'reasoning_summary') {
+                continue;
+            }
+
+            if (readTextPayload(part)) {
+                return part;
+            }
+        }
+    }
+
+    return undefined;
+}
+
 function summarizeToolResults(parts: MessagePartRecord[]): {
     toolCallCount: number;
     toolErrorCount: number;
@@ -134,6 +186,84 @@ function summarizeToolResults(parts: MessagePartRecord[]): {
         toolErrorCount: toolResults.filter(readToolError).length,
         toolNames,
     };
+}
+
+function buildToolResultEvidenceExcerpt(part: MessagePartRecord): string | undefined {
+    const outputText = part.payload['outputText'];
+    if (typeof outputText === 'string' && outputText.trim().length > 0) {
+        return truncateEvidenceExcerpt(outputText);
+    }
+
+    const segments = [
+        ...(readToolName(part) ? [`tool ${readToolName(part)}`] : []),
+        ...(readToolError(part) ? ['reported an error'] : ['completed without persisted artifact']),
+    ];
+
+    return segments.length > 0 ? segments.join(' ') : undefined;
+}
+
+function buildMemoryEvidence(input: {
+    runId: RunRecord['id'];
+    assistantEvidencePart?: MessagePartRecord;
+    toolResults: MessagePartRecord[];
+    artifactsByMessagePartId: Map<string, ToolResultArtifactRecord>;
+}): MemoryEvidenceCreateInput[] {
+    const evidence: MemoryEvidenceCreateInput[] = [
+        {
+            kind: 'run',
+            label: `Run ${input.runId}`,
+            sourceRunId: input.runId,
+        },
+    ];
+
+    if (input.assistantEvidencePart) {
+        const assistantExcerpt = readTextPayload(input.assistantEvidencePart);
+        evidence.push({
+            kind: 'message_part',
+            label:
+                input.assistantEvidencePart.partType === 'reasoning_summary'
+                    ? 'Assistant reasoning summary'
+                    : 'Assistant output',
+            ...(assistantExcerpt ? { excerptText: truncateEvidenceExcerpt(assistantExcerpt) } : {}),
+            sourceRunId: input.runId,
+            sourceMessageId: input.assistantEvidencePart.messageId,
+            sourceMessagePartId: input.assistantEvidencePart.id,
+        });
+    }
+
+    for (const toolResult of input.toolResults) {
+        const artifact = input.artifactsByMessagePartId.get(toolResult.id);
+        if (artifact) {
+            evidence.push({
+                kind: 'tool_result_artifact',
+                label: `Tool artifact: ${artifact.toolName}`,
+                ...(artifact.previewText ? { excerptText: truncateEvidenceExcerpt(artifact.previewText) } : {}),
+                sourceRunId: artifact.runId,
+                sourceMessageId: toolResult.messageId,
+                sourceMessagePartId: artifact.messagePartId,
+                metadata: {
+                    artifactKind: artifact.artifactKind,
+                    contentType: artifact.contentType,
+                },
+            });
+            continue;
+        }
+
+        const toolResultExcerpt = buildToolResultEvidenceExcerpt(toolResult);
+        evidence.push({
+            kind: 'message_part',
+            label: `Tool result: ${readToolName(toolResult) ?? 'unknown tool'}`,
+            ...(toolResultExcerpt ? { excerptText: toolResultExcerpt } : {}),
+            sourceRunId: input.runId,
+            sourceMessageId: toolResult.messageId,
+            sourceMessagePartId: toolResult.id,
+            metadata: {
+                isError: readToolError(toolResult),
+            },
+        });
+    }
+
+    return evidence;
 }
 
 function formatPromptSnippet(prompt: string): string {
@@ -279,13 +409,35 @@ function areMetadataEqual(left: Record<string, unknown>, right: Record<string, u
     return JSON.stringify(left) === JSON.stringify(right);
 }
 
+function areEvidenceEqual(left: MemoryEvidenceCreateInput[], right: MemoryEvidenceCreateInput[]): boolean {
+    return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function toEvidenceCreateInput(record: MemoryEvidenceRecord): MemoryEvidenceCreateInput {
+    return {
+        kind: record.kind,
+        label: record.label,
+        ...(record.excerptText ? { excerptText: record.excerptText } : {}),
+        ...(record.sourceRunId ? { sourceRunId: record.sourceRunId } : {}),
+        ...(record.sourceMessageId ? { sourceMessageId: record.sourceMessageId } : {}),
+        ...(record.sourceMessagePartId ? { sourceMessagePartId: record.sourceMessagePartId } : {}),
+        ...(Object.keys(record.metadata).length > 0 ? { metadata: record.metadata } : {}),
+    };
+}
+
 export function buildAutomaticRunMemorySnapshot(input: AutomaticRunMemoryLifecycleInput): AutomaticRunMemorySnapshot {
     const automaticRunMemories = input.runScopedMemories.filter((memory) => isAutomaticRunOutcomeMemory(memory));
     const activeAutomaticMemory = automaticRunMemories.find((memory) => memory.state === 'active');
+    const activeAutomaticMemoryEvidence = activeAutomaticMemory
+        ? (input.runScopedEvidenceByMemoryId.get(activeAutomaticMemory.id) ?? []).map(toEvidenceCreateInput)
+        : [];
     const partsByMessageId = buildMessagePartsByMessageId(input.parts);
     const assistantText = collectAssistantText(input.messages, partsByMessageId);
+    const assistantEvidencePart = selectAssistantEvidencePart(input.messages, partsByMessageId);
+    const toolResults = input.parts.filter((part) => part.partType === 'tool_result');
     const toolSummary = summarizeToolResults(input.parts);
     const usageSummary = formatUsageSummary(input.usage);
+    const artifactsByMessagePartId = new Map(input.toolArtifacts.map((artifact) => [artifact.messagePartId, artifact]));
     const metadata = buildRuntimeMemoryMetadata({
         runId: input.run.id,
         sessionId: input.run.sessionId,
@@ -297,9 +449,16 @@ export function buildAutomaticRunMemorySnapshot(input: AutomaticRunMemoryLifecyc
         toolCallCount: toolSummary.toolCallCount,
         toolErrorCount: toolSummary.toolErrorCount,
     });
+    const evidence = buildMemoryEvidence({
+        runId: input.run.id,
+        ...(assistantEvidencePart ? { assistantEvidencePart } : {}),
+        toolResults,
+        artifactsByMessagePartId,
+    });
 
     return {
         ...(activeAutomaticMemory ? { activeAutomaticMemory } : {}),
+        activeAutomaticMemoryEvidence,
         title: buildMemoryTitle({
             prompt: input.run.prompt,
             runStatus: input.run.status,
@@ -324,6 +483,7 @@ export function buildAutomaticRunMemorySnapshot(input: AutomaticRunMemoryLifecyc
             ...(input.run.errorMessage ? { errorMessage: input.run.errorMessage } : {}),
         }),
         metadata,
+        evidence,
     };
 }
 
@@ -338,7 +498,8 @@ export function resolveAutomaticRunMemoryDecision(snapshot: AutomaticRunMemorySn
         snapshot.activeAutomaticMemory.title === snapshot.title &&
         snapshot.activeAutomaticMemory.bodyMarkdown === snapshot.bodyMarkdown &&
         snapshot.activeAutomaticMemory.summaryText === snapshot.summaryText &&
-        areMetadataEqual(snapshot.activeAutomaticMemory.metadata, snapshot.metadata)
+        areMetadataEqual(snapshot.activeAutomaticMemory.metadata, snapshot.metadata) &&
+        areEvidenceEqual(snapshot.activeAutomaticMemoryEvidence, snapshot.evidence)
     ) {
         return {
             action: 'noop',

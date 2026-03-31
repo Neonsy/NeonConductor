@@ -1,7 +1,7 @@
 import { writeFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 
-import { memoryStore } from '@/app/backend/persistence/stores';
+import { memoryEvidenceStore, memoryStore, runStore } from '@/app/backend/persistence/stores';
 import type { ModeDefinition } from '@/app/backend/runtime/contracts';
 import { errOp } from '@/app/backend/runtime/services/common/operationalError';
 import { advancedMemoryDerivationService } from '@/app/backend/runtime/services/memory/advancedDerivation';
@@ -71,6 +71,31 @@ describe('memoryRetrievalService', () => {
             topLevelTab: 'agent',
         });
         const otherThreadId = requireEntityId(other.thread.id, 'thr', 'Expected other retrieval thread id.');
+        const supportingRun = await runStore.create({
+            profileId,
+            sessionId: current.session.id,
+            prompt: 'Supporting retrieval evidence',
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
+            authMethod: 'api_key',
+            runtimeOptions: {
+                reasoning: {
+                    effort: 'medium',
+                    summary: 'auto',
+                    includeEncrypted: true,
+                },
+                cache: {
+                    strategy: 'auto',
+                },
+                transport: {
+                    family: 'auto',
+                },
+            },
+            cache: {
+                applied: false,
+            },
+            transport: {},
+        });
 
         await caller.memory.create({
             profileId,
@@ -80,6 +105,13 @@ describe('memoryRetrievalService', () => {
             threadId: currentThreadId,
             title: 'Current thread memory',
             bodyMarkdown: 'Use the current-thread procedure.',
+            evidence: [
+                {
+                    kind: 'run',
+                    label: 'Supporting run evidence',
+                    sourceRunId: supportingRun.id,
+                },
+            ],
         });
         await caller.memory.create({
             profileId,
@@ -148,6 +180,7 @@ describe('memoryRetrievalService', () => {
             'Workspace memory',
             'Global memory',
         ]);
+        expect(retrieved.summary?.records[0]?.supportingEvidence[0]?.label).toBe('Supporting run evidence');
         expect(retrieved.summary?.records.some((record) => record.memoryId === disabledMemory.id)).toBe(false);
         expect(retrieved.summary?.records.some((record) => record.memoryId === supersededOriginal.memory.id)).toBe(
             false
@@ -330,6 +363,77 @@ describe('memoryRetrievalService', () => {
         } finally {
             expandSpy.mockRestore();
             summariesSpy.mockRestore();
+        }
+    });
+
+    it('fails soft when evidence loading fails and still returns retrieved records', async () => {
+        const caller = createCaller();
+        const created = await createSessionInScope(caller, profileId, {
+            scope: 'detached',
+            title: 'Evidence fail-soft thread',
+            kind: 'local',
+            topLevelTab: 'chat',
+        });
+        const supportingRun = await runStore.create({
+            profileId,
+            sessionId: created.session.id,
+            prompt: 'Evidence fail-soft run',
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
+            authMethod: 'api_key',
+            runtimeOptions: {
+                reasoning: {
+                    effort: 'medium',
+                    summary: 'auto',
+                    includeEncrypted: true,
+                },
+                cache: {
+                    strategy: 'auto',
+                },
+                transport: {
+                    family: 'auto',
+                },
+            },
+            cache: {
+                applied: false,
+            },
+            transport: {},
+        });
+
+        const memory = await caller.memory.create({
+            profileId,
+            memoryType: 'semantic',
+            scopeKind: 'global',
+            createdByKind: 'user',
+            title: 'Evidence-backed memory',
+            bodyMarkdown: 'Evidence-backed body.',
+            evidence: [
+                {
+                    kind: 'run',
+                    label: 'Supporting run evidence',
+                    sourceRunId: supportingRun.id,
+                },
+            ],
+        });
+        const evidenceSpy = vi
+            .spyOn(memoryEvidenceStore, 'listByMemoryIds')
+            .mockRejectedValue(new Error('Evidence load failed.'));
+
+        try {
+            const retrieved = await memoryRetrievalService.retrieveRelevantMemory({
+                profileId,
+                sessionId: created.session.id,
+                topLevelTab: 'chat',
+                modeKey: 'chat',
+                prompt: 'Use the evidence-backed memory.',
+            });
+
+            expect(retrieved.summary?.records.some((record) => record.memoryId === memory.memory.id)).toBe(true);
+            expect(
+                retrieved.summary?.records.find((record) => record.memoryId === memory.memory.id)?.supportingEvidence
+            ).toEqual([]);
+        } finally {
+            evidenceSpy.mockRestore();
         }
     });
 });

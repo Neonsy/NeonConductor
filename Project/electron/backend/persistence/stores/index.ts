@@ -15,6 +15,7 @@ export { messageMediaStore } from '@/app/backend/persistence/stores/conversation
 export { toolResultArtifactStore } from '@/app/backend/persistence/stores/conversation/messages/toolResultArtifactStore';
 export { mcpStore } from '@/app/backend/persistence/stores/runtime/mcpStore';
 export { memoryDerivedStore } from '@/app/backend/persistence/stores/runtime/memoryDerivedStore';
+export { memoryEvidenceStore } from '@/app/backend/persistence/stores/runtime/memoryEvidenceStore';
 export { memoryStore } from '@/app/backend/persistence/stores/runtime/memoryStore';
 export { modelLimitOverrideStore } from '@/app/backend/persistence/stores/runtime/modelLimitOverrideStore';
 export { modeStore } from '@/app/backend/persistence/stores/registry/modeStore';

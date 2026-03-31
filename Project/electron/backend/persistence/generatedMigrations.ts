@@ -721,6 +721,30 @@ CREATE TABLE memory_records (
     )
 );
 
+CREATE TABLE memory_evidence_records (
+    id TEXT PRIMARY KEY,
+    profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    memory_id TEXT NOT NULL REFERENCES memory_records(id) ON DELETE CASCADE,
+    sequence INTEGER NOT NULL CHECK (sequence >= 0),
+    evidence_kind TEXT NOT NULL CHECK (evidence_kind IN ('run', 'message', 'message_part', 'tool_result_artifact')),
+    label TEXT NOT NULL,
+    excerpt_text TEXT NULL,
+    source_run_id TEXT NULL REFERENCES runs(id) ON DELETE SET NULL,
+    source_message_id TEXT NULL REFERENCES messages(id) ON DELETE SET NULL,
+    source_message_part_id TEXT NULL REFERENCES message_parts(id) ON DELETE SET NULL,
+    metadata_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL,
+    CHECK (
+        (source_run_id IS NULL AND source_message_id IS NULL AND source_message_part_id IS NULL)
+        OR
+        (evidence_kind = 'run' AND source_run_id IS NOT NULL AND source_message_id IS NULL AND source_message_part_id IS NULL)
+        OR
+        (evidence_kind = 'message' AND source_message_id IS NOT NULL AND source_message_part_id IS NULL)
+        OR
+        (evidence_kind IN ('message_part', 'tool_result_artifact') AND source_message_part_id IS NOT NULL)
+    )
+);
+
 CREATE TABLE memory_temporal_facts (
     id TEXT PRIMARY KEY,
     profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
@@ -1167,6 +1191,12 @@ CREATE INDEX idx_memory_records_profile_thread
 
 CREATE INDEX idx_memory_records_profile_run
     ON memory_records(profile_id, run_id);
+
+CREATE UNIQUE INDEX idx_memory_evidence_records_profile_memory_sequence
+    ON memory_evidence_records(profile_id, memory_id, sequence);
+
+CREATE INDEX idx_memory_evidence_records_profile_kind
+    ON memory_evidence_records(profile_id, evidence_kind);
 
 CREATE UNIQUE INDEX idx_memory_temporal_facts_profile_source_memory
     ON memory_temporal_facts(profile_id, source_memory_id);

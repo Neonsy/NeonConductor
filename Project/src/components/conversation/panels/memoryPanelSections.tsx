@@ -89,6 +89,16 @@ function RetrievedMemoryCard({ record }: { record: RetrievedMemoryRecord }) {
             {record.annotations && record.annotations.length > 0 ? (
                 <p className='text-muted-foreground mt-1 text-[11px]'>{record.annotations.join(' ')}</p>
             ) : null}
+            {record.supportingEvidence.length > 0 ? (
+                <div className='mt-2 space-y-1'>
+                    {record.supportingEvidence.map((evidence) => (
+                        <p key={evidence.id} className='text-muted-foreground text-[11px]'>
+                            Evidence: {evidence.label}
+                            {evidence.excerptText ? ` - ${evidence.excerptText}` : ''}
+                        </p>
+                    ))}
+                </div>
+            ) : null}
         </div>
     );
 }

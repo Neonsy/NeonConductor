@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import type { MessagePartRecord, MessageRecord, MemoryRecord, RunUsageRecord } from '@/app/backend/persistence/types';
+import type {
+    MessagePartRecord,
+    MessageRecord,
+    MemoryEvidenceRecord,
+    MemoryRecord,
+    RunUsageRecord,
+    ToolResultArtifactRecord,
+} from '@/app/backend/persistence/types';
 import {
     buildAutomaticRunMemorySnapshot,
     isAutomaticRunOutcomeMemory,
@@ -83,6 +90,45 @@ function createMemoryRecord(overrides: Partial<MemoryRecord>): MemoryRecord {
     return record;
 }
 
+function createMemoryEvidenceRecord(overrides: Partial<MemoryEvidenceRecord>): MemoryEvidenceRecord {
+    return {
+        id: requireEntityId(overrides.id ?? 'mev_memory_auto_1', 'mev', 'Expected memory evidence id.'),
+        profileId: overrides.profileId ?? 'profile_memory_auto',
+        memoryId: overrides.memoryId ?? requireEntityId('mem_memory_auto_1', 'mem', 'Expected memory id.'),
+        sequence: overrides.sequence ?? 0,
+        kind: overrides.kind ?? 'run',
+        label: overrides.label ?? 'Run run_memory_auto_1',
+        metadata: overrides.metadata ?? {},
+        createdAt: overrides.createdAt ?? '2026-03-27T00:00:00.000Z',
+        ...(overrides.excerptText ? { excerptText: overrides.excerptText } : {}),
+        ...(overrides.sourceRunId ? { sourceRunId: overrides.sourceRunId } : {}),
+        ...(overrides.sourceMessageId ? { sourceMessageId: overrides.sourceMessageId } : {}),
+        ...(overrides.sourceMessagePartId ? { sourceMessagePartId: overrides.sourceMessagePartId } : {}),
+    };
+}
+
+function createToolResultArtifactRecord(overrides: Partial<ToolResultArtifactRecord>): ToolResultArtifactRecord {
+    return {
+        messagePartId: overrides.messagePartId ?? requireEntityId('part_memory_auto_2', 'part', 'Expected part id.'),
+        profileId: overrides.profileId ?? 'profile_memory_auto',
+        sessionId: overrides.sessionId ?? requireEntityId('sess_memory_auto_1', 'sess', 'Expected session id.'),
+        runId: overrides.runId ?? requireEntityId('run_memory_auto_1', 'run', 'Expected run id.'),
+        toolName: overrides.toolName ?? 'run_command',
+        artifactKind: overrides.artifactKind ?? 'command_output',
+        contentType: overrides.contentType ?? 'text/plain',
+        storageKind: overrides.storageKind ?? 'text_inline_db',
+        totalBytes: overrides.totalBytes ?? 2,
+        totalLines: overrides.totalLines ?? 1,
+        previewText: overrides.previewText ?? 'ok',
+        previewStrategy: overrides.previewStrategy ?? 'head_only',
+        metadata: overrides.metadata ?? {},
+        createdAt: overrides.createdAt ?? '2026-03-27T00:00:00.000Z',
+        updatedAt: overrides.updatedAt ?? '2026-03-27T00:00:00.000Z',
+        ...(overrides.rawText ? { rawText: overrides.rawText } : { rawText: 'ok' }),
+        ...(overrides.filePath ? { filePath: overrides.filePath } : {}),
+    };
+}
+
 describe('automaticRunMemoryLifecycle', () => {
     const runId = requireEntityId('run_memory_auto_1', 'run', 'Expected run id.');
     const sessionId = requireEntityId('sess_memory_auto_1', 'sess', 'Expected session id.');
@@ -151,7 +197,9 @@ describe('automaticRunMemoryLifecycle', () => {
             usage: baseUsage,
             messages: baseMessages,
             parts: baseParts,
+            toolArtifacts: [createToolResultArtifactRecord({})],
             runScopedMemories: [],
+            runScopedEvidenceByMemoryId: new Map(),
         });
 
         expect(snapshot.title).toBe('Completed run: Summarize the implementation.');
@@ -171,6 +219,17 @@ describe('automaticRunMemoryLifecycle', () => {
             hasAssistantText: true,
             toolCallCount: 1,
             toolErrorCount: 0,
+        });
+        expect(snapshot.evidence.map((evidence) => evidence.kind)).toEqual([
+            'run',
+            'message_part',
+            'tool_result_artifact',
+        ]);
+        expect(snapshot.evidence[1]?.label).toBe('Assistant output');
+        expect(snapshot.evidence[2]).toMatchObject({
+            kind: 'tool_result_artifact',
+            label: 'Tool artifact: run_command',
+            sourceMessagePartId: baseParts[1]?.id,
         });
 
         const activeAutomaticMemory = createMemoryRecord({
@@ -196,7 +255,9 @@ describe('automaticRunMemoryLifecycle', () => {
             usage: baseUsage,
             messages: baseMessages,
             parts: baseParts,
+            toolArtifacts: [createToolResultArtifactRecord({})],
             runScopedMemories: [],
+            runScopedEvidenceByMemoryId: new Map(),
         });
         const matchingMemory = createMemoryRecord({
             title: snapshot.title,
@@ -206,9 +267,32 @@ describe('automaticRunMemoryLifecycle', () => {
             threadId,
             runId,
         });
+        const matchingEvidence = snapshot.evidence.map((evidence, index) =>
+            createMemoryEvidenceRecord({
+                id: `mev_memory_auto_${String(index + 1)}`,
+                memoryId: matchingMemory.id,
+                sequence: index,
+                kind: evidence.kind,
+                label: evidence.label,
+                ...(evidence.excerptText ? { excerptText: evidence.excerptText } : {}),
+                ...(evidence.sourceRunId ? { sourceRunId: evidence.sourceRunId } : {}),
+                ...(evidence.sourceMessageId ? { sourceMessageId: evidence.sourceMessageId } : {}),
+                ...(evidence.sourceMessagePartId ? { sourceMessagePartId: evidence.sourceMessagePartId } : {}),
+                metadata: evidence.metadata ?? {},
+            })
+        );
         const matchingDecision = resolveAutomaticRunMemoryDecision({
             ...snapshot,
             activeAutomaticMemory: matchingMemory,
+            activeAutomaticMemoryEvidence: matchingEvidence.map((evidence) => ({
+                kind: evidence.kind,
+                label: evidence.label,
+                ...(evidence.excerptText ? { excerptText: evidence.excerptText } : {}),
+                ...(evidence.sourceRunId ? { sourceRunId: evidence.sourceRunId } : {}),
+                ...(evidence.sourceMessageId ? { sourceMessageId: evidence.sourceMessageId } : {}),
+                ...(evidence.sourceMessagePartId ? { sourceMessagePartId: evidence.sourceMessagePartId } : {}),
+                ...(Object.keys(evidence.metadata).length > 0 ? { metadata: evidence.metadata } : {}),
+            })),
         });
 
         expect(matchingDecision.action).toBe('noop');
@@ -227,7 +311,9 @@ describe('automaticRunMemoryLifecycle', () => {
             },
             messages: baseMessages,
             parts: baseParts,
+            toolArtifacts: [createToolResultArtifactRecord({})],
             runScopedMemories: [matchingMemory],
+            runScopedEvidenceByMemoryId: new Map([[matchingMemory.id, matchingEvidence]]),
         });
         const changedDecision = resolveAutomaticRunMemoryDecision(changedSnapshot);
 
@@ -246,12 +332,38 @@ describe('automaticRunMemoryLifecycle', () => {
             usage: baseUsage,
             messages: baseMessages,
             parts: baseParts,
+            toolArtifacts: [createToolResultArtifactRecord({})],
             runScopedMemories: [],
+            runScopedEvidenceByMemoryId: new Map(),
         });
 
         const decision = resolveAutomaticRunMemoryDecision(snapshot);
 
         expect(decision.action).toBe('created');
         expect(decision.activeAutomaticMemory).toBeUndefined();
+    });
+
+    it('falls back to message-part evidence when a tool result has no persisted artifact', () => {
+        const snapshot = buildAutomaticRunMemorySnapshot({
+            run: baseRun,
+            sessionThread: {
+                thread: {
+                    id: threadId,
+                },
+            },
+            usage: baseUsage,
+            messages: baseMessages,
+            parts: baseParts,
+            toolArtifacts: [],
+            runScopedMemories: [],
+            runScopedEvidenceByMemoryId: new Map(),
+        });
+
+        expect(snapshot.evidence.map((evidence) => evidence.kind)).toEqual(['run', 'message_part', 'message_part']);
+        expect(snapshot.evidence[2]).toMatchObject({
+            kind: 'message_part',
+            label: 'Tool result: run_command',
+            sourceMessagePartId: baseParts[1]?.id,
+        });
     });
 });

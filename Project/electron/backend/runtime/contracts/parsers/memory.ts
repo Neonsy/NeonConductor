@@ -6,6 +6,7 @@ import {
 } from '@/app/backend/runtime/contracts/enums';
 import {
     createParser,
+    readArray,
     readEntityId,
     readEnumValue,
     readObject,
@@ -14,10 +15,12 @@ import {
     readProfileId,
     readString,
 } from '@/app/backend/runtime/contracts/parsers/helpers';
+import { memoryEvidenceKinds } from '@/app/backend/runtime/contracts/types/memory';
 import type {
     ApplyMemoryEditProposalInput,
     MemoryByIdInput,
     MemoryCreateInput,
+    MemoryEvidenceCreateInput,
     MemoryDisableInput,
     MemoryListInput,
     MemoryProjectionContextInput,
@@ -32,6 +35,40 @@ function readMetadataRecord(value: unknown, field: string): Record<string, unkno
     return readObject(value, field);
 }
 
+function readMemoryEvidenceArray(value: unknown, field: string): MemoryEvidenceCreateInput[] | undefined {
+    if (value === undefined) {
+        return undefined;
+    }
+
+    return readArray(value, field).map((item, index) => {
+        const source = readObject(item, `${field}[${String(index)}]`);
+        const excerptText = readOptionalString(source.excerptText, `${field}[${String(index)}].excerptText`);
+        const sourceRunId =
+            source.sourceRunId !== undefined
+                ? readEntityId(source.sourceRunId, `${field}[${String(index)}].sourceRunId`, 'run')
+                : undefined;
+        const sourceMessageId =
+            source.sourceMessageId !== undefined
+                ? readEntityId(source.sourceMessageId, `${field}[${String(index)}].sourceMessageId`, 'msg')
+                : undefined;
+        const sourceMessagePartId =
+            source.sourceMessagePartId !== undefined
+                ? readEntityId(source.sourceMessagePartId, `${field}[${String(index)}].sourceMessagePartId`, 'part')
+                : undefined;
+        const metadata = readMetadataRecord(source.metadata, `${field}[${String(index)}].metadata`);
+
+        return {
+            kind: readEnumValue(source.kind, `${field}[${String(index)}].kind`, memoryEvidenceKinds),
+            label: readString(source.label, `${field}[${String(index)}].label`),
+            ...(excerptText ? { excerptText } : {}),
+            ...(sourceRunId ? { sourceRunId } : {}),
+            ...(sourceMessageId ? { sourceMessageId } : {}),
+            ...(sourceMessagePartId ? { sourceMessagePartId } : {}),
+            ...(metadata ? { metadata } : {}),
+        };
+    });
+}
+
 export function parseMemoryCreateInput(input: unknown): MemoryCreateInput {
     const source = readObject(input, 'input');
     const summaryText = readOptionalString(source.summaryText, 'summaryText');
@@ -39,6 +76,7 @@ export function parseMemoryCreateInput(input: unknown): MemoryCreateInput {
     const threadId = source.threadId !== undefined ? readEntityId(source.threadId, 'threadId', 'thr') : undefined;
     const runId = source.runId !== undefined ? readEntityId(source.runId, 'runId', 'run') : undefined;
     const metadata = readMetadataRecord(source.metadata, 'metadata');
+    const evidence = readMemoryEvidenceArray(source.evidence, 'evidence');
 
     return {
         profileId: readProfileId(source),
@@ -52,6 +90,7 @@ export function parseMemoryCreateInput(input: unknown): MemoryCreateInput {
         ...(workspaceFingerprint ? { workspaceFingerprint } : {}),
         ...(threadId ? { threadId } : {}),
         ...(runId ? { runId } : {}),
+        ...(evidence ? { evidence } : {}),
     };
 }
 
@@ -94,6 +133,7 @@ export function parseMemorySupersedeInput(input: unknown): MemorySupersedeInput 
     const source = readObject(input, 'input');
     const summaryText = readOptionalString(source.summaryText, 'summaryText');
     const metadata = readMetadataRecord(source.metadata, 'metadata');
+    const evidence = readMemoryEvidenceArray(source.evidence, 'evidence');
 
     return {
         profileId: readProfileId(source),
@@ -103,6 +143,7 @@ export function parseMemorySupersedeInput(input: unknown): MemorySupersedeInput 
         bodyMarkdown: readString(source.bodyMarkdown, 'bodyMarkdown'),
         ...(summaryText ? { summaryText } : {}),
         ...(metadata ? { metadata } : {}),
+        ...(evidence ? { evidence } : {}),
     };
 }
 

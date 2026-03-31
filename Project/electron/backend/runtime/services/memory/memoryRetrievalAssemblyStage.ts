@@ -23,6 +23,7 @@ export async function assembleMemoryRetrievalResult(
 
     const records = input.decisions.map((candidate, index) => {
         const derivedSummary = finalDerivedSummaryById?.get(candidate.memory.id);
+        const supportingEvidence = input.evidenceByMemoryId.get(candidate.memory.id) ?? [];
         return {
             memoryId: candidate.memory.id,
             title: candidate.memory.title,
@@ -30,6 +31,7 @@ export async function assembleMemoryRetrievalResult(
             scopeKind: candidate.memory.scopeKind,
             matchReason: candidate.matchReason,
             order: index + 1,
+            supportingEvidence,
             ...(candidate.sourceMemoryId ? { sourceMemoryId: candidate.sourceMemoryId } : {}),
             ...(candidate.annotations && candidate.annotations.length > 0
                 ? { annotations: candidate.annotations }
@@ -50,7 +52,11 @@ export async function assembleMemoryRetrievalResult(
               messages: [injectedMessage.message],
           }
         : {
-              records: [],
+              summary: {
+                  records,
+                  injectedTextLength: 0,
+              },
+              records,
               messages: [],
           };
 }

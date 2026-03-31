@@ -1,6 +1,7 @@
 import { assembleMemoryRetrievalResult } from '@/app/backend/runtime/services/memory/memoryRetrievalAssemblyStage';
 import { collectMemoryRetrievalCandidates } from '@/app/backend/runtime/services/memory/memoryRetrievalCandidateCollector';
 import { resolveMemoryRetrievalContext } from '@/app/backend/runtime/services/memory/memoryRetrievalContextResolver';
+import { loadMemoryRetrievalEvidence } from '@/app/backend/runtime/services/memory/memoryRetrievalEvidenceStage';
 import { expandMemoryRetrievalCandidates } from '@/app/backend/runtime/services/memory/memoryRetrievalExpansionStage';
 import type { MemoryRetrievalStageInput } from '@/app/backend/runtime/services/memory/memoryRetrievalPipelineTypes';
 import { rankRetrievedMemoryCandidates } from '@/app/backend/runtime/services/memory/memoryRetrievalRankingPolicy';
@@ -29,10 +30,15 @@ export class MemoryRetrievalService {
             promptTerms: context.promptTerms,
             derivedCandidates: expanded.derivedCandidates,
         }).slice(0, 6);
+        const evidence = await loadMemoryRetrievalEvidence({
+            profileId: input.profileId,
+            decisions: orderedCandidates,
+        });
 
         const assembled = await assembleMemoryRetrievalResult({
             profileId: input.profileId,
             decisions: orderedCandidates,
+            evidenceByMemoryId: evidence.evidenceByMemoryId,
         });
 
         return {

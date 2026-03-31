@@ -1,4 +1,5 @@
-import { memoryStore } from '@/app/backend/persistence/stores';
+import { getPersistence } from '@/app/backend/persistence/db';
+import { memoryEvidenceStore, memoryStore } from '@/app/backend/persistence/stores';
 import type { MemoryRecord } from '@/app/backend/persistence/types';
 import type {
     EntityId,
@@ -36,16 +37,28 @@ class MemoryService {
             });
         }
 
-        const createdMemory = await memoryStore.create({
-            profileId: input.profileId,
-            memoryType: input.memoryType,
-            scopeKind: input.scopeKind,
-            createdByKind: input.createdByKind,
-            title: input.title,
-            bodyMarkdown: input.bodyMarkdown,
-            ...(input.summaryText ? { summaryText: input.summaryText } : {}),
-            ...(input.metadata ? { metadata: input.metadata } : {}),
-            ...resolvedProvenance.value,
+        const createdMemory = await getPersistence().db.transaction().execute(async (transaction) => {
+            const created = await memoryStore.createInTransaction(transaction, {
+                profileId: input.profileId,
+                memoryType: input.memoryType,
+                scopeKind: input.scopeKind,
+                createdByKind: input.createdByKind,
+                title: input.title,
+                bodyMarkdown: input.bodyMarkdown,
+                ...(input.summaryText ? { summaryText: input.summaryText } : {}),
+                ...(input.metadata ? { metadata: input.metadata } : {}),
+                ...resolvedProvenance.value,
+            });
+
+            if (input.evidence && input.evidence.length > 0) {
+                await memoryEvidenceStore.createManyInTransaction(transaction, {
+                    profileId: input.profileId,
+                    memoryId: created.id,
+                    evidence: input.evidence,
+                });
+            }
+
+            return created;
         });
         await this.refreshDerivedIndex(input.profileId, [createdMemory.id], 'create_memory');
 
@@ -106,22 +119,34 @@ class MemoryService {
             return errOp('invalid_input', 'Only active memory can be superseded.');
         }
 
-        const superseded = await memoryStore.supersede({
-            profileId: input.profileId,
-            previousMemoryId: input.memoryId,
-            replacement: {
+        const superseded = await getPersistence().db.transaction().execute(async (transaction) => {
+            const result = await memoryStore.supersedeInTransaction(transaction, {
                 profileId: input.profileId,
-                memoryType: existing.memoryType,
-                scopeKind: existing.scopeKind,
-                createdByKind: input.createdByKind,
-                title: input.title,
-                bodyMarkdown: input.bodyMarkdown,
-                ...(input.summaryText ? { summaryText: input.summaryText } : {}),
-                ...(input.metadata ? { metadata: input.metadata } : {}),
-                ...(existing.workspaceFingerprint ? { workspaceFingerprint: existing.workspaceFingerprint } : {}),
-                ...(existing.threadId ? { threadId: existing.threadId } : {}),
-                ...(existing.runId ? { runId: existing.runId } : {}),
-            },
+                previousMemoryId: input.memoryId,
+                replacement: {
+                    profileId: input.profileId,
+                    memoryType: existing.memoryType,
+                    scopeKind: existing.scopeKind,
+                    createdByKind: input.createdByKind,
+                    title: input.title,
+                    bodyMarkdown: input.bodyMarkdown,
+                    ...(input.summaryText ? { summaryText: input.summaryText } : {}),
+                    ...(input.metadata ? { metadata: input.metadata } : {}),
+                    ...(existing.workspaceFingerprint ? { workspaceFingerprint: existing.workspaceFingerprint } : {}),
+                    ...(existing.threadId ? { threadId: existing.threadId } : {}),
+                    ...(existing.runId ? { runId: existing.runId } : {}),
+                },
+            });
+
+            if (result && input.evidence && input.evidence.length > 0) {
+                await memoryEvidenceStore.createManyInTransaction(transaction, {
+                    profileId: input.profileId,
+                    memoryId: result.replacement.id,
+                    evidence: input.evidence,
+                });
+            }
+
+            return result;
         });
 
         if (!superseded) {

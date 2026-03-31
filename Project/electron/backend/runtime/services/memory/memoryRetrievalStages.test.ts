@@ -1,11 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { memoryEvidenceStore } from '@/app/backend/persistence/stores';
 import type { MemoryRecord } from '@/app/backend/persistence/types';
 import { okOp } from '@/app/backend/runtime/services/common/operationalError';
 import { advancedMemoryDerivationService } from '@/app/backend/runtime/services/memory/advancedDerivation';
 import { assembleMemoryRetrievalResult } from '@/app/backend/runtime/services/memory/memoryRetrievalAssemblyStage';
 import { collectMemoryRetrievalCandidates } from '@/app/backend/runtime/services/memory/memoryRetrievalCandidateCollector';
 import { resolveMemoryRetrievalContext } from '@/app/backend/runtime/services/memory/memoryRetrievalContextResolver';
+import { loadMemoryRetrievalEvidence } from '@/app/backend/runtime/services/memory/memoryRetrievalEvidenceStage';
 import { expandMemoryRetrievalCandidates } from '@/app/backend/runtime/services/memory/memoryRetrievalExpansionStage';
 import { rankRetrievedMemoryCandidates } from '@/app/backend/runtime/services/memory/memoryRetrievalRankingPolicy';
 import {
@@ -203,16 +205,54 @@ describe('memory retrieval stages', () => {
             .mockResolvedValue(okOp(new Map()));
 
         try {
+            const evidence = await loadMemoryRetrievalEvidence({
+                profileId,
+                decisions: [rankedDecision],
+            });
             const assembled = await assembleMemoryRetrievalResult({
                 profileId,
                 decisions: [rankedDecision],
+                evidenceByMemoryId: evidence.evidenceByMemoryId,
             });
 
             expect(assembled.records.map((record) => record.title)).toEqual(['Assembled memory']);
             expect(assembled.summary?.records[0]?.matchReason).toBe('exact_global');
+            expect(assembled.summary?.records[0]?.supportingEvidence).toEqual([]);
             expect(assembled.messages).toHaveLength(1);
         } finally {
             summariesSpy.mockRestore();
+        }
+    });
+
+    it('fails soft when the evidence-loading stage cannot read evidence', async () => {
+        const evidenceSpy = vi
+            .spyOn(memoryEvidenceStore, 'listByMemoryIds')
+            .mockRejectedValue(new Error('Evidence stage failed.'));
+
+        try {
+            const result = await loadMemoryRetrievalEvidence({
+                profileId,
+                decisions: [
+                    {
+                        memory: createMemoryRecord({
+                            id: requireEntityId('mem_evidence_stage', 'mem', 'Expected evidence stage memory id.'),
+                        }),
+                        matchReason: 'exact_global',
+                        tier: 'exact',
+                        score: -1,
+                        priority: 1,
+                        explanation: {
+                            selectedSourceLabel: 'Exact global',
+                            selectionReason: 'Global scope matched this memory directly.',
+                            rankingReason: 'Exact scope outranks broader matches.',
+                        },
+                    },
+                ],
+            });
+
+            expect(result.evidenceByMemoryId.size).toBe(0);
+        } finally {
+            evidenceSpy.mockRestore();
         }
     });
 });

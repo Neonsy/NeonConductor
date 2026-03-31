@@ -1,4 +1,12 @@
-import { messageStore, memoryStore, runStore, runUsageStore, threadStore } from '@/app/backend/persistence/stores';
+import {
+    messageStore,
+    memoryEvidenceStore,
+    memoryStore,
+    runStore,
+    runUsageStore,
+    threadStore,
+    toolResultArtifactStore,
+} from '@/app/backend/persistence/stores';
 import type { MemoryRecord } from '@/app/backend/runtime/contracts';
 import { errOp, okOp, type OperationalResult } from '@/app/backend/runtime/services/common/operationalError';
 import {
@@ -46,6 +54,19 @@ export class MemoryRuntimeService {
                 runId: run.id,
             }),
         ]);
+        const [toolArtifacts, runScopedEvidence] = await Promise.all([
+            toolResultArtifactStore.listByMessagePartIds(parts.map((part) => part.id)),
+            memoryEvidenceStore.listByMemoryIds(
+                input.profileId,
+                runScopedMemories.map((memory) => memory.id)
+            ),
+        ]);
+        const runScopedEvidenceByMemoryId = new Map<string, typeof runScopedEvidence>();
+        for (const evidence of runScopedEvidence) {
+            const existing = runScopedEvidenceByMemoryId.get(evidence.memoryId) ?? [];
+            existing.push(evidence);
+            runScopedEvidenceByMemoryId.set(evidence.memoryId, existing);
+        }
 
         const snapshot = buildAutomaticRunMemorySnapshot({
             run: {
@@ -61,7 +82,9 @@ export class MemoryRuntimeService {
             usage,
             messages,
             parts,
+            toolArtifacts,
             runScopedMemories,
+            runScopedEvidenceByMemoryId,
         });
         const decision = resolveAutomaticRunMemoryDecision(snapshot);
 
@@ -81,6 +104,7 @@ export class MemoryRuntimeService {
                 bodyMarkdown: snapshot.bodyMarkdown,
                 summaryText: snapshot.summaryText,
                 metadata: snapshot.metadata,
+                evidence: snapshot.evidence,
             });
             if (superseded.isErr()) {
                 return errOp(superseded.error.code, superseded.error.message, {
@@ -105,6 +129,7 @@ export class MemoryRuntimeService {
             bodyMarkdown: snapshot.bodyMarkdown,
             summaryText: snapshot.summaryText,
             metadata: snapshot.metadata,
+            evidence: snapshot.evidence,
         });
         if (created.isErr()) {
             return errOp(created.error.code, created.error.message, {

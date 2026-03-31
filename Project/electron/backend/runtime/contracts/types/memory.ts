@@ -26,6 +26,44 @@ export interface MemoryRecord {
     updatedAt: string;
 }
 
+export const memoryEvidenceKinds = ['run', 'message', 'message_part', 'tool_result_artifact'] as const;
+export type MemoryEvidenceKind = (typeof memoryEvidenceKinds)[number];
+
+export interface MemoryEvidenceRecord {
+    id: EntityId<'mev'>;
+    profileId: string;
+    memoryId: EntityId<'mem'>;
+    sequence: number;
+    kind: MemoryEvidenceKind;
+    label: string;
+    excerptText?: string;
+    sourceRunId?: EntityId<'run'>;
+    sourceMessageId?: EntityId<'msg'>;
+    sourceMessagePartId?: EntityId<'part'>;
+    metadata: Record<string, unknown>;
+    createdAt: string;
+}
+
+export interface MemoryEvidenceSummary {
+    id: EntityId<'mev'>;
+    kind: MemoryEvidenceKind;
+    label: string;
+    excerptText?: string;
+    sourceRunId?: EntityId<'run'>;
+    sourceMessageId?: EntityId<'msg'>;
+    sourceMessagePartId?: EntityId<'part'>;
+}
+
+export interface MemoryEvidenceCreateInput {
+    kind: MemoryEvidenceKind;
+    label: string;
+    excerptText?: string;
+    sourceRunId?: EntityId<'run'>;
+    sourceMessageId?: EntityId<'msg'>;
+    sourceMessagePartId?: EntityId<'part'>;
+    metadata?: Record<string, unknown>;
+}
+
 export const memoryTemporalFactStatuses = ['current', 'superseded', 'disabled'] as const;
 export type MemoryTemporalFactStatus = (typeof memoryTemporalFactStatuses)[number];
 
@@ -109,6 +147,7 @@ export interface RetrievedMemoryRecord {
     sourceMemoryId?: EntityId<'mem'>;
     annotations?: string[];
     derivedSummary?: MemoryDerivedSummary;
+    supportingEvidence: MemoryEvidenceSummary[];
 }
 
 export interface RetrievedMemorySummary {
@@ -127,6 +166,7 @@ export interface MemoryCreateInput extends ProfileInput {
     workspaceFingerprint?: string;
     threadId?: EntityId<'thr'>;
     runId?: EntityId<'run'>;
+    evidence?: MemoryEvidenceCreateInput[];
 }
 
 export interface MemoryListInput extends ProfileInput {
@@ -150,6 +190,7 @@ export interface MemorySupersedeInput extends MemoryByIdInput {
     bodyMarkdown: string;
     summaryText?: string;
     metadata?: Record<string, unknown>;
+    evidence?: MemoryEvidenceCreateInput[];
 }
 
 export interface MemoryProjectionContextInput extends ProfileInput {
