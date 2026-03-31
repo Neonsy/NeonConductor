@@ -2,38 +2,11 @@ import { err, ok, type Result } from 'neverthrow';
 import { spawn } from 'node:child_process';
 
 import { readNumberArg, readStringArg } from '@/app/backend/runtime/services/toolExecution/args';
+import { createRunCommandExecutionOutput } from '@/app/backend/runtime/services/toolExecution/toolOutputCompressionPolicy';
 import type { ToolExecutionFailure, ToolExecutionOutput } from '@/app/backend/runtime/services/toolExecution/types';
 
 const DEFAULT_TIMEOUT_MS = 15_000;
 const MAX_TIMEOUT_MS = 60_000;
-const MAX_OUTPUT_BYTES = 24_000;
-
-function appendOutput(
-    existing: Uint8Array,
-    chunk: Uint8Array | string,
-    limit: number
-): { buffer: Uint8Array; truncated: boolean } {
-    const nextChunk = typeof chunk === 'string' ? Buffer.from(chunk) : Buffer.from(chunk);
-    if (existing.byteLength >= limit) {
-        return {
-            buffer: existing,
-            truncated: true,
-        };
-    }
-
-    const available = limit - existing.byteLength;
-    if (nextChunk.byteLength <= available) {
-        return {
-            buffer: Buffer.concat([existing, nextChunk]),
-            truncated: false,
-        };
-    }
-
-    return {
-        buffer: Buffer.concat([existing, nextChunk.subarray(0, available)]),
-        truncated: true,
-    };
-}
 
 function resolveTimeoutMs(args: Record<string, unknown>): number {
     const requested = Math.floor(readNumberArg(args, 'timeoutMs', DEFAULT_TIMEOUT_MS));
@@ -85,10 +58,8 @@ export async function runCommandToolHandler(
 
     return new Promise((resolve) => {
         const startedAt = Date.now();
-        let stdout: Uint8Array = Buffer.alloc(0);
-        let stderr: Uint8Array = Buffer.alloc(0);
-        let stdoutTruncated = false;
-        let stderrTruncated = false;
+        const stdoutChunks: Buffer[] = [];
+        const stderrChunks: Buffer[] = [];
         let timedOut = false;
         let settled = false;
 
@@ -103,15 +74,11 @@ export async function runCommandToolHandler(
         }, timeoutMs);
 
         child.stdout.on('data', (chunk: Buffer | string) => {
-            const appended = appendOutput(stdout, chunk, MAX_OUTPUT_BYTES);
-            stdout = appended.buffer;
-            stdoutTruncated = stdoutTruncated || appended.truncated;
+            stdoutChunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : Buffer.from(chunk));
         });
 
         child.stderr.on('data', (chunk: Buffer | string) => {
-            const appended = appendOutput(stderr, chunk, MAX_OUTPUT_BYTES);
-            stderr = appended.buffer;
-            stderrTruncated = stderrTruncated || appended.truncated;
+            stderrChunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : Buffer.from(chunk));
         });
 
         child.on('error', (error) => {
@@ -135,17 +102,22 @@ export async function runCommandToolHandler(
             settled = true;
             clearTimeout(timeout);
 
+            const stdout = Buffer.concat(stdoutChunks).toString('utf8');
+            const stderr = Buffer.concat(stderrChunks).toString('utf8');
+            const executionOutput = createRunCommandExecutionOutput({
+                command,
+                cwd: context.cwd,
+                exitCode,
+                stdout,
+                stderr,
+                timedOut,
+                durationMs: Date.now() - startedAt,
+            });
+
             resolve(
                 okResult({
-                    command,
-                    cwd: context.cwd,
-                    exitCode,
-                    stdout: Buffer.from(stdout).toString('utf8'),
-                    stderr: Buffer.from(stderr).toString('utf8'),
-                    stdoutTruncated,
-                    stderrTruncated,
-                    timedOut,
-                    durationMs: Date.now() - startedAt,
+                    ...executionOutput.output,
+                    artifactCandidate: executionOutput.artifactCandidate,
                 })
             );
         });

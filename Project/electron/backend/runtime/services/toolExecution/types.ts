@@ -17,11 +17,69 @@ export interface ToolExecutionFailure {
 
 export type ToolExecutionOutput = Record<string, unknown>;
 
+export interface CommandOutputArtifactCandidateMetadata extends Record<string, unknown> {
+    command: string;
+    cwd: string;
+    exitCode: number | null;
+    timedOut: boolean;
+    durationMs: number;
+    stdoutBytes: number;
+    stderrBytes: number;
+    totalBytes: number;
+    stdoutLines: number;
+    stderrLines: number;
+    totalLines: number;
+    omittedBytes: number;
+}
+
+export interface FileReadArtifactCandidateMetadata extends Record<string, unknown> {
+    path: string;
+    byteLength: number;
+    lineCount: number;
+    omittedBytes: number;
+    previewTruncated: boolean;
+}
+
+export interface DirectoryListingArtifactCandidateMetadata extends Record<string, unknown> {
+    rootPath: string;
+    count: number;
+    omittedEntries: number;
+    serializedBytes: number;
+    previewTruncated: boolean;
+}
+
+export interface CommandOutputArtifactCandidate {
+    kind: 'command_output';
+    contentType: 'text/plain';
+    rawText: string;
+    metadata: CommandOutputArtifactCandidateMetadata;
+}
+
+export interface FileReadArtifactCandidate {
+    kind: 'file_read';
+    contentType: 'text/plain';
+    rawText: string;
+    metadata: FileReadArtifactCandidateMetadata;
+}
+
+export interface DirectoryListingArtifactCandidate {
+    kind: 'directory_listing';
+    contentType: 'text/plain';
+    rawText: string;
+    metadata: DirectoryListingArtifactCandidateMetadata;
+}
+
+export type ToolExecutionArtifactCandidate =
+    | CommandOutputArtifactCandidate
+    | FileReadArtifactCandidate
+    | DirectoryListingArtifactCandidate;
+
 export type ToolInvocationOutcome =
     | {
           kind: 'executed';
           toolId: string;
           output: ToolExecutionOutput;
+          artifactCandidate?: ToolExecutionArtifactCandidate;
           at: string;
           policy: ToolExecutionPolicy;
       }

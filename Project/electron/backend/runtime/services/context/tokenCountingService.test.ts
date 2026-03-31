@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { tokenCountingService } from '@/app/backend/runtime/services/context/tokenCountingService';
 import { createTextMessage } from '@/app/backend/runtime/services/runExecution/contextParts';
+import type { RunContextMessage } from '@/app/backend/runtime/services/runExecution/types';
 
 describe('tokenCountingService', () => {
     it('uses estimated counting for providers without a native counter', async () => {
@@ -40,5 +41,31 @@ describe('tokenCountingService', () => {
         expect(estimate.mode).toBe('estimated');
         expect(estimate.totalTokens).toBeGreaterThan(0);
         expect(estimate.parts).toHaveLength(1);
+    });
+
+    it('counts only the stored preview text for tool results', async () => {
+        const previewText = '{"ok":true,"output":{"artifactized":true,"stdout":"preview only"}}';
+        const estimate = await tokenCountingService.estimate({
+            profileId: 'profile_test',
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
+            messages: [
+                {
+                    role: 'tool',
+                    parts: [
+                        {
+                            type: 'tool_result',
+                            callId: 'call_large',
+                            toolName: 'run_command',
+                            outputText: previewText,
+                            isError: false,
+                        },
+                    ],
+                } satisfies RunContextMessage,
+            ],
+        });
+
+        expect(estimate.parts).toHaveLength(1);
+        expect(estimate.parts[0]?.textLength).toBe(previewText.length);
     });
 });

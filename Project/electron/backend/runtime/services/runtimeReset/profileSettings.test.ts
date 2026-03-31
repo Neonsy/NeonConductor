@@ -1,4 +1,14 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+const { deleteByProfileMock } = vi.hoisted(() => ({
+    deleteByProfileMock: vi.fn(),
+}));
+
+vi.mock('@/app/backend/persistence/stores', () => ({
+    toolResultArtifactStore: {
+        deleteByProfile: deleteByProfileMock,
+    },
+}));
 
 import { planProfileSettingsReset } from '@/app/backend/runtime/services/runtimeReset/profileSettings';
 
@@ -40,6 +50,16 @@ function createResetDb(input?: {
 }
 
 describe('runtimeReset/profileSettings', () => {
+    it('cleans up tool-result artifacts during profile-settings reset apply', async () => {
+        deleteByProfileMock.mockReset();
+        const { db } = createResetDb();
+        const plan = await planProfileSettingsReset(db as never, 'profile_test');
+
+        await plan.apply(db as never);
+
+        expect(deleteByProfileMock).toHaveBeenCalledWith('profile_test');
+    });
+
     it('includes preparation rows in profile-settings reset counts', async () => {
         const { db } = createResetDb({
             counts: {

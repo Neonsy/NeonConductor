@@ -1,12 +1,18 @@
 import { err, ok, type Result } from 'neverthrow';
 import { readFile } from 'node:fs/promises';
+import { Buffer } from 'node:buffer';
 
 import {
     readNumberArg,
     readStringArg,
     resolveAbsoluteToolPath,
 } from '@/app/backend/runtime/services/toolExecution/args';
+import { createReadFileExecutionOutput } from '@/app/backend/runtime/services/toolExecution/toolOutputCompressionPolicy';
 import type { ToolExecutionFailure, ToolExecutionOutput } from '@/app/backend/runtime/services/toolExecution/types';
+
+function isMateriallyLossyUtf8Decode(buffer: Buffer, text: string): boolean {
+    return Buffer.from(text, 'utf8').compare(buffer) !== 0;
+}
 
 export async function readFileToolHandler(
     args: Record<string, unknown>
@@ -19,23 +25,33 @@ export async function readFileToolHandler(
         });
     }
 
-    const maxBytes = Math.max(1, Math.floor(readNumberArg(args, 'maxBytes', 200_000)));
     const targetPathResult = resolveAbsoluteToolPath(fileArg);
     if (targetPathResult.isErr()) {
         return err(targetPathResult.error);
     }
 
     const targetPath = targetPathResult.value;
+    const maxBytes = Math.max(1, Math.floor(readNumberArg(args, 'maxBytes', 200_000)));
     try {
         const buffer = await readFile(targetPath);
-        const truncated = buffer.byteLength > maxBytes;
-        const content = buffer.subarray(0, maxBytes).toString('utf8');
+        const rawText = buffer.toString('utf8');
+        if (isMateriallyLossyUtf8Decode(buffer, rawText)) {
+            return err({
+                code: 'execution_failed',
+                message: 'read_file currently supports UTF-8 text files only.',
+            });
+        }
+
+        const executionOutput = createReadFileExecutionOutput({
+            path: targetPath,
+            rawText,
+            byteLength: buffer.byteLength,
+            requestedPreviewMaxBytes: maxBytes,
+        });
 
         return ok({
-            path: targetPath,
-            content,
-            byteLength: buffer.byteLength,
-            truncated,
+            ...executionOutput.output,
+            artifactCandidate: executionOutput.artifactCandidate,
         });
     } catch (error) {
         return err({

@@ -412,6 +412,31 @@ CREATE TABLE message_media (
     created_at TEXT NOT NULL
 );
 
+CREATE TABLE tool_result_artifacts (
+    message_part_id TEXT PRIMARY KEY REFERENCES message_parts(id) ON DELETE CASCADE,
+    profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+    tool_name TEXT NOT NULL,
+    artifact_kind TEXT NOT NULL CHECK (artifact_kind IN ('command_output', 'file_read', 'directory_listing')),
+    content_type TEXT NOT NULL,
+    storage_kind TEXT NOT NULL CHECK (storage_kind IN ('text_inline_db', 'file_path')),
+    raw_text TEXT NULL,
+    file_path TEXT NULL,
+    total_bytes INTEGER NOT NULL CHECK (total_bytes >= 0),
+    total_lines INTEGER NOT NULL CHECK (total_lines >= 0),
+    preview_text TEXT NOT NULL,
+    preview_strategy TEXT NOT NULL CHECK (preview_strategy IN ('head_tail', 'head_only', 'bounded_list')),
+    metadata_json TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    CHECK (
+        (storage_kind = 'text_inline_db' AND raw_text IS NOT NULL AND file_path IS NULL)
+        OR
+        (storage_kind = 'file_path' AND raw_text IS NULL AND file_path IS NOT NULL)
+    )
+);
+
 CREATE TABLE session_context_compactions (
     session_id TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
     profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
@@ -1029,6 +1054,12 @@ CREATE UNIQUE INDEX idx_message_parts_message_sequence
 
 CREATE INDEX idx_message_media_part_id
     ON message_media(message_part_id);
+
+CREATE INDEX idx_tool_result_artifacts_profile_session
+    ON tool_result_artifacts(profile_id, session_id);
+
+CREATE INDEX idx_tool_result_artifacts_run_id
+    ON tool_result_artifacts(run_id);
 
 CREATE INDEX idx_session_context_compactions_profile_session
     ON session_context_compactions(profile_id, session_id);

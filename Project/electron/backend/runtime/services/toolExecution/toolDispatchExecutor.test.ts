@@ -119,6 +119,75 @@ describe('dispatchToolInvocation', () => {
         );
     });
 
+    it('strips supported artifact candidates from native tool output while preserving the semantic preview payload', async () => {
+        invokeToolHandlerMock.mockResolvedValue(
+            createHandledOkResult({
+                path: 'README.md',
+                content: 'preview body',
+                truncated: true,
+                artifactCandidate: {
+                    kind: 'file_read',
+                    contentType: 'text/plain',
+                    rawText: 'full file body',
+                    metadata: {
+                        path: 'README.md',
+                        byteLength: 50_000,
+                        lineCount: 100,
+                        omittedBytes: 38_000,
+                        previewTruncated: true,
+                    },
+                },
+            })
+        );
+
+        const outcome = await dispatchToolInvocation({
+            context: {
+                at: '2026-03-30T10:00:00.000Z',
+                args: { path: 'README.md' },
+                definition: buildNativeToolDefinition(),
+                executionArgs: { path: 'README.md' },
+                shellApprovalContext: null,
+                workspaceRequirement: 'resolved',
+                workspaceRootPath: '/workspace/project',
+            },
+            allowed: {
+                kind: 'allow',
+                resource: 'tool:read_file',
+                policy: {
+                    effective: 'allow',
+                    source: 'mode',
+                },
+            },
+        });
+
+        expect(outcome).toEqual({
+            kind: 'executed',
+            toolId: 'read_file',
+            output: {
+                path: 'README.md',
+                content: 'preview body',
+                truncated: true,
+            },
+            artifactCandidate: {
+                kind: 'file_read',
+                contentType: 'text/plain',
+                rawText: 'full file body',
+                metadata: {
+                    path: 'README.md',
+                    byteLength: 50_000,
+                    lineCount: 100,
+                    omittedBytes: 38_000,
+                    previewTruncated: true,
+                },
+            },
+            at: '2026-03-30T10:00:00.000Z',
+            policy: {
+                effective: 'allow',
+                source: 'mode',
+            },
+        });
+    });
+
     it('preserves policy metadata for native tool failure', async () => {
         invokeToolHandlerMock.mockResolvedValue(
             createHandledErrResult({

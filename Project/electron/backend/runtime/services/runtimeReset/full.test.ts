@@ -1,4 +1,14 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+const { deleteAllMock } = vi.hoisted(() => ({
+    deleteAllMock: vi.fn(),
+}));
+
+vi.mock('@/app/backend/persistence/stores', () => ({
+    toolResultArtifactStore: {
+        deleteAll: deleteAllMock,
+    },
+}));
 
 import { planFullReset } from '@/app/backend/runtime/services/runtimeReset/full';
 
@@ -38,6 +48,16 @@ function createResetDb(input?: {
 }
 
 describe('runtimeReset/full', () => {
+    it('cleans up tool-result artifacts during full reset apply', async () => {
+        deleteAllMock.mockReset();
+        const { db } = createResetDb();
+        const plan = await planFullReset(db as never);
+
+        await plan.apply(db as never);
+
+        expect(deleteAllMock).toHaveBeenCalledTimes(1);
+    });
+
     it('includes preparation rows in full reset counts', async () => {
         const { db } = createResetDb({
             counts: {

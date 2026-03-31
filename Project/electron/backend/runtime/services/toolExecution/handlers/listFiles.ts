@@ -8,6 +8,7 @@ import {
     readStringArg,
     resolveAbsoluteToolPath,
 } from '@/app/backend/runtime/services/toolExecution/args';
+import { createDirectoryListingExecutionOutput } from '@/app/backend/runtime/services/toolExecution/toolOutputCompressionPolicy';
 import type {
     ToolExecutionFailure,
     ToolExecutionOutput,
@@ -58,11 +59,16 @@ export async function listFilesToolHandler(
             }
         }
 
-        return ok({
+        const executionOutput = createDirectoryListingExecutionOutput({
             rootPath,
             entries,
             truncated: queue.length > 0 || entries.length >= maxEntries,
             count: entries.length,
+        });
+
+        return ok({
+            ...executionOutput.output,
+            artifactCandidate: executionOutput.artifactCandidate,
         });
     } catch (error) {
         return err({

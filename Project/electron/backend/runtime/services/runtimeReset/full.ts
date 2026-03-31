@@ -1,3 +1,4 @@
+import { toolResultArtifactStore } from '@/app/backend/persistence/stores';
 import type { RuntimeResetCounts } from '@/app/backend/runtime/contracts';
 import type {
     PlannedRuntimeResetOperation,
@@ -254,6 +255,7 @@ async function resolveFullCounts(db: RuntimeResetDatabase): Promise<RuntimeReset
 }
 
 async function applyFullReset(db: RuntimeResetDatabase): Promise<void> {
+    await toolResultArtifactStore.deleteAll();
     await db.deleteFrom('runtime_events').execute();
     await db.deleteFrom('permissions').execute();
     await db.deleteFrom('sessions').execute();

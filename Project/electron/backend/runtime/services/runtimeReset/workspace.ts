@@ -1,3 +1,4 @@
+import { toolResultArtifactStore } from '@/app/backend/persistence/stores';
 import type { RuntimeResetCounts, RuntimeResetInput } from '@/app/backend/runtime/contracts';
 import type {
     PlannedRuntimeResetOperation,
@@ -253,6 +254,8 @@ async function applyWorkspaceDelete(db: RuntimeResetDatabase, resolved: Workspac
     if (resolved.entityIds.length > 0) {
         await db.deleteFrom('runtime_events').where('entity_id', 'in', resolved.entityIds).execute();
     }
+
+    await toolResultArtifactStore.deleteBySessionIds(resolved.sessionIds);
 
     if (resolved.sessionIds.length > 0) {
         await db.deleteFrom('sessions').where('id', 'in', resolved.sessionIds).execute();

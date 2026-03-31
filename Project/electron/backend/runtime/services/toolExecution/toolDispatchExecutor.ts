@@ -2,11 +2,26 @@ import { err, ok } from 'neverthrow';
 
 import { mcpService } from '@/app/backend/runtime/services/mcp/service';
 import { invokeToolHandler } from '@/app/backend/runtime/services/toolExecution/handlers';
+import type { ToolExecutionArtifactCandidate } from '@/app/backend/runtime/services/toolExecution/types';
 import type {
     AllowedToolInvocation,
     ToolDispatchExecutionResult,
     ToolRequestContext,
 } from '@/app/backend/runtime/services/toolExecution/toolExecutionLifecycle.types';
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isToolExecutionArtifactCandidate(value: unknown): value is ToolExecutionArtifactCandidate {
+    return (
+        isRecord(value) &&
+        (value['kind'] === 'command_output' || value['kind'] === 'file_read' || value['kind'] === 'directory_listing') &&
+        value['contentType'] === 'text/plain' &&
+        typeof value['rawText'] === 'string' &&
+        isRecord(value['metadata'])
+    );
+}
 
 export async function dispatchToolInvocation(input: {
     context: ToolRequestContext;
@@ -46,10 +61,19 @@ export async function dispatchToolInvocation(input: {
         };
     }
 
+    const artifactCandidate = isToolExecutionArtifactCandidate(execution.value['artifactCandidate'])
+        ? execution.value['artifactCandidate']
+        : undefined;
+    const output =
+        artifactCandidate === undefined
+            ? execution.value
+            : Object.fromEntries(Object.entries(execution.value).filter(([key]) => key !== 'artifactCandidate'));
+
     return {
         kind: 'executed',
         toolId: context.definition.tool.id,
-        output: execution.value,
+        output,
+        ...(artifactCandidate ? { artifactCandidate } : {}),
         at: context.at,
         policy: allowed.policy,
     };

@@ -609,6 +609,26 @@ export interface MessageMediaRecord {
     createdAt: string;
 }
 
+export interface ToolResultArtifactRecord {
+    messagePartId: EntityId<'part'>;
+    profileId: string;
+    sessionId: EntityId<'sess'>;
+    runId: EntityId<'run'>;
+    toolName: string;
+    artifactKind: 'command_output' | 'file_read' | 'directory_listing';
+    contentType: string;
+    storageKind: 'text_inline_db' | 'file_path';
+    rawText?: string;
+    filePath?: string;
+    totalBytes: number;
+    totalLines: number;
+    previewText: string;
+    previewStrategy: 'head_tail' | 'head_only' | 'bounded_list';
+    metadata: Record<string, unknown>;
+    createdAt: string;
+    updatedAt: string;
+}
+
 export interface RunUsageRecord {
     runId: EntityId<'run'>;
     providerId: RuntimeProviderId;

@@ -12,6 +12,7 @@ export { kiloRoutingPreferenceStore } from '@/app/backend/persistence/stores/pro
 export { marketplaceStore } from '@/app/backend/persistence/stores/registry/marketplaceStore';
 export { messageStore } from '@/app/backend/persistence/stores/conversation/messages/messageStore';
 export { messageMediaStore } from '@/app/backend/persistence/stores/conversation/messages/messageMediaStore';
+export { toolResultArtifactStore } from '@/app/backend/persistence/stores/conversation/messages/toolResultArtifactStore';
 export { mcpStore } from '@/app/backend/persistence/stores/runtime/mcpStore';
 export { memoryDerivedStore } from '@/app/backend/persistence/stores/runtime/memoryDerivedStore';
 export { memoryStore } from '@/app/backend/persistence/stores/runtime/memoryStore';

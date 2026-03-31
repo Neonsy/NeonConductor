@@ -161,6 +161,26 @@ export interface MessageMediaTable {
     created_at: string;
 }
 
+export interface ToolResultArtifactsTable {
+    message_part_id: string;
+    profile_id: string;
+    session_id: string;
+    run_id: string;
+    tool_name: string;
+    artifact_kind: 'command_output' | 'file_read' | 'directory_listing';
+    content_type: string;
+    storage_kind: 'text_inline_db' | 'file_path';
+    raw_text: string | null;
+    file_path: string | null;
+    total_bytes: number;
+    total_lines: number;
+    preview_text: string;
+    preview_strategy: 'head_tail' | 'head_only' | 'bounded_list';
+    metadata_json: string;
+    created_at: string;
+    updated_at: string;
+}
+
 export interface RunUsageTable {
     run_id: string;
     provider_id: string;
@@ -806,6 +826,7 @@ export interface DatabaseSchema {
     messages: MessagesTable;
     message_parts: MessagePartsTable;
     message_media: MessageMediaTable;
+    tool_result_artifacts: ToolResultArtifactsTable;
     run_usage: RunUsageTable;
     permissions: PermissionsTable;
     settings: SettingsTable;

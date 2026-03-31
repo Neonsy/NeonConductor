@@ -1,3 +1,4 @@
+import { toolResultArtifactStore } from '@/app/backend/persistence/stores';
 import type { RuntimeResetCounts } from '@/app/backend/runtime/contracts';
 import type {
     PlannedRuntimeResetOperation,
@@ -128,6 +129,7 @@ async function resolveProfileSettingsCounts(db: RuntimeResetDatabase, profileId:
 }
 
 async function applyProfileSettingsDelete(db: RuntimeResetDatabase, profileId: string): Promise<void> {
+    await toolResultArtifactStore.deleteByProfile(profileId);
     await db.deleteFrom('settings').where('profile_id', '=', profileId).execute();
     await db.deleteFrom('profile_context_settings').where('profile_id', '=', profileId).execute();
     await db.deleteFrom('session_context_compactions').where('profile_id', '=', profileId).execute();

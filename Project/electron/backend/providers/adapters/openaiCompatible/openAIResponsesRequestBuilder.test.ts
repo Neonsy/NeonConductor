@@ -148,4 +148,35 @@ describe('openAIResponsesRequestBuilder', () => {
             },
         ]);
     });
+
+    it('forwards only the provided preview text for artifactized tool results', () => {
+        const previewText = '{"ok":true,"output":{"artifactized":true,"stdout":"preview only"}}';
+        const body = buildOpenAIResponsesRequestBody(
+            createRuntimeInput({
+                contextMessages: [
+                    {
+                        role: 'tool',
+                        parts: [
+                            {
+                                type: 'tool_result',
+                                callId: 'call_large',
+                                toolName: 'run_command',
+                                outputText: previewText,
+                                isError: false,
+                            },
+                        ],
+                    },
+                ],
+            }),
+            'openai/'
+        );
+
+        expect(body['input']).toEqual([
+            {
+                type: 'function_call_output',
+                call_id: 'call_large',
+                output: previewText,
+            },
+        ]);
+    });
 });

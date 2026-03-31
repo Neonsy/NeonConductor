@@ -1,45 +1,19 @@
-import { messageStore } from '@/app/backend/persistence/stores';
-import { emitMessageCreatedEvent, createMessagePartRecorder } from '@/app/backend/runtime/services/runExecution/eventing';
-import { serializeToolInvocationOutcome } from '@/app/backend/runtime/services/toolExecution/results';
+import { Buffer } from 'node:buffer';
+
+import { messageStore, toolResultArtifactStore } from '@/app/backend/persistence/stores';
+import {
+    emitMessageCreatedEvent,
+    emitMessagePartAppendedEvent,
+} from '@/app/backend/runtime/services/runExecution/eventing';
+import { prepareToolResultPersistence } from '@/app/backend/runtime/services/toolExecution/toolOutputCompressionPolicy';
 import type { ToolInvocationOutcome } from '@/app/backend/runtime/services/toolExecution/types';
 import type { EntityId } from '@/shared/contracts';
 import type { ProviderRuntimeInput } from '@/app/backend/providers/types';
+import { appLog } from '@/app/main/logging';
 
 import type { ExecutableToolCall } from '@/app/backend/runtime/services/runExecution/assistantTurnCollector';
 
 type ProviderContextMessage = NonNullable<ProviderRuntimeInput['contextMessages']>[number];
-
-function stringifyToolOutcome(outcome: ToolInvocationOutcome): {
-    outputText: string;
-    isError: boolean;
-    normalizedPayload: Record<string, unknown>;
-} {
-    const serializedResult = serializeToolInvocationOutcome(outcome);
-    const normalizedPayload = serializedResult.ok
-        ? {
-              ok: true,
-              toolId: serializedResult.toolId,
-              output: serializedResult.output,
-              at: serializedResult.at,
-              policy: serializedResult.policy,
-          }
-        : {
-              ok: false,
-              toolId: serializedResult.toolId,
-              error: serializedResult.error,
-              message: serializedResult.message,
-              args: serializedResult.args,
-              at: serializedResult.at,
-              ...(serializedResult.policy ? { policy: serializedResult.policy } : {}),
-              ...(serializedResult.requestId ? { requestId: serializedResult.requestId } : {}),
-          };
-
-    return {
-        outputText: JSON.stringify(normalizedPayload, null, 2),
-        isError: !serializedResult.ok,
-        normalizedPayload,
-    };
-}
 
 async function createRuntimeMessage(input: {
     profileId: string;
@@ -81,23 +55,59 @@ export async function persistToolResultMessage(input: {
         runId: input.runId,
         role: 'tool',
     });
-    const partRecorder = createMessagePartRecorder({
-        runId: input.runId,
+    const persistedResult = prepareToolResultPersistence({
         profileId: input.profileId,
         sessionId: input.sessionId,
-        messageId: toolMessage.id,
+        runId: input.runId,
+        toolName: input.toolCall.toolName,
+        toolOutcome: input.toolOutcome,
     });
-    const serializedResult = stringifyToolOutcome(input.toolOutcome);
-    await partRecorder.recordPart({
+    const recordedPart = await messageStore.createPart({
+        messageId: toolMessage.id,
         partType: 'tool_result',
         payload: {
             callId: input.toolCall.callId,
             toolName: input.toolCall.toolName,
-            outputText: serializedResult.outputText,
-            isError: serializedResult.isError,
-            result: serializedResult.normalizedPayload,
+            outputText: persistedResult.outputText,
+            isError: persistedResult.isError,
+            result: persistedResult.normalizedPayload,
+            ...persistedResult.payloadArtifactMetadata,
         },
     });
+    await emitMessagePartAppendedEvent({
+        runId: input.runId,
+        profileId: input.profileId,
+        sessionId: input.sessionId,
+        messageId: toolMessage.id,
+        part: recordedPart,
+    });
+
+    if (persistedResult.artifactPersistenceCandidate) {
+        const artifact = await toolResultArtifactStore.create({
+            messagePartId: recordedPart.id,
+            ...persistedResult.artifactPersistenceCandidate,
+        });
+        appLog.debug({
+            tag: 'tool-output-artifacts',
+            message: 'Artifactized tool result for prompt history.',
+            messagePartId: artifact.messagePartId,
+            profileId: input.profileId,
+            sessionId: input.sessionId,
+            toolName: input.toolCall.toolName,
+            storageKind: artifact.storageKind,
+            totalBytes: artifact.totalBytes,
+            previewBytes: Buffer.byteLength(persistedResult.outputText, 'utf8'),
+        });
+    } else {
+        appLog.debug({
+            tag: 'tool-output-artifacts',
+            message: 'Stored inline tool result preview without artifact row.',
+            profileId: input.profileId,
+            sessionId: input.sessionId,
+            toolName: input.toolCall.toolName,
+            previewBytes: Buffer.byteLength(persistedResult.outputText, 'utf8'),
+        });
+    }
 
     return {
         message: {
@@ -107,12 +117,12 @@ export async function persistToolResultMessage(input: {
                     type: 'tool_result',
                     callId: input.toolCall.callId,
                     toolName: input.toolCall.toolName,
-                    outputText: serializedResult.outputText,
-                    isError: serializedResult.isError,
+                    outputText: persistedResult.outputText,
+                    isError: persistedResult.isError,
                 },
             ],
         },
-        outputText: serializedResult.outputText,
-        isError: serializedResult.isError,
+        outputText: persistedResult.outputText,
+        isError: persistedResult.isError,
     };
 }
