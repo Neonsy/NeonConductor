@@ -40,6 +40,20 @@ test('AppRouter exposes conversation and session procedure contracts to clients'
         profileId: string;
         mode: 'template' | 'ai_optional';
     }>();
+    expectTypeOf<AppRouterInputs['conversation']['readToolArtifact']>().toExtend<{
+        profileId: string;
+        sessionId: string;
+        messagePartId: string;
+        startLine?: number;
+        lineCount?: number;
+    }>();
+    expectTypeOf<AppRouterInputs['conversation']['searchToolArtifact']>().toExtend<{
+        profileId: string;
+        sessionId: string;
+        messagePartId: string;
+        query: string;
+        caseSensitive?: boolean;
+    }>();
 
     expectTypeOf<AppRouterInputs['session']['startRun']>().toExtend<{
         profileId: string;
@@ -255,6 +269,42 @@ test('AppRouter exposes conversation and session procedure contracts to clients'
                 status: 'success' | 'failed' | 'noop';
             };
         };
+    }>();
+    expectTypeOf<AppRouterOutputs['conversation']['readToolArtifact']>().toExtend<
+        | {
+              found: false;
+          }
+        | {
+              found: true;
+              artifact: {
+                  messagePartId: string;
+                  toolName: string;
+                  artifactKind: 'command_output' | 'file_read' | 'directory_listing';
+                  contentType: string;
+                  totalBytes: number;
+                  totalLines: number;
+                  previewStrategy: 'head_tail' | 'head_only' | 'bounded_list';
+                  metadata: Record<string, unknown>;
+                  startLine: number;
+                  lineCount: number;
+                  lines: Array<{
+                      lineNumber: number;
+                      text: string;
+                  }>;
+                  hasPrevious: boolean;
+                  hasNext: boolean;
+              };
+          }
+    >();
+    expectTypeOf<AppRouterOutputs['conversation']['searchToolArtifact']>().toExtend<{
+        found: boolean;
+        matches: Array<{
+            lineNumber: number;
+            lineText: string;
+            matchStart: number;
+            matchEnd: number;
+        }>;
+        truncated: boolean;
     }>();
 
     expect(true).toBe(true);

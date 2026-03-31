@@ -181,4 +181,48 @@ describe('message flow rendering', () => {
         expect(html).toContain('min-h-14');
         expect(html).not.toContain('-bottom-5');
     });
+
+    it('renders an artifact viewer affordance for artifactized tool results', () => {
+        const html = renderToStaticMarkup(
+            createElement(MessageFlowTurnView, {
+                profileId: 'profile_default',
+                turn: {
+                    id: 'run_tool_artifact',
+                    runId: 'run_tool_artifact',
+                    createdAt: '2026-03-12T09:00:00.000Z',
+                    messages: [
+                        {
+                            id: 'msg_tool_artifact',
+                            runId: 'run_tool_artifact',
+                            role: 'tool',
+                            createdAt: '2026-03-12T09:00:01.000Z',
+                            body: [
+                                {
+                                    id: 'part_tool_artifact',
+                                    type: 'tool_result',
+                                    text: 'preview',
+                                    providerLimitedReasoning: false,
+                                    displayLabel: 'Tool Result',
+                                    messagePartId: 'part_tool_artifact',
+                                    toolName: 'run_command',
+                                    artifactized: true,
+                                    artifactAvailable: true,
+                                    artifactKind: 'command_output',
+                                    previewStrategy: 'head_tail',
+                                    totalBytes: 4096,
+                                    totalLines: 220,
+                                    omittedBytes: 3072,
+                                },
+                            ],
+                        },
+                    ],
+                },
+                run: undefined,
+                onOpenToolArtifact: () => undefined,
+            })
+        );
+
+        expect(html).toContain('Stored full output available');
+        expect(html).toContain('Open full output');
+    });
 });

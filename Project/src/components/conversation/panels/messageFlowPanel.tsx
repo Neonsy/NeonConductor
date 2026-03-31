@@ -11,6 +11,7 @@ import { useConversationTanstackMessages } from '@/web/components/conversation/m
 import { Button } from '@/web/components/ui/button';
 
 import type { MessagePartRecord, MessageRecord, RunRecord } from '@/app/backend/persistence/types';
+import type { EntityId } from '@/shared/contracts';
 
 interface MessageFlowPanelProps {
     profileId: string;
@@ -21,6 +22,7 @@ interface MessageFlowPanelProps {
     optimisticUserMessage?: OptimisticConversationUserMessage;
     onEditMessage?: (entry: MessageFlowMessage) => void;
     onBranchFromMessage?: (entry: MessageFlowMessage) => void;
+    onOpenToolArtifact?: (messagePartId: EntityId<'part'>) => void;
 }
 
 export function MessageFlowPanel({
@@ -32,6 +34,7 @@ export function MessageFlowPanel({
     optimisticUserMessage,
     onEditMessage,
     onBranchFromMessage,
+    onOpenToolArtifact,
 }: MessageFlowPanelProps) {
     const tanstackMessages = useConversationTanstackMessages({
         messages,
@@ -128,6 +131,7 @@ export function MessageFlowPanel({
                                 run={runsById.get(turn.runId)}
                                 {...(onEditMessage ? { onEditMessage } : {})}
                                 {...(onBranchFromMessage ? { onBranchFromMessage } : {})}
+                                {...(onOpenToolArtifact ? { onOpenToolArtifact } : {})}
                             />
                         ))}
                     </div>

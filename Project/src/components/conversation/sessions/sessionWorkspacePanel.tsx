@@ -67,6 +67,7 @@ export function SessionWorkspacePanel(input: SessionWorkspacePanelProps) {
         onCompactContext,
         onEditMessage,
         onBranchFromMessage,
+        onOpenToolArtifact,
     } = input;
 
     return (
@@ -146,6 +147,7 @@ export function SessionWorkspacePanel(input: SessionWorkspacePanelProps) {
                 onCompactContext={onCompactContext}
                 onEditMessage={onEditMessage}
                 onBranchFromMessage={onBranchFromMessage}
+                onOpenToolArtifact={onOpenToolArtifact}
             />
         </WorkspaceShell>
     );

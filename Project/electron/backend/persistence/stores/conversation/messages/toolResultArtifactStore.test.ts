@@ -205,4 +205,88 @@ describe('toolResultArtifactStore', () => {
         expect(listingArtifact.previewStrategy).toBe('bounded_list');
         expect(await toolResultArtifactStore.getRawText(listingTarget.partId)).toContain('"entries"');
     });
+
+    it('reads paged artifact windows and substring matches for db-backed and file-backed artifacts', async () => {
+        const inlineTarget = await createToolResultPart();
+        const inlineRawText = Array.from({ length: 6 }, (_, index) => `inline-${String(index + 1)}`).join('\n');
+        await toolResultArtifactStore.create({
+            messagePartId: inlineTarget.partId,
+            profileId: inlineTarget.profileId,
+            sessionId: inlineTarget.sessionId,
+            runId: inlineTarget.runId,
+            toolName: 'read_file',
+            artifactKind: 'file_read',
+            contentType: 'text/plain',
+            rawText: inlineRawText,
+            totalBytes: Buffer.byteLength(inlineRawText, 'utf8'),
+            totalLines: 6,
+            previewText: 'inline preview',
+            previewStrategy: 'head_only',
+            metadata: {
+                path: '/workspace/README.md',
+            },
+        });
+
+        const inlineWindow = await toolResultArtifactStore.readLineWindow({
+            messagePartId: inlineTarget.partId,
+            startLine: 2,
+            lineCount: 3,
+        });
+        expect(inlineWindow?.lines).toEqual([
+            { lineNumber: 2, text: 'inline-2' },
+            { lineNumber: 3, text: 'inline-3' },
+            { lineNumber: 4, text: 'inline-4' },
+        ]);
+        expect(inlineWindow?.hasPrevious).toBe(true);
+        expect(inlineWindow?.hasNext).toBe(true);
+
+        const inlineSearch = await toolResultArtifactStore.search({
+            messagePartId: inlineTarget.partId,
+            query: 'inline-5',
+        });
+        expect(inlineSearch?.matches).toEqual([
+            {
+                lineNumber: 5,
+                lineText: 'inline-5',
+                matchStart: 0,
+                matchEnd: 8,
+            },
+        ]);
+
+        const fileTarget = await createToolResultPart();
+        const fileRawText = Array.from({ length: 450 }, (_, index) => `file-line-${String(index + 1)}`).join('\n');
+        await toolResultArtifactStore.create({
+            messagePartId: fileTarget.partId,
+            profileId: fileTarget.profileId,
+            sessionId: fileTarget.sessionId,
+            runId: fileTarget.runId,
+            toolName: 'run_command',
+            artifactKind: 'command_output',
+            contentType: 'text/plain',
+            rawText: fileRawText,
+            totalBytes: Buffer.byteLength(fileRawText, 'utf8'),
+            totalLines: 450,
+            previewText: 'file preview',
+            previewStrategy: 'head_tail',
+            metadata: {
+                command: 'dir /s',
+            },
+        });
+
+        const fileWindow = await toolResultArtifactStore.readLineWindow({
+            messagePartId: fileTarget.partId,
+        });
+        expect(fileWindow?.lines).toHaveLength(400);
+        expect(fileWindow?.hasPrevious).toBe(false);
+        expect(fileWindow?.hasNext).toBe(true);
+
+        const fileSearch = await toolResultArtifactStore.search({
+            messagePartId: fileTarget.partId,
+            query: 'file-line-449',
+        });
+        expect(fileSearch?.matches[0]).toMatchObject({
+            lineNumber: 449,
+            lineText: 'file-line-449',
+        });
+    });
 });

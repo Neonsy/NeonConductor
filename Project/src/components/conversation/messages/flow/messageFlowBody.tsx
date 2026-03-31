@@ -4,16 +4,19 @@ import { MarkdownContent } from '@/web/components/content/markdown/markdownConte
 import type { MessageFlowBodyEntry, MessageFlowMessage } from '@/web/components/conversation/messages/messageFlowModel';
 import { MessageMediaPreview } from '@/web/components/conversation/messages/messageMediaPreview';
 import { describeAssistantPlaceholder } from '@/web/components/conversation/messages/messagePlaceholderState';
+import { ToolArtifactPreviewCard } from '@/web/components/conversation/messages/toolArtifactPreviewCard';
 
 import type { RunRecord } from '@/app/backend/persistence/types';
+import type { EntityId } from '@/shared/contracts';
 
 interface MessageFlowBodyProps {
     profileId: string;
     message: MessageFlowMessage;
     run: RunRecord | undefined;
+    onOpenToolArtifact?: (messagePartId: EntityId<'part'>) => void;
 }
 
-export function MessageFlowBody({ profileId, message, run }: MessageFlowBodyProps) {
+export function MessageFlowBody({ profileId, message, run, onOpenToolArtifact }: MessageFlowBodyProps) {
     const reasoningEntries = message.body.filter(
         (item): item is { id: string; type: 'assistant_reasoning'; text: string; providerLimitedReasoning: boolean } =>
             'text' in item && item.type === 'assistant_reasoning'
@@ -61,7 +64,10 @@ export function MessageFlowBody({ profileId, message, run }: MessageFlowBodyProp
                     {'label' in item ? (
                         <AssistantStatusRow item={item} />
                     ) : 'text' in item ? (
-                        <FlowMessageTextBlock item={item} />
+                        <FlowMessageTextBlock
+                            item={item}
+                            {...(onOpenToolArtifact ? { onOpenToolArtifact } : {})}
+                        />
                     ) : (
                         <MessageMediaPreview profileId={profileId} item={item} />
                     )}
@@ -72,7 +78,15 @@ export function MessageFlowBody({ profileId, message, run }: MessageFlowBodyProp
     );
 }
 
-function FlowMessageTextBlock({ item }: { item: Extract<MessageFlowBodyEntry, { text: string }> }) {
+function FlowMessageTextBlock({
+    item,
+    onOpenToolArtifact,
+}: {
+    item: Extract<MessageFlowBodyEntry, { text: string }>;
+    onOpenToolArtifact?: (messagePartId: EntityId<'part'>) => void;
+}) {
+    const toolResultItem = item.type === 'tool_result' ? item : undefined;
+
     return (
         <>
             {item.displayLabel ? (
@@ -81,6 +95,19 @@ function FlowMessageTextBlock({ item }: { item: Extract<MessageFlowBodyEntry, { 
                 </p>
             ) : null}
             <MarkdownContent markdown={item.text} />
+            {toolResultItem?.artifactAvailable && toolResultItem.artifactKind && onOpenToolArtifact ? (
+                <ToolArtifactPreviewCard
+                    artifactKind={toolResultItem.artifactKind}
+                    {...(toolResultItem.totalBytes !== undefined ? { totalBytes: toolResultItem.totalBytes } : {})}
+                    {...(toolResultItem.totalLines !== undefined ? { totalLines: toolResultItem.totalLines } : {})}
+                    {...(toolResultItem.omittedBytes !== undefined
+                        ? { omittedBytes: toolResultItem.omittedBytes }
+                        : {})}
+                    onOpen={() => {
+                        onOpenToolArtifact(toolResultItem.messagePartId);
+                    }}
+                />
+            ) : null}
         </>
     );
 }

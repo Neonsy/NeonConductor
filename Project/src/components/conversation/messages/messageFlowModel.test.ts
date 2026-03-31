@@ -177,6 +177,59 @@ describe('message flow model', () => {
         expect(turns[0]?.messages[0]?.body[0]).toMatchObject({
             type: 'tool_result',
             text: '{"ok":true}',
+            messagePartId: 'part_tool_result_1',
+            artifactized: false,
+            artifactAvailable: false,
+        });
+    });
+
+    it('keeps artifact metadata on projected tool results', () => {
+        const toolMessage = createMessage({
+            id: 'msg_tool_artifact',
+            runId: 'run_1',
+            role: 'tool',
+        });
+
+        const turns = buildMessageFlowTurns(
+            projectConversationTanstackMessages(
+                [toolMessage],
+                new Map([
+                    [
+                        toolMessage.id,
+                        [
+                            createPart({
+                                id: 'part_tool_artifact',
+                                messageId: toolMessage.id,
+                                partType: 'tool_result',
+                                payload: {
+                                    callId: 'call_artifact',
+                                    toolName: 'run_command',
+                                    outputText: 'preview',
+                                    isError: false,
+                                    artifactized: true,
+                                    artifactAvailable: true,
+                                    artifactKind: 'command_output',
+                                    previewStrategy: 'head_tail',
+                                    totalBytes: 4096,
+                                    totalLines: 220,
+                                    omittedBytes: 3072,
+                                },
+                            }),
+                        ],
+                    ],
+                ])
+            )
+        );
+
+        expect(turns[0]?.messages[0]?.body[0]).toMatchObject({
+            type: 'tool_result',
+            messagePartId: 'part_tool_artifact',
+            artifactized: true,
+            artifactAvailable: true,
+            artifactKind: 'command_output',
+            totalBytes: 4096,
+            totalLines: 220,
+            omittedBytes: 3072,
         });
     });
 

@@ -1,5 +1,6 @@
 import type { ConversationTanstackMessage } from '@/web/components/conversation/messages/tanstackMessageBridge';
 import { isEntityId } from '@/web/components/conversation/shell/workspace/helpers';
+import type { ToolArtifactKind, ToolArtifactPreviewStrategy } from '@/web/components/conversation/messages/toolArtifactFormatting';
 
 
 import type { EntityId } from '@/shared/contracts';
@@ -9,8 +10,7 @@ export type MessageFlowTextEntryType =
     | 'assistant_text'
     | 'user_text'
     | 'system_text'
-    | 'assistant_tool_call'
-    | 'tool_result';
+    | 'assistant_tool_call';
 export type MessageFlowImageEntryType = 'assistant_image' | 'user_image' | 'system_image';
 export type MessageFlowStatusEntryType = 'assistant_status';
 
@@ -36,6 +36,22 @@ export type MessageFlowBodyEntry =
           code: 'received' | 'stalled' | 'failed_before_output';
           label: string;
           elapsedMs?: number;
+      }
+    | {
+          id: string;
+          type: 'tool_result';
+          text: string;
+          providerLimitedReasoning: false;
+          displayLabel: 'Tool Result';
+          messagePartId: EntityId<'part'>;
+          toolName: string;
+          artifactized: boolean;
+          artifactAvailable: boolean;
+          artifactKind?: ToolArtifactKind;
+          previewStrategy?: ToolArtifactPreviewStrategy;
+          totalBytes?: number;
+          totalLines?: number;
+          omittedBytes?: number;
       };
 
 export interface MessageFlowMessage {
@@ -167,6 +183,15 @@ function buildBodyEntries(message: ConversationTanstackMessage): MessageFlowBody
                 text: part.outputText,
                 providerLimitedReasoning: false,
                 displayLabel: 'Tool Result',
+                messagePartId: part.messagePartId,
+                toolName: part.toolName,
+                artifactized: part.artifactized,
+                artifactAvailable: part.artifactAvailable,
+                ...(part.artifactKind ? { artifactKind: part.artifactKind } : {}),
+                ...(part.previewStrategy ? { previewStrategy: part.previewStrategy } : {}),
+                ...(part.totalBytes !== undefined ? { totalBytes: part.totalBytes } : {}),
+                ...(part.totalLines !== undefined ? { totalLines: part.totalLines } : {}),
+                ...(part.omittedBytes !== undefined ? { omittedBytes: part.omittedBytes } : {}),
             });
             continue;
         }

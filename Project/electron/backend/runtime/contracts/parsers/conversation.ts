@@ -13,6 +13,7 @@ import {
     readEntityId,
     readEnumValue,
     readObject,
+    readOptionalNumber,
     readOptionalString,
     readProfileId,
     readString,
@@ -27,6 +28,8 @@ import type {
     ConversationListTagsInput,
     ConversationListThreadsInput,
     ConversationRenameThreadInput,
+    ConversationReadToolArtifactInput,
+    ConversationSearchToolArtifactInput,
     ConversationSetThreadFavoriteInput,
     ConversationSetThreadExecutionEnvironmentInput,
     ConversationSetEditPreferenceInput,
@@ -232,6 +235,43 @@ export function parseConversationSetThreadTitlePreferenceInput(
     };
 }
 
+export function parseConversationReadToolArtifactInput(input: unknown): ConversationReadToolArtifactInput {
+    const source = readObject(input, 'input');
+
+    return {
+        profileId: readProfileId(source),
+        sessionId: readEntityId(source.sessionId, 'sessionId', 'sess'),
+        messagePartId: readEntityId(source.messagePartId, 'messagePartId', 'part'),
+        ...(source.startLine !== undefined
+            ? {
+                  startLine: Math.max(1, Math.floor(readOptionalNumber(source.startLine, 'startLine') ?? 1)),
+              }
+            : {}),
+        ...(source.lineCount !== undefined
+            ? {
+                  lineCount: Math.min(
+                      400,
+                      Math.max(1, Math.floor(readOptionalNumber(source.lineCount, 'lineCount') ?? 1))
+                  ),
+              }
+            : {}),
+    };
+}
+
+export function parseConversationSearchToolArtifactInput(input: unknown): ConversationSearchToolArtifactInput {
+    const source = readObject(input, 'input');
+
+    return {
+        profileId: readProfileId(source),
+        sessionId: readEntityId(source.sessionId, 'sessionId', 'sess'),
+        messagePartId: readEntityId(source.messagePartId, 'messagePartId', 'part'),
+        query: readString(source.query, 'query'),
+        ...(source.caseSensitive !== undefined
+            ? { caseSensitive: readBoolean(source.caseSensitive, 'caseSensitive') }
+            : {}),
+    };
+}
+
 export const conversationListBucketsInputSchema = createParser(parseConversationListBucketsInput);
 export const conversationListThreadsInputSchema = createParser(parseConversationListThreadsInput);
 export const conversationCreateThreadInputSchema = createParser(parseConversationCreateThreadInput);
@@ -255,3 +295,5 @@ export const conversationGetThreadTitlePreferenceInputSchema = createParser(
 export const conversationSetThreadTitlePreferenceInputSchema = createParser(
     parseConversationSetThreadTitlePreferenceInput
 );
+export const conversationReadToolArtifactInputSchema = createParser(parseConversationReadToolArtifactInput);
+export const conversationSearchToolArtifactInputSchema = createParser(parseConversationSearchToolArtifactInput);

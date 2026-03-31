@@ -4,5 +4,6 @@ export function buildConversationDialogProps(input: ShellDialogCompositionInput)
     return {
         messageEditDialogProps: input.messageEditDialogProps,
         branchWorkflowDialogProps: input.branchWorkflowDialogProps,
+        toolArtifactViewerDialogProps: input.toolArtifactViewerDialogProps,
     };
 }

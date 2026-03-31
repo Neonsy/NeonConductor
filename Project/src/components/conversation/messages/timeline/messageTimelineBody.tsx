@@ -1,21 +1,30 @@
 import { MarkdownContent } from '@/web/components/content/markdown/markdownContent';
 import { MessageMediaPreview } from '@/web/components/conversation/messages/messageMediaPreview';
 import { describeAssistantPlaceholder } from '@/web/components/conversation/messages/messagePlaceholderState';
+import { ToolArtifactPreviewCard } from '@/web/components/conversation/messages/toolArtifactPreviewCard';
 import type {
     MessageTimelineBodyEntry,
     MessageTimelineEntry,
 } from '@/web/components/conversation/messages/messageTimelineModel';
 
 import type { RunRecord } from '@/app/backend/persistence/types';
+import type { EntityId } from '@/shared/contracts';
 
 interface MessageTimelineBodyProps {
     profileId: string;
     entry: MessageTimelineEntry;
     runStatus: RunRecord['status'] | undefined;
     runErrorMessage: string | undefined;
+    onOpenToolArtifact?: (messagePartId: EntityId<'part'>) => void;
 }
 
-export function MessageTimelineBody({ profileId, entry, runStatus, runErrorMessage }: MessageTimelineBodyProps) {
+export function MessageTimelineBody({
+    profileId,
+    entry,
+    runStatus,
+    runErrorMessage,
+    onOpenToolArtifact,
+}: MessageTimelineBodyProps) {
     if (entry.body.length === 0 && entry.role === 'assistant') {
         return (
             <p className='text-muted-foreground text-sm'>
@@ -39,7 +48,10 @@ export function MessageTimelineBody({ profileId, entry, runStatus, runErrorMessa
                     {'label' in item ? (
                         <AssistantStatusRow item={item} />
                     ) : 'text' in item ? (
-                        <TimelineMessageTextBlock item={item} />
+                        <TimelineMessageTextBlock
+                            item={item}
+                            {...(onOpenToolArtifact ? { onOpenToolArtifact } : {})}
+                        />
                     ) : (
                         <MessageMediaPreview profileId={profileId} item={item} />
                     )}
@@ -50,7 +62,15 @@ export function MessageTimelineBody({ profileId, entry, runStatus, runErrorMessa
     );
 }
 
-function TimelineMessageTextBlock({ item }: { item: Extract<MessageTimelineBodyEntry, { text: string }> }) {
+function TimelineMessageTextBlock({
+    item,
+    onOpenToolArtifact,
+}: {
+    item: Extract<MessageTimelineBodyEntry, { text: string }>;
+    onOpenToolArtifact?: (messagePartId: EntityId<'part'>) => void;
+}) {
+    const toolResultItem = item.type === 'tool_result' ? item : undefined;
+
     return (
         <>
             {item.type === 'assistant_reasoning' ? (
@@ -68,6 +88,19 @@ function TimelineMessageTextBlock({ item }: { item: Extract<MessageTimelineBodyE
                 </div>
             ) : null}
             <MarkdownContent markdown={item.text} />
+            {toolResultItem?.artifactAvailable && toolResultItem.artifactKind && onOpenToolArtifact ? (
+                <ToolArtifactPreviewCard
+                    artifactKind={toolResultItem.artifactKind}
+                    {...(toolResultItem.totalBytes !== undefined ? { totalBytes: toolResultItem.totalBytes } : {})}
+                    {...(toolResultItem.totalLines !== undefined ? { totalLines: toolResultItem.totalLines } : {})}
+                    {...(toolResultItem.omittedBytes !== undefined
+                        ? { omittedBytes: toolResultItem.omittedBytes }
+                        : {})}
+                    onOpen={() => {
+                        onOpenToolArtifact(toolResultItem.messagePartId);
+                    }}
+                />
+            ) : null}
         </>
     );
 }

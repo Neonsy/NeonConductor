@@ -134,9 +134,25 @@ describe('conversation shell composition helpers', () => {
                 onClose: vi.fn(),
                 onBranch: vi.fn(),
             },
+            toolArtifactViewerDialogProps: {
+                open: true,
+                isLoading: false,
+                isUnavailable: false,
+                searchDraftValue: '',
+                searchMatches: [],
+                searchTruncated: false,
+                isSearching: false,
+                onSearchDraftChange: vi.fn(),
+                onSearchSubmit: vi.fn(),
+                onSelectSearchMatch: vi.fn(),
+                onPreviousPage: vi.fn(),
+                onNextPage: vi.fn(),
+                onClose: vi.fn(),
+            },
         });
 
         expect(dialogProps.messageEditDialogProps.open).toBe(true);
         expect(dialogProps.branchWorkflowDialogProps.busy).toBe(true);
+        expect(dialogProps.toolArtifactViewerDialogProps.open).toBe(true);
     });
 });

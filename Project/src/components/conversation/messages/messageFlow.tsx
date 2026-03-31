@@ -2,6 +2,7 @@ import { FlowMessageView } from '@/web/components/conversation/messages/flow/flo
 import type { MessageFlowMessage, MessageFlowTurn } from '@/web/components/conversation/messages/messageFlowModel';
 
 import type { RunRecord } from '@/app/backend/persistence/types';
+import type { EntityId } from '@/shared/contracts';
 
 interface MessageFlowTurnViewProps {
     profileId: string;
@@ -9,6 +10,7 @@ interface MessageFlowTurnViewProps {
     run: RunRecord | undefined;
     onEditMessage?: (entry: MessageFlowMessage) => void;
     onBranchFromMessage?: (entry: MessageFlowMessage) => void;
+    onOpenToolArtifact?: (messagePartId: EntityId<'part'>) => void;
 }
 
 export function MessageFlowEmptyState() {
@@ -27,6 +29,7 @@ export function MessageFlowTurnView({
     run,
     onEditMessage,
     onBranchFromMessage,
+    onOpenToolArtifact,
 }: MessageFlowTurnViewProps) {
     return (
         <section className='space-y-6'>
@@ -38,6 +41,7 @@ export function MessageFlowTurnView({
                     run={run}
                     {...(onEditMessage ? { onEditMessage } : {})}
                     {...(onBranchFromMessage ? { onBranchFromMessage } : {})}
+                    {...(onOpenToolArtifact ? { onOpenToolArtifact } : {})}
                 />
             ))}
         </section>

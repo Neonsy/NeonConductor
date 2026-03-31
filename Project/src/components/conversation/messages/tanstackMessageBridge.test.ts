@@ -90,6 +90,13 @@ describe('tanstack message bridge', () => {
                                 toolName: 'search_workspace',
                                 outputText: '{"ok":true}',
                                 isError: false,
+                                artifactized: true,
+                                artifactAvailable: true,
+                                artifactKind: 'command_output',
+                                previewStrategy: 'head_tail',
+                                totalBytes: 2048,
+                                totalLines: 120,
+                                omittedBytes: 1024,
                             },
                         }),
                     ],
@@ -106,6 +113,18 @@ describe('tanstack message bridge', () => {
             toolCallId: 'call_1',
             content: '{"ok":true}',
             state: 'complete',
+        });
+        expect(projected[1]?.renderParts[0]).toMatchObject({
+            kind: 'tool_result',
+            messagePartId: 'part_tool_result',
+            toolName: 'search_workspace',
+            artifactized: true,
+            artifactAvailable: true,
+            artifactKind: 'command_output',
+            previewStrategy: 'head_tail',
+            totalBytes: 2048,
+            totalLines: 120,
+            omittedBytes: 1024,
         });
     });
 

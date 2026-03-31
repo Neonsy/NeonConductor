@@ -11,6 +11,7 @@ import { readRelatedTargetNode } from '@/web/lib/dom/readRelatedTargetNode';
 import type { RunRecord } from '@/app/backend/persistence/types';
 
 import type { FocusEvent } from 'react';
+import type { EntityId } from '@/shared/contracts';
 
 
 interface FlowMessageViewProps {
@@ -19,9 +20,17 @@ interface FlowMessageViewProps {
     run: RunRecord | undefined;
     onEditMessage?: (entry: MessageFlowMessage) => void;
     onBranchFromMessage?: (entry: MessageFlowMessage) => void;
+    onOpenToolArtifact?: (messagePartId: EntityId<'part'>) => void;
 }
 
-export function FlowMessageView({ profileId, message, run, onEditMessage, onBranchFromMessage }: FlowMessageViewProps) {
+export function FlowMessageView({
+    profileId,
+    message,
+    run,
+    onEditMessage,
+    onBranchFromMessage,
+    onOpenToolArtifact,
+}: FlowMessageViewProps) {
     const [copyFeedback, setCopyFeedback] = useState<string | undefined>(undefined);
     const [isPinnedVisible, setIsPinnedVisible] = useState(false);
     const isUserMessage = message.role === 'user';
@@ -56,7 +65,12 @@ export function FlowMessageView({ profileId, message, run, onEditMessage, onBran
                     }}
                     onBlur={handleUserMessageBlur}>
                     <div className='bg-card/85 border-border/70 rounded-[1.4rem] border px-4 py-3 shadow-[0_18px_48px_rgba(4,8,18,0.12)]'>
-                        <MessageFlowBody profileId={profileId} message={message} run={run} />
+                        <MessageFlowBody
+                            profileId={profileId}
+                            message={message}
+                            run={run}
+                            {...(onOpenToolArtifact ? { onOpenToolArtifact } : {})}
+                        />
                     </div>
                     <div className='relative min-h-14 pt-3'>
                         <div className={userActionRailClassName}>
@@ -78,7 +92,12 @@ export function FlowMessageView({ profileId, message, run, onEditMessage, onBran
     return (
         <article className='space-y-4'>
             <div className='max-w-[min(52rem,100%)] space-y-4'>
-                <MessageFlowBody profileId={profileId} message={message} run={run} />
+                <MessageFlowBody
+                    profileId={profileId}
+                    message={message}
+                    run={run}
+                    {...(onOpenToolArtifact ? { onOpenToolArtifact } : {})}
+                />
             </div>
             {isAssistantMessage ? (
                 <FlowAssistantMessageActionBar

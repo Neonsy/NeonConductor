@@ -1,5 +1,6 @@
 import {
     conversationStore,
+    toolResultArtifactStore,
     settingsStore,
     tagStore,
     threadStore,
@@ -13,7 +14,9 @@ import {
     conversationListBucketsInputSchema,
     conversationListTagsInputSchema,
     conversationListThreadsInputSchema,
+    conversationReadToolArtifactInputSchema,
     conversationRenameThreadInputSchema,
+    conversationSearchToolArtifactInputSchema,
     conversationSetEditPreferenceInputSchema,
     conversationSetThreadFavoriteInputSchema,
     conversationSetThreadTitlePreferenceInputSchema,
@@ -388,4 +391,57 @@ export const conversationRouter = router({
 
             return { mode: input.mode };
         }),
+    readToolArtifact: publicProcedure.input(conversationReadToolArtifactInputSchema).query(async ({ input }) => {
+        const artifactWindow = await toolResultArtifactStore.readLineWindow({
+            messagePartId: input.messagePartId,
+            ...(input.startLine !== undefined ? { startLine: input.startLine } : {}),
+            ...(input.lineCount !== undefined ? { lineCount: input.lineCount } : {}),
+        });
+
+        if (!artifactWindow || artifactWindow.artifact.profileId !== input.profileId || artifactWindow.artifact.sessionId !== input.sessionId) {
+            return {
+                found: false as const,
+            };
+        }
+
+        return {
+            found: true as const,
+            artifact: {
+                messagePartId: artifactWindow.artifact.messagePartId,
+                toolName: artifactWindow.artifact.toolName,
+                artifactKind: artifactWindow.artifact.artifactKind,
+                contentType: artifactWindow.artifact.contentType,
+                totalBytes: artifactWindow.artifact.totalBytes,
+                totalLines: artifactWindow.artifact.totalLines,
+                previewStrategy: artifactWindow.artifact.previewStrategy,
+                metadata: artifactWindow.artifact.metadata,
+                startLine: artifactWindow.startLine,
+                lineCount: artifactWindow.lineCount,
+                lines: artifactWindow.lines,
+                hasPrevious: artifactWindow.hasPrevious,
+                hasNext: artifactWindow.hasNext,
+            },
+        };
+    }),
+    searchToolArtifact: publicProcedure.input(conversationSearchToolArtifactInputSchema).query(async ({ input }) => {
+        const artifactSearch = await toolResultArtifactStore.search({
+            messagePartId: input.messagePartId,
+            query: input.query,
+            ...(input.caseSensitive !== undefined ? { caseSensitive: input.caseSensitive } : {}),
+        });
+
+        if (!artifactSearch || artifactSearch.artifact.profileId !== input.profileId || artifactSearch.artifact.sessionId !== input.sessionId) {
+            return {
+                found: false as const,
+                matches: [],
+                truncated: false,
+            };
+        }
+
+        return {
+            found: true as const,
+            matches: artifactSearch.matches,
+            truncated: artifactSearch.truncated,
+        };
+    }),
 });

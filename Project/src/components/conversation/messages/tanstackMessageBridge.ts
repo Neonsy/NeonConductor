@@ -2,6 +2,7 @@
 import { buildMessageCopyPayloads } from '@/web/components/conversation/messages/messageCopy';
 import type { OptimisticConversationUserMessage } from '@/web/components/conversation/messages/optimisticUserMessage';
 import { isEntityId } from '@/web/components/conversation/shell/workspace/helpers';
+import type { ToolArtifactKind, ToolArtifactPreviewStrategy } from '@/web/components/conversation/messages/toolArtifactFormatting';
 
 import type { MessagePartRecord, MessageRecord } from '@/app/backend/persistence/types';
 import { readImageMimeType } from '@/app/shared/imageMimeType';
@@ -55,8 +56,17 @@ export type ConversationTanstackRenderPart =
     | {
           key: string;
           kind: 'tool_result';
+          messagePartId: EntityId<'part'>;
           callId: string;
+          toolName: string;
           outputText: string;
+          artifactized: boolean;
+          artifactAvailable: boolean;
+          artifactKind?: ToolArtifactKind;
+          previewStrategy?: ToolArtifactPreviewStrategy;
+          totalBytes?: number;
+          totalLines?: number;
+          omittedBytes?: number;
       }
     | {
           key: string;
@@ -71,6 +81,21 @@ interface ConversationImageMetadata {
     mimeType: 'image/jpeg' | 'image/png' | 'image/webp';
     width: number;
     height: number;
+}
+
+const toolArtifactKinds: ToolArtifactKind[] = ['command_output', 'file_read', 'directory_listing'];
+const toolArtifactPreviewStrategies: ToolArtifactPreviewStrategy[] = ['head_tail', 'head_only', 'bounded_list'];
+
+function readArtifactKind(value: unknown): ToolArtifactKind | undefined {
+    return typeof value === 'string' && toolArtifactKinds.some((candidate) => candidate === value)
+        ? (value as ToolArtifactKind)
+        : undefined;
+}
+
+function readPreviewStrategy(value: unknown): ToolArtifactPreviewStrategy | undefined {
+    return typeof value === 'string' && toolArtifactPreviewStrategies.some((candidate) => candidate === value)
+        ? (value as ToolArtifactPreviewStrategy)
+        : undefined;
 }
 
 function readTextPayload(part: MessagePartRecord): string | null {
@@ -166,12 +191,30 @@ function buildProjectedParts(message: MessageRecord, parts: MessagePartRecord[])
         if (part.partType === 'tool_result' && message.role === 'tool') {
             const callId = typeof part.payload['callId'] === 'string' ? part.payload['callId'] : part.id;
             const outputText = typeof part.payload['outputText'] === 'string' ? part.payload['outputText'] : '';
+            const toolName = typeof part.payload['toolName'] === 'string' ? part.payload['toolName'] : 'tool';
+            const artifactized = part.payload['artifactized'] === true;
+            const artifactAvailable = part.payload['artifactAvailable'] === true;
+            const artifactKind = readArtifactKind(part.payload['artifactKind']);
+            const previewStrategy = readPreviewStrategy(part.payload['previewStrategy']);
+            const totalBytes = typeof part.payload['totalBytes'] === 'number' ? part.payload['totalBytes'] : undefined;
+            const totalLines = typeof part.payload['totalLines'] === 'number' ? part.payload['totalLines'] : undefined;
+            const omittedBytes =
+                typeof part.payload['omittedBytes'] === 'number' ? part.payload['omittedBytes'] : undefined;
 
             projected.push({
                 key: part.id,
                 kind: 'tool_result',
+                messagePartId: part.id,
                 callId,
+                toolName,
                 outputText,
+                artifactized,
+                artifactAvailable,
+                ...(artifactKind ? { artifactKind } : {}),
+                ...(previewStrategy ? { previewStrategy } : {}),
+                ...(totalBytes !== undefined ? { totalBytes } : {}),
+                ...(totalLines !== undefined ? { totalLines } : {}),
+                ...(omittedBytes !== undefined ? { omittedBytes } : {}),
             });
             continue;
         }
@@ -322,6 +365,15 @@ function buildCopyPayloadBody(
                 text: part.outputText,
                 providerLimitedReasoning: false,
                 displayLabel: 'Tool Result',
+                messagePartId: part.messagePartId,
+                toolName: part.toolName,
+                artifactized: part.artifactized,
+                artifactAvailable: part.artifactAvailable,
+                ...(part.artifactKind ? { artifactKind: part.artifactKind } : {}),
+                ...(part.previewStrategy ? { previewStrategy: part.previewStrategy } : {}),
+                ...(part.totalBytes !== undefined ? { totalBytes: part.totalBytes } : {}),
+                ...(part.totalLines !== undefined ? { totalLines: part.totalLines } : {}),
+                ...(part.omittedBytes !== undefined ? { omittedBytes: part.omittedBytes } : {}),
             });
         }
     }

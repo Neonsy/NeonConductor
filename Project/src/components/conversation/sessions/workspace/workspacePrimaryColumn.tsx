@@ -58,6 +58,7 @@ interface WorkspacePrimaryColumnProps {
     onCompactContext: SessionWorkspacePanelProps['onCompactContext'];
     onEditMessage: SessionWorkspacePanelProps['onEditMessage'];
     onBranchFromMessage: SessionWorkspacePanelProps['onBranchFromMessage'];
+    onOpenToolArtifact: SessionWorkspacePanelProps['onOpenToolArtifact'];
 }
 
 export function WorkspacePrimaryColumn({
@@ -114,6 +115,7 @@ export function WorkspacePrimaryColumn({
     onCompactContext,
     onEditMessage,
     onBranchFromMessage,
+    onOpenToolArtifact,
 }: WorkspacePrimaryColumnProps) {
     const validatedSelectedSessionId = isEntityId(selectedSessionId, 'sess') ? selectedSessionId : undefined;
 
@@ -130,6 +132,7 @@ export function WorkspacePrimaryColumn({
                         {...(optimisticUserMessage ? { optimisticUserMessage } : {})}
                         {...(onEditMessage ? { onEditMessage } : {})}
                         {...(onBranchFromMessage ? { onBranchFromMessage } : {})}
+                        {...(onOpenToolArtifact ? { onOpenToolArtifact } : {})}
                     />
                 </div>
 

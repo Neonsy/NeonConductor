@@ -8,6 +8,7 @@ import { useConversationShellRoutingBadge } from '@/web/components/conversation/
 import { buildConversationPlanOrchestrator } from '@/web/components/conversation/shell/composition/buildConversationPlanOrchestrator';
 import { buildConversationWorkspaceProjection } from '@/web/components/conversation/shell/composition/buildConversationWorkspaceProjection';
 import { buildConversationDialogProps } from '@/web/components/conversation/shell/buildConversationDialogProps';
+import { useToolArtifactViewerController } from '@/web/components/conversation/shell/useToolArtifactViewerController';
 import { buildConversationSidebarPaneProps } from '@/web/components/conversation/shell/buildConversationSidebarPaneProps';
 import { buildConversationWorkspaceSectionProps } from '@/web/components/conversation/shell/buildConversationWorkspaceSectionProps';
 import { setOrchestratorLatestCache } from '@/web/components/conversation/shell/planCache';
@@ -204,6 +205,10 @@ export function useConversationShellViewControllers(input: UseConversationShellV
         mutations,
         onResolvePermission: composer.clearRunSubmitError,
     });
+    const toolArtifactViewer = useToolArtifactViewerController({
+        profileId,
+        selectedSessionId,
+    });
     const handleCreateThread = useEffectEvent(
         async (threadCreationInput: {
             workspaceFingerprint: string;
@@ -355,6 +360,7 @@ export function useConversationShellViewControllers(input: UseConversationShellV
             uiState.setSelectedSessionId(undefined);
             uiState.setSelectedRunId(undefined);
         },
+        onOpenToolArtifact: toolArtifactViewer.openToolArtifact,
     });
 
     return {
@@ -398,6 +404,7 @@ export function useConversationShellViewControllers(input: UseConversationShellV
                 ...branchWorkflowFlow.dialogProps,
                 busy: mutations.branchFromMessageWithWorkflowMutation.isPending,
             },
+            toolArtifactViewerDialogProps: toolArtifactViewer.dialogProps,
         }),
     } as const;
 }

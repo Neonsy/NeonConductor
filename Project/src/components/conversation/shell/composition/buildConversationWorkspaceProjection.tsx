@@ -62,6 +62,7 @@ interface BuildConversationWorkspaceProjectionInput {
     executionStrategy: OrchestratorExecutionStrategy;
     onExecutionStrategyChange: (executionStrategy: OrchestratorExecutionStrategy) => void;
     onSelectChildThread: (threadId: EntityId<'thr'>) => void;
+    onOpenToolArtifact: NonNullable<SessionWorkspacePanelProps['onOpenToolArtifact']>;
 }
 
 export function buildConversationWorkspaceProjection(
@@ -334,6 +335,7 @@ export function buildConversationWorkspaceProjection(
         },
         onEditMessage: input.editFlow.onEditMessage,
         onBranchFromMessage: input.branchFromMessage,
+        onOpenToolArtifact: input.onOpenToolArtifact,
     };
 
     return {

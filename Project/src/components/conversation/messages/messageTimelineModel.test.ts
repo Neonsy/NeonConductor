@@ -143,6 +143,55 @@ describe('message timeline model', () => {
         expect(entries[0]?.body[0]).toMatchObject({
             type: 'tool_result',
             text: '{"ok":true}',
+            messagePartId: 'part_tool_result',
+            artifactized: false,
+            artifactAvailable: false,
+        });
+    });
+
+    it('keeps artifact metadata on timeline tool-result entries', () => {
+        const message = createMessage({ id: 'msg_tool_artifact', role: 'tool' });
+        const entries = buildTimelineEntries(
+            projectConversationTanstackMessages(
+                [message],
+                new Map([
+                    [
+                        message.id,
+                        [
+                            createPart({
+                                id: 'part_tool_artifact',
+                                messageId: message.id,
+                                partType: 'tool_result',
+                                payload: {
+                                    callId: 'call_1',
+                                    toolName: 'read_file',
+                                    outputText: 'preview',
+                                    isError: false,
+                                    artifactized: true,
+                                    artifactAvailable: true,
+                                    artifactKind: 'file_read',
+                                    previewStrategy: 'head_only',
+                                    totalBytes: 8192,
+                                    totalLines: 140,
+                                    omittedBytes: 6144,
+                                },
+                            }),
+                        ],
+                    ],
+                ])
+            )
+        );
+
+        expect(entries[0]?.body[0]).toMatchObject({
+            type: 'tool_result',
+            messagePartId: 'part_tool_artifact',
+            artifactized: true,
+            artifactAvailable: true,
+            artifactKind: 'file_read',
+            previewStrategy: 'head_only',
+            totalBytes: 8192,
+            totalLines: 140,
+            omittedBytes: 6144,
         });
     });
 

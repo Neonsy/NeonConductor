@@ -5,6 +5,7 @@ import { MessageTimelineBody } from '@/web/components/conversation/messages/time
 import { MessageTimelineHeader } from '@/web/components/conversation/messages/timeline/messageTimelineHeader';
 
 import type { RunRecord } from '@/app/backend/persistence/types';
+import type { EntityId } from '@/shared/contracts';
 
 interface MessageTimelineItemProps {
     profileId: string;
@@ -14,6 +15,7 @@ interface MessageTimelineItemProps {
     canBranch: boolean;
     onEditMessage?: (entry: MessageTimelineEntry) => void;
     onBranchFromMessage?: (entry: MessageTimelineEntry) => void;
+    onOpenToolArtifact?: (messagePartId: EntityId<'part'>) => void;
 }
 
 export function MessageTimelineEmptyState() {
@@ -34,6 +36,7 @@ export function MessageTimelineItem({
     canBranch,
     onEditMessage,
     onBranchFromMessage,
+    onOpenToolArtifact,
 }: MessageTimelineItemProps) {
     const [copyFeedback, setCopyFeedback] = useState<string | undefined>(undefined);
 
@@ -53,6 +56,7 @@ export function MessageTimelineItem({
                     entry={entry}
                     runStatus={runStatus}
                     runErrorMessage={runErrorMessage}
+                    {...(onOpenToolArtifact ? { onOpenToolArtifact } : {})}
                 />
             </div>
         </article>

@@ -7,6 +7,21 @@ vi.mock('@/web/components/conversation/shell/useConversationShellController', ()
         workspaceSectionProps: {},
         messageEditDialogProps: {},
         branchWorkflowDialogProps: {},
+        toolArtifactViewerDialogProps: {
+            open: false,
+            isLoading: false,
+            isUnavailable: false,
+            searchDraftValue: '',
+            searchMatches: [],
+            searchTruncated: false,
+            isSearching: false,
+            onSearchDraftChange: vi.fn(),
+            onSearchSubmit: vi.fn(),
+            onSelectSearchMatch: vi.fn(),
+            onPreviousPage: vi.fn(),
+            onNextPage: vi.fn(),
+            onClose: vi.fn(),
+        },
     }),
 }));
 
@@ -24,6 +39,10 @@ vi.mock('@/web/components/conversation/panels/messageEditDialog', () => ({
 
 vi.mock('@/web/components/conversation/panels/branchWorkflowDialog', () => ({
     BranchWorkflowDialog: () => <div>Branch Workflow Dialog</div>,
+}));
+
+vi.mock('@/web/components/conversation/panels/toolArtifactViewerDialog', () => ({
+    ToolArtifactViewerDialog: () => <div>Tool Artifact Viewer Dialog</div>,
 }));
 
 import { ConversationShell } from '@/web/components/conversation/shell';
@@ -48,5 +67,6 @@ describe('conversation shell', () => {
         expect(html).toContain('Workspace Section');
         expect(html).toContain('Message Edit Dialog');
         expect(html).toContain('Branch Workflow Dialog');
+        expect(html).toContain('Tool Artifact Viewer Dialog');
     });
 });

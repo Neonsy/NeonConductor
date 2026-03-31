@@ -78,3 +78,56 @@ export type ConversationGetThreadTitlePreferenceInput = ProfileInput;
 export interface ConversationSetThreadTitlePreferenceInput extends ProfileInput {
     mode: ThreadTitleGenerationMode;
 }
+
+export interface ConversationReadToolArtifactInput extends ProfileInput {
+    sessionId: EntityId<'sess'>;
+    messagePartId: EntityId<'part'>;
+    startLine?: number;
+    lineCount?: number;
+}
+
+export interface ConversationSearchToolArtifactInput extends ProfileInput {
+    sessionId: EntityId<'sess'>;
+    messagePartId: EntityId<'part'>;
+    query: string;
+    caseSensitive?: boolean;
+}
+
+export interface ConversationToolArtifactLine {
+    lineNumber: number;
+    text: string;
+}
+
+export interface ConversationReadToolArtifactView {
+    messagePartId: EntityId<'part'>;
+    toolName: string;
+    artifactKind: 'command_output' | 'file_read' | 'directory_listing';
+    contentType: string;
+    totalBytes: number;
+    totalLines: number;
+    previewStrategy: 'head_tail' | 'head_only' | 'bounded_list';
+    metadata: Record<string, unknown>;
+    startLine: number;
+    lineCount: number;
+    lines: ConversationToolArtifactLine[];
+    hasPrevious: boolean;
+    hasNext: boolean;
+}
+
+export interface ConversationReadToolArtifactResult {
+    found: boolean;
+    artifact?: ConversationReadToolArtifactView;
+}
+
+export interface ConversationToolArtifactSearchMatch {
+    lineNumber: number;
+    lineText: string;
+    matchStart: number;
+    matchEnd: number;
+}
+
+export interface ConversationSearchToolArtifactResult {
+    found: boolean;
+    matches: ConversationToolArtifactSearchMatch[];
+    truncated: boolean;
+}

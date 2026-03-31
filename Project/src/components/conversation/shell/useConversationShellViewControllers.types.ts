@@ -5,6 +5,7 @@ import { useConversationShellSessionActions } from '@/web/components/conversatio
 import { useConversationShellViewModel } from '@/web/components/conversation/hooks/useConversationShellViewModel';
 import type { BranchWorkflowDialogProps } from '@/web/components/conversation/panels/branchWorkflowDialog';
 import type { MessageEditDialogProps } from '@/web/components/conversation/panels/messageEditDialog';
+import type { ToolArtifactViewerDialogProps } from '@/web/components/conversation/panels/toolArtifactViewerDialog';
 import { useConversationUiState } from '@/web/components/conversation/hooks/useConversationUiState';
 import { useConversationMutations } from '@/web/components/conversation/shell/actions/useConversationMutations';
 import { useConversationQueries } from '@/web/components/conversation/shell/queries/useConversationQueries';
@@ -160,4 +161,5 @@ export interface ShellWorkspaceCompositionInput {
 export interface ShellDialogCompositionInput {
     messageEditDialogProps: MessageEditDialogProps;
     branchWorkflowDialogProps: BranchWorkflowDialogProps;
+    toolArtifactViewerDialogProps: ToolArtifactViewerDialogProps;
 }

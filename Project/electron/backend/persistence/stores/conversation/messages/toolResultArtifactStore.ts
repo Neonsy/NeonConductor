@@ -8,6 +8,12 @@ import {
     parseEnumValue,
     parseJsonRecord,
 } from '@/app/backend/persistence/stores/shared/rowParsers';
+import {
+    buildToolArtifactLineWindow,
+    searchToolArtifactText,
+    type ToolArtifactLineWindow,
+    type ToolArtifactSearchMatch,
+} from '@/app/backend/persistence/stores/conversation/messages/toolResultArtifactText';
 import { nowIso } from '@/app/backend/persistence/stores/shared/utils';
 import type { ToolResultArtifactRecord } from '@/app/backend/persistence/types';
 import { appLog } from '@/app/main/logging';
@@ -227,6 +233,59 @@ export class ToolResultArtifactStore {
         } catch {
             return null;
         }
+    }
+
+    async readLineWindow(input: {
+        messagePartId: string;
+        startLine?: number;
+        lineCount?: number;
+    }): Promise<(ToolArtifactLineWindow & { artifact: ToolResultArtifactRecord }) | null> {
+        const artifact = await this.getByMessagePartId(input.messagePartId);
+        if (!artifact) {
+            return null;
+        }
+
+        const rawText = await this.getRawText(input.messagePartId);
+        if (rawText === null) {
+            return null;
+        }
+
+        return {
+            artifact,
+            ...buildToolArtifactLineWindow({
+                rawText,
+                ...(input.startLine !== undefined ? { startLine: input.startLine } : {}),
+                ...(input.lineCount !== undefined ? { lineCount: input.lineCount } : {}),
+            }),
+        };
+    }
+
+    async search(input: {
+        messagePartId: string;
+        query: string;
+        caseSensitive?: boolean;
+    }): Promise<{ artifact: ToolResultArtifactRecord; matches: ToolArtifactSearchMatch[]; truncated: boolean } | null> {
+        const artifact = await this.getByMessagePartId(input.messagePartId);
+        if (!artifact) {
+            return null;
+        }
+
+        const rawText = await this.getRawText(input.messagePartId);
+        if (rawText === null) {
+            return null;
+        }
+
+        const searchResult = searchToolArtifactText({
+            rawText,
+            query: input.query,
+            ...(input.caseSensitive !== undefined ? { caseSensitive: input.caseSensitive } : {}),
+        });
+
+        return {
+            artifact,
+            matches: searchResult.matches,
+            truncated: searchResult.truncated,
+        };
     }
 
     async deleteBySessionIds(sessionIds: string[]): Promise<void> {
