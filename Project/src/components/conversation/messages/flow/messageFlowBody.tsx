@@ -103,6 +103,7 @@ function FlowMessageTextBlock({
                     {...(toolResultItem.omittedBytes !== undefined
                         ? { omittedBytes: toolResultItem.omittedBytes }
                         : {})}
+                    {...(toolResultItem.summaryMode ? { summaryMode: toolResultItem.summaryMode } : {})}
                     onOpen={() => {
                         onOpenToolArtifact(toolResultItem.messagePartId);
                     }}

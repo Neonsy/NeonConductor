@@ -1,20 +1,14 @@
 import { createHash } from 'node:crypto';
 
-import { getProviderAdapter } from '@/app/backend/providers/adapters';
-import { providerStore } from '@/app/backend/persistence/stores';
-import type { ProviderRuntimeInput } from '@/app/backend/providers/types';
 import type { SessionContextCompactionRecord } from '@/app/backend/persistence/types';
 import type { ResolvedContextPolicy, RuntimeProviderId, TokenCountEstimate } from '@/app/backend/runtime/contracts';
-import { createEntityId } from '@/app/backend/runtime/identity/entityIds';
+import { generatePlainTextFromMessages } from '@/app/backend/runtime/services/common/plainTextGeneration';
 import { errOp, okOp, type OperationalResult } from '@/app/backend/runtime/services/common/operationalError';
-import { contextPolicyService } from '@/app/backend/runtime/services/context/policyService';
+import { resolveSummaryGenerationTarget } from '@/app/backend/runtime/services/common/summaryGenerationTarget';
 import { buildPreparedContextMessages } from '@/app/backend/runtime/services/context/preparedContextMessageBuilder';
 import { estimatePreparedContextMessages } from '@/app/backend/runtime/services/context/sessionContextBudgetEvaluator';
 import { applyPersistedCompaction } from '@/app/backend/runtime/services/context/sessionReplayLoader';
-import { utilityModelService } from '@/app/backend/runtime/services/profile/utilityModel';
 import { createTextMessage } from '@/app/backend/runtime/services/runExecution/contextParts';
-import { resolveRuntimeProtocol } from '@/app/backend/runtime/services/runExecution/protocol';
-import { resolveRunAuth } from '@/app/backend/runtime/services/runExecution/resolveRunAuth';
 import type { ReplayMessage } from '@/app/backend/runtime/services/runExecution/contextReplay';
 import type { RunContextMessage } from '@/app/backend/runtime/services/runExecution/types';
 
@@ -144,24 +138,6 @@ export function createCompactionSourceDigest(summaryMessages: RunContextMessage[
     return createHash('sha256').update(JSON.stringify(normalized)).digest('hex');
 }
 
-function toProviderContextMessages(
-    summaryMessages: RunContextMessage[]
-): NonNullable<ProviderRuntimeInput['contextMessages']> {
-    return summaryMessages.map((message) => ({
-        role: message.role,
-        parts: message.parts.flatMap((part) =>
-            part.type === 'text'
-                ? [
-                      {
-                          type: 'text' as const,
-                          text: part.text,
-                      },
-                  ]
-                : []
-        ),
-    }));
-}
-
 export async function deriveCompactionCandidate(input: {
     profileId: string;
     policy: ResolvedContextPolicy;
@@ -234,46 +210,20 @@ export async function resolveCompactionSummarizerTarget(input: {
     fallbackModelId: string;
     summaryMessages: RunContextMessage[];
 }): Promise<{ providerId: RuntimeProviderId; modelId: string; source: 'utility' | 'fallback' }> {
-    const target = await utilityModelService.resolveUtilityModelTarget({
+    const target = await resolveSummaryGenerationTarget({
         profileId: input.profileId,
         fallbackProviderId: input.fallbackProviderId,
         fallbackModelId: input.fallbackModelId,
+        summaryMessages: input.summaryMessages,
     });
-    if (target.source !== 'utility') {
-        return {
-            providerId: target.providerId,
-            modelId: target.modelId,
-            source: 'fallback',
-        };
-    }
 
-    const utilityPolicy = await contextPolicyService.resolvePolicy({
-        profileId: input.profileId,
-        providerId: target.providerId,
-        modelId: target.modelId,
-    });
-    if (!utilityPolicy.limits.modelLimitsKnown || !utilityPolicy.usableInputBudgetTokens || utilityPolicy.disabledReason) {
-        return {
+    return (
+        target ?? {
             providerId: input.fallbackProviderId,
             modelId: input.fallbackModelId,
             source: 'fallback',
-        };
-    }
-
-    const estimate = await estimatePreparedContextMessages({
-        profileId: input.profileId,
-        policy: utilityPolicy,
-        messages: input.summaryMessages,
-    });
-    if (!estimate.estimate || estimate.estimate.totalTokens > utilityPolicy.usableInputBudgetTokens) {
-        return {
-            providerId: input.fallbackProviderId,
-            modelId: input.fallbackModelId,
-            source: 'fallback',
-        };
-    }
-
-    return target;
+        }
+    );
 }
 
 export async function generateCompactionSummary(input: {
@@ -282,84 +232,17 @@ export async function generateCompactionSummary(input: {
     modelId: string;
     summaryMessages: RunContextMessage[];
 }): Promise<OperationalResult<string>> {
-    const authResult = await resolveRunAuth({
-        profileId: input.profileId,
-        providerId: input.providerId,
-    });
-    if (authResult.isErr()) {
-        return errOp(authResult.error.code, authResult.error.message);
-    }
-
-    const modelCapabilities = await providerStore.getModelCapabilities(input.profileId, input.providerId, input.modelId);
-    if (!modelCapabilities) {
-        return errOp('provider_model_missing', `Model "${input.modelId}" is missing runtime capabilities.`);
-    }
-
-    const runtimeOptions = {
-        reasoning: {
-            effort: 'none' as const,
-            summary: 'none' as const,
-            includeEncrypted: false,
-        },
-        cache: {
-            strategy: 'auto' as const,
-        },
-        transport: {
-            family: 'auto' as const,
-        },
-        execution: {},
-    };
-    const runtimeProtocol = await resolveRuntimeProtocol({
+    const generated = await generatePlainTextFromMessages({
         profileId: input.profileId,
         providerId: input.providerId,
         modelId: input.modelId,
-        modelCapabilities,
-        authMethod: authResult.value.authMethod,
-        runtimeOptions,
+        messages: input.summaryMessages,
     });
-    if (runtimeProtocol.isErr()) {
-        return errOp(runtimeProtocol.error.code, runtimeProtocol.error.message);
+    if (generated.isErr()) {
+        return errOp(generated.error.code, generated.error.message);
     }
 
-    const adapter = getProviderAdapter(input.providerId);
-    let summaryText = '';
-    const result = await adapter.streamCompletion(
-        {
-            profileId: input.profileId,
-            sessionId: createEntityId('sess'),
-            runId: createEntityId('run'),
-            providerId: input.providerId,
-            modelId: input.modelId,
-            runtime: runtimeProtocol.value.runtime,
-            promptText: '',
-            contextMessages: toProviderContextMessages(input.summaryMessages),
-            runtimeOptions,
-            cache: {
-                strategy: 'auto',
-                applied: false,
-            },
-            authMethod: authResult.value.authMethod,
-            ...(authResult.value.apiKey ? { apiKey: authResult.value.apiKey } : {}),
-            ...(authResult.value.accessToken ? { accessToken: authResult.value.accessToken } : {}),
-            ...(authResult.value.organizationId ? { organizationId: authResult.value.organizationId } : {}),
-            signal: new AbortController().signal,
-        },
-        {
-            onPart: (part) => {
-                if (part.partType === 'text' || part.partType === 'reasoning_summary') {
-                    const nextText = part.payload['text'];
-                    if (typeof nextText === 'string') {
-                        summaryText += nextText;
-                    }
-                }
-            },
-        }
-    );
-    if (result.isErr()) {
-        return errOp(result.error.code, result.error.message);
-    }
-
-    const normalizedSummary = summaryText.trim();
+    const normalizedSummary = generated.value.trim();
     if (normalizedSummary.length === 0) {
         return errOp('provider_request_failed', 'Context compaction returned an empty summary.');
     }

@@ -5,28 +5,22 @@ import { ok } from 'neverthrow';
 const {
     listModelsMock,
     modelExistsMock,
-    getModelCapabilitiesMock,
     getThreadBySessionIdMock,
     renameThreadMock,
     listRunsBySessionMock,
     getStringOptionalMock,
     resolveUtilityModelTargetMock,
-    resolveRunAuthMock,
-    resolveRuntimeProtocolMock,
-    streamCompletionMock,
+    generatePlainTextFromMessagesMock,
     warnMock,
 } = vi.hoisted(() => ({
     listModelsMock: vi.fn(),
     modelExistsMock: vi.fn(),
-    getModelCapabilitiesMock: vi.fn(),
     getThreadBySessionIdMock: vi.fn(),
     renameThreadMock: vi.fn(),
     listRunsBySessionMock: vi.fn(),
     getStringOptionalMock: vi.fn(),
     resolveUtilityModelTargetMock: vi.fn(),
-    resolveRunAuthMock: vi.fn(),
-    resolveRuntimeProtocolMock: vi.fn(),
-    streamCompletionMock: vi.fn(),
+    generatePlainTextFromMessagesMock: vi.fn(),
     warnMock: vi.fn(),
 }));
 
@@ -34,7 +28,6 @@ vi.mock('@/app/backend/persistence/stores', () => ({
     providerStore: {
         listModels: listModelsMock,
         modelExists: modelExistsMock,
-        getModelCapabilities: getModelCapabilitiesMock,
     },
     runStore: {
         listBySession: listRunsBySessionMock,
@@ -48,24 +41,14 @@ vi.mock('@/app/backend/persistence/stores', () => ({
     },
 }));
 
-vi.mock('@/app/backend/providers/adapters', () => ({
-    getProviderAdapter: () => ({
-        streamCompletion: streamCompletionMock,
-    }),
-}));
-
 vi.mock('@/app/backend/runtime/services/profile/utilityModel', () => ({
     utilityModelService: {
         resolveUtilityModelTarget: resolveUtilityModelTargetMock,
     },
 }));
 
-vi.mock('@/app/backend/runtime/services/runExecution/resolveRunAuth', () => ({
-    resolveRunAuth: resolveRunAuthMock,
-}));
-
-vi.mock('@/app/backend/runtime/services/runExecution/protocol', () => ({
-    resolveRuntimeProtocol: resolveRuntimeProtocolMock,
+vi.mock('@/app/backend/runtime/services/common/plainTextGeneration', () => ({
+    generatePlainTextFromMessages: generatePlainTextFromMessagesMock,
 }));
 
 vi.mock('@/app/main/logging', () => ({
@@ -80,15 +63,12 @@ describe('threadTitleService', () => {
     beforeEach(() => {
         listModelsMock.mockReset();
         modelExistsMock.mockReset();
-        getModelCapabilitiesMock.mockReset();
         getThreadBySessionIdMock.mockReset();
         renameThreadMock.mockReset();
         listRunsBySessionMock.mockReset();
         getStringOptionalMock.mockReset();
         resolveUtilityModelTargetMock.mockReset();
-        resolveRunAuthMock.mockReset();
-        resolveRuntimeProtocolMock.mockReset();
-        streamCompletionMock.mockReset();
+        generatePlainTextFromMessagesMock.mockReset();
         warnMock.mockReset();
     });
 
@@ -104,43 +84,7 @@ describe('threadTitleService', () => {
         getStringOptionalMock.mockResolvedValue('ai_optional');
         listModelsMock.mockResolvedValue([{ id: 'openai/gpt-5', label: 'GPT-5' }]);
         renameThreadMock.mockResolvedValue(ok(undefined));
-        resolveRunAuthMock.mockResolvedValue(
-            ok({
-                authMethod: 'api_key',
-            })
-        );
-        getModelCapabilitiesMock.mockResolvedValue({
-            features: {
-                supportsTools: false,
-                supportsReasoning: false,
-                supportsVision: false,
-                supportsAudioInput: false,
-                supportsAudioOutput: false,
-                inputModalities: ['text'],
-                outputModalities: ['text'],
-            },
-            runtime: {
-                toolProtocol: 'openai_responses',
-                apiFamily: 'openai_compatible',
-            },
-        });
-        resolveRuntimeProtocolMock.mockResolvedValue(
-            ok({
-                runtime: {
-                    toolProtocol: 'openai_responses',
-                    apiFamily: 'openai_compatible',
-                },
-            })
-        );
-        streamCompletionMock.mockImplementation(async (_input, handlers) => {
-            await handlers.onPart({
-                partType: 'text',
-                payload: {
-                    text: 'Utility Generated Title',
-                },
-            });
-            return ok(undefined);
-        });
+        generatePlainTextFromMessagesMock.mockResolvedValue(ok('Utility Generated Title'));
     }
 
     it('uses the Utility AI target for optional AI naming when available', async () => {
@@ -164,12 +108,12 @@ describe('threadTitleService', () => {
             fallbackProviderId: 'openai',
             fallbackModelId: 'openai/gpt-5',
         });
-        expect(streamCompletionMock).toHaveBeenCalledWith(
+        expect(generatePlainTextFromMessagesMock).toHaveBeenCalledWith(
             expect.objectContaining({
+                profileId: 'profile_test',
                 providerId: 'zai',
                 modelId: 'zai/glm-4.5-air',
-            }),
-            expect.any(Object)
+            })
         );
         expect(renameThreadMock).toHaveBeenNthCalledWith(
             2,
@@ -195,12 +139,12 @@ describe('threadTitleService', () => {
             modelId: 'openai/gpt-5',
         });
 
-        expect(streamCompletionMock).toHaveBeenCalledWith(
+        expect(generatePlainTextFromMessagesMock).toHaveBeenCalledWith(
             expect.objectContaining({
+                profileId: 'profile_test',
                 providerId: 'openai',
                 modelId: 'openai/gpt-5',
-            }),
-            expect.any(Object)
+            })
         );
         expect(renameThreadMock).toHaveBeenCalledTimes(2);
     });

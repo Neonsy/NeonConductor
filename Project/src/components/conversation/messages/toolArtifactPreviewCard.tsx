@@ -10,6 +10,7 @@ interface ToolArtifactPreviewCardProps {
     totalBytes?: number;
     totalLines?: number;
     omittedBytes?: number;
+    summaryMode?: 'deterministic' | 'utility_ai';
     onOpen: () => void;
 }
 
@@ -41,12 +42,18 @@ export function ToolArtifactPreviewCard({
     totalBytes,
     totalLines,
     omittedBytes,
+    summaryMode,
     onOpen,
 }: ToolArtifactPreviewCardProps) {
     return (
         <div className='border-border/70 bg-background/60 rounded-2xl border px-4 py-3'>
             <div className='flex flex-wrap items-center justify-between gap-3'>
                 <div className='space-y-1'>
+                    {summaryMode === 'utility_ai' ? (
+                        <p className='text-muted-foreground text-[11px] font-semibold tracking-[0.12em] uppercase'>
+                            AI summary
+                        </p>
+                    ) : null}
                     <p className='text-foreground text-sm font-medium'>Stored full output available</p>
                     <p className='text-muted-foreground text-xs'>
                         {buildMetadataSummary({

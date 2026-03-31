@@ -46,6 +46,8 @@ export async function persistToolResultMessage(input: {
     profileId: string;
     sessionId: EntityId<'sess'>;
     runId: EntityId<'run'>;
+    providerId: ProviderRuntimeInput['providerId'];
+    modelId: string;
     toolCall: ExecutableToolCall;
     toolOutcome: ToolInvocationOutcome;
 }): Promise<ToolResultContext> {
@@ -55,10 +57,12 @@ export async function persistToolResultMessage(input: {
         runId: input.runId,
         role: 'tool',
     });
-    const persistedResult = prepareToolResultPersistence({
+    const persistedResult = await prepareToolResultPersistence({
         profileId: input.profileId,
         sessionId: input.sessionId,
         runId: input.runId,
+        providerId: input.providerId,
+        modelId: input.modelId,
         toolName: input.toolCall.toolName,
         toolOutcome: input.toolOutcome,
     });

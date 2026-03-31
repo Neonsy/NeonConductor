@@ -1,4 +1,14 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const { summarizeArtifactMock } = vi.hoisted(() => ({
+    summarizeArtifactMock: vi.fn(),
+}));
+
+vi.mock('@/app/backend/runtime/services/toolExecution/artifactSummaryService', () => ({
+    artifactSummaryService: {
+        summarizeArtifact: summarizeArtifactMock,
+    },
+}));
 
 import { getDefaultProfileId, resetPersistenceForTests } from '@/app/backend/persistence/db';
 import {
@@ -82,6 +92,11 @@ async function createSessionRun() {
 describe('toolResultMessageRecorder', () => {
     beforeEach(() => {
         resetPersistenceForTests();
+        summarizeArtifactMock.mockReset();
+        summarizeArtifactMock.mockResolvedValue({
+            kind: 'fallback_deterministic',
+            reason: 'no_usable_target',
+        });
     });
 
     it('persists only the preview in message history while preserving raw command output in an artifact row', async () => {
@@ -101,6 +116,8 @@ describe('toolResultMessageRecorder', () => {
             profileId: target.profileId,
             sessionId: target.sessionId,
             runId: target.runId,
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
             toolCall: {
                 callId: 'call_shell',
                 toolName: 'run_command',
@@ -166,6 +183,8 @@ describe('toolResultMessageRecorder', () => {
             profileId: target.profileId,
             sessionId: target.sessionId,
             runId: target.runId,
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
             toolCall: {
                 callId: 'call_read_file',
                 toolName: 'read_file',
@@ -202,6 +221,8 @@ describe('toolResultMessageRecorder', () => {
             profileId: target.profileId,
             sessionId: target.sessionId,
             runId: target.runId,
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
             toolCall: {
                 callId: 'call_list_files',
                 toolName: 'list_files',
@@ -258,5 +279,70 @@ describe('toolResultMessageRecorder', () => {
         expect(extractTextFromParts(replayToolMessages[1]?.parts ?? [])).toBe(
             String(listingResultPart.payload['outputText'])
         );
+    });
+
+    it('stores a Utility AI semantic summary in tool_result.outputText while keeping the raw artifact retrievable', async () => {
+        summarizeArtifactMock.mockResolvedValue({
+            kind: 'summary_generated',
+            summaryText: '## Command summary\n- Exit code: 2\n- Stack trace in stderr',
+            providerId: 'zai',
+            modelId: 'zai/glm-4.5-air',
+            source: 'utility',
+        });
+
+        const target = await createSessionRun();
+        const oversizedStdout = 'x'.repeat(80_000);
+        const execution = createRunCommandExecutionOutput({
+            command: 'node build.js',
+            cwd: 'C:/workspace',
+            exitCode: 2,
+            stdout: oversizedStdout,
+            stderr: 'fatal stack trace',
+            timedOut: false,
+            durationMs: 120,
+        });
+
+        await persistToolResultMessage({
+            profileId: target.profileId,
+            sessionId: target.sessionId,
+            runId: target.runId,
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
+            toolCall: {
+                callId: 'call_build',
+                toolName: 'run_command',
+                argumentsText: '{"command":"node build.js"}',
+                args: {
+                    command: 'node build.js',
+                },
+            },
+            toolOutcome: {
+                kind: 'executed',
+                toolId: 'run_command',
+                output: execution.output,
+                artifactCandidate: execution.artifactCandidate,
+                at: '2026-03-31T12:00:00.000Z',
+                policy: {
+                    effective: 'allow',
+                    source: 'test',
+                },
+            },
+        });
+
+        const messageParts = await messageStore.listPartsBySession(target.profileId, target.sessionId);
+        const toolResultPart = messageParts.find((part) => part.partType === 'tool_result');
+        if (!toolResultPart) {
+            throw new Error('Expected persisted tool_result part.');
+        }
+
+        expect(toolResultPart.payload['outputText']).toBe('## Command summary\n- Exit code: 2\n- Stack trace in stderr');
+        expect(toolResultPart.payload['summaryMode']).toBe('utility_ai');
+        expect(toolResultPart.payload['summaryProviderId']).toBe('zai');
+        expect(toolResultPart.payload['summaryModelId']).toBe('zai/glm-4.5-air');
+
+        const artifact = await toolResultArtifactStore.getByMessagePartId(toolResultPart.id);
+        expect(artifact?.previewText).toContain('"artifactized": true');
+        expect(artifact?.metadata['summaryMode']).toBe('utility_ai');
+        expect(await toolResultArtifactStore.getRawText(toolResultPart.id)).toContain(oversizedStdout);
     });
 });

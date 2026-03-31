@@ -1,4 +1,14 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const { summarizeArtifactMock } = vi.hoisted(() => ({
+    summarizeArtifactMock: vi.fn(),
+}));
+
+vi.mock('@/app/backend/runtime/services/toolExecution/artifactSummaryService', () => ({
+    artifactSummaryService: {
+        summarizeArtifact: summarizeArtifactMock,
+    },
+}));
 
 import {
     createDirectoryListingExecutionOutput,
@@ -38,7 +48,15 @@ function createDirectoryEntries(count: number): ToolOutputEntry[] {
 }
 
 describe('toolOutputCompressionPolicy', () => {
-    it('keeps small command output inline without an artifact row candidate', () => {
+    beforeEach(() => {
+        summarizeArtifactMock.mockReset();
+        summarizeArtifactMock.mockResolvedValue({
+            kind: 'fallback_deterministic',
+            reason: 'no_usable_target',
+        });
+    });
+
+    it('keeps small command output inline without an artifact row candidate', async () => {
         const execution = createRunCommandExecutionOutput({
             command: 'node -e "process.stdout.write(\'x\')"',
             cwd: 'C:/workspace',
@@ -49,10 +67,12 @@ describe('toolOutputCompressionPolicy', () => {
             durationMs: 42,
         });
 
-        const prepared = prepareToolResultPersistence({
+        const prepared = await prepareToolResultPersistence({
             profileId: 'profile_test',
             sessionId: 'sess_test',
             runId: 'run_test',
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
             toolName: 'run_command',
             toolOutcome: createExecutedOutcome({
                 toolId: 'run_command',
@@ -66,7 +86,7 @@ describe('toolOutputCompressionPolicy', () => {
         expect(prepared.outputText).toContain('small output');
     });
 
-    it('artifactizes oversized command output while preserving only the preview in the result payload', () => {
+    it('artifactizes oversized command output while preserving only the preview in the result payload', async () => {
         const oversizedOutput = 'x'.repeat(60_000);
         const execution = createRunCommandExecutionOutput({
             command: 'node -e "process.stdout.write(\'x\')"',
@@ -78,10 +98,12 @@ describe('toolOutputCompressionPolicy', () => {
             durationMs: 42,
         });
 
-        const prepared = prepareToolResultPersistence({
+        const prepared = await prepareToolResultPersistence({
             profileId: 'profile_test',
             sessionId: 'sess_test',
             runId: 'run_test',
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
             toolName: 'run_command',
             toolOutcome: createExecutedOutcome({
                 toolId: 'run_command',
@@ -93,14 +115,60 @@ describe('toolOutputCompressionPolicy', () => {
         expect(prepared.payloadArtifactMetadata.artifactized).toBe(true);
         expect(prepared.payloadArtifactMetadata.artifactKind).toBe('command_output');
         expect(prepared.payloadArtifactMetadata.previewStrategy).toBe('head_tail');
+        expect(prepared.payloadArtifactMetadata.summaryMode).toBe('deterministic');
+        expect(prepared.payloadArtifactMetadata.deterministicPreviewAvailable).toBe(true);
         expect(prepared.payloadArtifactMetadata.totalBytes).toBe(60_000);
         expect(prepared.artifactPersistenceCandidate?.rawText).toContain(oversizedOutput);
         expect(prepared.outputText.length).toBeLessThan(oversizedOutput.length);
         expect(prepared.outputText).toContain('"artifactized": true');
+        expect(prepared.artifactPersistenceCandidate?.previewText).toContain('"artifactized": true');
 
         const output = prepared.normalizedPayload['output'];
         expect(typeof output).toBe('object');
         expect(JSON.stringify(output)).not.toContain(oversizedOutput);
+    });
+
+    it('stores a semantic Utility AI summary in outputText while keeping the deterministic preview in the artifact row', async () => {
+        summarizeArtifactMock.mockResolvedValue({
+            kind: 'summary_generated',
+            summaryText: '## Command summary\n- Exit code: 1\n- Error in stderr',
+            providerId: 'zai',
+            modelId: 'zai/glm-4.5-air',
+            source: 'utility',
+        });
+
+        const oversizedOutput = 'x'.repeat(60_000);
+        const execution = createRunCommandExecutionOutput({
+            command: 'node -e "process.stdout.write(\'x\')"',
+            cwd: 'C:/workspace',
+            exitCode: 1,
+            stdout: oversizedOutput,
+            stderr: 'fatal error',
+            timedOut: false,
+            durationMs: 42,
+        });
+
+        const prepared = await prepareToolResultPersistence({
+            profileId: 'profile_test',
+            sessionId: 'sess_test',
+            runId: 'run_test',
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
+            toolName: 'run_command',
+            toolOutcome: createExecutedOutcome({
+                toolId: 'run_command',
+                output: execution.output,
+                artifactCandidate: execution.artifactCandidate,
+            }),
+        });
+
+        expect(prepared.outputText).toBe('## Command summary\n- Exit code: 1\n- Error in stderr');
+        expect(prepared.payloadArtifactMetadata.summaryMode).toBe('utility_ai');
+        expect(prepared.payloadArtifactMetadata.summaryProviderId).toBe('zai');
+        expect(prepared.payloadArtifactMetadata.summaryModelId).toBe('zai/glm-4.5-air');
+        expect(prepared.artifactPersistenceCandidate?.previewText).toContain('"artifactized": true');
+        expect(prepared.artifactPersistenceCandidate?.previewText).not.toBe(prepared.outputText);
+        expect(prepared.artifactPersistenceCandidate?.metadata['summaryMode']).toBe('utility_ai');
     });
 
     it('builds head-tail previews for large command streams', () => {
@@ -120,17 +188,19 @@ describe('toolOutputCompressionPolicy', () => {
         expect(String(execution.output['stdout']).endsWith('bbbb')).toBe(true);
     });
 
-    it('keeps small file reads inline without artifactization', () => {
+    it('keeps small file reads inline without artifactization', async () => {
         const execution = createReadFileExecutionOutput({
             path: 'C:/workspace/README.md',
             rawText: 'short file body',
             byteLength: 15,
         });
 
-        const prepared = prepareToolResultPersistence({
+        const prepared = await prepareToolResultPersistence({
             profileId: 'profile_test',
             sessionId: 'sess_test',
             runId: 'run_test',
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
             toolName: 'read_file',
             toolOutcome: createExecutedOutcome({
                 toolId: 'read_file',
@@ -145,7 +215,7 @@ describe('toolOutputCompressionPolicy', () => {
         expect(prepared.artifactPersistenceCandidate).toBeUndefined();
     });
 
-    it('artifactizes oversized file reads and stores only the preview in the persisted result payload', () => {
+    it('artifactizes oversized file reads and stores only the preview in the persisted result payload', async () => {
         const rawText = `header\n${'x'.repeat(40_000)}`;
         const execution = createReadFileExecutionOutput({
             path: 'C:/workspace/big.log',
@@ -153,10 +223,12 @@ describe('toolOutputCompressionPolicy', () => {
             byteLength: Buffer.byteLength(rawText, 'utf8'),
         });
 
-        const prepared = prepareToolResultPersistence({
+        const prepared = await prepareToolResultPersistence({
             profileId: 'profile_test',
             sessionId: 'sess_test',
             runId: 'run_test',
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
             toolName: 'read_file',
             toolOutcome: createExecutedOutcome({
                 toolId: 'read_file',
@@ -168,13 +240,14 @@ describe('toolOutputCompressionPolicy', () => {
         expect(prepared.payloadArtifactMetadata.artifactized).toBe(true);
         expect(prepared.payloadArtifactMetadata.artifactKind).toBe('file_read');
         expect(prepared.payloadArtifactMetadata.previewStrategy).toBe('head_only');
+        expect(prepared.payloadArtifactMetadata.summaryMode).toBe('deterministic');
         expect(String(execution.output['content'])).not.toBe(rawText);
         expect(String(execution.output['content'])).toContain('bytes omitted');
         expect(prepared.artifactPersistenceCandidate?.rawText).toBe(rawText);
         expect(JSON.stringify(prepared.normalizedPayload['output'])).not.toContain(rawText);
     });
 
-    it('artifactizes caller-truncated file previews so raw content is not lost', () => {
+    it('artifactizes caller-truncated file previews so raw content is not lost', async () => {
         const rawText = 'abcdefghijklmnopqrstuvwxyz';
         const execution = createReadFileExecutionOutput({
             path: 'C:/workspace/notes.txt',
@@ -183,10 +256,12 @@ describe('toolOutputCompressionPolicy', () => {
             requestedPreviewMaxBytes: 5,
         });
 
-        const prepared = prepareToolResultPersistence({
+        const prepared = await prepareToolResultPersistence({
             profileId: 'profile_test',
             sessionId: 'sess_test',
             runId: 'run_test',
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
             toolName: 'read_file',
             toolOutcome: createExecutedOutcome({
                 toolId: 'read_file',
@@ -201,7 +276,7 @@ describe('toolOutputCompressionPolicy', () => {
         expect(String(execution.output['content'])).toContain('bytes omitted');
     });
 
-    it('keeps small directory listings inline', () => {
+    it('keeps small directory listings inline', async () => {
         const execution = createDirectoryListingExecutionOutput({
             rootPath: 'C:/workspace',
             entries: createDirectoryEntries(5),
@@ -209,10 +284,12 @@ describe('toolOutputCompressionPolicy', () => {
             count: 5,
         });
 
-        const prepared = prepareToolResultPersistence({
+        const prepared = await prepareToolResultPersistence({
             profileId: 'profile_test',
             sessionId: 'sess_test',
             runId: 'run_test',
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
             toolName: 'list_files',
             toolOutcome: createExecutedOutcome({
                 toolId: 'list_files',
@@ -225,7 +302,7 @@ describe('toolOutputCompressionPolicy', () => {
         expect(prepared.payloadArtifactMetadata.artifactized).toBe(false);
     });
 
-    it('artifactizes oversized directory listings and persists only a bounded preview', () => {
+    it('artifactizes oversized directory listings and persists only a bounded preview', async () => {
         const entries = createDirectoryEntries(260);
         const execution = createDirectoryListingExecutionOutput({
             rootPath: 'C:/workspace',
@@ -234,10 +311,12 @@ describe('toolOutputCompressionPolicy', () => {
             count: entries.length,
         });
 
-        const prepared = prepareToolResultPersistence({
+        const prepared = await prepareToolResultPersistence({
             profileId: 'profile_test',
             sessionId: 'sess_test',
             runId: 'run_test',
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
             toolName: 'list_files',
             toolOutcome: createExecutedOutcome({
                 toolId: 'list_files',

@@ -212,6 +212,7 @@ describe('message flow rendering', () => {
                                     totalBytes: 4096,
                                     totalLines: 220,
                                     omittedBytes: 3072,
+                                    summaryMode: 'utility_ai',
                                 },
                             ],
                         },
@@ -224,5 +225,6 @@ describe('message flow rendering', () => {
 
         expect(html).toContain('Stored full output available');
         expect(html).toContain('Open full output');
+        expect(html).toContain('AI summary');
     });
 });

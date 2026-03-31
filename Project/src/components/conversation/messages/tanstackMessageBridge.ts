@@ -53,7 +53,7 @@ export type ConversationTanstackRenderPart =
           toolName: string;
           argumentsText: string;
       }
-    | {
+      | {
           key: string;
           kind: 'tool_result';
           messagePartId: EntityId<'part'>;
@@ -67,6 +67,9 @@ export type ConversationTanstackRenderPart =
           totalBytes?: number;
           totalLines?: number;
           omittedBytes?: number;
+          summaryMode?: 'deterministic' | 'utility_ai';
+          summaryProviderId?: string;
+          summaryModelId?: string;
       }
     | {
           key: string;
@@ -200,6 +203,14 @@ function buildProjectedParts(message: MessageRecord, parts: MessagePartRecord[])
             const totalLines = typeof part.payload['totalLines'] === 'number' ? part.payload['totalLines'] : undefined;
             const omittedBytes =
                 typeof part.payload['omittedBytes'] === 'number' ? part.payload['omittedBytes'] : undefined;
+            const summaryMode =
+                part.payload['summaryMode'] === 'utility_ai' || part.payload['summaryMode'] === 'deterministic'
+                    ? part.payload['summaryMode']
+                    : undefined;
+            const summaryProviderId =
+                typeof part.payload['summaryProviderId'] === 'string' ? part.payload['summaryProviderId'] : undefined;
+            const summaryModelId =
+                typeof part.payload['summaryModelId'] === 'string' ? part.payload['summaryModelId'] : undefined;
 
             projected.push({
                 key: part.id,
@@ -215,6 +226,9 @@ function buildProjectedParts(message: MessageRecord, parts: MessagePartRecord[])
                 ...(totalBytes !== undefined ? { totalBytes } : {}),
                 ...(totalLines !== undefined ? { totalLines } : {}),
                 ...(omittedBytes !== undefined ? { omittedBytes } : {}),
+                ...(summaryMode ? { summaryMode } : {}),
+                ...(summaryProviderId ? { summaryProviderId } : {}),
+                ...(summaryModelId ? { summaryModelId } : {}),
             });
             continue;
         }
@@ -374,6 +388,9 @@ function buildCopyPayloadBody(
                 ...(part.totalBytes !== undefined ? { totalBytes: part.totalBytes } : {}),
                 ...(part.totalLines !== undefined ? { totalLines: part.totalLines } : {}),
                 ...(part.omittedBytes !== undefined ? { omittedBytes: part.omittedBytes } : {}),
+                ...(part.summaryMode ? { summaryMode: part.summaryMode } : {}),
+                ...(part.summaryProviderId ? { summaryProviderId: part.summaryProviderId } : {}),
+                ...(part.summaryModelId ? { summaryModelId: part.summaryModelId } : {}),
             });
         }
     }

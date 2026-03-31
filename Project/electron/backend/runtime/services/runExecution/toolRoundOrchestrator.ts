@@ -90,6 +90,8 @@ export async function executeToolRound(input: {
             profileId: input.executeRunInput.profileId,
             sessionId: input.executeRunInput.sessionId,
             runId: input.executeRunInput.runId,
+            providerId: input.executeRunInput.providerId,
+            modelId: input.executeRunInput.modelId,
             toolCall,
             toolOutcome,
         });

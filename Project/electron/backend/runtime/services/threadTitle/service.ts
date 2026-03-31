@@ -1,10 +1,8 @@
 import { providerStore, runStore, settingsStore, threadStore } from '@/app/backend/persistence/stores';
-import { getProviderAdapter } from '@/app/backend/providers/adapters';
-import type { ProviderRuntimeInput, ProviderRuntimePart } from '@/app/backend/providers/types';
 import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
+import { generatePlainTextFromMessages } from '@/app/backend/runtime/services/common/plainTextGeneration';
 import { utilityModelService } from '@/app/backend/runtime/services/profile/utilityModel';
-import { resolveRuntimeProtocol } from '@/app/backend/runtime/services/runExecution/protocol';
-import { resolveRunAuth } from '@/app/backend/runtime/services/runExecution/resolveRunAuth';
+import { createTextMessage } from '@/app/backend/runtime/services/runExecution/contextParts';
 import { appLog } from '@/app/main/logging';
 
 const TITLE_GENERATION_MODE_KEY = 'thread_title_generation_mode';
@@ -42,18 +40,6 @@ function sanitizeTitle(value: string): string {
     return truncate(singleLine, 90);
 }
 
-function parseRuntimeTextPart(part: ProviderRuntimePart): string | undefined {
-    if (part.partType !== 'text' && part.partType !== 'reasoning_summary') {
-        return undefined;
-    }
-    const value = part.payload['text'];
-    if (typeof value !== 'string') {
-        return undefined;
-    }
-    const trimmed = value.trim();
-    return trimmed.length > 0 ? trimmed : undefined;
-}
-
 function shouldRetitleThread(input: { title: string; runCount: number; parentThreadId?: string }): boolean {
     if (input.title.startsWith('New ')) {
         return true;
@@ -62,21 +48,6 @@ function shouldRetitleThread(input: { title: string; runCount: number; parentThr
         return true;
     }
     return false;
-}
-
-function createTitleContextMessage(
-    role: 'system' | 'user' | 'assistant',
-    text: string
-): NonNullable<ProviderRuntimeInput['contextMessages']>[number] {
-    return {
-        role,
-        parts: [
-            {
-                type: 'text',
-                text,
-            },
-        ],
-    };
 }
 
 interface ApplyThreadTitleInput {
@@ -111,109 +82,21 @@ async function generateAiTitle(input: {
         return undefined;
     }
 
-    const auth = await resolveRunAuth({
-        profileId: input.profileId,
-        providerId: input.providerId,
-    });
-    if (auth.isErr()) {
-        return undefined;
-    }
-
-    const modelCapabilities = await providerStore.getModelCapabilities(input.profileId, input.providerId, input.modelId);
-    if (!modelCapabilities) {
-        return undefined;
-    }
-
-    const runtimeProtocol = await resolveRuntimeProtocol({
+    const generationResult = await generatePlainTextFromMessages({
         profileId: input.profileId,
         providerId: input.providerId,
         modelId: input.modelId,
-        modelCapabilities,
-        authMethod: auth.value.authMethod,
-        runtimeOptions: {
-            reasoning: {
-                effort: 'none',
-                summary: 'none',
-                includeEncrypted: false,
-            },
-            cache: {
-                strategy: 'auto',
-            },
-            transport: {
-                family: 'auto',
-            },
-        },
+        promptText: 'Return a concise thread title (max 70 chars) based on the user request. Return title text only.',
+        messages: [
+            createTextMessage('system', 'You produce short, clear conversation thread titles. Output plain text only.'),
+            createTextMessage('user', `Request: ${input.prompt}\nTemplate: ${input.templateTitle}`),
+        ],
     });
-    if (runtimeProtocol.isErr()) {
+    if (generationResult.isErr()) {
         return undefined;
     }
 
-    const adapter = getProviderAdapter(input.providerId);
-    const controller = new AbortController();
-    const timeout = setTimeout(() => {
-        controller.abort();
-    }, 10_000);
-
-    const chunks: string[] = [];
-    try {
-        const runtimeInput: ProviderRuntimeInput = {
-            profileId: input.profileId,
-            sessionId: 'sess_title_generation',
-            runId: 'run_title_generation',
-            providerId: input.providerId,
-            modelId: input.modelId,
-            runtime: runtimeProtocol.value.runtime,
-            promptText:
-                'Return a concise thread title (max 70 chars) based on the user request. Return title text only.',
-            contextMessages: [
-                createTitleContextMessage(
-                    'system',
-                    'You produce short, clear conversation thread titles. Output plain text only.'
-                ),
-                createTitleContextMessage('user', `Request: ${input.prompt}\nTemplate: ${input.templateTitle}`),
-            ],
-            runtimeOptions: {
-                reasoning: {
-                    effort: 'none',
-                    summary: 'none',
-                    includeEncrypted: false,
-                },
-                cache: {
-                    strategy: 'auto',
-                },
-                transport: {
-                    family: 'auto',
-                },
-                execution: {},
-            },
-            cache: {
-                strategy: 'auto',
-                applied: false,
-            },
-            authMethod: auth.value.authMethod,
-            ...(auth.value.apiKey ? { apiKey: auth.value.apiKey } : {}),
-            ...(auth.value.accessToken ? { accessToken: auth.value.accessToken } : {}),
-            ...(auth.value.organizationId ? { organizationId: auth.value.organizationId } : {}),
-            signal: controller.signal,
-        };
-        const streamResult = await adapter.streamCompletion(runtimeInput, {
-            onPart: (part) => {
-                const text = parseRuntimeTextPart(part);
-                if (text) {
-                    chunks.push(text);
-                }
-            },
-        });
-        if (streamResult.isErr()) {
-            return undefined;
-        }
-    } catch {
-        return undefined;
-    } finally {
-        clearTimeout(timeout);
-    }
-
-    const candidate = sanitizeTitle(chunks.join(' '));
+    const candidate = sanitizeTitle(generationResult.value);
     if (candidate.length < 3) {
         return undefined;
     }

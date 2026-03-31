@@ -1,7 +1,9 @@
 import { Buffer } from 'node:buffer';
 
 import type { ToolResultArtifactRecord } from '@/app/backend/persistence/types';
+import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
 import { serializeToolInvocationOutcome } from '@/app/backend/runtime/services/toolExecution/results';
+import { artifactSummaryService } from '@/app/backend/runtime/services/toolExecution/artifactSummaryService';
 import type {
     ToolExecutionArtifactCandidate,
     ToolExecutionOutput,
@@ -31,6 +33,10 @@ export interface ToolResultArtifactPayloadMetadata {
     totalLines?: number;
     omittedBytes?: number;
     artifactAvailable?: boolean;
+    summaryMode?: 'deterministic' | 'utility_ai';
+    summaryProviderId?: RuntimeProviderId;
+    summaryModelId?: string;
+    deterministicPreviewAvailable?: boolean;
 }
 
 export interface ToolResultArtifactPersistenceCandidate {
@@ -399,13 +405,15 @@ function getArtifactizedCandidateDetails(
     };
 }
 
-export function prepareToolResultPersistence(input: {
+export async function prepareToolResultPersistence(input: {
     profileId: string;
     sessionId: string;
     runId: string;
+    providerId: RuntimeProviderId;
+    modelId: string;
     toolName: string;
     toolOutcome: ToolInvocationOutcome;
-}): PreparedToolResultPersistence {
+}): Promise<PreparedToolResultPersistence> {
     const serializedResult = serializeToolInvocationOutcome(input.toolOutcome);
     const normalizedPayload = serializedResult.ok
         ? createExecutedPayload(serializedResult)
@@ -432,7 +440,21 @@ export function prepareToolResultPersistence(input: {
         totalLines: artifactizedDetails.totalLines,
         omittedBytes: artifactizedDetails.omittedBytes,
         artifactAvailable: true,
+        summaryMode: 'deterministic',
+        deterministicPreviewAvailable: true,
     };
+
+    const summaryResult = await artifactSummaryService.summarizeArtifact({
+        profileId: input.profileId,
+        fallbackProviderId: input.providerId,
+        fallbackModelId: input.modelId,
+        artifactCandidate: artifactizedDetails.candidate,
+    });
+    if (summaryResult.kind === 'summary_generated') {
+        payloadArtifactMetadata.summaryMode = 'utility_ai';
+        payloadArtifactMetadata.summaryProviderId = summaryResult.providerId;
+        payloadArtifactMetadata.summaryModelId = summaryResult.modelId;
+    }
 
     if (isRecord(normalizedPayload['output'])) {
         normalizedPayload['output'] = {
@@ -441,7 +463,8 @@ export function prepareToolResultPersistence(input: {
         };
     }
 
-    const outputText = JSON.stringify(normalizedPayload, null, 2);
+    const deterministicPreviewText = JSON.stringify(normalizedPayload, null, 2);
+    const outputText = summaryResult.kind === 'summary_generated' ? summaryResult.summaryText : deterministicPreviewText;
 
     return {
         outputText,
@@ -458,10 +481,18 @@ export function prepareToolResultPersistence(input: {
             rawText: artifactizedDetails.candidate.rawText,
             totalBytes: artifactizedDetails.totalBytes,
             totalLines: artifactizedDetails.totalLines,
-            previewText: outputText,
+            previewText: deterministicPreviewText,
             previewStrategy: artifactizedDetails.previewStrategy,
             metadata: {
                 ...artifactizedDetails.candidate.metadata,
+                summaryMode: payloadArtifactMetadata.summaryMode,
+                ...(payloadArtifactMetadata.summaryProviderId
+                    ? { summaryProviderId: payloadArtifactMetadata.summaryProviderId }
+                    : {}),
+                ...(payloadArtifactMetadata.summaryModelId
+                    ? { summaryModelId: payloadArtifactMetadata.summaryModelId }
+                    : {}),
+                deterministicPreviewAvailable: true,
             },
         },
     };

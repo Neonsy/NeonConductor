@@ -97,6 +97,9 @@ describe('tanstack message bridge', () => {
                                 totalBytes: 2048,
                                 totalLines: 120,
                                 omittedBytes: 1024,
+                                summaryMode: 'utility_ai',
+                                summaryProviderId: 'zai',
+                                summaryModelId: 'zai/glm-4.5-air',
                             },
                         }),
                     ],
@@ -125,6 +128,9 @@ describe('tanstack message bridge', () => {
             totalBytes: 2048,
             totalLines: 120,
             omittedBytes: 1024,
+            summaryMode: 'utility_ai',
+            summaryProviderId: 'zai',
+            summaryModelId: 'zai/glm-4.5-air',
         });
     });
 

@@ -174,6 +174,9 @@ describe('message timeline model', () => {
                                     totalBytes: 8192,
                                     totalLines: 140,
                                     omittedBytes: 6144,
+                                    summaryMode: 'utility_ai',
+                                    summaryProviderId: 'zai',
+                                    summaryModelId: 'zai/glm-4.5-air',
                                 },
                             }),
                         ],
@@ -192,6 +195,9 @@ describe('message timeline model', () => {
             totalBytes: 8192,
             totalLines: 140,
             omittedBytes: 6144,
+            summaryMode: 'utility_ai',
+            summaryProviderId: 'zai',
+            summaryModelId: 'zai/glm-4.5-air',
         });
     });
 

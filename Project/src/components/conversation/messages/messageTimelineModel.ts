@@ -52,6 +52,9 @@ export type MessageTimelineBodyEntry =
           totalBytes?: number;
           totalLines?: number;
           omittedBytes?: number;
+          summaryMode?: 'deterministic' | 'utility_ai';
+          summaryProviderId?: string;
+          summaryModelId?: string;
       };
 
 export interface MessageTimelineEntry {
@@ -185,6 +188,9 @@ function buildBodyEntries(message: ConversationTanstackMessage): MessageTimeline
                 ...(part.totalBytes !== undefined ? { totalBytes: part.totalBytes } : {}),
                 ...(part.totalLines !== undefined ? { totalLines: part.totalLines } : {}),
                 ...(part.omittedBytes !== undefined ? { omittedBytes: part.omittedBytes } : {}),
+                ...(part.summaryMode ? { summaryMode: part.summaryMode } : {}),
+                ...(part.summaryProviderId ? { summaryProviderId: part.summaryProviderId } : {}),
+                ...(part.summaryModelId ? { summaryModelId: part.summaryModelId } : {}),
             });
             continue;
         }

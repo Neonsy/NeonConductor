@@ -213,6 +213,9 @@ describe('message flow model', () => {
                                     totalBytes: 4096,
                                     totalLines: 220,
                                     omittedBytes: 3072,
+                                    summaryMode: 'utility_ai',
+                                    summaryProviderId: 'zai',
+                                    summaryModelId: 'zai/glm-4.5-air',
                                 },
                             }),
                         ],
@@ -230,6 +233,9 @@ describe('message flow model', () => {
             totalBytes: 4096,
             totalLines: 220,
             omittedBytes: 3072,
+            summaryMode: 'utility_ai',
+            summaryProviderId: 'zai',
+            summaryModelId: 'zai/glm-4.5-air',
         });
     });
 
