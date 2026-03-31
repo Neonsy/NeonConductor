@@ -30,3 +30,19 @@ export interface ProfileSetUtilityModelInput extends ProfileInput {
     providerId?: RuntimeProviderId;
     modelId?: string;
 }
+
+export type ProfileGetMemoryRetrievalModelInput = ProfileInput;
+
+export interface MemoryRetrievalModelSelection {
+    providerId: RuntimeProviderId;
+    modelId: string;
+}
+
+export interface MemoryRetrievalModelPreference {
+    selection: MemoryRetrievalModelSelection | null;
+}
+
+export interface ProfileSetMemoryRetrievalModelInput extends ProfileInput {
+    providerId?: RuntimeProviderId;
+    modelId?: string;
+}

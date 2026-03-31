@@ -6,6 +6,7 @@ import type {
 } from '@/app/backend/runtime/contracts/enums';
 import type { EntityId } from '@/app/backend/runtime/contracts/ids';
 import type { ProfileInput } from '@/app/backend/runtime/contracts/types/common';
+import type { RuntimeProviderId } from '@/shared/contracts';
 
 export interface MemoryRecord {
     id: EntityId<'mem'>;
@@ -62,6 +63,20 @@ export interface MemoryEvidenceCreateInput {
     sourceMessageId?: EntityId<'msg'>;
     sourceMessagePartId?: EntityId<'part'>;
     metadata?: Record<string, unknown>;
+}
+
+export interface MemoryEmbeddingIndexRecord {
+    id: EntityId<'mvec'>;
+    profileId: string;
+    memoryId: EntityId<'mem'>;
+    providerId: RuntimeProviderId;
+    modelId: string;
+    sourceDigest: string;
+    indexedText: string;
+    embedding: number[];
+    dimensions: number;
+    createdAt: string;
+    updatedAt: string;
 }
 
 export const memoryTemporalFactStatuses = ['current', 'superseded', 'disabled'] as const;
@@ -135,6 +150,7 @@ export type RetrievedMemoryMatchReason =
     | 'structured'
     | 'derived_temporal'
     | 'derived_causal'
+    | 'semantic'
     | 'prompt';
 
 export interface RetrievedMemoryRecord {

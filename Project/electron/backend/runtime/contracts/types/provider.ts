@@ -210,3 +210,15 @@ export interface ProviderCredentialValue {
     credentialSource: 'api_key' | 'access_token';
     value: string;
 }
+
+export interface ProviderEmbeddingModelRecord {
+    id: string;
+    providerId: RuntimeProviderId;
+    label: string;
+    dimensions: number;
+    maxInputTokens?: number;
+    inputPrice?: number;
+    source?: string;
+    updatedAt?: string;
+    raw?: Record<string, unknown>;
+}

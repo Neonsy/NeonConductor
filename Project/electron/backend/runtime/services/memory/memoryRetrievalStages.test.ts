@@ -175,6 +175,7 @@ describe('memory retrieval stages', () => {
             activeMemories: [exactOlder, exactNewer],
             promptTerms: [],
             derivedCandidates: [],
+            semanticCandidates: [],
         });
 
         expect(decisions.map((decision) => decision.memory.id)).toEqual(['mem_exact_newer', 'mem_exact_older']);

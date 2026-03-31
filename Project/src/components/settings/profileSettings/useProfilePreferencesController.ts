@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { buildModelPickerOption } from '@/web/components/modelSelection/modelCapabilities';
+import type { ModelPickerOption } from '@/web/components/modelSelection/modelCapabilities';
 import { createProfilePreferencesActions } from '@/web/components/settings/profileSettings/actions';
 import type { ProfileSelectionState } from '@/web/components/settings/profileSettings/useProfileSelectionState';
 import { createFailClosedAsyncAction } from '@/web/lib/async/createFailClosedAsyncAction';
@@ -9,17 +10,75 @@ import { findProviderControlEntry, listProviderControlProviders } from '@/web/li
 import { trpc } from '@/web/trpc/client';
 
 import type { RuntimeProviderId } from '@/shared/contracts';
+import type { ProviderEmbeddingControlSnapshot } from '@/app/backend/providers/service/types';
+
+function listProviderEmbeddingControlProviders(
+    snapshot: ProviderEmbeddingControlSnapshot | undefined
+): Array<{ id: RuntimeProviderId; label: string }> {
+    return (snapshot?.entries ?? []).map((entry) => ({
+        id: entry.provider.id,
+        label: entry.provider.label,
+    }));
+}
+
+function findProviderEmbeddingControlEntry(
+    snapshot: ProviderEmbeddingControlSnapshot | undefined,
+    providerId: RuntimeProviderId | undefined
+) {
+    if (!providerId) {
+        return undefined;
+    }
+
+    return snapshot?.entries.find((entry) => entry.provider.id === providerId);
+}
+
+function buildEmbeddingModelPickerOption(input: {
+    providerId: RuntimeProviderId;
+    providerLabel: string;
+    model: {
+        id: string;
+        label: string;
+        inputPrice?: number;
+        source?: string;
+    };
+}): ModelPickerOption {
+    return {
+        id: input.model.id,
+        label: input.model.label,
+        providerId: input.providerId,
+        providerLabel: input.providerLabel,
+        ...(input.model.source ? { source: input.model.source } : {}),
+        ...(input.model.inputPrice !== undefined ? { price: input.model.inputPrice } : {}),
+        supportsTools: false,
+        supportsVision: false,
+        supportsReasoning: false,
+        capabilityBadges: [],
+        compatibilityState: 'compatible',
+    };
+}
 
 interface ProfilePreferencesControllerInput {
     selection: ProfileSelectionState;
     setStatusMessage: (value: string | undefined) => void;
 }
 
+type ModelPreferenceDraft = {
+    profileId: string;
+    providerId?: RuntimeProviderId;
+    modelId?: string;
+};
+
+interface ModelPreferenceDraftState {
+    utilityModelDraft: ModelPreferenceDraft | undefined;
+    memoryRetrievalModelDraft: ModelPreferenceDraft | undefined;
+}
+
 export function useProfilePreferencesController(input: ProfilePreferencesControllerInput) {
     const utils = trpc.useUtils();
-    const [utilityModelDraft, setUtilityModelDraft] = useState<
-        { profileId: string; providerId?: RuntimeProviderId; modelId?: string } | undefined
-    >(undefined);
+    const [modelPreferenceDrafts, setModelPreferenceDrafts] = useState<ModelPreferenceDraftState>({
+        utilityModelDraft: undefined,
+        memoryRetrievalModelDraft: undefined,
+    });
 
     const editPreferenceQuery = trpc.conversation.getEditPreference.useQuery(
         {
@@ -233,10 +292,81 @@ export function useProfilePreferencesController(input: ProfilePreferencesControl
                 },
                 result
             );
-            setUtilityModelDraft(undefined);
+            setModelPreferenceDrafts((current) => ({
+                ...current,
+                utilityModelDraft: undefined,
+            }));
+        },
+    });
+    const memoryRetrievalModelQuery = trpc.profile.getMemoryRetrievalModel.useQuery(
+        {
+            profileId: input.selection.selectedProfileIdForSettings,
+        },
+        {
+            enabled: Boolean(input.selection.selectedProfileIdForSettings),
+            ...PROGRESSIVE_QUERY_OPTIONS,
+        }
+    );
+    const setMemoryRetrievalModelMutation = trpc.profile.setMemoryRetrievalModel.useMutation({
+        onMutate: async (variables) => {
+            await utils.profile.getMemoryRetrievalModel.cancel({
+                profileId: variables.profileId,
+            });
+            const previous = utils.profile.getMemoryRetrievalModel.getData({
+                profileId: variables.profileId,
+            });
+            utils.profile.getMemoryRetrievalModel.setData(
+                {
+                    profileId: variables.profileId,
+                },
+                {
+                    selection:
+                        variables.providerId && variables.modelId
+                            ? {
+                                  providerId: variables.providerId,
+                                  modelId: variables.modelId,
+                              }
+                            : null,
+                }
+            );
+            return {
+                previous,
+                profileId: variables.profileId,
+            };
+        },
+        onError: (_error, _variables, context) => {
+            if (context?.previous) {
+                utils.profile.getMemoryRetrievalModel.setData(
+                    {
+                        profileId: context.profileId,
+                    },
+                    context.previous
+                );
+            }
+        },
+        onSuccess: (result, variables) => {
+            utils.profile.getMemoryRetrievalModel.setData(
+                {
+                    profileId: variables.profileId,
+                },
+                result
+            );
+            setModelPreferenceDrafts((current) => ({
+                ...current,
+                memoryRetrievalModelDraft: undefined,
+            }));
         },
     });
     const providerControlQuery = trpc.provider.getControlPlane.useQuery(
+        {
+            profileId: input.selection.selectedProfileIdForSettings,
+        },
+        {
+            enabled: Boolean(input.selection.selectedProfileIdForSettings),
+            ...PROGRESSIVE_QUERY_OPTIONS,
+        }
+    );
+    const providerEmbeddingControlQuery = trpc.provider.getEmbeddingControlPlane.useQuery(
         {
             profileId: input.selection.selectedProfileIdForSettings,
         },
@@ -264,10 +394,19 @@ export function useProfilePreferencesController(input: ProfilePreferencesControl
         createFailClosedAsyncAction(action);
 
     const providerControl = providerControlQuery.data?.providerControl;
+    const providerEmbeddingControl = providerEmbeddingControlQuery.data?.providerEmbeddingControl;
     const utilityProviderItems = listProviderControlProviders(providerControl);
+    const memoryRetrievalProviderItems = listProviderEmbeddingControlProviders(providerEmbeddingControl);
     const persistedUtilitySelection = utilityModelQuery.data?.selection ?? null;
+    const persistedMemoryRetrievalSelection = memoryRetrievalModelQuery.data?.selection ?? null;
     const activeUtilityDraft =
-        utilityModelDraft?.profileId === input.selection.selectedProfileIdForSettings ? utilityModelDraft : undefined;
+        modelPreferenceDrafts.utilityModelDraft?.profileId === input.selection.selectedProfileIdForSettings
+            ? modelPreferenceDrafts.utilityModelDraft
+            : undefined;
+    const activeMemoryRetrievalDraft =
+        modelPreferenceDrafts.memoryRetrievalModelDraft?.profileId === input.selection.selectedProfileIdForSettings
+            ? modelPreferenceDrafts.memoryRetrievalModelDraft
+            : undefined;
     const selectedUtilityProviderId =
         activeUtilityDraft?.providerId ?? persistedUtilitySelection?.providerId ?? utilityProviderItems[0]?.id;
     const selectedUtilityProviderEntry = findProviderControlEntry(providerControl, selectedUtilityProviderId);
@@ -288,6 +427,32 @@ export function useProfilePreferencesController(input: ProfilePreferencesControl
             ? requestedUtilityModelId
             : (utilityModelOptions[0]?.id ?? '');
     const selectedUtilityModelOption = utilityModelOptions.find((option) => option.id === selectedUtilityModelId);
+    const selectedMemoryRetrievalProviderId =
+        activeMemoryRetrievalDraft?.providerId ??
+        persistedMemoryRetrievalSelection?.providerId ??
+        memoryRetrievalProviderItems[0]?.id;
+    const selectedMemoryRetrievalProviderEntry = findProviderEmbeddingControlEntry(
+        providerEmbeddingControl,
+        selectedMemoryRetrievalProviderId
+    );
+    const memoryRetrievalModelOptions =
+        selectedMemoryRetrievalProviderEntry?.models.map((model) =>
+            buildEmbeddingModelPickerOption({
+                providerId: selectedMemoryRetrievalProviderEntry.provider.id,
+                providerLabel: selectedMemoryRetrievalProviderEntry.provider.label,
+                model,
+            })
+        ) ?? [];
+    const requestedMemoryRetrievalModelId =
+        activeMemoryRetrievalDraft?.modelId ?? persistedMemoryRetrievalSelection?.modelId ?? '';
+    const selectedMemoryRetrievalModelId =
+        requestedMemoryRetrievalModelId &&
+        memoryRetrievalModelOptions.some((option) => option.id === requestedMemoryRetrievalModelId)
+            ? requestedMemoryRetrievalModelId
+            : (memoryRetrievalModelOptions[0]?.id ?? '');
+    const selectedMemoryRetrievalModelOption = memoryRetrievalModelOptions.find(
+        (option) => option.id === selectedMemoryRetrievalModelId
+    );
 
     return {
         editPreferenceQuery,
@@ -298,13 +463,22 @@ export function useProfilePreferencesController(input: ProfilePreferencesControl
         setExecutionPresetMutation,
         utilityModelQuery,
         setUtilityModelMutation,
+        memoryRetrievalModelQuery,
+        setMemoryRetrievalModelMutation,
         providerControlQuery,
+        providerEmbeddingControlQuery,
         utilityProviderItems,
+        memoryRetrievalProviderItems,
         selectedUtilityProviderId,
         utilityModelOptions,
         selectedUtilityModelId,
         selectedUtilityModelOption,
         utilityModelSelection: persistedUtilitySelection,
+        selectedMemoryRetrievalProviderId,
+        memoryRetrievalModelOptions,
+        selectedMemoryRetrievalModelId,
+        selectedMemoryRetrievalModelOption,
+        memoryRetrievalModelSelection: persistedMemoryRetrievalSelection,
         executionPreset:
             executionPresetQuery.data?.preset === 'privacy' ||
             executionPresetQuery.data?.preset === 'standard' ||
@@ -326,15 +500,16 @@ export function useProfilePreferencesController(input: ProfilePreferencesControl
             input.setStatusMessage(undefined);
             const nextProviderEntry = findProviderControlEntry(providerControl, providerId);
             const nextModelId = nextProviderEntry?.models[0]?.id;
-            setUtilityModelDraft(
-                input.selection.selectedProfileIdForSettings
+            setModelPreferenceDrafts((current) => ({
+                ...current,
+                utilityModelDraft: input.selection.selectedProfileIdForSettings
                     ? {
                           profileId: input.selection.selectedProfileIdForSettings,
                           ...(providerId ? { providerId } : {}),
                           ...(nextModelId ? { modelId: nextModelId } : {}),
                       }
-                    : undefined
-            );
+                    : undefined,
+            }));
         },
         setUtilityModelId: (modelId: string) => {
             if (!input.selection.selectedProfileIdForSettings || !selectedUtilityProviderId) {
@@ -342,12 +517,77 @@ export function useProfilePreferencesController(input: ProfilePreferencesControl
             }
 
             input.setStatusMessage(undefined);
-            setUtilityModelDraft({
-                profileId: input.selection.selectedProfileIdForSettings,
-                providerId: selectedUtilityProviderId,
-                modelId,
-            });
+            setModelPreferenceDrafts((current) => ({
+                ...current,
+                utilityModelDraft: {
+                    profileId: input.selection.selectedProfileIdForSettings,
+                    providerId: selectedUtilityProviderId,
+                    modelId,
+                },
+            }));
         },
+        setMemoryRetrievalProviderId: (providerId: RuntimeProviderId | undefined) => {
+            input.setStatusMessage(undefined);
+            const nextProviderEntry = findProviderEmbeddingControlEntry(providerEmbeddingControl, providerId);
+            const nextModelId = nextProviderEntry?.models[0]?.id;
+            setModelPreferenceDrafts((current) => ({
+                ...current,
+                memoryRetrievalModelDraft: input.selection.selectedProfileIdForSettings
+                    ? {
+                          profileId: input.selection.selectedProfileIdForSettings,
+                          ...(providerId ? { providerId } : {}),
+                          ...(nextModelId ? { modelId: nextModelId } : {}),
+                      }
+                    : undefined,
+            }));
+        },
+        setMemoryRetrievalModelId: (modelId: string) => {
+            if (!input.selection.selectedProfileIdForSettings || !selectedMemoryRetrievalProviderId) {
+                return;
+            }
+
+            input.setStatusMessage(undefined);
+            setModelPreferenceDrafts((current) => ({
+                ...current,
+                memoryRetrievalModelDraft: {
+                    profileId: input.selection.selectedProfileIdForSettings,
+                    providerId: selectedMemoryRetrievalProviderId,
+                    modelId,
+                },
+            }));
+        },
+        saveMemoryRetrievalModel: wrapFailClosedAction(async () => {
+            if (
+                !input.selection.selectedProfile ||
+                !selectedMemoryRetrievalProviderId ||
+                selectedMemoryRetrievalModelId.length === 0
+            ) {
+                return;
+            }
+
+            await setMemoryRetrievalModelMutation.mutateAsync({
+                profileId: input.selection.selectedProfile.id,
+                providerId: selectedMemoryRetrievalProviderId,
+                modelId: selectedMemoryRetrievalModelId,
+            });
+            input.setStatusMessage('Updated Memory Retrieval model.');
+        }),
+        clearMemoryRetrievalModel: wrapFailClosedAction(async () => {
+            if (!input.selection.selectedProfile) {
+                return;
+            }
+
+            setModelPreferenceDrafts((current) => ({
+                ...current,
+                memoryRetrievalModelDraft: undefined,
+            }));
+            await setMemoryRetrievalModelMutation.mutateAsync({
+                profileId: input.selection.selectedProfile.id,
+            });
+            input.setStatusMessage(
+                'Cleared Memory Retrieval model. Neon will leave semantic retrieval unconfigured.'
+            );
+        }),
         updateExecutionPreset: wrapFailClosedAction(async (preset: 'privacy' | 'standard' | 'yolo') => {
             if (!input.selection.selectedProfile) {
                 return;
@@ -378,7 +618,10 @@ export function useProfilePreferencesController(input: ProfilePreferencesControl
                 return;
             }
 
-            setUtilityModelDraft(undefined);
+            setModelPreferenceDrafts((current) => ({
+                ...current,
+                utilityModelDraft: undefined,
+            }));
             await setUtilityModelMutation.mutateAsync({
                 profileId: input.selection.selectedProfile.id,
             });

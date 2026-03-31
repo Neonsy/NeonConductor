@@ -114,6 +114,50 @@ async function copyProviderCatalog(
         .execute();
 }
 
+async function copyProviderEmbeddingCatalog(
+    tx: ProfileStoreDb,
+    sourceProfileId: string,
+    targetProfileId: string,
+    timestamp: string
+): Promise<void> {
+    const rows = await tx
+        .selectFrom('provider_embedding_model_catalog')
+        .select([
+            'provider_id',
+            'model_id',
+            'label',
+            'dimensions',
+            'max_input_tokens',
+            'input_price',
+            'source',
+            'raw_json',
+        ])
+        .where('profile_id', '=', sourceProfileId)
+        .execute();
+
+    if (rows.length === 0) {
+        return;
+    }
+
+    await tx
+        .insertInto('provider_embedding_model_catalog')
+        .values(
+            rows.map((row) => ({
+                profile_id: targetProfileId,
+                provider_id: row.provider_id,
+                model_id: row.model_id,
+                label: row.label,
+                dimensions: row.dimensions,
+                max_input_tokens: row.max_input_tokens,
+                input_price: row.input_price,
+                source: row.source,
+                updated_at: timestamp,
+                raw_json: row.raw_json,
+            }))
+        )
+        .execute();
+}
+
 async function seedProviderAuthStates(tx: ProfileStoreDb, profileId: string, timestamp: string): Promise<void> {
     const providers = await tx.selectFrom('providers').select('id').orderBy('id', 'asc').execute();
     if (providers.length === 0) {
@@ -179,6 +223,7 @@ export async function initializeProfileProviderBaseline(input: {
     timestamp: string;
 }): Promise<void> {
     await copyProviderCatalog(input.tx, input.sourceProfileId, input.targetProfileId, input.timestamp);
+    await copyProviderEmbeddingCatalog(input.tx, input.sourceProfileId, input.targetProfileId, input.timestamp);
     await seedProviderAuthStates(input.tx, input.targetProfileId, input.timestamp);
     await seedKiloAccountSnapshot(input.tx, input.targetProfileId, input.timestamp);
 }

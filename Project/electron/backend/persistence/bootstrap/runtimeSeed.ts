@@ -2,6 +2,10 @@ import {
     listStaticModelDefinitions,
     toStaticProviderCatalogModel,
 } from '@/app/backend/providers/metadata/staticCatalog/registry';
+import {
+    listStaticEmbeddingModelDefinitions,
+    toStaticProviderEmbeddingCatalogModel,
+} from '@/app/backend/providers/embeddingCatalog/staticCatalog/registry';
 import { getDefaultEndpointProfile } from '@/app/backend/providers/registry';
 import type { ProviderRoutedApiFamily } from '@/app/backend/providers/types';
 
@@ -77,6 +81,20 @@ function listDefaultStaticCatalogModels() {
 }
 
 const STATIC_MODEL_SEED = listDefaultStaticCatalogModels();
+
+function listDefaultStaticEmbeddingCatalogModels() {
+    return (['openai'] as const).flatMap((providerId) => {
+        const endpointProfile = getDefaultEndpointProfile(providerId);
+        return listStaticEmbeddingModelDefinitions(providerId, endpointProfile).map((definition) => ({
+            providerId,
+            endpointProfile,
+            definition,
+            catalogModel: toStaticProviderEmbeddingCatalogModel(definition, endpointProfile),
+        }));
+    });
+}
+
+const STATIC_EMBEDDING_MODEL_SEED = listDefaultStaticEmbeddingCatalogModels();
 
 const TOOL_SEED = [
     {
@@ -225,6 +243,24 @@ export function seedRuntimeData(sqlite: DatabaseSync, defaultProfileId: string):
                     updated_at
                 )
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `
+    );
+    const insertEmbeddingCatalogModel = sqlite.prepare(
+        `
+            INSERT OR IGNORE INTO provider_embedding_model_catalog
+                (
+                    profile_id,
+                    provider_id,
+                    model_id,
+                    label,
+                    dimensions,
+                    max_input_tokens,
+                    input_price,
+                    source,
+                    updated_at,
+                    raw_json
+                )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `
     );
     const insertProviderAuthState = sqlite.prepare(
@@ -390,6 +426,21 @@ export function seedRuntimeData(sqlite: DatabaseSync, defaultProfileId: string):
             JSON.stringify(model.catalogModel.raw),
             'seed',
             now
+        );
+    }
+
+    for (const model of STATIC_EMBEDDING_MODEL_SEED) {
+        insertEmbeddingCatalogModel.run(
+            defaultProfileId,
+            model.providerId,
+            model.catalogModel.id,
+            model.catalogModel.label,
+            model.catalogModel.dimensions,
+            model.catalogModel.maxInputTokens ?? null,
+            model.catalogModel.inputPrice ?? null,
+            model.catalogModel.source ?? 'static_embedding_registry',
+            model.catalogModel.updatedAt ?? now,
+            JSON.stringify(model.catalogModel.raw ?? {})
         );
     }
 

@@ -12,10 +12,19 @@ import type {
 import { errOp, okOp, type OperationalResult } from '@/app/backend/runtime/services/common/operationalError';
 import { advancedMemoryDerivationService } from '@/app/backend/runtime/services/memory/advancedDerivation';
 import { resolveCanonicalMemoryProvenance } from '@/app/backend/runtime/services/memory/memoryProvenancePolicy';
+import { memorySemanticIndexService } from '@/app/backend/runtime/services/memory/memorySemanticIndexService';
 
 class MemoryService {
     private async refreshDerivedIndex(profileId: string, memoryIds: EntityId<'mem'>[], reason: string): Promise<void> {
         await advancedMemoryDerivationService.refreshMemoryIdsSafely({
+            profileId,
+            memoryIds,
+            reason,
+        });
+    }
+
+    private async refreshSemanticIndex(profileId: string, memoryIds: EntityId<'mem'>[], reason: string): Promise<void> {
+        await memorySemanticIndexService.refreshMemoryIdsSafely({
             profileId,
             memoryIds,
             reason,
@@ -61,6 +70,7 @@ class MemoryService {
             return created;
         });
         await this.refreshDerivedIndex(input.profileId, [createdMemory.id], 'create_memory');
+        await this.refreshSemanticIndex(input.profileId, [createdMemory.id], 'create_memory');
 
         return okOp(createdMemory);
     }
@@ -79,6 +89,7 @@ class MemoryService {
             return errOp('not_found', `Memory "${input.memoryId}" was not found.`);
         }
         await this.refreshDerivedIndex(input.profileId, [disabled.id], 'disable_memory');
+        await this.refreshSemanticIndex(input.profileId, [disabled.id], 'disable_memory');
 
         return okOp(disabled);
     }
@@ -104,6 +115,7 @@ class MemoryService {
             return errOp('not_found', `Memory "${input.memoryId}" was not found.`);
         }
         await this.refreshDerivedIndex(input.profileId, [updated.id], 'update_memory');
+        await this.refreshSemanticIndex(input.profileId, [updated.id], 'update_memory');
 
         return okOp(updated);
     }
@@ -153,6 +165,11 @@ class MemoryService {
             return errOp('not_found', `Memory "${input.memoryId}" was not found.`);
         }
         await this.refreshDerivedIndex(
+            input.profileId,
+            [superseded.previous.id, superseded.replacement.id],
+            'supersede_memory'
+        );
+        await this.refreshSemanticIndex(
             input.profileId,
             [superseded.previous.id, superseded.replacement.id],
             'supersede_memory'

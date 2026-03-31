@@ -46,12 +46,22 @@ vi.mock('@/web/components/settings/profileSettings/useProfileSettingsController'
             setEditPreferenceMutation: { isPending: false },
             setThreadTitlePreferenceMutation: { isPending: false },
             setUtilityModelMutation: { isPending: false },
+            setMemoryRetrievalModelMutation: { isPending: false },
             utilityProviderItems: [{ id: 'openai', label: 'OpenAI' }],
             selectedUtilityProviderId: 'openai',
             utilityModelOptions: [{ id: 'openai/gpt-5-mini', label: 'GPT-5 Mini', providerId: 'openai' }],
             selectedUtilityModelId: 'openai/gpt-5-mini',
             selectedUtilityModelOption: undefined,
             utilityModelSelection: {
+                providerId: 'openai',
+                modelId: 'openai/gpt-5-mini',
+            },
+            memoryRetrievalProviderItems: [{ id: 'openai', label: 'OpenAI' }],
+            selectedMemoryRetrievalProviderId: 'openai',
+            memoryRetrievalModelOptions: [{ id: 'openai/gpt-5-mini', label: 'GPT-5 Mini', providerId: 'openai' }],
+            selectedMemoryRetrievalModelId: 'openai/gpt-5-mini',
+            selectedMemoryRetrievalModelOption: undefined,
+            memoryRetrievalModelSelection: {
                 providerId: 'openai',
                 modelId: 'openai/gpt-5-mini',
             },
@@ -62,6 +72,10 @@ vi.mock('@/web/components/settings/profileSettings/useProfileSettingsController'
             setUtilityModelId: vi.fn(),
             saveUtilityModel: vi.fn(),
             clearUtilityModel: vi.fn(),
+            setMemoryRetrievalProviderId: vi.fn(),
+            setMemoryRetrievalModelId: vi.fn(),
+            saveMemoryRetrievalModel: vi.fn(),
+            clearMemoryRetrievalModel: vi.fn(),
         },
         reset: {
             factoryResetMutation: { isPending: false, error: null },
@@ -105,6 +119,20 @@ describe('ProfileSettingsView', () => {
         expect(html).toContain('Save Utility AI');
         expect(html).not.toContain('Interim AI model override');
         expect(html).not.toContain('threadTitleAiModel');
+    });
+
+    it('renders the Memory Retrieval subsection as a separate profile setting', () => {
+        const html = renderToStaticMarkup(
+            <ProfileSettingsView
+                activeProfileId='profile_default'
+                onProfileActivated={vi.fn()}
+                subsection='memoryRetrieval'
+            />
+        );
+
+        expect(html).toContain('Memory Retrieval');
+        expect(html).toContain('Save Memory Retrieval');
+        expect(html).not.toContain('Semantic memory retrieval model');
     });
 
     it('renders naming mode copy without the removed raw model selector', () => {

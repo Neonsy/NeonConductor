@@ -39,6 +39,12 @@ export async function invalidateProviderQueries(
     context: RuntimeEventContext
 ): Promise<void> {
     const invalidations: Promise<void>[] = [];
+    const scopedEmbeddingControlInvalidation =
+        context.profileId
+            ? utils.provider.getEmbeddingControlPlane.invalidate({
+                  profileId: context.profileId,
+              })
+            : utils.provider.getEmbeddingControlPlane.invalidate();
 
     if (context.profileId && context.providerId && isProviderAuthEvent(event)) {
         addInvalidation(
@@ -50,6 +56,9 @@ export async function invalidateProviderQueries(
         );
     } else if (isProviderAuthEvent(event)) {
         addInvalidation(invalidations, utils.provider.getAuthState.invalidate());
+    }
+    if (isProviderAuthEvent(event)) {
+        addInvalidation(invalidations, scopedEmbeddingControlInvalidation);
     }
 
     if (isProviderAccountContextEvent(event)) {
@@ -74,6 +83,7 @@ export async function invalidateProviderQueries(
                   })
                 : utils.provider.getConnectionProfile.invalidate()
         );
+        addInvalidation(invalidations, scopedEmbeddingControlInvalidation);
     }
 
     if (isProviderCatalogEvent(event)) {
@@ -86,6 +96,7 @@ export async function invalidateProviderQueries(
                   })
                 : utils.provider.listModels.invalidate()
         );
+        addInvalidation(invalidations, scopedEmbeddingControlInvalidation);
         addInvalidation(
             invalidations,
             context.profileId

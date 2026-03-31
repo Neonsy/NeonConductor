@@ -12,11 +12,13 @@ import type {
     ProfileDeleteInput,
     ProfileDuplicateInput,
     ProfileGetExecutionPresetInput,
+    ProfileGetMemoryRetrievalModelInput,
     ProfileGetUtilityModelInput,
     ProfileInput,
     ProfileRenameInput,
     ProfileSetActiveInput,
     ProfileSetExecutionPresetInput,
+    ProfileSetMemoryRetrievalModelInput,
     ProfileSetUtilityModelInput,
 } from '@/app/backend/runtime/contracts/types';
 import { providerIds } from '@/shared/contracts';
@@ -98,6 +100,29 @@ export function parseProfileSetUtilityModelInput(input: unknown): ProfileSetUtil
     };
 }
 
+export function parseProfileGetMemoryRetrievalModelInput(input: unknown): ProfileGetMemoryRetrievalModelInput {
+    return parseProfileInput(input);
+}
+
+export function parseProfileSetMemoryRetrievalModelInput(input: unknown): ProfileSetMemoryRetrievalModelInput {
+    const source = readObject(input, 'input');
+    const providerId =
+        source.providerId !== undefined ? readEnumValue(source.providerId, 'providerId', providerIds) : undefined;
+    const modelId = readOptionalString(source.modelId, 'modelId');
+
+    if ((providerId && !modelId) || (!providerId && modelId)) {
+        throw new Error(
+            'Invalid Memory Retrieval selection: providerId and modelId must be set together or both omitted.'
+        );
+    }
+
+    return {
+        profileId: readProfileId(source),
+        ...(providerId ? { providerId } : {}),
+        ...(modelId ? { modelId } : {}),
+    };
+}
+
 export const profileInputSchema = createParser(parseProfileInput);
 export const profileCreateInputSchema = createParser(parseProfileCreateInput);
 export const profileRenameInputSchema = createParser(parseProfileRenameInput);
@@ -108,3 +133,5 @@ export const profileGetExecutionPresetInputSchema = createParser(parseProfileGet
 export const profileSetExecutionPresetInputSchema = createParser(parseProfileSetExecutionPresetInput);
 export const profileGetUtilityModelInputSchema = createParser(parseProfileGetUtilityModelInput);
 export const profileSetUtilityModelInputSchema = createParser(parseProfileSetUtilityModelInput);
+export const profileGetMemoryRetrievalModelInputSchema = createParser(parseProfileGetMemoryRetrievalModelInput);
+export const profileSetMemoryRetrievalModelInputSchema = createParser(parseProfileSetMemoryRetrievalModelInput);

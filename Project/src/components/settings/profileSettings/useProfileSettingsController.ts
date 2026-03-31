@@ -53,6 +53,7 @@ export function useProfileSettingsController(input: {
                 preferences.setThreadTitlePreferenceMutation.error?.message ??
                 preferences.setExecutionPresetMutation.error?.message ??
                 preferences.setUtilityModelMutation.error?.message ??
+                preferences.setMemoryRetrievalModelMutation.error?.message ??
                 statusMessage,
             tone:
                 (library.createMutation.error ??
@@ -64,7 +65,8 @@ export function useProfileSettingsController(input: {
                 preferences.setEditPreferenceMutation.error ??
                 preferences.setThreadTitlePreferenceMutation.error ??
                 preferences.setExecutionPresetMutation.error ??
-                preferences.setUtilityModelMutation.error)
+                preferences.setUtilityModelMutation.error ??
+                preferences.setMemoryRetrievalModelMutation.error)
                     ? ('error' as const)
                     : statusMessage
                       ? ('success' as const)

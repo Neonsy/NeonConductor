@@ -426,6 +426,134 @@ function ProfileUtilityAiScreen({
     );
 }
 
+function ProfileMemoryRetrievalScreen({
+    controller,
+}: {
+    controller: ReturnType<typeof useProfileSettingsController>;
+}) {
+    const hasModelOptions = controller.preferences.memoryRetrievalModelOptions.length > 0;
+
+    return (
+        <div className='space-y-5'>
+            <ProfileSectionHeader
+                eyebrow='Profiles'
+                title='Memory Retrieval'
+                description='Choose the dedicated model Neon will reserve for future semantic memory retrieval work. This setting is stored separately from Utility AI.'
+                selectedProfileId={controller.selection.selectedProfileId}
+                profiles={controller.selection.profiles}
+                onSelectProfile={(profileId) => {
+                    controller.selection.setSelectedProfileId(profileId);
+                }}
+            />
+
+            <SettingsFeedbackBanner message={controller.feedback.message} tone={controller.feedback.tone} />
+
+            <section className='border-border/70 bg-card/55 space-y-4 rounded-[24px] border p-5'>
+                <div className='space-y-1'>
+                    <p className='text-sm font-semibold'>Memory retrieval model</p>
+                    <p className='text-muted-foreground text-xs leading-5'>
+                        Neon stores this selection for the semantic retrieval phase. It is intentionally separate from
+                        the shared Utility AI model.
+                    </p>
+                </div>
+
+                {hasModelOptions ? (
+                    <>
+                        <div className='grid gap-4 md:grid-cols-[minmax(0,0.34fr)_minmax(0,0.66fr)]'>
+                            <label className='space-y-2'>
+                                <span className='text-sm font-medium'>Provider</span>
+                                <select
+                                    aria-label='Memory Retrieval provider'
+                                    className='border-border bg-background h-10 w-full rounded-xl border px-3 text-sm'
+                                    value={controller.preferences.selectedMemoryRetrievalProviderId ?? ''}
+                                    disabled={controller.preferences.setMemoryRetrievalModelMutation.isPending}
+                                    onChange={(event) => {
+                                        const nextProviderId = controller.preferences.memoryRetrievalProviderItems.find(
+                                            (provider) => provider.id === event.target.value
+                                        )?.id;
+                                        controller.preferences.setMemoryRetrievalProviderId(nextProviderId);
+                                    }}>
+                                    {controller.preferences.memoryRetrievalProviderItems.map((provider) => (
+                                        <option key={provider.id} value={provider.id}>
+                                            {provider.label}
+                                        </option>
+                                    ))}
+                                </select>
+                            </label>
+
+                            <label className='space-y-2'>
+                                <span className='text-sm font-medium'>Model</span>
+                                <ModelPicker
+                                    providerId={controller.preferences.selectedMemoryRetrievalProviderId}
+                                    selectedModelId={controller.preferences.selectedMemoryRetrievalModelId}
+                                    models={controller.preferences.memoryRetrievalModelOptions}
+                                    ariaLabel='Memory Retrieval model'
+                                    placeholder='Select a memory retrieval model'
+                                    disabled={controller.preferences.setMemoryRetrievalModelMutation.isPending}
+                                    onSelectModel={controller.preferences.setMemoryRetrievalModelId}
+                                    onSelectOption={(option) => {
+                                        if (
+                                            option.providerId &&
+                                            option.providerId !== controller.preferences.selectedMemoryRetrievalProviderId
+                                        ) {
+                                            controller.preferences.setMemoryRetrievalProviderId(option.providerId);
+                                        }
+                                        controller.preferences.setMemoryRetrievalModelId(option.id);
+                                    }}
+                                />
+                                {controller.preferences.selectedMemoryRetrievalModelOption?.compatibilityReason ? (
+                                    <p className='text-muted-foreground text-xs'>
+                                        {controller.preferences.selectedMemoryRetrievalModelOption.compatibilityReason}
+                                    </p>
+                                ) : null}
+                            </label>
+                        </div>
+
+                        <div className='flex flex-wrap items-center gap-2'>
+                            <Button
+                                type='button'
+                                size='sm'
+                                variant='outline'
+                                disabled={
+                                    controller.preferences.setMemoryRetrievalModelMutation.isPending ||
+                                    !controller.preferences.selectedMemoryRetrievalProviderId ||
+                                    controller.preferences.selectedMemoryRetrievalModelId.length === 0
+                                }
+                                onClick={() => {
+                                    void controller.preferences.saveMemoryRetrievalModel();
+                                }}>
+                                Save Memory Retrieval
+                            </Button>
+                            <Button
+                                type='button'
+                                size='sm'
+                                variant='outline'
+                                disabled={
+                                    controller.preferences.setMemoryRetrievalModelMutation.isPending ||
+                                    !controller.preferences.memoryRetrievalModelSelection
+                                }
+                                onClick={() => {
+                                    void controller.preferences.clearMemoryRetrievalModel();
+                                }}>
+                                Clear
+                            </Button>
+                            <span className='text-muted-foreground text-xs'>
+                                {controller.preferences.memoryRetrievalModelSelection
+                                    ? `Saved model: ${controller.preferences.memoryRetrievalModelSelection.providerId}/${controller.preferences.memoryRetrievalModelSelection.modelId}`
+                                    : 'No Memory Retrieval model saved yet.'}
+                            </span>
+                        </div>
+                    </>
+                ) : (
+                    <div className='border-border/70 bg-background/60 text-muted-foreground rounded-2xl border border-dashed px-4 py-5 text-sm leading-6'>
+                        No compatible memory retrieval models are available right now.
+                    </div>
+                )}
+            </section>
+        </div>
+    );
+}
+
 export function ProfileSettingsView({
     activeProfileId,
     onProfileActivated,
@@ -466,6 +594,7 @@ export function ProfileSettingsView({
                 {subsection === 'execution' ? <ProfileExecutionScreen controller={controller} /> : null}
                 {subsection === 'naming' ? <ProfileConversationNamingScreen controller={controller} /> : null}
                 {subsection === 'utility' ? <ProfileUtilityAiScreen controller={controller} /> : null}
+                {subsection === 'memoryRetrieval' ? <ProfileMemoryRetrievalScreen controller={controller} /> : null}
             </div>
 
             <ConfirmDialog

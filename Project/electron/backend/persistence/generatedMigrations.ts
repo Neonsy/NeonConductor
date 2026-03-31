@@ -209,6 +209,20 @@ CREATE TABLE provider_model_catalog (
     PRIMARY KEY (profile_id, provider_id, model_id)
 );
 
+CREATE TABLE provider_embedding_model_catalog (
+    profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    provider_id TEXT NOT NULL REFERENCES providers(id) ON DELETE CASCADE,
+    model_id TEXT NOT NULL,
+    label TEXT NOT NULL,
+    dimensions INTEGER NOT NULL CHECK (dimensions > 0),
+    max_input_tokens INTEGER NULL,
+    input_price REAL NULL,
+    source TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    raw_json TEXT NOT NULL,
+    PRIMARY KEY (profile_id, provider_id, model_id)
+);
+
 CREATE TABLE provider_secrets (
     id TEXT PRIMARY KEY,
     profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
@@ -745,6 +759,21 @@ CREATE TABLE memory_evidence_records (
     )
 );
 
+CREATE TABLE memory_embedding_records (
+    id TEXT PRIMARY KEY,
+    profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    memory_id TEXT NOT NULL REFERENCES memory_records(id) ON DELETE CASCADE,
+    provider_id TEXT NOT NULL REFERENCES providers(id) ON DELETE CASCADE,
+    model_id TEXT NOT NULL,
+    source_digest TEXT NOT NULL,
+    indexed_text TEXT NOT NULL,
+    embedding_json TEXT NOT NULL,
+    dimensions INTEGER NOT NULL CHECK (dimensions > 0),
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE (profile_id, memory_id, provider_id, model_id)
+);
+
 CREATE TABLE memory_temporal_facts (
     id TEXT PRIMARY KEY,
     profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
@@ -988,6 +1017,9 @@ CREATE INDEX idx_provider_auth_flows_profile_provider_status
 CREATE INDEX idx_provider_model_catalog_profile_provider_label
     ON provider_model_catalog(profile_id, provider_id, label);
 
+CREATE INDEX idx_provider_embedding_model_catalog_profile_provider_label
+    ON provider_embedding_model_catalog(profile_id, provider_id, label);
+
 CREATE INDEX idx_mcp_servers_label
     ON mcp_servers(label);
 
@@ -1197,6 +1229,12 @@ CREATE UNIQUE INDEX idx_memory_evidence_records_profile_memory_sequence
 
 CREATE INDEX idx_memory_evidence_records_profile_kind
     ON memory_evidence_records(profile_id, evidence_kind);
+
+CREATE INDEX idx_memory_embedding_records_profile_model
+    ON memory_embedding_records(profile_id, provider_id, model_id);
+
+CREATE INDEX idx_memory_embedding_records_profile_memory
+    ON memory_embedding_records(profile_id, memory_id);
 
 CREATE UNIQUE INDEX idx_memory_temporal_facts_profile_source_memory
     ON memory_temporal_facts(profile_id, source_memory_id);

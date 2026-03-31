@@ -15,6 +15,7 @@ export { messageMediaStore } from '@/app/backend/persistence/stores/conversation
 export { toolResultArtifactStore } from '@/app/backend/persistence/stores/conversation/messages/toolResultArtifactStore';
 export { mcpStore } from '@/app/backend/persistence/stores/runtime/mcpStore';
 export { memoryDerivedStore } from '@/app/backend/persistence/stores/runtime/memoryDerivedStore';
+export { memoryEmbeddingStore } from '@/app/backend/persistence/stores/runtime/memoryEmbeddingStore';
 export { memoryEvidenceStore } from '@/app/backend/persistence/stores/runtime/memoryEvidenceStore';
 export { memoryStore } from '@/app/backend/persistence/stores/runtime/memoryStore';
 export { modelLimitOverrideStore } from '@/app/backend/persistence/stores/runtime/modelLimitOverrideStore';
@@ -29,6 +30,7 @@ export { providerSecretStore } from '@/app/backend/persistence/stores/profile/pr
 export { providerAuthStore } from '@/app/backend/persistence/stores/provider/providerAuthStore';
 export { providerAuthFlowStore } from '@/app/backend/persistence/stores/provider/providerAuthFlowStore';
 export { providerCatalogStore } from '@/app/backend/persistence/stores/provider/providerCatalogStore';
+export { providerEmbeddingCatalogStore } from '@/app/backend/persistence/stores/provider/providerEmbeddingCatalogStore';
 export { providerStore } from '@/app/backend/persistence/stores/provider/providerStore';
 export { runStore } from '@/app/backend/persistence/stores/conversation/runs/runStore';
 export { runUsageStore } from '@/app/backend/persistence/stores/conversation/runs/runUsageStore';

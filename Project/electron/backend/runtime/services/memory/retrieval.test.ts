@@ -6,6 +6,7 @@ import type { ModeDefinition } from '@/app/backend/runtime/contracts';
 import { errOp } from '@/app/backend/runtime/services/common/operationalError';
 import { advancedMemoryDerivationService } from '@/app/backend/runtime/services/memory/advancedDerivation';
 import { memoryRetrievalService } from '@/app/backend/runtime/services/memory/retrieval';
+import { memorySemanticIndexService } from '@/app/backend/runtime/services/memory/memorySemanticIndexService';
 import { memoryService } from '@/app/backend/runtime/services/memory/service';
 import { buildRunContext } from '@/app/backend/runtime/services/runExecution/contextBuilder';
 import {
@@ -363,6 +364,119 @@ describe('memoryRetrievalService', () => {
         } finally {
             expandSpy.mockRestore();
             summariesSpy.mockRestore();
+        }
+    });
+
+    it('returns semantic matches when other retrieval signals do not match and keeps semantic above prompt fallback', async () => {
+        const caller = createCaller();
+        const created = await createSessionInScope(caller, profileId, {
+            scope: 'detached',
+            title: 'Semantic retrieval thread',
+            kind: 'local',
+            topLevelTab: 'chat',
+        });
+        const unrelated = await createSessionInScope(caller, profileId, {
+            scope: 'detached',
+            title: 'Unrelated semantic thread',
+            kind: 'local',
+            topLevelTab: 'chat',
+        });
+        const unrelatedThreadId = requireEntityId(unrelated.thread.id, 'thr', 'Expected unrelated semantic thread id.');
+
+        const semanticMemory = await caller.memory.create({
+            profileId,
+            memoryType: 'semantic',
+            scopeKind: 'thread',
+            createdByKind: 'user',
+            threadId: unrelatedThreadId,
+            title: 'Architectural retrieval note',
+            bodyMarkdown: 'This describes retrieval architecture without direct prompt overlap.',
+        });
+        await caller.memory.create({
+            profileId,
+            memoryType: 'procedural',
+            scopeKind: 'thread',
+            createdByKind: 'user',
+            threadId: unrelatedThreadId,
+            title: 'Prompt fallback memory',
+            bodyMarkdown: 'Use zebra fallback in the rare zebra case.',
+        });
+
+        const semanticSpy = vi.spyOn(memorySemanticIndexService, 'collectSemanticCandidates').mockResolvedValue([
+            {
+                memory: semanticMemory.memory,
+                matchReason: 'semantic',
+                tier: 'semantic',
+                similarity: 0.94,
+            },
+        ]);
+
+        try {
+            const retrieved = await memoryRetrievalService.retrieveRelevantMemory({
+                profileId,
+                sessionId: created.session.id,
+                topLevelTab: 'chat',
+                modeKey: 'chat',
+                prompt: 'Need architectural guidance about memory retrieval.',
+            });
+
+            expect(retrieved.summary?.records[0]?.memoryId).toBe(semanticMemory.memory.id);
+            expect(retrieved.summary?.records[0]?.matchReason).toBe('semantic');
+            expect(retrieved.summary?.records.some((record) => record.matchReason === 'prompt')).toBe(true);
+            const promptIndex = retrieved.summary?.records.findIndex((record) => record.matchReason === 'prompt') ?? -1;
+            expect(promptIndex).toBeGreaterThan(0);
+        } finally {
+            semanticSpy.mockRestore();
+        }
+    });
+
+    it('fails soft when the semantic stage throws unexpectedly', async () => {
+        const caller = createCaller();
+        const created = await createSessionInScope(caller, profileId, {
+            scope: 'detached',
+            title: 'Semantic fail-soft thread',
+            kind: 'local',
+            topLevelTab: 'chat',
+        });
+        const unrelated = await createSessionInScope(caller, profileId, {
+            scope: 'detached',
+            title: 'Prompt fallback source thread',
+            kind: 'local',
+            topLevelTab: 'chat',
+        });
+        const unrelatedThreadId = requireEntityId(
+            unrelated.thread.id,
+            'thr',
+            'Expected prompt fallback source thread id.'
+        );
+
+        const promptMemory = await caller.memory.create({
+            profileId,
+            memoryType: 'procedural',
+            scopeKind: 'thread',
+            createdByKind: 'user',
+            threadId: unrelatedThreadId,
+            title: 'Prompt fallback memory',
+            bodyMarkdown: 'Use zebra fallback when the zebra prompt appears.',
+        });
+
+        const semanticSpy = vi
+            .spyOn(memorySemanticIndexService, 'collectSemanticCandidates')
+            .mockRejectedValue(new Error('semantic stage broke'));
+
+        try {
+            const retrieved = await memoryRetrievalService.retrieveRelevantMemory({
+                profileId,
+                sessionId: created.session.id,
+                topLevelTab: 'chat',
+                modeKey: 'chat',
+                prompt: 'Need the zebra fallback.',
+            });
+
+            expect(retrieved.summary?.records[0]?.memoryId).toBe(promptMemory.memory.id);
+            expect(retrieved.summary?.records[0]?.matchReason).toBe('prompt');
+        } finally {
+            semanticSpy.mockRestore();
         }
     });
 

@@ -20,7 +20,7 @@ export interface MemoryRetrievalStageInput {
     runId?: EntityId<'run'>;
 }
 
-export type MemoryRetrievalTier = 'exact' | 'structured' | 'derived' | 'prompt';
+export type MemoryRetrievalTier = 'exact' | 'structured' | 'derived' | 'semantic' | 'prompt';
 
 export interface ResolvedMemoryRetrievalContext {
     profileId: string;
@@ -52,6 +52,13 @@ export interface MemoryRetrievalExpansionCandidate {
     annotations?: string[];
 }
 
+export interface MemoryRetrievalSemanticCandidate {
+    memory: MemoryRecord;
+    matchReason: Extract<RetrievedMemoryMatchReason, 'semantic'>;
+    tier: 'semantic';
+    similarity: number;
+}
+
 export interface MemoryRetrievalExpansionResult {
     baseCandidates: MemoryRetrievalCandidate[];
     derivedCandidates: MemoryRetrievalExpansionCandidate[];
@@ -66,6 +73,17 @@ export interface MemoryRetrievalAssemblyInput {
     profileId: string;
     decisions: RankedMemoryRetrievalDecision[];
     evidenceByMemoryId: Map<EntityId<'mem'>, MemoryEvidenceSummary[]>;
+}
+
+export interface MemoryRetrievalSemanticStageInput {
+    profileId: string;
+    prompt: string;
+    activeMemories: MemoryRecord[];
+    excludedMemoryIds: Set<EntityId<'mem'>>;
+}
+
+export interface MemoryRetrievalSemanticStageResult {
+    semanticCandidates: MemoryRetrievalSemanticCandidate[];
 }
 
 export interface MemoryRetrievalAssemblyResult {

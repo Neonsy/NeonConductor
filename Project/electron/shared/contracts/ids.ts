@@ -2,6 +2,7 @@ export type EntityIdPrefix =
     | 'ws'
     | 'mem'
     | 'mev'
+    | 'mvec'
     | 'mfact'
     | 'mlink'
     | 'chg'

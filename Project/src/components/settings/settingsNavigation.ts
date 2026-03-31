@@ -4,7 +4,7 @@ export type SettingsPrimarySectionId = 'kilo' | 'modes' | 'providers' | 'profile
 
 export type KiloSettingsSubsectionId = 'account' | 'models' | 'routing' | 'marketplace';
 export type ModesSettingsSubsectionId = 'instructions';
-export type ProfileSettingsSubsectionId = 'management' | 'execution' | 'naming' | 'utility';
+export type ProfileSettingsSubsectionId = 'management' | 'execution' | 'naming' | 'utility' | 'memoryRetrieval';
 export type ContextSettingsSubsectionId = 'workspace' | 'budgeting';
 export type RegistrySettingsSubsectionId = 'rules' | 'skills' | 'modes' | 'diagnostics';
 export type AppSettingsSubsectionId = 'privacy' | 'mcp' | 'maintenance';
@@ -142,6 +142,13 @@ export const PROFILE_SETTINGS_SUBSECTIONS: ReadonlyArray<SettingsSubsectionDefin
         label: 'Utility AI',
         description:
             'Reserved for the future shared utility model used by conversation naming and other small utility tasks.',
+        availability: 'available',
+    },
+    {
+        id: 'memoryRetrieval',
+        label: 'Memory Retrieval',
+        description:
+            'Reserved for the future model used by semantic memory retrieval and other memory-specific background work.',
         availability: 'available',
     },
 ];

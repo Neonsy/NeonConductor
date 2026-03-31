@@ -2,13 +2,22 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const reactState = vi.hoisted(() => ({
-    currentUtilityDraft: undefined as
-        | {
-              profileId: string;
-              providerId?: 'openai';
-              modelId?: string;
-          }
-        | undefined,
+    currentModelPreferenceDrafts: {} as {
+        utilityModelDraft?:
+            | {
+                  profileId: string;
+                  providerId?: 'openai';
+                  modelId?: string;
+              }
+            | undefined;
+        memoryRetrievalModelDraft?:
+            | {
+                  profileId: string;
+                  providerId?: 'openai';
+                  modelId?: string;
+              }
+            | undefined;
+    },
 }));
 
 vi.mock('react', async (importOriginal) => {
@@ -16,14 +25,14 @@ vi.mock('react', async (importOriginal) => {
     return {
         ...actual,
         useState: () => [
-            reactState.currentUtilityDraft,
+            reactState.currentModelPreferenceDrafts,
             (
                 value:
-                    | typeof reactState.currentUtilityDraft
-                    | ((current: typeof reactState.currentUtilityDraft) => typeof reactState.currentUtilityDraft)
+                    | typeof reactState.currentModelPreferenceDrafts
+                    | ((current: typeof reactState.currentModelPreferenceDrafts) => typeof reactState.currentModelPreferenceDrafts)
             ) => {
-                reactState.currentUtilityDraft =
-                    typeof value === 'function' ? value(reactState.currentUtilityDraft) : value;
+                reactState.currentModelPreferenceDrafts =
+                    typeof value === 'function' ? value(reactState.currentModelPreferenceDrafts) : value;
             },
         ],
     };
@@ -64,10 +73,17 @@ const controllerTestState = vi.hoisted(() => {
             modelId: 'openai/gpt-5-mini',
         },
     };
+    const memoryRetrievalQueryData = {
+        selection: {
+            providerId: 'openai',
+            modelId: 'openai/text-embedding-3-small',
+        },
+    };
 
     return {
         mutationConfigs,
         utilityQueryData,
+        memoryRetrievalQueryData,
         utilsMock: {
             conversation: {
                 getEditPreference: {
@@ -88,6 +104,11 @@ const controllerTestState = vi.hoisted(() => {
                     setData: createSetDataMock(),
                 },
                 getUtilityModel: {
+                    cancel: createCancelMock(),
+                    getData: createGetDataMock(),
+                    setData: createSetDataMock(),
+                },
+                getMemoryRetrievalModel: {
                     cancel: createCancelMock(),
                     getData: createGetDataMock(),
                     setData: createSetDataMock(),
@@ -127,6 +148,12 @@ const controllerTestState = vi.hoisted(() => {
                     })),
                 },
                 setUtilityModel: createUseMutationMock('setUtilityModel'),
+                getMemoryRetrievalModel: {
+                    useQuery: vi.fn(() => ({
+                        data: memoryRetrievalQueryData,
+                    })),
+                },
+                setMemoryRetrievalModel: createUseMutationMock('setMemoryRetrievalModel'),
             },
             provider: {
                 getControlPlane: {
@@ -145,6 +172,36 @@ const controllerTestState = vi.hoisted(() => {
                                             {
                                                 id: 'openai/gpt-5',
                                                 label: 'GPT-5',
+                                            },
+                                        ],
+                                    },
+                                ],
+                            },
+                        },
+                    })),
+                },
+                getEmbeddingControlPlane: {
+                    useQuery: vi.fn(() => ({
+                        data: {
+                            providerEmbeddingControl: {
+                                entries: [
+                                    {
+                                        provider: {
+                                            id: 'openai',
+                                            label: 'OpenAI',
+                                        },
+                                        models: [
+                                            {
+                                                id: 'openai/text-embedding-3-small',
+                                                label: 'text-embedding-3-small',
+                                                dimensions: 1536,
+                                                inputPrice: 0.02,
+                                            },
+                                            {
+                                                id: 'openai/text-embedding-3-large',
+                                                label: 'text-embedding-3-large',
+                                                dimensions: 3072,
+                                                inputPrice: 0.13,
                                             },
                                         ],
                                     },
@@ -172,9 +229,12 @@ vi.mock('@/web/trpc/client', () => ({
             setExecutionPreset: controllerTestState.trpcMocks.profile.setExecutionPreset,
             getUtilityModel: controllerTestState.trpcMocks.profile.getUtilityModel,
             setUtilityModel: controllerTestState.trpcMocks.profile.setUtilityModel,
+            getMemoryRetrievalModel: controllerTestState.trpcMocks.profile.getMemoryRetrievalModel,
+            setMemoryRetrievalModel: controllerTestState.trpcMocks.profile.setMemoryRetrievalModel,
         },
         provider: {
             getControlPlane: controllerTestState.trpcMocks.provider.getControlPlane,
+            getEmbeddingControlPlane: controllerTestState.trpcMocks.provider.getEmbeddingControlPlane,
         },
     },
 }));
@@ -225,7 +285,7 @@ function getMutationConfig(name: keyof typeof controllerTestState.mutationConfig
 describe('useProfilePreferencesController', () => {
     beforeEach(() => {
         lastController = undefined;
-        reactState.currentUtilityDraft = undefined;
+        reactState.currentModelPreferenceDrafts = {};
         vi.clearAllMocks();
         for (const key of Object.keys(controllerTestState.mutationConfigs)) {
             delete controllerTestState.mutationConfigs[key];
@@ -233,6 +293,10 @@ describe('useProfilePreferencesController', () => {
         controllerTestState.utilityQueryData.selection = {
             providerId: 'openai',
             modelId: 'openai/gpt-5-mini',
+        };
+        controllerTestState.memoryRetrievalQueryData.selection = {
+            providerId: 'openai',
+            modelId: 'openai/text-embedding-3-small',
         };
     });
 
@@ -295,7 +359,7 @@ describe('useProfilePreferencesController', () => {
             providerId: 'openai',
             modelId: 'openai/gpt-5',
         });
-        expect(reactState.currentUtilityDraft).toEqual({
+        expect(reactState.currentModelPreferenceDrafts.utilityModelDraft).toEqual({
             profileId: 'profile_default',
             providerId: 'openai',
             modelId: 'openai/gpt-5',
@@ -315,7 +379,7 @@ describe('useProfilePreferencesController', () => {
             }
         );
 
-        expect(reactState.currentUtilityDraft).toBeUndefined();
+        expect(reactState.currentModelPreferenceDrafts.utilityModelDraft).toBeUndefined();
         renderToStaticMarkup(<Harness />);
         expect(lastController?.selectedUtilityModelId).toBe('openai/gpt-5-mini');
 
@@ -328,6 +392,116 @@ describe('useProfilePreferencesController', () => {
             profileId: 'profile_default',
         });
         expect(controllerTestState.utilsMock.profile.getUtilityModel.setData).toHaveBeenCalledWith(
+            { profileId: 'profile_default' },
+            {
+                selection: null,
+            }
+        );
+    });
+
+    it('optimistically updates and rolls back Memory Retrieval selection mutations', async () => {
+        renderToStaticMarkup(<Harness />);
+
+        controllerTestState.utilsMock.profile.getMemoryRetrievalModel.getData.mockReturnValue({
+            selection: {
+                providerId: 'openai',
+                modelId: 'openai/text-embedding-3-small',
+            },
+        });
+
+        const context = await getMutationConfig('setMemoryRetrievalModel').onMutate?.({
+            profileId: 'profile_default',
+            providerId: 'openai',
+            modelId: 'openai/text-embedding-3-large',
+        });
+
+        expect(controllerTestState.utilsMock.profile.getMemoryRetrievalModel.setData).toHaveBeenCalledWith(
+            { profileId: 'profile_default' },
+            {
+                selection: {
+                    providerId: 'openai',
+                    modelId: 'openai/text-embedding-3-large',
+                },
+            }
+        );
+
+        getMutationConfig('setMemoryRetrievalModel').onError?.(
+            new Error('fail'),
+            {
+                profileId: 'profile_default',
+                providerId: 'openai',
+                modelId: 'openai/text-embedding-3-large',
+            },
+            context
+        );
+
+        expect(controllerTestState.utilsMock.profile.getMemoryRetrievalModel.setData).toHaveBeenLastCalledWith(
+            { profileId: 'profile_default' },
+            {
+                selection: {
+                    providerId: 'openai',
+                    modelId: 'openai/text-embedding-3-small',
+                },
+            }
+        );
+    });
+
+    it('builds Memory Retrieval options from the embedding control plane', () => {
+        renderToStaticMarkup(<Harness />);
+
+        expect(lastController?.memoryRetrievalModelOptions.map((option) => option.id)).toEqual([
+            'openai/text-embedding-3-small',
+            'openai/text-embedding-3-large',
+        ]);
+        expect(lastController?.selectedMemoryRetrievalModelId).toBe('openai/text-embedding-3-small');
+        expect(lastController?.memoryRetrievalModelOptions[0]?.price).toBe(0.02);
+    });
+
+    it('clears local Memory Retrieval draft state after successful save and writes null on clear', async () => {
+        renderToStaticMarkup(<Harness />);
+        lastController?.setMemoryRetrievalModelId('openai/text-embedding-3-large');
+        renderToStaticMarkup(<Harness />);
+
+        await lastController?.saveMemoryRetrievalModel();
+
+        expect(controllerTestState.trpcMocks.profile.setMemoryRetrievalModel.result.mutateAsync).toHaveBeenCalledWith({
+            profileId: 'profile_default',
+            providerId: 'openai',
+            modelId: 'openai/text-embedding-3-large',
+        });
+        expect(reactState.currentModelPreferenceDrafts.memoryRetrievalModelDraft).toEqual({
+            profileId: 'profile_default',
+            providerId: 'openai',
+            modelId: 'openai/text-embedding-3-large',
+        });
+
+        getMutationConfig('setMemoryRetrievalModel').onSuccess?.(
+            {
+                selection: {
+                    providerId: 'openai',
+                    modelId: 'openai/text-embedding-3-large',
+                },
+            },
+            {
+                profileId: 'profile_default',
+                providerId: 'openai',
+                modelId: 'openai/text-embedding-3-large',
+            }
+        );
+
+        expect(reactState.currentModelPreferenceDrafts.memoryRetrievalModelDraft).toBeUndefined();
+        renderToStaticMarkup(<Harness />);
+        expect(lastController?.selectedMemoryRetrievalModelId).toBe('openai/text-embedding-3-small');
+
+        await lastController?.clearMemoryRetrievalModel();
+
+        expect(controllerTestState.trpcMocks.profile.setMemoryRetrievalModel.result.mutateAsync).toHaveBeenLastCalledWith({
+            profileId: 'profile_default',
+        });
+        await getMutationConfig('setMemoryRetrievalModel').onMutate?.({
+            profileId: 'profile_default',
+        });
+        expect(controllerTestState.utilsMock.profile.getMemoryRetrievalModel.setData).toHaveBeenCalledWith(
             { profileId: 'profile_default' },
             {
                 selection: null,

@@ -5,6 +5,7 @@ import { loadMemoryRetrievalEvidence } from '@/app/backend/runtime/services/memo
 import { expandMemoryRetrievalCandidates } from '@/app/backend/runtime/services/memory/memoryRetrievalExpansionStage';
 import type { MemoryRetrievalStageInput } from '@/app/backend/runtime/services/memory/memoryRetrievalPipelineTypes';
 import { rankRetrievedMemoryCandidates } from '@/app/backend/runtime/services/memory/memoryRetrievalRankingPolicy';
+import { collectSemanticMemoryRetrievalCandidates } from '@/app/backend/runtime/services/memory/memoryRetrievalSemanticStage';
 
 import type { RetrievedMemorySummary } from '@/app/backend/runtime/contracts';
 import type { RunContextMessage } from '@/app/backend/runtime/services/runExecution/types';
@@ -24,11 +25,21 @@ export class MemoryRetrievalService {
             context,
             baseCandidates: collected.baseCandidates,
         });
+        const semantic = await collectSemanticMemoryRetrievalCandidates({
+            profileId: input.profileId,
+            prompt: input.prompt,
+            activeMemories: context.activeMemories,
+            excludedMemoryIds: new Set([
+                ...expanded.baseCandidates.map((candidate) => candidate.memory.id),
+                ...expanded.derivedCandidates.map((candidate) => candidate.memory.id),
+            ]),
+        });
         const orderedCandidates = rankRetrievedMemoryCandidates({
             baseCandidates: expanded.baseCandidates,
             activeMemories: context.activeMemories,
             promptTerms: context.promptTerms,
             derivedCandidates: expanded.derivedCandidates,
+            semanticCandidates: semantic.semanticCandidates,
         }).slice(0, 6);
         const evidence = await loadMemoryRetrievalEvidence({
             profileId: input.profileId,

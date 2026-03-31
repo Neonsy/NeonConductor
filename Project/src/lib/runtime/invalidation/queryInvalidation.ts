@@ -155,6 +155,7 @@ export function invalidateProfileQueries(utils: TrpcUtils, profileId: string | u
         utils.profile.getActive.invalidate(),
         utils.profile.getExecutionPreset.invalidate(),
         utils.profile.getUtilityModel.invalidate(),
+        utils.profile.getMemoryRetrievalModel.invalidate(),
         invalidateShellBootstrap(utils, profileId),
     ]).then(() => undefined);
 }
@@ -175,6 +176,7 @@ export async function invalidateRuntimeResetQueries(utils: TrpcUtils): Promise<v
         utils.checkpoint.list.invalidate(),
         utils.provider.listProviders.invalidate(),
         utils.provider.getDefaults.invalidate(),
+        utils.provider.getEmbeddingControlPlane.invalidate(),
         utils.provider.listModels.invalidate(),
         utils.provider.getAuthState.invalidate(),
         utils.provider.getAccountContext.invalidate(),
@@ -201,6 +203,7 @@ export async function invalidateRuntimeResetQueries(utils: TrpcUtils): Promise<v
 
     invalidations.push(toVoidPromise(utils.profile.getExecutionPreset.invalidate()));
     invalidations.push(toVoidPromise(utils.profile.getUtilityModel.invalidate()));
+    invalidations.push(toVoidPromise(utils.profile.getMemoryRetrievalModel.invalidate()));
     invalidations.push(toVoidPromise(utils.runtime.listWorkspaceRoots.invalidate()));
     invalidations.push(toVoidPromise(utils.sandbox.list.invalidate()));
     invalidations.push(toVoidPromise(utils.session.getAttachedRules.invalidate()));

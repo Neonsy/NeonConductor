@@ -4,13 +4,16 @@ import {
     profileDeleteInputSchema,
     profileDuplicateInputSchema,
     profileGetExecutionPresetInputSchema,
+    profileGetMemoryRetrievalModelInputSchema,
     profileGetUtilityModelInputSchema,
     profileRenameInputSchema,
     profileSetActiveInputSchema,
     profileSetExecutionPresetInputSchema,
+    profileSetMemoryRetrievalModelInputSchema,
     profileSetUtilityModelInputSchema,
 } from '@/app/backend/runtime/contracts';
 import { getExecutionPreset, setExecutionPreset } from '@/app/backend/runtime/services/profile/executionPreset';
+import { memoryRetrievalModelService } from '@/app/backend/runtime/services/profile/memoryRetrievalModel';
 import { utilityModelService } from '@/app/backend/runtime/services/profile/utilityModel';
 import {
     runtimeRemoveEvent,
@@ -43,6 +46,11 @@ export const profileRouter = router({
     getUtilityModel: publicProcedure.input(profileGetUtilityModelInputSchema).query(async ({ input }) => {
         return utilityModelService.getUtilityModelPreference(input.profileId);
     }),
+    getMemoryRetrievalModel: publicProcedure
+        .input(profileGetMemoryRetrievalModelInputSchema)
+        .query(async ({ input }) => {
+            return memoryRetrievalModelService.getMemoryRetrievalModelPreference(input.profileId);
+        }),
     setExecutionPreset: publicProcedure.input(profileSetExecutionPresetInputSchema).mutation(async ({ input }) => {
         const preset = await setExecutionPreset(input.profileId, input.preset);
         await runtimeEventLogService.append(
@@ -81,6 +89,29 @@ export const profileRouter = router({
 
         return result.value;
     }),
+    setMemoryRetrievalModel: publicProcedure
+        .input(profileSetMemoryRetrievalModelInputSchema)
+        .mutation(async ({ input }) => {
+            const result = await memoryRetrievalModelService.setMemoryRetrievalModelPreference(input);
+            if (result.isErr()) {
+                throwWithCode(result.error.code, result.error.message);
+            }
+
+            await runtimeEventLogService.append(
+                runtimeStatusEvent({
+                    entityType: 'profile',
+                    domain: 'profile',
+                    entityId: input.profileId,
+                    eventType: 'profile.memory-retrieval-model.updated',
+                    payload: {
+                        profileId: input.profileId,
+                        selection: result.value.selection,
+                    },
+                })
+            );
+
+            return result.value;
+        }),
     setActive: publicProcedure.input(profileSetActiveInputSchema).mutation(async ({ input }) => {
         const result = await profileStore.setActive(input.profileId);
         if (result.isErr()) {

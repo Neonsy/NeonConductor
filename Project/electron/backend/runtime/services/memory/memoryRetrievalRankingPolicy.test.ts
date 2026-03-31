@@ -65,6 +65,7 @@ describe('rankRetrievedMemoryCandidates', () => {
                     annotations: ['Current fact has temporal history.'],
                 },
             ],
+            semanticCandidates: [],
         });
 
         expect(decisions.map((decision) => decision.memory.id)).toEqual(['mem_exact', 'mem_derived', 'mem_prompt']);
@@ -73,5 +74,52 @@ describe('rankRetrievedMemoryCandidates', () => {
         expect(decisions[0]?.explanation.selectionReason).toContain('matched this memory directly');
         expect(decisions[1]?.explanation.selectedSourceLabel).toBe('Derived temporal');
         expect(decisions[2]?.explanation.rankingReason).toContain('Prompt matches');
+    });
+
+    it('ranks semantic matches below exact and derived results but above prompt-only fallback', () => {
+        const exact = createMemory({
+            id: 'mem_exact',
+            scopeKind: 'thread',
+            threadId: 'thr_test',
+            title: 'Exact thread memory',
+        });
+        const semantic = createMemory({
+            id: 'mem_semantic',
+            scopeKind: 'global',
+            title: 'Related architectural memory',
+            bodyMarkdown: 'No direct term overlap.',
+        });
+        const promptMatch = createMemory({
+            id: 'mem_prompt',
+            scopeKind: 'global',
+            title: 'Prompt fallback memory',
+            bodyMarkdown: 'Contains zebra keyword.',
+        });
+
+        const decisions = rankRetrievedMemoryCandidates({
+            baseCandidates: [
+                {
+                    memory: exact,
+                    matchReason: 'exact_thread',
+                    tier: 'exact',
+                    priority: 1,
+                },
+            ],
+            activeMemories: [exact, semantic, promptMatch],
+            promptTerms: ['zebra'],
+            derivedCandidates: [],
+            semanticCandidates: [
+                {
+                    memory: semantic,
+                    matchReason: 'semantic',
+                    tier: 'semantic',
+                    similarity: 0.93,
+                },
+            ],
+        });
+
+        expect(decisions.map((decision) => decision.memory.id)).toEqual(['mem_exact', 'mem_semantic', 'mem_prompt']);
+        expect(decisions.map((decision) => decision.tier)).toEqual(['exact', 'semantic', 'prompt']);
+        expect(decisions[1]?.matchReason).toBe('semantic');
     });
 });

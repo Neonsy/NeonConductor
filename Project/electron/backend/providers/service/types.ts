@@ -1,6 +1,7 @@
 import type { ProviderModelRecord, ProviderRecord } from '@/app/backend/persistence/types';
 import type { ProviderCatalogStrategy } from '@/app/backend/providers/registry';
 import type {
+    ProviderEmbeddingModelRecord,
     ProviderConnectionProfile,
     ProviderExecutionPreference,
     KiloModelProviderInfo,
@@ -56,6 +57,15 @@ export interface ProviderControlSnapshot {
         modelId: string;
     };
     specialistDefaults: import('@/app/backend/runtime/contracts/types/provider').ProviderSpecialistDefaultRecord[];
+}
+
+export interface ProviderEmbeddingControlEntry {
+    provider: ProviderRecord;
+    models: ProviderEmbeddingModelRecord[];
+}
+
+export interface ProviderEmbeddingControlSnapshot {
+    entries: ProviderEmbeddingControlEntry[];
 }
 
 export interface ProviderSyncResult {

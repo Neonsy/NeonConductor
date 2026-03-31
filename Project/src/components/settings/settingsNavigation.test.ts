@@ -28,11 +28,11 @@ describe('settingsNavigation route search', () => {
         expect(
             resolveSettingsSelectionFromRouteSearch({
                 section: 'profiles',
-                subsection: 'execution',
+                subsection: 'memoryRetrieval',
             })
         ).toEqual({
             section: 'profiles',
-            subsection: 'execution',
+            subsection: 'memoryRetrieval',
         });
     });
 

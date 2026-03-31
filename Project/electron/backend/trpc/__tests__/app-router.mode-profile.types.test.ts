@@ -41,5 +41,11 @@ test('AppRouter exposes mode and profile procedure contracts to clients', () => 
         providerId?: string;
         modelId?: string;
     }>();
+    expectTypeOf<AppRouterInputs['profile']['getMemoryRetrievalModel']>().toExtend<{ profileId: string }>();
+    expectTypeOf<AppRouterInputs['profile']['setMemoryRetrievalModel']>().toExtend<{
+        profileId: string;
+        providerId?: string;
+        modelId?: string;
+    }>();
 });
 

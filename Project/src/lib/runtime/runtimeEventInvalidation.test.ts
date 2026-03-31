@@ -69,6 +69,7 @@ function createUtilsMock(calls: InvalidationCall[]) {
         provider: {
             listProviders: createInvalidateLeaf(calls, 'provider.listProviders'),
             getDefaults: createInvalidateLeaf(calls, 'provider.getDefaults'),
+            getEmbeddingControlPlane: createInvalidateLeaf(calls, 'provider.getEmbeddingControlPlane'),
             listModels: createInvalidateLeaf(calls, 'provider.listModels'),
             getAuthState: createInvalidateLeaf(calls, 'provider.getAuthState'),
             getAccountContext: createInvalidateLeaf(calls, 'provider.getAccountContext'),
@@ -88,6 +89,7 @@ function createUtilsMock(calls: InvalidationCall[]) {
         profile: {
             getExecutionPreset: createInvalidateLeaf(calls, 'profile.getExecutionPreset'),
             getUtilityModel: createInvalidateLeaf(calls, 'profile.getUtilityModel'),
+            getMemoryRetrievalModel: createInvalidateLeaf(calls, 'profile.getMemoryRetrievalModel'),
             list: createInvalidateLeaf(calls, 'profile.list'),
             getActive: createInvalidateLeaf(calls, 'profile.getActive'),
         },
@@ -466,6 +468,12 @@ describe('invalidateQueriesForRuntimeEvent', () => {
 
         expect(calls).toEqual([
             {
+                key: 'provider.getEmbeddingControlPlane',
+                args: {
+                    profileId: 'profile_default',
+                },
+            },
+            {
                 key: 'provider.getAuthState',
                 args: {
                     profileId: 'profile_default',
@@ -558,6 +566,7 @@ describe('invalidateQueriesForRuntimeEvent', () => {
         expect(calls.some((call) => call.key === 'runtime.getShellBootstrap')).toBe(true);
         expect(calls.some((call) => call.key === 'session.listMessages')).toBe(true);
         expect(calls.some((call) => call.key === 'provider.listModels')).toBe(true);
+        expect(calls.some((call) => call.key === 'provider.getEmbeddingControlPlane')).toBe(true);
         expect(calls.some((call) => call.key === 'mode.list')).toBe(true);
         expect(calls.some((call) => call.key === 'registry.listResolved')).toBe(true);
     });

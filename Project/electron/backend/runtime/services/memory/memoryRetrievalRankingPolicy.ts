@@ -10,6 +10,7 @@ import {
 import type {
     MemoryRetrievalCandidate,
     MemoryRetrievalExpansionCandidate,
+    MemoryRetrievalSemanticCandidate,
     RankedMemoryRetrievalDecision,
 } from '@/app/backend/runtime/services/memory/memoryRetrievalPipelineTypes';
 
@@ -18,6 +19,7 @@ export interface MemoryRetrievalRankingInput {
     activeMemories: MemoryRecord[];
     promptTerms: string[];
     derivedCandidates: MemoryRetrievalExpansionCandidate[];
+    semanticCandidates: MemoryRetrievalSemanticCandidate[];
 }
 
 function withPriority(
@@ -80,6 +82,20 @@ export function rankRetrievedMemoryCandidates(input: MemoryRetrievalRankingInput
 
     for (const memory of input.activeMemories) {
         if (candidateMemoryIds.has(memory.id)) {
+            continue;
+        }
+
+        const semanticCandidate = input.semanticCandidates.find((candidate) => candidate.memory.id === memory.id);
+        if (semanticCandidate) {
+            combinedCandidates.push(
+                withPriority(
+                    semanticCandidate.memory,
+                    semanticCandidate.matchReason,
+                    semanticCandidate.tier,
+                    17 + Math.max(0, 1 - semanticCandidate.similarity)
+                )
+            );
+            candidateMemoryIds.add(memory.id);
             continue;
         }
 

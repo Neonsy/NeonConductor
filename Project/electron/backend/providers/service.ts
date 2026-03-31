@@ -34,6 +34,7 @@ import {
     setProviderApiKey,
 } from '@/app/backend/providers/service/providerAuthMutationLifecycle';
 import { syncProviderCatalog } from '@/app/backend/providers/service/providerCatalogSyncMutationLifecycle';
+import { providerEmbeddingCatalogService } from '@/app/backend/providers/embeddingCatalog/service';
 import { setProviderConnectionProfile } from '@/app/backend/providers/service/providerConnectionProfileMutationLifecycle';
 import { setProviderOrganization } from '@/app/backend/providers/service/providerOrganizationMutationLifecycle';
 import { providerProfileNormalizationGate } from '@/app/backend/providers/service/providerProfileNormalizationGate';
@@ -52,6 +53,7 @@ import {
 } from '@/app/backend/providers/service/readService';
 import type {
     ProviderControlSnapshot,
+    ProviderEmbeddingControlSnapshot,
     ProviderCredentialSummaryResult,
     ProviderCredentialValueResult,
     KiloModelProviderOption,
@@ -99,6 +101,12 @@ class ProviderManagementService {
     async getControlPlane(profileId: string): Promise<ProviderServiceResult<ProviderControlSnapshot>> {
         await this.ensureNormalizedProviderProfileState(profileId);
         return getProviderControlSnapshot(profileId);
+    }
+
+    async getEmbeddingControlPlane(
+        profileId: string
+    ): Promise<ProviderServiceResult<ProviderEmbeddingControlSnapshot>> {
+        return providerEmbeddingCatalogService.getControlPlane(profileId);
     }
 
     async setDefault(profileId: string, providerId: RuntimeProviderId, modelId: string) {
@@ -156,6 +164,10 @@ class ProviderManagementService {
     async listUsageSummaries(profileId: string) {
         await this.ensureNormalizedProviderProfileState(profileId);
         return listUsageSummaries(profileId);
+    }
+
+    async listEmbeddingModels(profileId: string, providerId: RuntimeProviderId) {
+        return providerEmbeddingCatalogService.listModels(profileId, providerId);
     }
 
     async getOpenAISubscriptionUsage(profileId: string) {

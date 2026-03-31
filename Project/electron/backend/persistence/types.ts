@@ -8,6 +8,7 @@ import type {
     ContextCompactionSource,
     MemoryCausalLinkRecord as RuntimeMemoryCausalLinkRecord,
     MemoryDerivedSummary as RuntimeMemoryDerivedSummary,
+    MemoryEmbeddingIndexRecord as RuntimeMemoryEmbeddingIndexRecord,
     MemoryEvidenceRecord as RuntimeMemoryEvidenceRecord,
     MemoryCreatedByKind,
     MemoryTemporalFactRecord as RuntimeMemoryTemporalFactRecord,
@@ -100,6 +101,8 @@ export interface MemoryRecord {
 
 export type MemoryEvidenceRecord = RuntimeMemoryEvidenceRecord;
 
+export type MemoryEmbeddingIndexRecord = RuntimeMemoryEmbeddingIndexRecord;
+
 export type MemoryTemporalFactRecord = RuntimeMemoryTemporalFactRecord;
 
 export type MemoryCausalLinkRecord = RuntimeMemoryCausalLinkRecord;
@@ -181,6 +184,18 @@ export interface ProviderModelRecord {
     price?: number;
     latency?: number;
     tps?: number;
+}
+
+export interface ProviderEmbeddingModelRecord {
+    id: string;
+    providerId: RuntimeProviderId;
+    label: string;
+    dimensions: number;
+    maxInputTokens?: number;
+    inputPrice?: number;
+    source?: string;
+    updatedAt?: string;
+    raw?: Record<string, unknown>;
 }
 
 export interface ProviderAuthStateRecord {

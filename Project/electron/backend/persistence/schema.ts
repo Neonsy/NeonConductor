@@ -24,6 +24,19 @@ export interface ProviderModelsTable {
     updated_at: string;
 }
 
+export interface ProviderEmbeddingModelCatalogTable {
+    profile_id: string;
+    provider_id: string;
+    model_id: string;
+    label: string;
+    dimensions: number;
+    max_input_tokens: number | null;
+    input_price: number | null;
+    source: string;
+    updated_at: string;
+    raw_json: string;
+}
+
 export interface SessionsTable {
     id: string;
     profile_id: string;
@@ -84,6 +97,20 @@ export interface MemoryEvidenceRecordsTable {
     source_message_part_id: string | null;
     metadata_json: string;
     created_at: string;
+}
+
+export interface MemoryEmbeddingRecordsTable {
+    id: string;
+    profile_id: string;
+    memory_id: string;
+    provider_id: string;
+    model_id: string;
+    source_digest: string;
+    indexed_text: string;
+    embedding_json: string;
+    dimensions: number;
+    created_at: string;
+    updated_at: string;
 }
 
 export interface MemoryTemporalFactsTable {
@@ -836,6 +863,7 @@ export interface DatabaseSchema {
     session_attached_rules: SessionAttachedRulesTable;
     memory_records: MemoryRecordsTable;
     memory_evidence_records: MemoryEvidenceRecordsTable;
+    memory_embedding_records: MemoryEmbeddingRecordsTable;
     memory_temporal_facts: MemoryTemporalFactsTable;
     memory_causal_links: MemoryCausalLinksTable;
     runs: RunsTable;
@@ -886,6 +914,7 @@ export interface DatabaseSchema {
     provider_auth_states: ProviderAuthStatesTable;
     provider_auth_flows: ProviderAuthFlowsTable;
     provider_model_catalog: ProviderModelCatalogTable;
+    provider_embedding_model_catalog: ProviderEmbeddingModelCatalogTable;
     provider_discovery_snapshots: ProviderDiscoverySnapshotsTable;
     kilo_model_routing_preferences: KiloModelRoutingPreferencesTable;
     plan_records: PlanRecordsTable;
