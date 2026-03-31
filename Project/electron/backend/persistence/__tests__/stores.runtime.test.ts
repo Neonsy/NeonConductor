@@ -12,6 +12,7 @@ import {
     messageStore,
     memoryStore,
     memoryEvidenceStore,
+    memoryRevisionStore,
     mcpStore,
     modeStore,
     permissionStore,
@@ -195,6 +196,7 @@ describe('persistence stores: runtime domain', () => {
             bodyMarkdown: 'Thread body',
             workspaceFingerprint,
             threadId,
+            temporalSubjectKey: 'subject::thread-memory',
         });
         const runMemory = await memoryStore.create({
             profileId,
@@ -246,6 +248,7 @@ describe('persistence stores: runtime domain', () => {
         const superseded = await memoryStore.supersede({
             profileId,
             previousMemoryId: threadMemory.id,
+            revisionReason: 'refinement',
             replacement: {
                 profileId,
                 memoryType: threadMemory.memoryType,
@@ -255,12 +258,22 @@ describe('persistence stores: runtime domain', () => {
                 bodyMarkdown: 'Updated thread body',
                 workspaceFingerprint,
                 threadId,
+                ...(threadMemory.temporalSubjectKey ? { temporalSubjectKey: threadMemory.temporalSubjectKey } : {}),
             },
         });
         expect(superseded?.previous.state).toBe('superseded');
         expect(superseded?.previous.supersededByMemoryId).toBe(superseded?.replacement.id);
         expect(superseded?.replacement.state).toBe('active');
         expect(superseded?.replacement.title).toBe('Thread Memory v2');
+        expect(superseded?.replacement.temporalSubjectKey).toBe('subject::thread-memory');
+
+        if (!superseded) {
+            throw new Error('Expected superseded memory result.');
+        }
+        const createdRevision = await memoryRevisionStore.getByPreviousMemoryId(profileId, superseded.previous.id);
+        expect(createdRevision?.revisionReason).toBe('refinement');
+        expect(createdRevision?.previousMemoryId).toBe(superseded.previous.id);
+        expect(createdRevision?.replacementMemoryId).toBe(superseded.replacement.id);
     });
 
     it('cascades owned memory when the owning run or thread is deleted', async () => {

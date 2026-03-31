@@ -4,6 +4,7 @@ import {
     memoryStates,
     memoryTypes,
 } from '@/app/backend/runtime/contracts/enums';
+import { memoryRevisionReasons } from '@/app/backend/runtime/contracts/types/memory';
 import {
     createParser,
     readArray,
@@ -75,6 +76,7 @@ export function parseMemoryCreateInput(input: unknown): MemoryCreateInput {
     const workspaceFingerprint = readOptionalString(source.workspaceFingerprint, 'workspaceFingerprint');
     const threadId = source.threadId !== undefined ? readEntityId(source.threadId, 'threadId', 'thr') : undefined;
     const runId = source.runId !== undefined ? readEntityId(source.runId, 'runId', 'run') : undefined;
+    const temporalSubjectKey = readOptionalString(source.temporalSubjectKey, 'temporalSubjectKey');
     const metadata = readMetadataRecord(source.metadata, 'metadata');
     const evidence = readMemoryEvidenceArray(source.evidence, 'evidence');
 
@@ -90,6 +92,7 @@ export function parseMemoryCreateInput(input: unknown): MemoryCreateInput {
         ...(workspaceFingerprint ? { workspaceFingerprint } : {}),
         ...(threadId ? { threadId } : {}),
         ...(runId ? { runId } : {}),
+        ...(temporalSubjectKey ? { temporalSubjectKey } : {}),
         ...(evidence ? { evidence } : {}),
     };
 }
@@ -134,6 +137,7 @@ export function parseMemorySupersedeInput(input: unknown): MemorySupersedeInput 
     const summaryText = readOptionalString(source.summaryText, 'summaryText');
     const metadata = readMetadataRecord(source.metadata, 'metadata');
     const evidence = readMemoryEvidenceArray(source.evidence, 'evidence');
+    const revisionReason = readEnumValue(source.revisionReason, 'revisionReason', memoryRevisionReasons);
 
     return {
         profileId: readProfileId(source),
@@ -141,6 +145,7 @@ export function parseMemorySupersedeInput(input: unknown): MemorySupersedeInput 
         createdByKind: readEnumValue(source.createdByKind, 'createdByKind', memoryCreatedByKinds),
         title: readString(source.title, 'title'),
         bodyMarkdown: readString(source.bodyMarkdown, 'bodyMarkdown'),
+        revisionReason,
         ...(summaryText ? { summaryText } : {}),
         ...(metadata ? { metadata } : {}),
         ...(evidence ? { evidence } : {}),

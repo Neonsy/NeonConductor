@@ -122,7 +122,7 @@ function computeDecisionScore(input: {
     return familyComponent + structuredComponent + promptComponent + semanticComponent + sourceComponent + input.recencyValue;
 }
 
-function withDecisionFeatures(
+export function buildRankedRetrievedMemoryDecision(
     memory: MemoryRecord,
     matchReason: RetrievedMemoryMatchReason,
     tier: RankedMemoryRetrievalDecision['tier'],
@@ -133,6 +133,7 @@ function withDecisionFeatures(
         promptMatchCount?: number;
         semanticSimilarity?: number;
         sourceDecisionRank?: number;
+        selectionExemptionReason?: RankedMemoryRetrievalDecision['selectionExemptionReason'];
     }
 ): RankedMemoryRetrievalDecision {
     const family = getDecisionFamily(matchReason);
@@ -164,6 +165,7 @@ function withDecisionFeatures(
         redundancyKey: buildRedundancyKey(memory),
         score,
         priority: familyRank,
+        ...(input?.selectionExemptionReason ? { selectionExemptionReason: input.selectionExemptionReason } : {}),
         ...(input?.sourceMemoryId ? { sourceMemoryId: input.sourceMemoryId } : {}),
         ...(input?.annotations && input.annotations.length > 0 ? { annotations: input.annotations } : {}),
         explanation: buildRetrievedMemoryExplanation({
@@ -178,7 +180,7 @@ export function rankRetrievedMemoryCandidates(input: MemoryRetrievalRankingInput
     const candidateMemoryIds = new Set(input.baseCandidates.map((candidate) => candidate.memory.id));
     const combinedCandidates: RankedMemoryRetrievalDecision[] = [
         ...input.baseCandidates.map((candidate) =>
-            withDecisionFeatures(
+            buildRankedRetrievedMemoryDecision(
                 candidate.memory,
                 candidate.matchReason,
                 candidate.tier,
@@ -202,7 +204,7 @@ export function rankRetrievedMemoryCandidates(input: MemoryRetrievalRankingInput
         }
 
         combinedCandidates.push(
-            withDecisionFeatures(
+            buildRankedRetrievedMemoryDecision(
                 derivedCandidate.memory,
                 derivedCandidate.matchReason,
                 derivedCandidate.tier,
@@ -227,7 +229,7 @@ export function rankRetrievedMemoryCandidates(input: MemoryRetrievalRankingInput
         const semanticCandidate = input.semanticCandidates.find((candidate) => candidate.memory.id === memory.id);
         if (semanticCandidate) {
             combinedCandidates.push(
-                withDecisionFeatures(
+                buildRankedRetrievedMemoryDecision(
                     semanticCandidate.memory,
                     semanticCandidate.matchReason,
                     semanticCandidate.tier,
@@ -246,7 +248,7 @@ export function rankRetrievedMemoryCandidates(input: MemoryRetrievalRankingInput
         }
 
         combinedCandidates.push(
-            withDecisionFeatures(
+            buildRankedRetrievedMemoryDecision(
                 memory,
                 'prompt',
                 'prompt',

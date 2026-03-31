@@ -12,6 +12,7 @@ import {
     memoryTypes,
     type EntityId,
     type MemoryCreatedByKind,
+    type MemoryRevisionReason,
     type MemoryScopeKind,
     type MemoryState,
     type MemoryType,
@@ -34,6 +35,7 @@ function mapMemoryRecord(row: {
     body_markdown: string;
     summary_text: string | null;
     metadata_json: string;
+    temporal_subject_key: string | null;
     superseded_by_memory_id: string | null;
     created_at: string;
     updated_at: string;
@@ -52,6 +54,7 @@ function mapMemoryRecord(row: {
         ...(row.thread_id ? { threadId: parseEntityId(row.thread_id, 'memory_records.thread_id', 'thr') } : {}),
         ...(row.run_id ? { runId: parseEntityId(row.run_id, 'memory_records.run_id', 'run') } : {}),
         ...(row.summary_text ? { summaryText: row.summary_text } : {}),
+        ...(row.temporal_subject_key ? { temporalSubjectKey: row.temporal_subject_key } : {}),
         ...(row.superseded_by_memory_id
             ? {
                   supersededByMemoryId: parseEntityId(
@@ -79,6 +82,7 @@ interface CreateMemoryRecordInput {
     workspaceFingerprint?: string;
     threadId?: EntityId<'thr'>;
     runId?: EntityId<'run'>;
+    temporalSubjectKey?: string;
 }
 
 interface UpdateMemoryEditableFieldsInput {
@@ -120,6 +124,7 @@ export class MemoryStore {
                 body_markdown: input.bodyMarkdown,
                 summary_text: input.summaryText ?? null,
                 metadata_json: JSON.stringify(input.metadata ?? {}),
+                temporal_subject_key: input.temporalSubjectKey ?? null,
                 superseded_by_memory_id: null,
                 created_at: timestamp,
                 updated_at: timestamp,
@@ -223,6 +228,7 @@ export class MemoryStore {
     async supersede(input: {
         profileId: string;
         previousMemoryId: EntityId<'mem'>;
+        revisionReason: MemoryRevisionReason;
         replacement: CreateMemoryRecordInput;
     }): Promise<{ previous: MemoryRecord; replacement: MemoryRecord } | null> {
         return this.getDb().transaction().execute(async (transaction) =>
@@ -235,6 +241,7 @@ export class MemoryStore {
         input: {
             profileId: string;
             previousMemoryId: EntityId<'mem'>;
+            revisionReason: MemoryRevisionReason;
             replacement: CreateMemoryRecordInput;
         }
     ): Promise<{ previous: MemoryRecord; replacement: MemoryRecord } | null> {
@@ -267,6 +274,18 @@ export class MemoryStore {
             .where('id', '=', input.previousMemoryId)
             .returningAll()
             .executeTakeFirstOrThrow();
+
+        await transaction
+            .insertInto('memory_revision_records')
+            .values({
+                id: createEntityId('mrev'),
+                profile_id: input.profileId,
+                previous_memory_id: input.previousMemoryId,
+                replacement_memory_id: replacementId,
+                revision_reason: input.revisionReason,
+                created_at: timestamp,
+            })
+            .execute();
 
         return {
             previous: mapMemoryRecord(updated),

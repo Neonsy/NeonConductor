@@ -76,6 +76,12 @@ function MemoryProjectionRoots({ viewModel }: { viewModel: MemoryPanelViewModel 
 }
 
 function RetrievedMemoryCard({ record }: { record: RetrievedMemoryRecord }) {
+    const hasConflictingCurrentTruth = record.derivedSummary
+        ? record.derivedSummary.conflictingCurrentMemoryIds.length > 0
+        : false;
+    const showsDifferentCurrentTruth =
+        record.derivedSummary?.currentTruthMemoryId && record.derivedSummary.currentTruthMemoryId !== record.memoryId;
+
     return (
         <div className='border-border bg-background/70 rounded-xl border px-3 py-3'>
             <div className='flex flex-wrap items-center gap-2'>
@@ -88,6 +94,16 @@ function RetrievedMemoryCard({ record }: { record: RetrievedMemoryRecord }) {
             <p className='text-muted-foreground mt-1 text-xs'>{record.memoryId}</p>
             {record.annotations && record.annotations.length > 0 ? (
                 <p className='text-muted-foreground mt-1 text-[11px]'>{record.annotations.join(' ')}</p>
+            ) : null}
+            {hasConflictingCurrentTruth ? (
+                <p className='text-muted-foreground mt-1 text-[11px]'>
+                    Conflicting current truth detected for this temporal subject.
+                </p>
+            ) : null}
+            {showsDifferentCurrentTruth ? (
+                <p className='text-muted-foreground mt-1 text-[11px]'>
+                    Current truth resolves to {record.derivedSummary?.currentTruthMemoryId}.
+                </p>
             ) : null}
             {record.supportingEvidence.length > 0 ? (
                 <div className='mt-2 space-y-1'>
@@ -110,6 +126,9 @@ function ProjectedMemoryCard({
     controller: MemoryPanelController;
     projectedMemory: ProjectedMemoryRecord;
 }) {
+    const hasConflictingCurrentTruth = projectedMemory.derivedSummary
+        ? projectedMemory.derivedSummary.conflictingCurrentMemoryIds.length > 0
+        : false;
     const runtimeMetadata = (() => {
         if (projectedMemory.memory.metadata['source'] !== 'runtime_run_outcome') {
             return null;
@@ -158,6 +177,11 @@ function ProjectedMemoryCard({
                     Temporal history: {projectedMemory.derivedSummary.predecessorMemoryIds.length} prior fact
                     {projectedMemory.derivedSummary.predecessorMemoryIds.length === 1 ? '' : 's'}
                     {projectedMemory.derivedSummary.successorMemoryId ? ', plus a newer replacement' : ''}.
+                </p>
+            ) : null}
+            {hasConflictingCurrentTruth ? (
+                <p className='text-muted-foreground mt-2 text-[11px]'>
+                    Conflicting current truth detected for this temporal subject.
                 </p>
             ) : null}
         </div>

@@ -79,9 +79,19 @@ export interface MemoryRecordsTable {
     body_markdown: string;
     summary_text: string | null;
     metadata_json: string;
+    temporal_subject_key: string | null;
     superseded_by_memory_id: string | null;
     created_at: string;
     updated_at: string;
+}
+
+export interface MemoryRevisionRecordsTable {
+    id: string;
+    profile_id: string;
+    previous_memory_id: string;
+    replacement_memory_id: string;
+    revision_reason: string;
+    created_at: string;
 }
 
 export interface MemoryEvidenceRecordsTable {
@@ -862,6 +872,7 @@ export interface DatabaseSchema {
     session_attached_skills: SessionAttachedSkillsTable;
     session_attached_rules: SessionAttachedRulesTable;
     memory_records: MemoryRecordsTable;
+    memory_revision_records: MemoryRevisionRecordsTable;
     memory_evidence_records: MemoryEvidenceRecordsTable;
     memory_embedding_records: MemoryEmbeddingRecordsTable;
     memory_temporal_facts: MemoryTemporalFactsTable;

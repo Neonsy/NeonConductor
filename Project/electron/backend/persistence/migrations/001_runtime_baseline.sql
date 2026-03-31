@@ -709,6 +709,7 @@ CREATE TABLE memory_records (
     body_markdown TEXT NOT NULL,
     summary_text TEXT NULL,
     metadata_json TEXT NOT NULL DEFAULT '{}',
+    temporal_subject_key TEXT NULL,
     superseded_by_memory_id TEXT NULL REFERENCES memory_records(id) ON DELETE SET NULL,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
@@ -722,6 +723,17 @@ CREATE TABLE memory_records (
         (state = 'superseded' AND superseded_by_memory_id IS NOT NULL) OR
         (state IN ('active', 'disabled') AND superseded_by_memory_id IS NULL)
     )
+);
+
+CREATE TABLE memory_revision_records (
+    id TEXT PRIMARY KEY,
+    profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    previous_memory_id TEXT NOT NULL REFERENCES memory_records(id) ON DELETE CASCADE,
+    replacement_memory_id TEXT NOT NULL REFERENCES memory_records(id) ON DELETE CASCADE,
+    revision_reason TEXT NOT NULL CHECK (revision_reason IN ('correction', 'refinement', 'deprecation', 'runtime_refresh')),
+    created_at TEXT NOT NULL,
+    UNIQUE (previous_memory_id),
+    UNIQUE (replacement_memory_id)
 );
 
 CREATE TABLE memory_evidence_records (
@@ -769,7 +781,7 @@ CREATE TABLE memory_temporal_facts (
     subject_key TEXT NOT NULL,
     fact_kind TEXT NOT NULL CHECK (fact_kind IN ('semantic', 'episodic', 'procedural')),
     value_json TEXT NOT NULL,
-    status TEXT NOT NULL CHECK (status IN ('current', 'superseded', 'disabled')),
+    status TEXT NOT NULL CHECK (status IN ('current', 'superseded', 'disabled', 'conflicted')),
     valid_from TEXT NOT NULL,
     valid_to TEXT NULL,
     source_memory_id TEXT NOT NULL REFERENCES memory_records(id) ON DELETE CASCADE,
@@ -1218,6 +1230,12 @@ CREATE UNIQUE INDEX idx_memory_evidence_records_profile_memory_sequence
 
 CREATE INDEX idx_memory_evidence_records_profile_kind
     ON memory_evidence_records(profile_id, evidence_kind);
+
+CREATE INDEX idx_memory_revision_records_profile_previous
+    ON memory_revision_records(profile_id, previous_memory_id);
+
+CREATE INDEX idx_memory_revision_records_profile_replacement
+    ON memory_revision_records(profile_id, replacement_memory_id);
 
 CREATE INDEX idx_memory_embedding_records_profile_model
     ON memory_embedding_records(profile_id, provider_id, model_id);

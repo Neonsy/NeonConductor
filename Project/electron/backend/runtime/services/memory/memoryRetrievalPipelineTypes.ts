@@ -87,6 +87,7 @@ export interface RankedMemoryRetrievalDecision extends RetrievedMemoryDecision {
     recencyKey: string;
     redundancyKey: string;
     score: number;
+    selectionExemptionReason?: 'history' | 'conflict';
 }
 
 export interface MemoryRetrievalAssemblyInput {
@@ -125,8 +126,20 @@ export interface MemoryRetrievalEvidenceStageResult {
 export interface MemoryRetrievalSelectionStageInput {
     decisions: RankedMemoryRetrievalDecision[];
     derivedSummaryByMemoryId: Map<string, MemoryDerivedSummary>;
+    temporalIntent: 'current' | 'history' | 'conflict';
 }
 
 export interface MemoryRetrievalSelectionStageResult {
+    decisions: RankedMemoryRetrievalDecision[];
+}
+
+export interface MemoryRetrievalTemporalResolutionStageInput {
+    prompt: string;
+    activeMemories: MemoryRecord[];
+    decisions: RankedMemoryRetrievalDecision[];
+    derivedSummaryByMemoryId: Map<string, MemoryDerivedSummary>;
+}
+
+export interface MemoryRetrievalTemporalResolutionStageResult {
     decisions: RankedMemoryRetrievalDecision[];
 }

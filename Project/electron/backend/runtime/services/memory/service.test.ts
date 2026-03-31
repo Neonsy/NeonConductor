@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { memoryEvidenceStore, runStore } from '@/app/backend/persistence/stores';
+import { memoryEvidenceStore, memoryRevisionStore, runStore } from '@/app/backend/persistence/stores';
 import { memoryService } from '@/app/backend/runtime/services/memory/service';
 import {
     createCaller,
@@ -120,6 +120,7 @@ describe('memoryService evidence-backed writes', () => {
             createdByKind: 'system',
             title: 'Replacement without evidence',
             bodyMarkdown: 'Replacement body.',
+            revisionReason: 'refinement',
         });
         expect(firstSupersede.isOk()).toBe(true);
         if (firstSupersede.isErr()) {
@@ -135,6 +136,7 @@ describe('memoryService evidence-backed writes', () => {
             createdByKind: 'system',
             title: 'Replacement with evidence',
             bodyMarkdown: 'Replacement body v2.',
+            revisionReason: 'refinement',
             evidence: [
                 {
                     kind: 'run',
@@ -150,5 +152,71 @@ describe('memoryService evidence-backed writes', () => {
 
         const replacementEvidence = await memoryEvidenceStore.listByMemoryId(profileId, secondSupersede.value.replacement.id);
         expect(replacementEvidence.map((evidence) => evidence.label)).toEqual(['Replacement evidence run']);
+        expect(secondSupersede.value.replacement.temporalSubjectKey).toBeUndefined();
+
+        const revision = await memoryRevisionStore.getByPreviousMemoryId(profileId, secondSupersede.value.previous.id);
+        expect(revision?.revisionReason).toBe('refinement');
+        expect(revision?.replacementMemoryId).toBe(secondSupersede.value.replacement.id);
+    });
+
+    it('rejects runtime_refresh outside automatic run-outcome supersession', async () => {
+        const createdMemory = await memoryService.createMemory({
+            profileId,
+            memoryType: 'semantic',
+            scopeKind: 'global',
+            createdByKind: 'user',
+            title: 'Manual semantic memory',
+            bodyMarkdown: 'Manual semantic body.',
+        });
+        expect(createdMemory.isOk()).toBe(true);
+        if (createdMemory.isErr()) {
+            throw new Error(createdMemory.error.message);
+        }
+
+        const invalidSupersede = await memoryService.supersedeMemory({
+            profileId,
+            memoryId: createdMemory.value.id,
+            createdByKind: 'system',
+            title: 'Invalid runtime refresh replacement',
+            bodyMarkdown: 'Should be rejected.',
+            revisionReason: 'runtime_refresh',
+        });
+
+        expect(invalidSupersede.isErr()).toBe(true);
+        if (invalidSupersede.isOk()) {
+            throw new Error('Expected invalid runtime refresh supersede to fail.');
+        }
+        expect(invalidSupersede.error.message).toMatch(/Runtime refresh revisions/i);
+    });
+
+    it('inherits temporalSubjectKey through supersede revisions', async () => {
+        const createdMemory = await memoryService.createMemory({
+            profileId,
+            memoryType: 'semantic',
+            scopeKind: 'global',
+            createdByKind: 'user',
+            title: 'Subject-bound memory',
+            bodyMarkdown: 'Original subject body.',
+            temporalSubjectKey: 'subject::alpha',
+        });
+        expect(createdMemory.isOk()).toBe(true);
+        if (createdMemory.isErr()) {
+            throw new Error(createdMemory.error.message);
+        }
+
+        const superseded = await memoryService.supersedeMemory({
+            profileId,
+            memoryId: createdMemory.value.id,
+            createdByKind: 'user',
+            title: 'Subject-bound memory v2',
+            bodyMarkdown: 'Replacement subject body.',
+            revisionReason: 'correction',
+        });
+        expect(superseded.isOk()).toBe(true);
+        if (superseded.isErr()) {
+            throw new Error(superseded.error.message);
+        }
+
+        expect(superseded.value.replacement.temporalSubjectKey).toBe('subject::alpha');
     });
 });

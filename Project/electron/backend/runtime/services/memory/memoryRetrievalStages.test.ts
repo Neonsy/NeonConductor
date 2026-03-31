@@ -154,7 +154,19 @@ describe('memory retrieval stages', () => {
                         annotations: ['Prior truth from temporal memory history.'],
                     },
                 ],
-                summaries: new Map([[exactMemory.id, { hasTemporalHistory: true, predecessorMemoryIds: [], linkedRunIds: [], linkedThreadIds: [], linkedWorkspaceFingerprints: [] }]]),
+                summaries: new Map([
+                    [
+                        exactMemory.id,
+                        {
+                            hasTemporalHistory: true,
+                            conflictingCurrentMemoryIds: [],
+                            predecessorMemoryIds: [],
+                            linkedRunIds: [],
+                            linkedThreadIds: [],
+                            linkedWorkspaceFingerprints: [],
+                        },
+                    ],
+                ]),
             })
         );
 

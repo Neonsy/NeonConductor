@@ -1,8 +1,9 @@
-import { memoryDerivedStore, memoryStore } from '@/app/backend/persistence/stores';
+import { memoryDerivedStore, memoryRevisionStore, memoryStore } from '@/app/backend/persistence/stores';
 import type {
     MemoryCausalLinkRecord,
     MemoryDerivedSummary,
     MemoryRecord,
+    MemoryRevisionRecord,
     MemoryTemporalFactRecord,
 } from '@/app/backend/persistence/types';
 import type {
@@ -14,8 +15,8 @@ import type {
 import { errOp, okOp, type OperationalResult } from '@/app/backend/runtime/services/common/operationalError';
 import { appLog } from '@/app/main/logging';
 
-const DERIVATION_VERSION = 1;
-const HISTORY_PROMPT_TERMS = ['before', 'change', 'changed', 'earlier', 'history', 'old', 'older', 'previous', 'prior'];
+const DERIVATION_VERSION = 2;
+const HISTORY_PROMPT_TERMS = ['before', 'change', 'changed', 'corrected', 'earlier', 'history', 'old', 'older', 'previous', 'prior', 'replaced'];
 const CAUSAL_PROMPT_TERMS = ['because', 'cause', 'caused', 'origin', 'reason', 'why'];
 
 interface DerivedCandidate {
@@ -23,6 +24,17 @@ interface DerivedCandidate {
     matchReason: Extract<RetrievedMemoryMatchReason, 'derived_temporal' | 'derived_causal'>;
     sourceMemoryId: EntityId<'mem'>;
     annotations: string[];
+}
+
+interface TemporalResolutionMaps {
+    subjectKeyByMemoryId: Map<EntityId<'mem'>, string>;
+    temporalStatusByMemoryId: Map<EntityId<'mem'>, MemoryTemporalFactRecord['status']>;
+    predecessorMemoryIdsByMemoryId: Map<EntityId<'mem'>, EntityId<'mem'>[]>;
+    successorMemoryIdByMemoryId: Map<EntityId<'mem'>, EntityId<'mem'>>;
+    incomingRevisionReasonByMemoryId: Map<EntityId<'mem'>, MemoryRevisionRecord['revisionReason']>;
+    outgoingRevisionReasonByMemoryId: Map<EntityId<'mem'>, MemoryRevisionRecord['revisionReason']>;
+    currentTruthMemoryIdByGroupKey: Map<string, EntityId<'mem'>>;
+    conflictingCurrentMemoryIdsByGroupKey: Map<string, EntityId<'mem'>[]>;
 }
 
 function normalizeSearchText(value: string): string {
@@ -47,13 +59,20 @@ function extractSourceRunId(memory: RuntimeMemoryRecord): EntityId<'run'> | unde
         : undefined;
 }
 
-function buildSubjectKey(memory: RuntimeMemoryRecord): string {
+function buildFallbackSubjectKey(memory: RuntimeMemoryRecord): string {
     const provenanceKey = memory.runId ?? memory.threadId ?? memory.workspaceFingerprint ?? 'global';
-
     return [memory.memoryType, memory.scopeKind, provenanceKey, normalizeSubjectSegment(memory.title)].join('::');
 }
 
-function toTemporalStatus(memory: RuntimeMemoryRecord): MemoryTemporalFactRecord['status'] {
+function resolveTemporalSubjectKey(memory: RuntimeMemoryRecord): string {
+    return memory.temporalSubjectKey ?? buildFallbackSubjectKey(memory);
+}
+
+function buildTemporalGroupKey(memoryType: RuntimeMemoryRecord['memoryType'], temporalSubjectKey: string): string {
+    return `${memoryType}::${temporalSubjectKey}`;
+}
+
+function toBaseTemporalStatus(memory: RuntimeMemoryRecord): Extract<MemoryTemporalFactRecord['status'], 'current' | 'superseded' | 'disabled'> {
     switch (memory.state) {
         case 'active':
             return 'current';
@@ -76,29 +95,120 @@ function dedupeEntityIds<T extends string>(values: T[]): T[] {
     return Array.from(new Set(values));
 }
 
+function buildTemporalResolutionMaps(
+    memories: RuntimeMemoryRecord[],
+    revisionRecords: MemoryRevisionRecord[]
+): TemporalResolutionMaps {
+    const subjectKeyByMemoryId = new Map<EntityId<'mem'>, string>();
+    const temporalStatusByMemoryId = new Map<EntityId<'mem'>, MemoryTemporalFactRecord['status']>();
+    const predecessorMemoryIdsByMemoryId = new Map<EntityId<'mem'>, EntityId<'mem'>[]>();
+    const successorMemoryIdByMemoryId = new Map<EntityId<'mem'>, EntityId<'mem'>>();
+    const incomingRevisionReasonByMemoryId = new Map<EntityId<'mem'>, MemoryRevisionRecord['revisionReason']>();
+    const outgoingRevisionReasonByMemoryId = new Map<EntityId<'mem'>, MemoryRevisionRecord['revisionReason']>();
+    const currentTruthMemoryIdByGroupKey = new Map<string, EntityId<'mem'>>();
+    const conflictingCurrentMemoryIdsByGroupKey = new Map<string, EntityId<'mem'>[]>();
+    const memoriesByGroupKey = new Map<string, RuntimeMemoryRecord[]>();
+
+    for (const revisionRecord of revisionRecords) {
+        const existingPredecessors = predecessorMemoryIdsByMemoryId.get(revisionRecord.replacementMemoryId) ?? [];
+        existingPredecessors.push(revisionRecord.previousMemoryId);
+        predecessorMemoryIdsByMemoryId.set(
+            revisionRecord.replacementMemoryId,
+            dedupeEntityIds(existingPredecessors)
+        );
+        successorMemoryIdByMemoryId.set(revisionRecord.previousMemoryId, revisionRecord.replacementMemoryId);
+        outgoingRevisionReasonByMemoryId.set(revisionRecord.previousMemoryId, revisionRecord.revisionReason);
+        incomingRevisionReasonByMemoryId.set(revisionRecord.replacementMemoryId, revisionRecord.revisionReason);
+    }
+
+    for (const memory of memories) {
+        const temporalSubjectKey = resolveTemporalSubjectKey(memory);
+        subjectKeyByMemoryId.set(memory.id, temporalSubjectKey);
+        const groupKey = buildTemporalGroupKey(memory.memoryType, temporalSubjectKey);
+        const existing = memoriesByGroupKey.get(groupKey) ?? [];
+        existing.push(memory);
+        memoriesByGroupKey.set(groupKey, existing);
+    }
+
+    for (const [groupKey, groupedMemories] of memoriesByGroupKey.entries()) {
+        const activeMemoryIds = groupedMemories.filter((memory) => memory.state === 'active').map((memory) => memory.id);
+        const conflictingCurrentMemoryIds =
+            groupedMemories[0] &&
+            (groupedMemories[0].memoryType === 'semantic' || groupedMemories[0].memoryType === 'procedural') &&
+            activeMemoryIds.length > 1
+                ? activeMemoryIds
+                : [];
+
+        if (conflictingCurrentMemoryIds.length > 0) {
+            conflictingCurrentMemoryIdsByGroupKey.set(groupKey, conflictingCurrentMemoryIds);
+        }
+        if (activeMemoryIds.length === 1) {
+            currentTruthMemoryIdByGroupKey.set(groupKey, activeMemoryIds[0]!);
+        }
+
+        for (const memory of groupedMemories) {
+            temporalStatusByMemoryId.set(
+                memory.id,
+                conflictingCurrentMemoryIds.includes(memory.id) ? 'conflicted' : toBaseTemporalStatus(memory)
+            );
+        }
+    }
+
+    return {
+        subjectKeyByMemoryId,
+        temporalStatusByMemoryId,
+        predecessorMemoryIdsByMemoryId,
+        successorMemoryIdByMemoryId,
+        incomingRevisionReasonByMemoryId,
+        outgoingRevisionReasonByMemoryId,
+        currentTruthMemoryIdByGroupKey,
+        conflictingCurrentMemoryIdsByGroupKey,
+    };
+}
+
 function mapDerivedSummary(input: {
     memoryId: EntityId<'mem'>;
     factsByMemoryId: Map<string, MemoryTemporalFactRecord>;
     outgoingLinksByMemoryId: Map<string, MemoryCausalLinkRecord[]>;
     incomingSupersedeLinksByTargetMemoryId: Map<string, MemoryCausalLinkRecord[]>;
+    outgoingRevisionReasonByMemoryId: Map<EntityId<'mem'>, MemoryRevisionRecord['revisionReason']>;
+    incomingRevisionReasonByMemoryId: Map<EntityId<'mem'>, MemoryRevisionRecord['revisionReason']>;
+    subjectFactsByGroupKey: Map<string, MemoryTemporalFactRecord[]>;
 }): MemoryDerivedSummary {
     const temporalFact = input.factsByMemoryId.get(input.memoryId);
     const outgoingLinks = input.outgoingLinksByMemoryId.get(input.memoryId) ?? [];
     const incomingSupersedeLinks = input.incomingSupersedeLinksByTargetMemoryId.get(input.memoryId) ?? [];
-
     const successorLink = outgoingLinks.find(
         (link) => link.relationType === 'supersedes' && link.targetEntityKind === 'memory'
     );
+    const subjectFacts = temporalFact
+        ? input.subjectFactsByGroupKey.get(buildTemporalGroupKey(temporalFact.factKind, temporalFact.subjectKey)) ?? []
+        : [];
+    const currentTruthMemoryIds = subjectFacts
+        .filter((fact) => fact.status === 'current')
+        .map((fact) => fact.sourceMemoryId);
+    const conflictingCurrentMemoryIds = subjectFacts
+        .filter((fact) => fact.status === 'conflicted')
+        .map((fact) => fact.sourceMemoryId);
 
     return {
         ...(temporalFact ? { temporalStatus: temporalFact.status } : {}),
+        ...(temporalFact ? { temporalSubjectKey: temporalFact.subjectKey } : {}),
         hasTemporalHistory: incomingSupersedeLinks.length > 0 || Boolean(successorLink),
+        ...(currentTruthMemoryIds.length === 1 ? { currentTruthMemoryId: currentTruthMemoryIds[0] } : {}),
+        conflictingCurrentMemoryIds,
         predecessorMemoryIds: dedupeEntityIds(
             incomingSupersedeLinks
                 .filter((link) => link.sourceEntityKind === 'memory')
                 .map((link) => link.sourceEntityId as EntityId<'mem'>)
         ),
         ...(successorLink ? { successorMemoryId: successorLink.targetEntityId as EntityId<'mem'> } : {}),
+        ...(input.incomingRevisionReasonByMemoryId.get(input.memoryId)
+            ? { incomingRevisionReason: input.incomingRevisionReasonByMemoryId.get(input.memoryId)! }
+            : {}),
+        ...(input.outgoingRevisionReasonByMemoryId.get(input.memoryId)
+            ? { outgoingRevisionReason: input.outgoingRevisionReasonByMemoryId.get(input.memoryId)! }
+            : {}),
         linkedRunIds: dedupeEntityIds(
             outgoingLinks
                 .filter((link) => link.relationType === 'observed_in_run' && link.targetEntityKind === 'run')
@@ -120,7 +230,10 @@ function mapDerivedSummary(input: {
 }
 
 export class AdvancedMemoryDerivationService {
-    private async buildDerivedArtifacts(memory: RuntimeMemoryRecord): Promise<{
+    private buildDerivedArtifacts(input: {
+        memory: RuntimeMemoryRecord;
+        resolutionMaps: TemporalResolutionMaps;
+    }): {
         temporalFact: {
             profileId: string;
             subjectKey: string;
@@ -144,11 +257,16 @@ export class AdvancedMemoryDerivationService {
             sourceMemoryId: EntityId<'mem'>;
             sourceRunId?: EntityId<'run'>;
         }>;
-    }> {
-        const successorMemory = memory.supersededByMemoryId
-            ? await memoryStore.getById(memory.profileId, memory.supersededByMemoryId)
-            : null;
+    } {
+        const memory = input.memory;
         const sourceRunId = extractSourceRunId(memory);
+        const temporalSubjectKey = input.resolutionMaps.subjectKeyByMemoryId.get(memory.id) ?? resolveTemporalSubjectKey(memory);
+        const temporalStatus = input.resolutionMaps.temporalStatusByMemoryId.get(memory.id) ?? toBaseTemporalStatus(memory);
+        const groupKey = buildTemporalGroupKey(memory.memoryType, temporalSubjectKey);
+        const currentTruthMemoryId = input.resolutionMaps.currentTruthMemoryIdByGroupKey.get(groupKey);
+        const conflictingCurrentMemoryIds =
+            input.resolutionMaps.conflictingCurrentMemoryIdsByGroupKey.get(groupKey) ?? [];
+        const successorMemoryId = input.resolutionMaps.successorMemoryIdByMemoryId.get(memory.id);
         const causalLinks: Array<{
             profileId: string;
             sourceEntityKind: 'memory' | 'run' | 'thread' | 'workspace';
@@ -160,13 +278,13 @@ export class AdvancedMemoryDerivationService {
             sourceRunId?: EntityId<'run'>;
         }> = [];
 
-        if (memory.supersededByMemoryId) {
+        if (successorMemoryId) {
             causalLinks.push({
                 profileId: memory.profileId,
                 sourceEntityKind: 'memory',
                 sourceEntityId: memory.id,
                 targetEntityKind: 'memory',
-                targetEntityId: memory.supersededByMemoryId,
+                targetEntityId: successorMemoryId,
                 relationType: 'supersedes',
                 sourceMemoryId: memory.id,
                 ...(sourceRunId ? { sourceRunId } : {}),
@@ -212,7 +330,7 @@ export class AdvancedMemoryDerivationService {
         return {
             temporalFact: {
                 profileId: memory.profileId,
-                subjectKey: buildSubjectKey(memory),
+                subjectKey: temporalSubjectKey,
                 factKind: memory.memoryType,
                 value: {
                     title: memory.title,
@@ -220,15 +338,16 @@ export class AdvancedMemoryDerivationService {
                     bodyMarkdown: memory.bodyMarkdown,
                     scopeKind: memory.scopeKind,
                     createdByKind: memory.createdByKind,
-                    ...(successorMemory ? { successorMemoryId: successorMemory.id } : {}),
+                    temporalSubjectKey,
+                    ...(currentTruthMemoryId ? { currentTruthMemoryId } : {}),
+                    ...(conflictingCurrentMemoryIds.length > 0 ? { conflictingCurrentMemoryIds } : {}),
+                    ...(successorMemoryId ? { successorMemoryId } : {}),
                 },
-                status: toTemporalStatus(memory),
+                status: temporalStatus,
                 validFrom: memory.createdAt,
-                ...(memory.state === 'active'
-                    ? {}
-                    : {
-                          validTo: successorMemory?.createdAt ?? memory.updatedAt,
-                      }),
+                ...((memory.state === 'superseded' || memory.state === 'disabled')
+                    ? { validTo: memory.updatedAt }
+                    : {}),
                 sourceMemoryId: memory.id,
                 ...(sourceRunId ? { sourceRunId } : {}),
                 derivationVersion: DERIVATION_VERSION,
@@ -239,28 +358,20 @@ export class AdvancedMemoryDerivationService {
     }
 
     async refreshMemoryById(profileId: string, memoryId: EntityId<'mem'>): Promise<OperationalResult<void>> {
-        const memory = await memoryStore.getById(profileId, memoryId);
-        if (!memory) {
-            return okOp(undefined);
-        }
-
-        const derivedArtifacts = await this.buildDerivedArtifacts(memory);
-        await memoryDerivedStore.replaceForMemory({
-            profileId,
-            sourceMemoryId: memory.id,
-            temporalFact: derivedArtifacts.temporalFact,
-            causalLinks: derivedArtifacts.causalLinks,
-        });
-
-        return okOp(undefined);
+        return this.refreshMemoryIds(profileId, [memoryId]);
     }
 
     async refreshMemoryIds(profileId: string, memoryIds: EntityId<'mem'>[]): Promise<OperationalResult<void>> {
-        for (const memoryId of dedupeEntityIds(memoryIds)) {
-            const refreshed = await this.refreshMemoryById(profileId, memoryId);
-            if (refreshed.isErr()) {
-                return refreshed;
-            }
+        if (dedupeEntityIds(memoryIds).length === 0) {
+            return okOp(undefined);
+        }
+
+        const rebuilt = await this.rebuildProfile(profileId);
+        if (rebuilt.isErr()) {
+            return errOp(rebuilt.error.code, rebuilt.error.message, {
+                ...(rebuilt.error.details ? { details: rebuilt.error.details } : {}),
+                ...(rebuilt.error.retryable !== undefined ? { retryable: rebuilt.error.retryable } : {}),
+            });
         }
 
         return okOp(undefined);
@@ -268,6 +379,11 @@ export class AdvancedMemoryDerivationService {
 
     async rebuildProfile(profileId: string): Promise<OperationalResult<{ memoryCount: number }>> {
         const memories = await memoryStore.listByProfile({ profileId });
+        const revisionRecords = await memoryRevisionStore.listByMemoryIds(
+            profileId,
+            memories.map((memory) => memory.id)
+        );
+        const resolutionMaps = buildTemporalResolutionMaps(memories, revisionRecords);
         const temporalFacts: Array<{
             profileId: string;
             subjectKey: string;
@@ -293,7 +409,10 @@ export class AdvancedMemoryDerivationService {
         }> = [];
 
         for (const memory of memories) {
-            const derivedArtifacts = await this.buildDerivedArtifacts(memory);
+            const derivedArtifacts = this.buildDerivedArtifacts({
+                memory,
+                resolutionMaps,
+            });
             temporalFacts.push(derivedArtifacts.temporalFact);
             causalLinks.push(...derivedArtifacts.causalLinks);
         }
@@ -316,7 +435,7 @@ export class AdvancedMemoryDerivationService {
             return okOp(new Map());
         }
 
-        const [facts, outgoingLinks, incomingSupersedeLinks] = await Promise.all([
+        const [facts, outgoingLinks, incomingSupersedeLinks, revisionRecords] = await Promise.all([
             memoryDerivedStore.listTemporalFactsBySourceMemoryIds(profileId, uniqueMemoryIds),
             memoryDerivedStore.listCausalLinksBySourceMemoryIds(profileId, uniqueMemoryIds),
             memoryDerivedStore.listCausalLinksByTargetEntities({
@@ -325,7 +444,10 @@ export class AdvancedMemoryDerivationService {
                 targetEntityIds: uniqueMemoryIds,
                 relationTypes: ['supersedes'],
             }),
+            memoryRevisionStore.listByMemoryIds(profileId, uniqueMemoryIds),
         ]);
+        const subjectKeys = dedupeEntityIds(facts.map((fact) => fact.subjectKey));
+        const subjectFacts = await memoryDerivedStore.listTemporalFactsBySubjectKeys(profileId, subjectKeys);
 
         const factsByMemoryId = new Map(facts.map((fact) => [fact.sourceMemoryId, fact] as const));
         const outgoingLinksByMemoryId = new Map<string, MemoryCausalLinkRecord[]>();
@@ -340,6 +462,19 @@ export class AdvancedMemoryDerivationService {
             existing.push(link);
             incomingSupersedeLinksByTargetMemoryId.set(link.targetEntityId, existing);
         }
+        const outgoingRevisionReasonByMemoryId = new Map<EntityId<'mem'>, MemoryRevisionRecord['revisionReason']>();
+        const incomingRevisionReasonByMemoryId = new Map<EntityId<'mem'>, MemoryRevisionRecord['revisionReason']>();
+        for (const revisionRecord of revisionRecords) {
+            outgoingRevisionReasonByMemoryId.set(revisionRecord.previousMemoryId, revisionRecord.revisionReason);
+            incomingRevisionReasonByMemoryId.set(revisionRecord.replacementMemoryId, revisionRecord.revisionReason);
+        }
+        const subjectFactsByGroupKey = new Map<string, MemoryTemporalFactRecord[]>();
+        for (const fact of subjectFacts) {
+            const groupKey = buildTemporalGroupKey(fact.factKind, fact.subjectKey);
+            const existing = subjectFactsByGroupKey.get(groupKey) ?? [];
+            existing.push(fact);
+            subjectFactsByGroupKey.set(groupKey, existing);
+        }
 
         return okOp(
             new Map(
@@ -350,6 +485,9 @@ export class AdvancedMemoryDerivationService {
                         factsByMemoryId,
                         outgoingLinksByMemoryId,
                         incomingSupersedeLinksByTargetMemoryId,
+                        outgoingRevisionReasonByMemoryId,
+                        incomingRevisionReasonByMemoryId,
+                        subjectFactsByGroupKey,
                     }),
                 ])
             )
@@ -433,8 +571,8 @@ export class AdvancedMemoryDerivationService {
                         continue;
                     }
 
-                    const sourceMemory = input.matchedMemories.find(
-                        (memory) => summariesResult.value.get(memory.id)?.linkedRunIds.includes(runId)
+                    const sourceMemory = input.matchedMemories.find((memory) =>
+                        summariesResult.value.get(memory.id)?.linkedRunIds.includes(runId)
                     );
                     candidates.push({
                         memory: runMemory,

@@ -11,6 +11,7 @@ import type {
 } from '@/app/backend/runtime/contracts';
 import { errOp, okOp, type OperationalResult } from '@/app/backend/runtime/services/common/operationalError';
 import { advancedMemoryDerivationService } from '@/app/backend/runtime/services/memory/advancedDerivation';
+import { isAutomaticRunOutcomeMemory } from '@/app/backend/runtime/services/memory/automaticRunMemoryLifecycle';
 import { resolveCanonicalMemoryProvenance } from '@/app/backend/runtime/services/memory/memoryProvenancePolicy';
 import { memorySemanticIndexService } from '@/app/backend/runtime/services/memory/memorySemanticIndexService';
 
@@ -56,6 +57,7 @@ class MemoryService {
                 bodyMarkdown: input.bodyMarkdown,
                 ...(input.summaryText ? { summaryText: input.summaryText } : {}),
                 ...(input.metadata ? { metadata: input.metadata } : {}),
+                ...(input.temporalSubjectKey ? { temporalSubjectKey: input.temporalSubjectKey } : {}),
                 ...resolvedProvenance.value,
             });
 
@@ -130,11 +132,21 @@ class MemoryService {
         if (existing.state !== 'active') {
             return errOp('invalid_input', 'Only active memory can be superseded.');
         }
+        if (input.revisionReason === 'runtime_refresh') {
+            const isValidRuntimeRefresh = input.createdByKind === 'system' && isAutomaticRunOutcomeMemory(existing);
+            if (!isValidRuntimeRefresh) {
+                return errOp(
+                    'invalid_input',
+                    'Runtime refresh revisions are only valid for automatic run-outcome memories.'
+                );
+            }
+        }
 
         const superseded = await getPersistence().db.transaction().execute(async (transaction) => {
             const result = await memoryStore.supersedeInTransaction(transaction, {
                 profileId: input.profileId,
                 previousMemoryId: input.memoryId,
+                revisionReason: input.revisionReason,
                 replacement: {
                     profileId: input.profileId,
                     memoryType: existing.memoryType,
@@ -147,6 +159,7 @@ class MemoryService {
                     ...(existing.workspaceFingerprint ? { workspaceFingerprint: existing.workspaceFingerprint } : {}),
                     ...(existing.threadId ? { threadId: existing.threadId } : {}),
                     ...(existing.runId ? { runId: existing.runId } : {}),
+                    ...(existing.temporalSubjectKey ? { temporalSubjectKey: existing.temporalSubjectKey } : {}),
                 },
             });
 

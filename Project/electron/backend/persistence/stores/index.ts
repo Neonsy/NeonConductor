@@ -17,6 +17,7 @@ export { mcpStore } from '@/app/backend/persistence/stores/runtime/mcpStore';
 export { memoryDerivedStore } from '@/app/backend/persistence/stores/runtime/memoryDerivedStore';
 export { memoryEmbeddingStore } from '@/app/backend/persistence/stores/runtime/memoryEmbeddingStore';
 export { memoryEvidenceStore } from '@/app/backend/persistence/stores/runtime/memoryEvidenceStore';
+export { memoryRevisionStore } from '@/app/backend/persistence/stores/runtime/memoryRevisionStore';
 export { memoryStore } from '@/app/backend/persistence/stores/runtime/memoryStore';
 export { modelLimitOverrideStore } from '@/app/backend/persistence/stores/runtime/modelLimitOverrideStore';
 export { modeStore } from '@/app/backend/persistence/stores/registry/modeStore';

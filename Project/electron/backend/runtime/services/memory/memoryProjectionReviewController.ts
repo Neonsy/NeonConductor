@@ -177,6 +177,7 @@ export class MemoryProjectionReviewController {
             bodyMarkdown: proposal.proposedBodyMarkdown,
             ...(proposal.proposedSummaryText ? { summaryText: proposal.proposedSummaryText } : {}),
             metadata: proposal.proposedMetadata,
+            revisionReason: 'correction',
         });
         if (superseded.isErr()) {
             return errOp(superseded.error.code, superseded.error.message, {

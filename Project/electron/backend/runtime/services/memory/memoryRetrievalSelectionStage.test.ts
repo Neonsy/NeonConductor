@@ -122,6 +122,7 @@ describe('selectRetrievedMemoryCandidates', () => {
         const selected = selectRetrievedMemoryCandidates({
             decisions: [semantic, exactGlobal, exactRun, exactThread],
             derivedSummaryByMemoryId: createEmptyDerivedSummaryMap(),
+            temporalIntent: 'current',
         }).decisions;
 
         expect(selected.slice(0, 2).map((decision) => decision.memory.id)).toEqual([
@@ -167,6 +168,7 @@ describe('selectRetrievedMemoryCandidates', () => {
                 }),
             ],
             derivedSummaryByMemoryId: createEmptyDerivedSummaryMap(),
+            temporalIntent: 'current',
         }).decisions;
 
         expect(selected).toHaveLength(4);
@@ -209,6 +211,7 @@ describe('selectRetrievedMemoryCandidates', () => {
                 }),
             ],
             derivedSummaryByMemoryId: createEmptyDerivedSummaryMap(),
+            temporalIntent: 'current',
         }).decisions;
 
         expect(selected.filter((decision) => decision.family === 'prompt')).toHaveLength(1);
@@ -236,6 +239,7 @@ describe('selectRetrievedMemoryCandidates', () => {
                     'mem_predecessor',
                     {
                         hasTemporalHistory: true,
+                        conflictingCurrentMemoryIds: [],
                         predecessorMemoryIds: [],
                         successorMemoryId: 'mem_successor',
                         linkedRunIds: [],
@@ -244,6 +248,7 @@ describe('selectRetrievedMemoryCandidates', () => {
                     },
                 ],
             ]),
+            temporalIntent: 'current',
         }).decisions;
 
         expect(selected.map((decision) => decision.memory.id)).toEqual(['mem_successor']);

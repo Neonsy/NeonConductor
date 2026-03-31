@@ -43,6 +43,7 @@ describe('advancedMemoryDerivationService', () => {
             createdByKind: 'user',
             title: 'API base URL',
             bodyMarkdown: 'Use the new base URL.',
+            revisionReason: 'correction',
         });
 
         const summariesResult = await advancedMemoryDerivationService.getDerivedSummaries(profileId, [
@@ -95,6 +96,7 @@ describe('advancedMemoryDerivationService', () => {
             createdByKind: 'user',
             title: 'Deployment endpoint',
             bodyMarkdown: 'Use the new deployment endpoint.',
+            revisionReason: 'correction',
         });
 
         const threadHistory = await memoryRetrievalService.retrieveRelevantMemory({
@@ -105,9 +107,13 @@ describe('advancedMemoryDerivationService', () => {
             workspaceFingerprint: 'wsf_memory_advanced_retrieval',
             prompt: 'What changed before on the deployment endpoint?',
         });
-        expect(threadHistory.summary?.records.map((record) => record.title)).toEqual(['Deployment endpoint']);
+        expect(threadHistory.summary?.records.map((record) => record.title)).toEqual([
+            'Deployment endpoint',
+            'Deployment endpoint',
+        ]);
         expect(threadHistory.summary?.records[0]?.matchReason).toBe('exact_thread');
         expect(threadHistory.summary?.records[0]?.derivedSummary?.hasTemporalHistory).toBe(true);
+        expect(threadHistory.summary?.records[1]?.matchReason).toBe('derived_temporal');
 
         const originSession = await createSessionInScope(caller, profileId, {
             scope: 'workspace',
@@ -214,5 +220,63 @@ describe('advancedMemoryDerivationService', () => {
         const links = await memoryDerivedStore.listCausalLinksBySourceMemoryIds(profileId, [memory.memory.id]);
         expect(facts).toHaveLength(1);
         expect(links.some((link) => link.relationType === 'observed_in_thread')).toBe(true);
+    });
+
+    it('marks competing active memories for the same subject as conflicted and exposes revision reasons', async () => {
+        const caller = createCaller();
+        const created = await createSessionInScope(caller, profileId, {
+            scope: 'workspace',
+            workspaceFingerprint: 'wsf_memory_advanced_conflict',
+            title: 'Advanced conflict thread',
+            kind: 'local',
+            topLevelTab: 'agent',
+        });
+        const threadId = requireEntityId(created.thread.id, 'thr', 'Expected advanced conflict thread id.');
+
+        const original = await caller.memory.create({
+            profileId,
+            memoryType: 'semantic',
+            scopeKind: 'thread',
+            createdByKind: 'user',
+            threadId,
+            temporalSubjectKey: 'subject::deployment-endpoint',
+            title: 'Deployment endpoint',
+            bodyMarkdown: 'Use endpoint A.',
+        });
+        const corrected = await caller.memory.supersede({
+            profileId,
+            memoryId: original.memory.id,
+            createdByKind: 'user',
+            title: 'Deployment endpoint',
+            bodyMarkdown: 'Use endpoint B.',
+            revisionReason: 'correction',
+        });
+        await caller.memory.create({
+            profileId,
+            memoryType: 'semantic',
+            scopeKind: 'thread',
+            createdByKind: 'user',
+            threadId,
+            temporalSubjectKey: 'subject::deployment-endpoint',
+            title: 'Deployment endpoint alternative',
+            bodyMarkdown: 'Use endpoint C.',
+        });
+
+        const summariesResult = await advancedMemoryDerivationService.getDerivedSummaries(profileId, [
+            original.memory.id,
+            corrected.replacement.id,
+        ]);
+        expect(summariesResult.isOk()).toBe(true);
+        if (summariesResult.isErr()) {
+            throw new Error(summariesResult.error.message);
+        }
+
+        const originalSummary = summariesResult.value.get(original.memory.id);
+        const correctedSummary = summariesResult.value.get(corrected.replacement.id);
+        expect(originalSummary?.outgoingRevisionReason).toBe('correction');
+        expect(correctedSummary?.incomingRevisionReason).toBe('correction');
+        expect(correctedSummary?.temporalStatus).toBe('conflicted');
+        expect(correctedSummary?.conflictingCurrentMemoryIds.length).toBe(2);
+        expect(correctedSummary?.currentTruthMemoryId).toBeUndefined();
     });
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { runStore, sandboxStore } from '@/app/backend/persistence/stores';
+import { memoryRevisionStore, runStore, sandboxStore } from '@/app/backend/persistence/stores';
 import { errOp } from '@/app/backend/runtime/services/common/operationalError';
 import { advancedMemoryDerivationService } from '@/app/backend/runtime/services/memory/advancedDerivation';
 import {
@@ -121,6 +121,7 @@ describe('runtime contracts: memory', () => {
             createdByKind: 'system',
             title: 'Thread note v2',
             bodyMarkdown: 'Updated thread note.',
+            revisionReason: 'refinement',
             metadata: {
                 revision: 2,
             },
@@ -221,6 +222,7 @@ describe('runtime contracts: memory', () => {
                 createdByKind: 'system',
                 title: 'Disabled replacement',
                 bodyMarkdown: 'Should fail.',
+                revisionReason: 'correction',
             })
         ).rejects.toThrow(/Only active memory can be superseded/i);
     });
@@ -679,6 +681,76 @@ describe('runtime contracts: memory', () => {
         });
         expect(parseErrorScan.proposals).toHaveLength(0);
         expect(parseErrorScan.parseErrors).toHaveLength(1);
+    });
+
+    it('applies projected supersede edits using correction revision metadata', async () => {
+        const caller = createCaller();
+        const globalMemoryRoot = mkdtempSync(path.join(os.tmpdir(), 'nc-memory-review-supersede-'));
+        vi.stubEnv('NEONCONDUCTOR_GLOBAL_MEMORY_ROOT', globalMemoryRoot);
+        const workspaceFingerprint = 'wsf_runtime_memory_review_supersede';
+        const created = await createSessionInScope(caller, profileId, {
+            scope: 'workspace',
+            workspaceFingerprint,
+            title: 'Memory review supersede thread',
+            kind: 'local',
+            topLevelTab: 'agent',
+        });
+        const threadId = requireEntityId(created.thread.id, 'thr', 'Expected review supersede thread id.');
+
+        const editableMemory = await caller.memory.create({
+            profileId,
+            memoryType: 'procedural',
+            scopeKind: 'thread',
+            createdByKind: 'user',
+            threadId,
+            title: 'Supersede projection memory',
+            bodyMarkdown: 'Original projection body.',
+            temporalSubjectKey: 'subject::projection-memory',
+        });
+
+        const synced = await caller.memory.syncProjection({
+            profileId,
+            workspaceFingerprint,
+            threadId,
+        });
+        const projectedMemory = synced.projectedMemories.find(
+            (record) => record.memory.id === editableMemory.memory.id
+        );
+        if (!projectedMemory) {
+            throw new Error('Expected synced projected memory for supersede review.');
+        }
+
+        writeFileSync(
+            projectedMemory.absolutePath,
+            `---\nid: "${editableMemory.memory.id}"\nmemoryType: "procedural"\nscopeKind: "thread"\nstate: "superseded"\ntitle: "Supersede projection memory v2"\nthreadId: "${threadId}"\nworkspaceFingerprint: "${workspaceFingerprint}"\nmetadata: {"source":"projection","revision":2}\n---\nSuperseded projection body.\n`,
+            'utf8'
+        );
+
+        const scanned = await caller.memory.scanProjectionEdits({
+            profileId,
+            workspaceFingerprint,
+            threadId,
+        });
+        expect(scanned.proposals[0]?.reviewAction).toBe('supersede');
+        const proposal = scanned.proposals[0];
+        if (!proposal) {
+            throw new Error('Expected supersede memory edit proposal.');
+        }
+
+        const applied = await caller.memory.applyProjectionEdit({
+            profileId,
+            workspaceFingerprint,
+            threadId,
+            memoryId: proposal.memory.id,
+            observedContentHash: proposal.observedContentHash,
+            decision: 'accept',
+        });
+        expect(applied.appliedAction).toBe('supersede');
+        expect(applied.previousMemory?.id).toBe(editableMemory.memory.id);
+
+        const revision = await memoryRevisionStore.getByPreviousMemoryId(profileId, editableMemory.memory.id);
+        expect(revision?.revisionReason).toBe('correction');
+        expect(revision?.replacementMemoryId).toBe(applied.memory.id);
     });
 
     it('does not overwrite edited projected memory files during sync', async () => {

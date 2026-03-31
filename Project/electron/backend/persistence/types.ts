@@ -10,6 +10,7 @@ import type {
     MemoryDerivedSummary as RuntimeMemoryDerivedSummary,
     MemoryEmbeddingIndexRecord as RuntimeMemoryEmbeddingIndexRecord,
     MemoryEvidenceRecord as RuntimeMemoryEvidenceRecord,
+    MemoryRevisionRecord as RuntimeMemoryRevisionRecord,
     MemoryCreatedByKind,
     MemoryTemporalFactRecord as RuntimeMemoryTemporalFactRecord,
     MemoryScopeKind,
@@ -94,10 +95,13 @@ export interface MemoryRecord {
     workspaceFingerprint?: string;
     threadId?: EntityId<'thr'>;
     runId?: EntityId<'run'>;
+    temporalSubjectKey?: string;
     supersededByMemoryId?: EntityId<'mem'>;
     createdAt: string;
     updatedAt: string;
 }
+
+export type MemoryRevisionRecord = RuntimeMemoryRevisionRecord;
 
 export type MemoryEvidenceRecord = RuntimeMemoryEvidenceRecord;
 

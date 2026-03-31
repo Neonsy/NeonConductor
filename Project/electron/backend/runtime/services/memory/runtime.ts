@@ -104,6 +104,7 @@ export class MemoryRuntimeService {
                 bodyMarkdown: snapshot.bodyMarkdown,
                 summaryText: snapshot.summaryText,
                 metadata: snapshot.metadata,
+                revisionReason: 'runtime_refresh',
                 evidence: snapshot.evidence,
             });
             if (superseded.isErr()) {

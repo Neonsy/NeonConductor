@@ -156,6 +156,7 @@ describe('memoryRetrievalService', () => {
             createdByKind: 'user',
             title: 'Superseded zebra memory v2',
             bodyMarkdown: 'New zebra instruction.',
+            revisionReason: 'correction',
         });
         const promptMatch = await caller.memory.create({
             profileId,
@@ -549,5 +550,56 @@ describe('memoryRetrievalService', () => {
         } finally {
             evidenceSpy.mockRestore();
         }
+    });
+
+    it('surfaces conflicting current truths for the same temporal subject when the prompt asks about conflict', async () => {
+        const caller = createCaller();
+        const created = await createSessionInScope(caller, profileId, {
+            scope: 'workspace',
+            workspaceFingerprint: 'wsf_memory_retrieval_conflict',
+            title: 'Conflict retrieval thread',
+            kind: 'local',
+            topLevelTab: 'agent',
+        });
+        const threadId = requireEntityId(created.thread.id, 'thr', 'Expected conflict retrieval thread id.');
+
+        const first = await caller.memory.create({
+            profileId,
+            memoryType: 'semantic',
+            scopeKind: 'thread',
+            createdByKind: 'user',
+            threadId,
+            temporalSubjectKey: 'subject::api-endpoint',
+            title: 'Endpoint A',
+            bodyMarkdown: 'Use endpoint A.',
+        });
+        const second = await caller.memory.create({
+            profileId,
+            memoryType: 'semantic',
+            scopeKind: 'thread',
+            createdByKind: 'user',
+            threadId,
+            temporalSubjectKey: 'subject::api-endpoint',
+            title: 'Endpoint B',
+            bodyMarkdown: 'Use endpoint B.',
+        });
+
+        const retrieved = await memoryRetrievalService.retrieveRelevantMemory({
+            profileId,
+            sessionId: created.session.id,
+            topLevelTab: 'agent',
+            modeKey: 'code',
+            workspaceFingerprint: 'wsf_memory_retrieval_conflict',
+            prompt: 'There is a conflict about endpoint A. Which value disagrees?',
+        });
+
+        expect(retrieved.summary?.records.map((record) => record.memoryId)).toEqual(
+            expect.arrayContaining([first.memory.id, second.memory.id])
+        );
+        expect(
+            retrieved.summary?.records.filter(
+                (record) => record.derivedSummary?.temporalStatus === 'conflicted'
+            ).length
+        ).toBeGreaterThanOrEqual(2);
     });
 });

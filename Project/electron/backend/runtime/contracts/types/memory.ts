@@ -22,9 +22,22 @@ export interface MemoryRecord {
     workspaceFingerprint?: string;
     threadId?: EntityId<'thr'>;
     runId?: EntityId<'run'>;
+    temporalSubjectKey?: string;
     supersededByMemoryId?: EntityId<'mem'>;
     createdAt: string;
     updatedAt: string;
+}
+
+export const memoryRevisionReasons = ['correction', 'refinement', 'deprecation', 'runtime_refresh'] as const;
+export type MemoryRevisionReason = (typeof memoryRevisionReasons)[number];
+
+export interface MemoryRevisionRecord {
+    id: EntityId<'mrev'>;
+    profileId: string;
+    previousMemoryId: EntityId<'mem'>;
+    replacementMemoryId: EntityId<'mem'>;
+    revisionReason: MemoryRevisionReason;
+    createdAt: string;
 }
 
 export const memoryEvidenceKinds = ['run', 'message', 'message_part', 'tool_result_artifact'] as const;
@@ -79,7 +92,7 @@ export interface MemoryEmbeddingIndexRecord {
     updatedAt: string;
 }
 
-export const memoryTemporalFactStatuses = ['current', 'superseded', 'disabled'] as const;
+export const memoryTemporalFactStatuses = ['current', 'superseded', 'disabled', 'conflicted'] as const;
 export type MemoryTemporalFactStatus = (typeof memoryTemporalFactStatuses)[number];
 
 export const memoryCausalRelationTypes = [
@@ -134,9 +147,14 @@ export interface MemoryCausalLinkRecord {
 
 export interface MemoryDerivedSummary {
     temporalStatus?: MemoryTemporalFactStatus;
+    temporalSubjectKey?: string;
     hasTemporalHistory: boolean;
+    currentTruthMemoryId?: EntityId<'mem'>;
+    conflictingCurrentMemoryIds: EntityId<'mem'>[];
     predecessorMemoryIds: EntityId<'mem'>[];
     successorMemoryId?: EntityId<'mem'>;
+    incomingRevisionReason?: MemoryRevisionReason;
+    outgoingRevisionReason?: MemoryRevisionReason;
     linkedRunIds: EntityId<'run'>[];
     linkedThreadIds: EntityId<'thr'>[];
     linkedWorkspaceFingerprints: string[];
@@ -182,6 +200,7 @@ export interface MemoryCreateInput extends ProfileInput {
     workspaceFingerprint?: string;
     threadId?: EntityId<'thr'>;
     runId?: EntityId<'run'>;
+    temporalSubjectKey?: string;
     evidence?: MemoryEvidenceCreateInput[];
 }
 
@@ -206,6 +225,7 @@ export interface MemorySupersedeInput extends MemoryByIdInput {
     bodyMarkdown: string;
     summaryText?: string;
     metadata?: Record<string, unknown>;
+    revisionReason: MemoryRevisionReason;
     evidence?: MemoryEvidenceCreateInput[];
 }
 

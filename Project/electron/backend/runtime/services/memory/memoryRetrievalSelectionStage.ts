@@ -47,14 +47,23 @@ function wouldExceedFamilyCap(
 function isRedundantSelection(
     candidate: RankedMemoryRetrievalDecision,
     selectedDecisions: RankedMemoryRetrievalDecision[],
-    derivedSummaryByMemoryId: MemoryRetrievalSelectionStageInput['derivedSummaryByMemoryId']
+    derivedSummaryByMemoryId: MemoryRetrievalSelectionStageInput['derivedSummaryByMemoryId'],
+    temporalIntent: MemoryRetrievalSelectionStageInput['temporalIntent']
 ): boolean {
     if (isAnchor(candidate)) {
         return false;
     }
+    if (candidate.selectionExemptionReason === 'conflict') {
+        return false;
+    }
 
     const derivedSummary = derivedSummaryByMemoryId.get(candidate.memory.id);
-    if (derivedSummary?.successorMemoryId && selectedDecisions.some((decision) => decision.memory.id === derivedSummary.successorMemoryId)) {
+    if (
+        temporalIntent !== 'history' &&
+        candidate.selectionExemptionReason !== 'history' &&
+        derivedSummary?.successorMemoryId &&
+        selectedDecisions.some((decision) => decision.memory.id === derivedSummary.successorMemoryId)
+    ) {
         return true;
     }
 
@@ -107,7 +116,7 @@ export function selectRetrievedMemoryCandidates(
         if (wouldExceedFamilyCap(decision, selectedDecisions)) {
             continue;
         }
-        if (isRedundantSelection(decision, selectedDecisions, input.derivedSummaryByMemoryId)) {
+        if (isRedundantSelection(decision, selectedDecisions, input.derivedSummaryByMemoryId, input.temporalIntent)) {
             continue;
         }
 

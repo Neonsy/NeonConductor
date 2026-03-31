@@ -64,6 +64,7 @@ vi.mock('@/web/trpc/client', () => ({
                                 derivedSummary: {
                                     temporalStatus: 'current',
                                     hasTemporalHistory: true,
+                                    conflictingCurrentMemoryIds: [],
                                     predecessorMemoryIds: ['mem_0'],
                                     successorMemoryId: 'mem_2',
                                     linkedRunIds: ['run_1'],
@@ -188,6 +189,7 @@ describe('MemoryPanel', () => {
                             derivedSummary: {
                                 temporalStatus: 'current',
                                 hasTemporalHistory: true,
+                                conflictingCurrentMemoryIds: [],
                                 predecessorMemoryIds: ['mem_0'],
                                 successorMemoryId: 'mem_2',
                                 linkedRunIds: ['run_1'],
