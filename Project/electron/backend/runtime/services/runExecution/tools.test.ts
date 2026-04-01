@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { resolveRuntimeToolsForMode } from '@/app/backend/runtime/services/runExecution/tools';
+import type { RuntimeToolGuidanceContext } from '@/app/backend/runtime/services/runExecution/types';
 import type { ModeDefinition } from '@/shared/contracts';
 
 const { toolStoreListMock, mcpListRuntimeToolsMock } = vi.hoisted(() => ({
@@ -39,6 +40,16 @@ function buildMode(toolCapabilities: NonNullable<ModeDefinition['executionPolicy
         precedence: 0,
         createdAt: '2026-04-01T00:00:00.000Z',
         updatedAt: '2026-04-01T00:00:00.000Z',
+    };
+}
+
+function buildGuidanceContext(): RuntimeToolGuidanceContext {
+    return {
+        platform: process.platform === 'win32' ? 'win32' : process.platform === 'darwin' ? 'darwin' : 'linux',
+        shellFamily: process.platform === 'win32' ? 'powershell' : 'posix_sh',
+        shellExecutable: process.platform === 'win32' ? 'pwsh.exe' : '/bin/sh',
+        shellResolved: true,
+        vendoredRipgrepAvailable: true,
     };
 }
 
@@ -121,5 +132,28 @@ describe('resolveRuntimeToolsForMode', () => {
         });
 
         expect(tools.map((tool) => tool.id)).toEqual(['list_files', 'read_file', 'search_files', 'write_file']);
+    });
+
+    it('keeps edited base descriptions while appending runtime guidance', async () => {
+        toolStoreListMock.mockResolvedValue([
+            {
+                id: 'write_file',
+                label: 'Write File',
+                description: 'Base editable write description.',
+                permissionPolicy: 'ask',
+                capabilities: ['filesystem_write'],
+                requiresWorkspace: true,
+                allowsExternalPaths: false,
+                allowsIgnoredPaths: false,
+            },
+        ]);
+
+        const tools = await resolveRuntimeToolsForMode({
+            mode: buildMode(['filesystem_write']),
+            guidanceContext: buildGuidanceContext(),
+        });
+
+        expect(tools[0]?.description).toContain('Base editable write description.');
+        expect(tools[0]?.description).toContain('Prefer this tool for ordinary whole-file creation or replacement');
     });
 });

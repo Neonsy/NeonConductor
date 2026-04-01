@@ -37,6 +37,7 @@ describe('runtime contracts: core flows', () => {
         const promptLayers = await caller.prompt.getSettings({ profileId });
         const pendingPermissions = await caller.permission.listPending();
         const tools = await caller.tool.list();
+        const builtInToolMetadata = await caller.tool.listBuiltInMetadata();
         const mcpServers = await caller.mcp.listServers();
 
         expect(snapshot.lastSequence).toBeGreaterThanOrEqual(0);
@@ -67,7 +68,43 @@ describe('runtime contracts: core flows', () => {
         expect(activeMode.activeMode.modeKey).toBe('code');
         expect(pendingPermissions.requests).toEqual([]);
         expect(tools.tools.length).toBeGreaterThan(0);
+        expect(builtInToolMetadata.tools.some((tool) => tool.toolId === 'write_file')).toBe(true);
         expect(mcpServers.servers).toEqual([]);
+    });
+
+    it('supports global built-in native tool description editing without changing tool.list shape', async () => {
+        const caller = createCaller();
+
+        const updated = await caller.tool.setBuiltInDescription({
+            toolId: 'write_file',
+            description: 'Create or replace a UTF-8 workspace file.',
+        });
+        expect(updated.tools.find((tool) => tool.toolId === 'write_file')).toMatchObject({
+            description: 'Create or replace a UTF-8 workspace file.',
+            isModified: true,
+        });
+
+        const listedTools = await caller.tool.list();
+        expect(listedTools.tools.find((tool) => tool.id === 'write_file')).toMatchObject({
+            description: 'Create or replace a UTF-8 workspace file.',
+            availability: 'available',
+        });
+
+        const reset = await caller.tool.resetBuiltInDescription({
+            toolId: 'write_file',
+        });
+        expect(reset.tools.find((tool) => tool.toolId === 'write_file')).toMatchObject({
+            isModified: false,
+        });
+
+        await expect(
+            caller.tool.setBuiltInDescription({
+                toolId: 'missing_tool',
+                description: 'Nope',
+            })
+        ).rejects.toMatchObject({
+            message: 'Unknown built-in native tool "missing_tool".',
+        });
     });
 
     it('returns a typed not-found error when no enabled modes exist for a tab', async () => {

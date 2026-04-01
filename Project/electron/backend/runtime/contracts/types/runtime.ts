@@ -53,6 +53,23 @@ export interface ToolCatalogEntry {
     allowsIgnoredPaths: boolean;
 }
 
+export interface BuiltInToolMetadataEntry {
+    toolId: string;
+    label: string;
+    description: string;
+    defaultDescription: string;
+    isModified: boolean;
+}
+
+export interface ToolSetBuiltInDescriptionInput {
+    toolId: string;
+    description: string;
+}
+
+export interface ToolResetBuiltInDescriptionInput {
+    toolId: string;
+}
+
 export interface RuntimeShellBootstrap {
     lastSequence: number;
     providerControl: ProviderControlSnapshot;

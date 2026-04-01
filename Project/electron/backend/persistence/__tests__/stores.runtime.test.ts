@@ -547,6 +547,29 @@ describe('persistence stores: runtime domain', () => {
     it('supports mcp and tool seed stores', async () => {
         const tools = await toolStore.list();
         expect(tools.some((tool) => tool.id === 'read_file')).toBe(true);
+        const builtInMetadata = await toolStore.listBuiltInMetadata();
+        expect(builtInMetadata.map((tool) => tool.toolId)).toContain('write_file');
+
+        const updatedMetadata = await toolStore.setBuiltInDescription(
+            'write_file',
+            'Create or replace a UTF-8 workspace file.'
+        );
+        expect(updatedMetadata.find((tool) => tool.toolId === 'write_file')).toMatchObject({
+            description: 'Create or replace a UTF-8 workspace file.',
+            isModified: true,
+        });
+
+        const resetMetadata = await toolStore.resetBuiltInDescription('write_file');
+        expect(resetMetadata.find((tool) => tool.toolId === 'write_file')).toMatchObject({
+            isModified: false,
+        });
+
+        await expect(toolStore.setBuiltInDescription('missing_tool', 'Nope')).rejects.toThrow(
+            'Unknown built-in native tool "missing_tool".'
+        );
+        await expect(toolStore.setBuiltInDescription('write_file', '   ')).rejects.toThrow(
+            'Built-in tool description cannot be empty.'
+        );
 
         const servers = await mcpStore.listServers();
         expect(servers).toEqual([]);

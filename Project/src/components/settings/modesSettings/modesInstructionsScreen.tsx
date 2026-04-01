@@ -1,5 +1,8 @@
+import { useState } from 'react';
+
 import {
     BuiltInModePromptCard,
+    BuiltInToolMetadataCard,
     CustomModeEditorSection,
     FileBackedModeInventorySection,
     PromptInstructionsHeader,
@@ -29,6 +32,7 @@ export function ModesInstructionsScreen(input: {
 }) {
     const controller = useModesInstructionsSettingsController(input);
     const { viewModel } = controller;
+    const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
 
     if (controller.query.isLoading) {
         return <p className='text-muted-foreground text-sm'>Loading mode settings…</p>;
@@ -132,6 +136,56 @@ export function ModesInstructionsScreen(input: {
                         </div>
                     </TopLevelPromptSection>
                 ))}
+            </TopLevelPromptSection>
+
+            <TopLevelPromptSection
+                title='Advanced Settings'
+                description='Reveal low-level built-in tool metadata controls. These descriptions become the editable base text the model sees for shipped native tools.'>
+                <div className='space-y-4'>
+                    <div className='flex flex-wrap items-center justify-between gap-3 rounded-[24px] border border-dashed p-4'>
+                        <div className='space-y-1'>
+                            <h5 className='text-sm font-semibold'>Built-In Tool Metadata</h5>
+                            <p className='text-muted-foreground text-sm leading-6'>
+                                Edit global base descriptions for shipped native tools without changing prompt layers or
+                                runtime-only guidance.
+                            </p>
+                        </div>
+                        <Button
+                            type='button'
+                            size='sm'
+                            variant='outline'
+                            onClick={() => {
+                                setShowAdvancedSettings((currentValue) => !currentValue);
+                            }}>
+                            {showAdvancedSettings ? 'Hide Advanced Tool Settings' : 'Show Advanced Tool Settings'}
+                        </Button>
+                    </div>
+
+                    {showAdvancedSettings ? (
+                        <TopLevelPromptSection
+                            title={viewModel.builtInToolMetadata.title}
+                            description={viewModel.builtInToolMetadata.description}>
+                            <div className='grid gap-5 xl:grid-cols-2'>
+                                {viewModel.builtInToolMetadata.items.map((tool) => (
+                                    <BuiltInToolMetadataCard
+                                        key={tool.toolId}
+                                        {...tool}
+                                        isSaving={controller.builtInToolMetadata.isSaving}
+                                        onChange={(value) => {
+                                            controller.builtInToolMetadata.setDescription(tool.toolId, value);
+                                        }}
+                                        onSave={() => {
+                                            void controller.builtInToolMetadata.save(tool.toolId);
+                                        }}
+                                        onReset={() => {
+                                            void controller.builtInToolMetadata.reset(tool.toolId);
+                                        }}
+                                    />
+                                ))}
+                            </div>
+                        </TopLevelPromptSection>
+                    ) : null}
+                </div>
             </TopLevelPromptSection>
 
             <div className='space-y-4'>

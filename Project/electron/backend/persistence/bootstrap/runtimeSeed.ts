@@ -7,6 +7,7 @@ import {
     toStaticProviderEmbeddingCatalogModel,
 } from '@/app/backend/providers/embeddingCatalog/staticCatalog/registry';
 import { getDefaultEndpointProfile } from '@/app/backend/providers/registry';
+import { builtInNativeToolDefinitions } from '@/app/backend/runtime/services/toolExecution/builtInNativeTools';
 import type { ProviderRoutedApiFamily } from '@/app/backend/providers/types';
 
 import { kiloBalancedModelId, kiloFreeModelId, kiloFrontierModelId, kiloSmallModelId } from '@/shared/kiloModels';
@@ -95,39 +96,6 @@ function listDefaultStaticEmbeddingCatalogModels() {
 }
 
 const STATIC_EMBEDDING_MODEL_SEED = listDefaultStaticEmbeddingCatalogModels();
-
-const TOOL_SEED = [
-    {
-        id: 'read_file',
-        label: 'Read File',
-        description: 'Read file contents from the active workspace.',
-        permissionPolicy: 'ask',
-    },
-    {
-        id: 'list_files',
-        label: 'List Files',
-        description: 'List files and folders in the active workspace.',
-        permissionPolicy: 'ask',
-    },
-    {
-        id: 'run_command',
-        label: 'Run Command',
-        description: 'Run a command in a sandboxed shell.',
-        permissionPolicy: 'ask',
-    },
-    {
-        id: 'search_files',
-        label: 'Search Files',
-        description: 'Search for fixed text in workspace files.',
-        permissionPolicy: 'ask',
-    },
-    {
-        id: 'write_file',
-        label: 'Write File',
-        description: 'Create or replace a UTF-8 text file in the active workspace.',
-        permissionPolicy: 'ask',
-    },
-] as const;
 
 const MODE_SEED = [
     {
@@ -456,8 +424,8 @@ export function seedRuntimeData(sqlite: DatabaseSync, defaultProfileId: string):
         );
     }
 
-    for (const tool of TOOL_SEED) {
-        insertTool.run(tool.id, tool.label, tool.description, tool.permissionPolicy, now, now);
+    for (const tool of builtInNativeToolDefinitions) {
+        insertTool.run(tool.id, tool.label, tool.defaultDescription, tool.permissionPolicy, now, now);
     }
 
     for (const mode of MODE_SEED) {

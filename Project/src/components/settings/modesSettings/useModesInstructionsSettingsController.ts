@@ -5,6 +5,7 @@ import { buildModesInstructionsViewModel } from '@/web/components/settings/modes
 import { useModesInstructionsBuiltInModesController } from '@/web/components/settings/modesSettings/useModesInstructionsBuiltInModesController';
 import { useModesInstructionsCustomModesController } from '@/web/components/settings/modesSettings/useModesInstructionsCustomModesController';
 import { useModesInstructionsGlobalController } from '@/web/components/settings/modesSettings/useModesInstructionsGlobalController';
+import { useModesInstructionsToolMetadataController } from '@/web/components/settings/modesSettings/useModesInstructionsToolMetadataController';
 import { PROGRESSIVE_QUERY_OPTIONS } from '@/web/lib/query/progressiveQueryOptions';
 import { trpc } from '@/web/trpc/client';
 
@@ -79,6 +80,11 @@ export function useModesInstructionsSettingsController(input: {
         setErrorFeedback,
         setSuccessFeedback,
     });
+    const toolMetadataController = useModesInstructionsToolMetadataController({
+        clearFeedback,
+        setErrorFeedback,
+        setSuccessFeedback,
+    });
     const topLevelValues = buildTopLevelTabRecord((topLevelTab) => globalController.topLevel.getValue(topLevelTab));
     const builtInModesByTab = buildTopLevelTabRecord((topLevelTab) =>
         builtInModesController.builtInModes.getItems(topLevelTab)
@@ -92,6 +98,7 @@ export function useModesInstructionsSettingsController(input: {
         topLevelIsSaving: globalController.topLevel.isSaving,
         builtInModesByTab,
         builtInModesIsSaving: builtInModesController.builtInModes.isSaving,
+        builtInToolMetadata: toolMetadataController.builtInToolMetadata.items,
         fileBackedGlobalModes: customModesController.customModes.global,
         fileBackedWorkspaceModes: customModesController.customModes.workspace,
         hasWorkspaceScope: Boolean(workspaceFingerprint),
@@ -104,7 +111,10 @@ export function useModesInstructionsSettingsController(input: {
             tone: feedbackTone,
             clear: clearFeedback,
         },
-        query: settingsQuery,
+        query: {
+            ...settingsQuery,
+            isLoading: settingsQuery.isLoading || toolMetadataController.toolMetadataQuery.isLoading,
+        },
         workspace: {
             fingerprint: workspaceFingerprint,
             selectedLabel: selectedWorkspaceLabel,
@@ -112,6 +122,7 @@ export function useModesInstructionsSettingsController(input: {
         viewModel,
         ...globalController,
         ...builtInModesController,
+        ...toolMetadataController,
         ...customModesController,
     };
 }

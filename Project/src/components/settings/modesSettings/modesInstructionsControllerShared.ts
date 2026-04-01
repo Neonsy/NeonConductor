@@ -1,4 +1,5 @@
 import type {
+    BuiltInToolMetadataEntry,
     BuiltInModePromptSettingsItem,
     FileBackedCustomModeSettingsItem,
     ToolCapability,
@@ -18,6 +19,7 @@ export type TopLevelDraftState = Partial<Record<TopLevelTab, { profileId: string
 export type BuiltInModeDraftState = Partial<
     Record<string, { profileId: string; roleDefinition: string; customInstructions: string }>
 >;
+export type BuiltInToolMetadataDraftState = Partial<Record<string, { description: string }>>;
 export type CustomModeScope = 'global' | 'workspace';
 
 export interface CustomModeEditorDraftBase {
@@ -55,6 +57,8 @@ export interface PromptSettingsSnapshot {
         workspace?: Record<TopLevelTab, FileBackedCustomModeSettingsItem[]>;
     };
 }
+
+export type BuiltInToolMetadataSnapshot = BuiltInToolMetadataEntry[];
 
 export function resolveTopLevelDraftValue(input: {
     profileId: string;

@@ -1,4 +1,5 @@
 import type {
+    BuiltInToolMetadataSnapshot,
     BuiltInModePromptEntry,
     FileBackedModeItemsByTab,
 } from '@/web/components/settings/modesSettings/modesInstructionsControllerShared';
@@ -41,6 +42,14 @@ export interface ModeLibrarySectionModel {
     selectedWorkspaceLabel?: string;
 }
 
+export interface BuiltInToolMetadataCardModel {
+    toolId: string;
+    label: string;
+    description: string;
+    defaultDescription: string;
+    isModified: boolean;
+}
+
 export interface ModesInstructionsViewModel {
     promptLayers: {
         appGlobal: PromptLayerSectionModel;
@@ -52,6 +61,11 @@ export interface ModesInstructionsViewModel {
         >;
     };
     builtInModeSections: BuiltInModePromptSectionModel[];
+    builtInToolMetadata: {
+        title: string;
+        description: string;
+        items: BuiltInToolMetadataCardModel[];
+    };
     modeLibrary: ModeLibrarySectionModel;
 }
 
@@ -104,6 +118,7 @@ export function buildModesInstructionsViewModel(input: {
     topLevelIsSaving: boolean;
     builtInModesByTab: Record<TopLevelTab, BuiltInModePromptEntry[]>;
     builtInModesIsSaving: boolean;
+    builtInToolMetadata: BuiltInToolMetadataSnapshot;
     fileBackedGlobalModes: FileBackedModeItemsByTab;
     fileBackedWorkspaceModes: FileBackedModeItemsByTab;
     selectedWorkspaceLabel?: string;
@@ -144,6 +159,18 @@ export function buildModesInstructionsViewModel(input: {
             })),
         },
         builtInModeSections,
+        builtInToolMetadata: {
+            title: 'Built-In Tool Metadata',
+            description:
+                'These global descriptions become the editable base text the model sees for shipped native tools. Runtime-only shell and tool guidance still appends after them.',
+            items: input.builtInToolMetadata.map((tool) => ({
+                toolId: tool.toolId,
+                label: tool.label,
+                description: tool.description,
+                defaultDescription: tool.defaultDescription,
+                isModified: tool.isModified,
+            })),
+        },
         modeLibrary: {
             title: 'File-Backed Custom Modes',
             description: 'Manage app-level file-backed custom modes while keeping the registry roots as the only source of truth.',

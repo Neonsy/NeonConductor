@@ -28,3 +28,24 @@ export function parseToolInvokeInput(input: unknown): ToolInvokeInput {
 }
 
 export const toolInvokeInputSchema = createParser(parseToolInvokeInput);
+
+export function parseToolSetBuiltInDescriptionInput(input: unknown): { toolId: string; description: string } {
+    const source = readObject(input, 'input');
+
+    return {
+        toolId: readString(source.toolId, 'toolId'),
+        description: readString(source.description, 'description'),
+    };
+}
+
+export const toolSetBuiltInDescriptionInputSchema = createParser(parseToolSetBuiltInDescriptionInput);
+
+export function parseToolResetBuiltInDescriptionInput(input: unknown): { toolId: string } {
+    const source = readObject(input, 'input');
+
+    return {
+        toolId: readString(source.toolId, 'toolId'),
+    };
+}
+
+export const toolResetBuiltInDescriptionInputSchema = createParser(parseToolResetBuiltInDescriptionInput);

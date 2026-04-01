@@ -1,7 +1,10 @@
 import type { ReactNode } from 'react';
 
 import type { FileBackedModeItemsByTab } from '@/web/components/settings/modesSettings/modesInstructionsControllerShared';
-import type { PromptLayerSectionModel } from '@/web/components/settings/modesSettings/modesInstructionsViewModel';
+import type {
+    BuiltInToolMetadataCardModel,
+    PromptLayerSectionModel,
+} from '@/web/components/settings/modesSettings/modesInstructionsViewModel';
 import { Button } from '@/web/components/ui/button';
 import { isOneOf } from '@/web/lib/typeGuards/isOneOf';
 
@@ -159,6 +162,81 @@ export function BuiltInModePromptCard(input: {
                     spellCheck={false}
                 />
             </label>
+
+            <div className='flex flex-wrap gap-2'>
+                <Button
+                    type='button'
+                    size='sm'
+                    disabled={input.isSaving}
+                    onClick={() => {
+                        input.onSave();
+                    }}>
+                    {input.isSaving ? 'Saving…' : 'Save'}
+                </Button>
+                <Button
+                    type='button'
+                    size='sm'
+                    variant='outline'
+                    disabled={input.isSaving}
+                    onClick={() => {
+                        input.onReset();
+                    }}>
+                    Reset
+                </Button>
+            </div>
+        </section>
+    );
+}
+
+export function BuiltInToolMetadataCard(
+    input: BuiltInToolMetadataCardModel & {
+        isSaving: boolean;
+        onChange: (value: string) => void;
+        onSave: () => void;
+        onReset: () => void;
+    }
+) {
+    return (
+        <section className='border-border/70 bg-card/50 space-y-4 rounded-[24px] border p-5'>
+            <div className='flex flex-wrap items-start justify-between gap-3'>
+                <div className='space-y-1'>
+                    <h5 className='text-sm font-semibold'>{input.label}</h5>
+                    <p className='text-muted-foreground text-sm leading-6'>
+                        Adjust the base description the model sees for this built-in native tool. Runtime-only guidance
+                        still appends after this text.
+                    </p>
+                </div>
+                <div className='border-border/70 bg-background/80 rounded-full border px-3 py-1 text-[11px] font-medium'>
+                    {input.isModified ? 'Modified' : 'Default'}
+                </div>
+            </div>
+
+            <div className='border-border/70 bg-background/60 rounded-2xl border px-4 py-3 text-sm'>
+                Tool ID: <code>{input.toolId}</code>
+            </div>
+
+            <label className='space-y-2'>
+                <span className='text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase'>
+                    Description
+                </span>
+                <textarea
+                    value={input.description}
+                    onChange={(event) => {
+                        input.onChange(event.target.value);
+                    }}
+                    className='border-border bg-background min-h-28 w-full rounded-2xl border px-4 py-3 text-sm leading-6'
+                    spellCheck={false}
+                />
+            </label>
+
+            <div className='space-y-2'>
+                <span className='text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase'>
+                    Shipped Default
+                </span>
+                <div className='border-border/70 bg-background/60 rounded-2xl border px-4 py-3 text-sm leading-6'>
+                    {input.defaultDescription}
+                </div>
+            </div>
 
             <div className='flex flex-wrap gap-2'>
                 <Button

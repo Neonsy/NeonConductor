@@ -7,10 +7,9 @@ import {
 } from '@/app/backend/runtime/services/mode/toolCapabilities';
 import { composeRuntimeToolDescription } from '@/app/backend/runtime/services/runExecution/runtimeToolDescriptionBuilder';
 import type { RuntimeToolGuidanceContext } from '@/app/backend/runtime/services/runExecution/types';
+import { builtInNativeToolOrder } from '@/app/backend/runtime/services/toolExecution/builtInNativeTools';
 
 import type { ModeDefinition } from '@/shared/contracts';
-
-const RUNTIME_NATIVE_TOOL_ORDER = ['list_files', 'read_file', 'search_files', 'write_file', 'run_command'] as const;
 
 const TOOL_INPUT_SCHEMAS: Record<string, ProviderRuntimeToolDefinition['inputSchema']> = {
     list_files: {
@@ -125,8 +124,8 @@ export async function resolveRuntimeToolsForMode(input: {
     const nativeTools = storedTools
         .filter((tool) => modeAllowsToolCapabilities(input.mode, tool.capabilities))
         .sort((left, right) => {
-            const leftIndex = RUNTIME_NATIVE_TOOL_ORDER.indexOf(left.id as (typeof RUNTIME_NATIVE_TOOL_ORDER)[number]);
-            const rightIndex = RUNTIME_NATIVE_TOOL_ORDER.indexOf(right.id as (typeof RUNTIME_NATIVE_TOOL_ORDER)[number]);
+            const leftIndex = builtInNativeToolOrder.indexOf(left.id as (typeof builtInNativeToolOrder)[number]);
+            const rightIndex = builtInNativeToolOrder.indexOf(right.id as (typeof builtInNativeToolOrder)[number]);
             const normalizedLeftIndex = leftIndex === -1 ? Number.MAX_SAFE_INTEGER : leftIndex;
             const normalizedRightIndex = rightIndex === -1 ? Number.MAX_SAFE_INTEGER : rightIndex;
             return normalizedLeftIndex - normalizedRightIndex || left.label.localeCompare(right.label);

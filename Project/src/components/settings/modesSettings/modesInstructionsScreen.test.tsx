@@ -184,6 +184,20 @@ vi.mock('@/web/components/settings/modesSettings/useModesInstructionsSettingsCon
                     ],
                 },
             ],
+            builtInToolMetadata: {
+                title: 'Built-In Tool Metadata',
+                description:
+                    'These global descriptions become the editable base text the model sees for shipped native tools. Runtime-only shell and tool guidance still appends after them.',
+                items: [
+                    {
+                        toolId: 'write_file',
+                        label: 'Write File',
+                        description: 'Create or replace a full file.',
+                        defaultDescription: 'Create or replace a full file.',
+                        isModified: false,
+                    },
+                ],
+            },
             modeLibrary: {
                 title: 'File-Backed Custom Modes',
                 description: 'Manage app-level file-backed custom modes while keeping the registry roots as the only source of truth.',
@@ -283,6 +297,21 @@ vi.mock('@/web/components/settings/modesSettings/useModesInstructionsSettingsCon
                             },
                         ],
             setPromptField: vi.fn(),
+            save: vi.fn(),
+            reset: vi.fn(),
+        },
+        builtInToolMetadata: {
+            isSaving: false,
+            items: [
+                {
+                    toolId: 'write_file',
+                    label: 'Write File',
+                    description: 'Create or replace a full file.',
+                    defaultDescription: 'Create or replace a full file.',
+                    isModified: false,
+                },
+            ],
+            setDescription: vi.fn(),
             save: vi.fn(),
             reset: vi.fn(),
         },
@@ -390,6 +419,8 @@ describe('modes instructions screen', () => {
         expect(html).toContain('App-Scope Global Instructions');
         expect(html).toContain('Profile-Scope Global Instructions');
         expect(html).toContain('Built-In Mode Prompts');
+        expect(html).toContain('Advanced Settings');
+        expect(html).toContain('Show Advanced Tool Settings');
         expect(html).toContain('Agent Code');
         expect(html).toContain('Import Portable Mode JSON');
         expect(html).toContain('Export Portable Mode JSON');

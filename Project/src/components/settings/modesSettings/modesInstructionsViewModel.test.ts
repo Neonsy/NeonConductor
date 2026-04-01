@@ -32,6 +32,15 @@ describe('buildModesInstructionsViewModel', () => {
                 orchestrator: [],
             },
             builtInModesIsSaving: true,
+            builtInToolMetadata: [
+                {
+                    toolId: 'write_file',
+                    label: 'Write File',
+                    description: 'Write the full contents of a file.',
+                    defaultDescription: 'Write the full contents of a file.',
+                    isModified: false,
+                },
+            ],
             fileBackedGlobalModes: {
                 chat: [],
                 agent: [],
@@ -55,6 +64,7 @@ describe('buildModesInstructionsViewModel', () => {
         ]);
         expect(viewModel.builtInModeSections).toHaveLength(1);
         expect(viewModel.builtInModeSections[0]?.cards[0]?.label).toBe('Agent Code');
+        expect(viewModel.builtInToolMetadata.items[0]?.toolId).toBe('write_file');
         expect(viewModel.modeLibrary.hasWorkspaceScope).toBe(true);
         expect(viewModel.modeLibrary.selectedWorkspaceLabel).toBe('Workspace Root');
     });
