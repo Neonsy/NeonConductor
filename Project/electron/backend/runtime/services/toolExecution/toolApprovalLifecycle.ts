@@ -19,6 +19,7 @@ export async function resolveToolApprovalDecision(input: {
         modeKey: request.modeKey,
         executionPreset: input.executionPreset,
         capabilities: context.definition.tool.capabilities,
+        mutability: context.definition.tool.mutability,
         resource: context.shellApprovalContext?.commandResource ?? context.definition.resource,
         ...(context.shellApprovalContext?.overrideResources.length
             ? { resourceCandidates: context.shellApprovalContext.overrideResources }

@@ -7,6 +7,11 @@ export function McpServerListSection(input: {
     onEditServer: (server: McpServerRecord) => void;
     onConnectServer: (server: McpServerRecord) => Promise<void>;
     onDisconnectServer: (serverId: string) => Promise<void>;
+    onSetToolMutability: (input: {
+        serverId: string;
+        toolName: string;
+        mutability: 'read_only' | 'mutating';
+    }) => Promise<void>;
     onRequestDelete: (server: McpServerRecord) => void;
 }) {
     return (
@@ -14,7 +19,8 @@ export function McpServerListSection(input: {
             <div className='space-y-1'>
                 <p className='text-sm font-semibold'>Servers</p>
                 <p className='text-muted-foreground text-xs leading-5'>
-                    Connected and ready servers expose MCP tools only in agent.code and agent.debug.
+                    Connected and ready servers expose MCP tools in code-capable modes, and only tools marked read-only
+                    are eligible for basic plan mode.
                 </p>
             </div>
 
@@ -65,10 +71,48 @@ export function McpServerListSection(input: {
                                         <div
                                             key={tool.name}
                                             className='border-border/70 bg-card/50 rounded-2xl border px-3 py-2'>
-                                            <p className='text-xs font-medium'>{tool.name}</p>
+                                            <div className='flex flex-wrap items-center gap-2'>
+                                                <p className='text-xs font-medium'>{tool.name}</p>
+                                                <span
+                                                    className={`rounded-full border px-2 py-0.5 text-[10px] tracking-[0.12em] uppercase ${
+                                                        tool.mutability === 'read_only'
+                                                            ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700'
+                                                            : 'border-amber-500/40 bg-amber-500/10 text-amber-700'
+                                                    }`}>
+                                                    {tool.mutability === 'read_only' ? 'read-only' : 'mutating'}
+                                                </span>
+                                            </div>
                                             {tool.description ? (
                                                 <p className='text-muted-foreground text-xs'>{tool.description}</p>
                                             ) : null}
+                                            <div className='mt-2 flex flex-wrap gap-2'>
+                                                <button
+                                                    type='button'
+                                                    className='border-border/80 rounded-full border px-3 py-1 text-[11px] font-medium disabled:opacity-60'
+                                                    disabled={input.isBusy || tool.mutability === 'read_only'}
+                                                    onClick={() => {
+                                                        void input.onSetToolMutability({
+                                                            serverId: server.id,
+                                                            toolName: tool.name,
+                                                            mutability: 'read_only',
+                                                        });
+                                                    }}>
+                                                    Mark Read-Only
+                                                </button>
+                                                <button
+                                                    type='button'
+                                                    className='border-border/80 rounded-full border px-3 py-1 text-[11px] font-medium disabled:opacity-60'
+                                                    disabled={input.isBusy || tool.mutability === 'mutating'}
+                                                    onClick={() => {
+                                                        void input.onSetToolMutability({
+                                                            serverId: server.id,
+                                                            toolName: tool.name,
+                                                            mutability: 'mutating',
+                                                        });
+                                                    }}>
+                                                    Mark Mutating
+                                                </button>
+                                            </div>
                                         </div>
                                     ))}
                                 </div>

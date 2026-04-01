@@ -123,7 +123,7 @@ export function AppSettingsView({
                         <>
                             <AppSectionHeader
                                 title='MCP'
-                                description='Manage backend-owned stdio MCP servers, secret-backed env keys, and live tool discovery for agent.code and agent.debug.'
+                                description='Manage backend-owned stdio MCP servers, secret-backed env keys, live tool discovery, and which MCP tools are safe for basic plan mode.'
                             />
 
                             <McpSettingsSection

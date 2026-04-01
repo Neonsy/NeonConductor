@@ -51,6 +51,7 @@ import type {
     SkillfileDefinition,
     TopLevelTab,
     ToolCapability,
+    ToolMutability,
     SandboxRecord as RuntimeSandboxRecord,
     WorkspaceRootRecord as RuntimeWorkspaceRootRecord,
 } from '@/app/backend/runtime/contracts';
@@ -321,6 +322,7 @@ export interface ToolRecord {
     label: string;
     description: string;
     permissionPolicy: PermissionPolicy;
+    mutability: ToolMutability;
     capabilities: ToolCapability[];
     requiresWorkspace: boolean;
     allowsExternalPaths: boolean;

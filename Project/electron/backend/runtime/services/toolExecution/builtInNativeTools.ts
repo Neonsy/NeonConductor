@@ -3,6 +3,7 @@ export interface BuiltInNativeToolDefinition {
     label: string;
     defaultDescription: string;
     permissionPolicy: 'ask' | 'allow' | 'deny';
+    mutability: 'read_only' | 'mutating';
 }
 
 export const builtInNativeToolDefinitions: BuiltInNativeToolDefinition[] = [
@@ -11,30 +12,35 @@ export const builtInNativeToolDefinitions: BuiltInNativeToolDefinition[] = [
         label: 'List Files',
         defaultDescription: 'List files and folders in the active workspace.',
         permissionPolicy: 'ask',
+        mutability: 'read_only',
     },
     {
         id: 'read_file',
         label: 'Read File',
         defaultDescription: 'Read file contents from the active workspace.',
         permissionPolicy: 'ask',
+        mutability: 'read_only',
     },
     {
         id: 'search_files',
         label: 'Search Files',
         defaultDescription: 'Search for fixed text in workspace files.',
         permissionPolicy: 'ask',
+        mutability: 'read_only',
     },
     {
         id: 'write_file',
         label: 'Write File',
         defaultDescription: 'Create or replace a UTF-8 text file in the active workspace.',
         permissionPolicy: 'ask',
+        mutability: 'mutating',
     },
     {
         id: 'run_command',
         label: 'Run Command',
         defaultDescription: 'Run a command in a sandboxed shell.',
         permissionPolicy: 'ask',
+        mutability: 'mutating',
     },
 ] as const;
 

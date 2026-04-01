@@ -429,6 +429,7 @@ export interface McpServerToolsTable {
     tool_name: string;
     description: string | null;
     input_schema_json: string;
+    mutability: string;
     updated_at: string;
 }
 

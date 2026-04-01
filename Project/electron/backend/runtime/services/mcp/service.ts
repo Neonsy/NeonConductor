@@ -9,6 +9,7 @@ import type { McpServerRecord } from '@/app/backend/persistence/types';
 import type { ProviderRuntimeToolDefinition } from '@/app/backend/providers/types';
 import type { McpDiscoveredToolRecord } from '@/app/backend/runtime/contracts';
 import { errOp, okOp, type OperationalResult } from '@/app/backend/runtime/services/common/operationalError';
+import type { ToolMutability } from '@/shared/contracts';
 
 interface LiveMcpConnection {
     client: Client;
@@ -16,6 +17,7 @@ interface LiveMcpConnection {
 }
 
 export interface McpResolvedToolDefinition extends ProviderRuntimeToolDefinition {
+    mutability: ToolMutability;
     serverId: string;
     toolName: string;
     resource: string;
@@ -68,6 +70,7 @@ function toRuntimeToolDefinition(server: McpServerRecord, tool: McpDiscoveredToo
         id: buildMcpRuntimeToolId(server.id, tool.name),
         description: tool.description ?? `MCP tool "${tool.name}" from ${server.label}.`,
         inputSchema: tool.inputSchema,
+        mutability: tool.mutability,
         serverId: server.id,
         toolName: tool.name,
         resource: buildMcpToolResource(server.id, tool.name),
@@ -85,6 +88,7 @@ function normalizeMcpToolRecords(
         name: tool.name,
         ...(tool.description ? { description: tool.description } : {}),
         inputSchema: tool.inputSchema,
+        mutability: 'mutating',
     }));
 }
 

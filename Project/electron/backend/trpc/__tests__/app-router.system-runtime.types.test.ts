@@ -40,6 +40,11 @@ test('AppRouter exposes system, runtime, tooling, and registry procedure contrac
         prompt: string;
         workspaceFingerprint?: string;
     }>();
+    expectTypeOf<AppRouterInputs['mcp']['setToolMutability']>().toExtend<{
+        serverId: string;
+        toolName: string;
+        mutability: 'read_only' | 'mutating';
+    }>();
     expectTypeOf<AppRouterInputs['orchestrator']['start']>().toExtend<{
         profileId: string;
         planId: string;
@@ -72,7 +77,12 @@ test('AppRouter exposes system, runtime, tooling, and registry procedure contrac
             connectedAt?: string;
             updatedAt: string;
             toolDiscoveryState: 'idle' | 'discovering' | 'ready' | 'error';
-            tools: Array<{ name: string; description?: string; inputSchema: Record<string, unknown> }>;
+            tools: Array<{
+                name: string;
+                description?: string;
+                inputSchema: Record<string, unknown>;
+                mutability: 'read_only' | 'mutating';
+            }>;
             envKeys: string[];
         }>;
     }>();

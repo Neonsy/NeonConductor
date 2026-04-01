@@ -52,6 +52,9 @@ export type PermissionResolution = (typeof permissionResolutions)[number];
 export const toolCapabilities = ['filesystem_read', 'filesystem_write', 'shell', 'git', 'mcp'] as const;
 export type ToolCapability = (typeof toolCapabilities)[number];
 
+export const toolMutabilities = ['read_only', 'mutating'] as const;
+export type ToolMutability = (typeof toolMutabilities)[number];
+
 export const contextBudgets = ['low', 'balanced', 'high'] as const;
 export type ContextBudget = (typeof contextBudgets)[number];
 

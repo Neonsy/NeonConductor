@@ -10,6 +10,7 @@ import {
     readString,
     readStringArray,
 } from '@/app/backend/runtime/contracts/parsers/helpers';
+import { toolMutabilities } from '@/app/backend/runtime/contracts/enums';
 import {
     mcpServerWorkingDirectoryModes,
     type McpConnectInput,
@@ -19,6 +20,7 @@ import {
     type McpEnvSecretInput,
     type McpGetServerInput,
     type McpSetEnvSecretsInput,
+    type McpSetToolMutabilityInput,
     type McpUpdateServerInput,
 } from '@/app/backend/runtime/contracts/types/mcp';
 
@@ -122,6 +124,15 @@ export function parseMcpSetEnvSecretsInput(input: unknown): McpSetEnvSecretsInpu
     };
 }
 
+export function parseMcpSetToolMutabilityInput(input: unknown): McpSetToolMutabilityInput {
+    const source = readObject(input, 'input');
+    return {
+        serverId: readString(source.serverId, 'serverId'),
+        toolName: readString(source.toolName, 'toolName'),
+        mutability: readEnumValue(source.mutability, 'mutability', toolMutabilities),
+    };
+}
+
 export const mcpGetServerInputSchema = createParser(parseMcpGetServerInput);
 export const mcpCreateServerInputSchema = createParser(parseMcpCreateServerInput);
 export const mcpUpdateServerInputSchema = createParser(parseMcpUpdateServerInput);
@@ -129,3 +140,4 @@ export const mcpDeleteServerInputSchema = createParser(parseMcpDeleteServerInput
 export const mcpConnectInputSchema = createParser(parseMcpConnectInput);
 export const mcpDisconnectInputSchema = createParser(parseMcpDisconnectInput);
 export const mcpSetEnvSecretsInputSchema = createParser(parseMcpSetEnvSecretsInput);
+export const mcpSetToolMutabilityInputSchema = createParser(parseMcpSetToolMutabilityInput);

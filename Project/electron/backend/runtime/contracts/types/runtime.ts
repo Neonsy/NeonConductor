@@ -6,6 +6,7 @@ import type {
     RuntimeResetTarget,
     StreamEventType,
     ToolCapability,
+    ToolMutability,
 } from '@/app/backend/runtime/contracts/enums';
 import type { EntityId } from '@/app/backend/runtime/contracts/ids';
 import type { ProfileInput } from '@/app/backend/runtime/contracts/types/common';
@@ -47,6 +48,7 @@ export interface ToolCatalogEntry {
     label: string;
     description: string;
     permissionPolicy: 'ask' | 'allow' | 'deny';
+    mutability: ToolMutability;
     capabilities: ToolCapability[];
     requiresWorkspace: boolean;
     allowsExternalPaths: boolean;

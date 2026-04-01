@@ -40,6 +40,7 @@ function createContext(overrides: Partial<ToolRequestContext>): ToolRequestConte
                 permissionPolicy: 'allow',
                 allowsExternalPaths: false,
                 allowsIgnoredPaths: false,
+                mutability: 'read_only',
             },
             resource: 'tool:read_file',
             source: 'native',

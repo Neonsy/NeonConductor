@@ -20,6 +20,7 @@ export function useMcpServerLifecycleController(input: {
     const connectMutation = trpc.mcp.connect.useMutation();
     const disconnectMutation = trpc.mcp.disconnect.useMutation();
     const setEnvSecretsMutation = trpc.mcp.setEnvSecrets.useMutation();
+    const setToolMutabilityMutation = trpc.mcp.setToolMutability.useMutation();
 
     const selectedServer = input.editingServerId
         ? input.servers.find((server) => server.id === input.editingServerId)
@@ -98,18 +99,29 @@ export function useMcpServerLifecycleController(input: {
         input.onServerDeleted(deleteTarget.id);
     }
 
+    async function setToolMutability(inputValue: {
+        serverId: string;
+        toolName: string;
+        mutability: 'read_only' | 'mutating';
+    }): Promise<void> {
+        await setToolMutabilityMutation.mutateAsync(inputValue);
+        await invalidateMcpQueries();
+    }
+
     return {
         submitDraft,
         connectServer,
         disconnectServer,
         deleteServer,
+        setToolMutability,
         isBusy:
             createServerMutation.isPending ||
             updateServerMutation.isPending ||
             deleteServerMutation.isPending ||
             connectMutation.isPending ||
             disconnectMutation.isPending ||
-            setEnvSecretsMutation.isPending,
+            setEnvSecretsMutation.isPending ||
+            setToolMutabilityMutation.isPending,
         deletePending: deleteServerMutation.isPending,
         errorMessage:
             createServerMutation.error?.message ??
@@ -117,6 +129,7 @@ export function useMcpServerLifecycleController(input: {
             deleteServerMutation.error?.message ??
             connectMutation.error?.message ??
             disconnectMutation.error?.message ??
-            setEnvSecretsMutation.error?.message,
+            setEnvSecretsMutation.error?.message ??
+            setToolMutabilityMutation.error?.message,
     };
 }

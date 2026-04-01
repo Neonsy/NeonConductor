@@ -1,5 +1,11 @@
 import { permissionPolicyOverrideStore } from '@/app/backend/persistence/stores';
-import type { ExecutionPreset, PermissionPolicy, ToolCapability, TopLevelTab } from '@/app/backend/runtime/contracts';
+import type {
+    ExecutionPreset,
+    PermissionPolicy,
+    ToolCapability,
+    ToolMutability,
+    TopLevelTab,
+} from '@/app/backend/runtime/contracts';
 import { modeAllowsToolCapabilities } from '@/app/backend/runtime/services/mode/toolCapabilities';
 import { resolveModesForTab } from '@/app/backend/runtime/services/registry/service';
 
@@ -33,6 +39,7 @@ async function resolveModePolicy(input: {
     modeKey: string;
     resource: string;
     capabilities: ToolCapability[];
+    mutability: ToolMutability;
     workspaceFingerprint?: string;
 }): Promise<PermissionPolicy | null> {
     const toolId = extractToolIdFromResource(input.resource);
@@ -46,12 +53,16 @@ async function resolveModePolicy(input: {
         ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
     });
     const mode = modes.find((candidate) => candidate.modeKey === input.modeKey);
-    if (!mode || mode.executionPolicy.planningOnly) {
+    if (!mode) {
         return 'deny';
     }
 
     if (!modeAllowsToolCapabilities(mode, input.capabilities)) {
         return 'deny';
+    }
+
+    if (mode.executionPolicy.planningOnly) {
+        return input.mutability === 'read_only' ? 'allow' : 'deny';
     }
 
     if (input.topLevelTab === 'agent' && input.modeKey === 'ask') {
@@ -146,6 +157,7 @@ export async function resolveEffectivePermissionPolicy(input: {
     modeKey: string;
     executionPreset: ExecutionPreset;
     capabilities: ToolCapability[];
+    mutability: ToolMutability;
     workspaceFingerprint?: string;
     toolDefaultPolicy: PermissionPolicy;
 }): Promise<ResolvedPermissionPolicy> {
@@ -155,6 +167,7 @@ export async function resolveEffectivePermissionPolicy(input: {
         modeKey: input.modeKey,
         resource: input.resource,
         capabilities: input.capabilities,
+        mutability: input.mutability,
         ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
     });
     if (modePolicy) {

@@ -114,6 +114,7 @@ const MODE_SEED = [
         prompt: {},
         executionPolicy: {
             planningOnly: true,
+            toolCapabilities: ['filesystem_read', 'mcp'],
         },
     },
     {
@@ -150,6 +151,7 @@ const MODE_SEED = [
         prompt: {},
         executionPolicy: {
             planningOnly: true,
+            toolCapabilities: ['filesystem_read', 'mcp'],
         },
     },
     {

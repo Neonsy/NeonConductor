@@ -998,6 +998,7 @@ CREATE TABLE mcp_server_tools (
     tool_name TEXT NOT NULL,
     description TEXT NULL,
     input_schema_json TEXT NOT NULL DEFAULT '{}',
+    mutability TEXT NOT NULL CHECK (mutability IN ('read_only', 'mutating')) DEFAULT 'mutating',
     updated_at TEXT NOT NULL,
     PRIMARY KEY (server_id, tool_name)
 );

@@ -74,6 +74,18 @@ export function useMcpSettingsController({ profileId, currentWorkspaceFingerprin
                 return;
             }
         },
+        setToolMutability: async (inputValue: {
+            serverId: string;
+            toolName: string;
+            mutability: 'read_only' | 'mutating';
+        }) => {
+            try {
+                await lifecycleController.setToolMutability(inputValue);
+                setStatusMessage(undefined);
+            } catch {
+                return;
+            }
+        },
         confirmDeleteServer: async () => {
             if (!draftState.state.deleteTarget) {
                 return;

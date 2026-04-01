@@ -6,6 +6,7 @@ import {
     mcpDisconnectInputSchema,
     mcpGetServerInputSchema,
     mcpSetEnvSecretsInputSchema,
+    mcpSetToolMutabilityInputSchema,
     mcpUpdateServerInputSchema,
 } from '@/app/backend/runtime/contracts';
 import { mcpService } from '@/app/backend/runtime/services/mcp/service';
@@ -164,6 +165,32 @@ export const mcpRouter = router({
                 domain: 'mcp',
                 entityId: server.id,
                 eventType: 'mcp.server.env.updated',
+                payload: {
+                    server,
+                },
+            })
+        );
+
+        return {
+            updated: true as const,
+            server,
+        };
+    }),
+    setToolMutability: publicProcedure.input(mcpSetToolMutabilityInputSchema).mutation(async ({ input }) => {
+        const server = await mcpStore.setToolMutability(input);
+        if (!server) {
+            return {
+                updated: false as const,
+                reason: 'not_found' as const,
+            };
+        }
+
+        await runtimeEventLogService.append(
+            runtimeStatusEvent({
+                entityType: 'mcp',
+                domain: 'mcp',
+                entityId: server.id,
+                eventType: 'mcp.server.tools.updated',
                 payload: {
                     server,
                 },

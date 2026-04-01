@@ -28,11 +28,13 @@ export interface ResolvedVendoredRipgrep {
 }
 
 function readDefaultRuntimeContext(): VendoredRipgrepRuntimeContext {
+    const electronApp = typeof app === 'object' && app !== null ? app : undefined;
+    const appPath = typeof electronApp?.getAppPath === 'function' ? electronApp.getAppPath() : process.cwd();
     return {
         platform: process.platform,
         arch: process.arch,
-        isPackaged: app.isPackaged,
-        appPath: app.getAppPath(),
+        isPackaged: electronApp?.isPackaged ?? false,
+        appPath,
         resourcesPath: process.resourcesPath,
     };
 }

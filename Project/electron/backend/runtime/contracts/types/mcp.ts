@@ -1,4 +1,5 @@
 import type { ProfileInput } from '@/app/backend/runtime/contracts/types/common';
+import type { ToolMutability } from '@/shared/contracts';
 
 export const mcpServerTransports = ['stdio'] as const;
 export type McpServerTransport = (typeof mcpServerTransports)[number];
@@ -16,6 +17,7 @@ export interface McpDiscoveredToolRecord {
     name: string;
     description?: string;
     inputSchema: Record<string, unknown>;
+    mutability: ToolMutability;
 }
 
 export interface McpServerRecord {
@@ -79,4 +81,10 @@ export interface McpSetEnvSecretsInput {
     serverId: string;
     values: McpEnvSecretInput[];
     clearKeys?: string[];
+}
+
+export interface McpSetToolMutabilityInput {
+    serverId: string;
+    toolName: string;
+    mutability: ToolMutability;
 }

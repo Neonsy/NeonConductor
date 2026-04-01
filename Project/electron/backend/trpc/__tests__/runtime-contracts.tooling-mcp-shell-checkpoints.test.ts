@@ -55,7 +55,10 @@ describe('runtime contracts: permissions and tooling', () => {
         if (!connected.server) {
             throw new Error('Expected connected MCP server record.');
         }
-        expect(connected.server.tools.map((tool) => tool.name)).toEqual(['echo_text', 'read_secret']);
+        expect(connected.server.tools.map((tool) => [tool.name, tool.mutability])).toEqual([
+            ['echo_text', 'mutating'],
+            ['read_secret', 'mutating'],
+        ]);
 
         const agentModes = await caller.mode.list({
             profileId,
@@ -63,18 +66,32 @@ describe('runtime contracts: permissions and tooling', () => {
         });
         const codeMode = agentModes.modes.find((mode) => mode.modeKey === 'code');
         const askMode = agentModes.modes.find((mode) => mode.modeKey === 'ask');
-        if (!codeMode || !askMode) {
+        const planMode = agentModes.modes.find((mode) => mode.modeKey === 'plan');
+        if (!codeMode || !askMode || !planMode) {
             throw new Error('Expected seeded agent modes.');
         }
 
         const codeTools = await resolveRuntimeToolsForMode({ mode: codeMode });
         const askTools = await resolveRuntimeToolsForMode({ mode: askMode });
+        const planToolsBeforeClassification = await resolveRuntimeToolsForMode({ mode: planMode });
         const mcpTool = codeTools.find((tool) => tool.id.startsWith('mcp__'));
         expect(mcpTool).toBeDefined();
         expect(askTools.some((tool) => tool.id.startsWith('mcp__'))).toBe(false);
+        expect(planToolsBeforeClassification.some((tool) => tool.id.startsWith('mcp__'))).toBe(false);
         if (!mcpTool) {
             throw new Error('Expected MCP runtime tool exposure for agent.code.');
         }
+
+        const classifiedReadOnly = await caller.mcp.setToolMutability({
+            serverId: createdServer.server.id,
+            toolName: 'echo_text',
+            mutability: 'read_only',
+        });
+        expect(classifiedReadOnly.updated).toBe(true);
+        const planToolsAfterClassification = await resolveRuntimeToolsForMode({ mode: planMode });
+        const planMcpTool = planToolsAfterClassification.find((tool) => tool.id.startsWith('mcp__'));
+        expect(planMcpTool?.id).toContain('mcp__');
+        expect(planToolsAfterClassification.filter((tool) => tool.id.startsWith('mcp__'))).toHaveLength(1);
 
         const firstAttempt = await caller.tool.invoke({
             profileId,
@@ -154,6 +171,23 @@ describe('runtime contracts: permissions and tooling', () => {
         }
         expect(secretResult.output).toMatchObject({
             content: [{ type: 'text', text: 'top-secret' }],
+        });
+
+        const planReadOnlyTool = await caller.tool.invoke({
+            profileId,
+            toolId: planMcpTool?.id ?? '',
+            topLevelTab: 'agent',
+            modeKey: 'plan',
+            args: {
+                text: 'from-plan',
+            },
+        });
+        expect(planReadOnlyTool.ok).toBe(true);
+        if (!planReadOnlyTool.ok) {
+            throw new Error('Expected read-only MCP tool to be allowed in agent.plan mode.');
+        }
+        expect(planReadOnlyTool.output).toMatchObject({
+            content: [{ type: 'text', text: 'echo:from-plan' }],
         });
 
         await caller.mcp.disconnect({ serverId: createdServer.server.id });

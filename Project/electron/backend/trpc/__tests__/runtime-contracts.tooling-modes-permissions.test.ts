@@ -37,7 +37,7 @@ describe('runtime contracts: permissions and tooling', () => {
             ['ask', ['filesystem_read']],
             ['code', ['filesystem_read', 'filesystem_write', 'shell', 'mcp']],
             ['debug', ['filesystem_read', 'filesystem_write', 'shell', 'mcp']],
-            ['plan', []],
+            ['plan', ['filesystem_read', 'mcp']],
         ]);
 
         const orchestratorModes = await caller.mode.list({
@@ -49,18 +49,25 @@ describe('runtime contracts: permissions and tooling', () => {
         ).toEqual([
             ['debug', ['filesystem_read']],
             ['orchestrate', ['filesystem_read']],
-            ['plan', []],
+            ['plan', ['filesystem_read', 'mcp']],
         ]);
 
         const askMode = agentModes.modes.find((mode) => mode.modeKey === 'ask');
         const codeMode = agentModes.modes.find((mode) => mode.modeKey === 'code');
+        const planMode = agentModes.modes.find((mode) => mode.modeKey === 'plan');
         const orchestrateMode = orchestratorModes.modes.find((mode) => mode.modeKey === 'orchestrate');
         const orchestratorDebugMode = orchestratorModes.modes.find((mode) => mode.modeKey === 'debug');
-        if (!askMode || !codeMode || !orchestrateMode || !orchestratorDebugMode) {
+        const orchestratorPlanMode = orchestratorModes.modes.find((mode) => mode.modeKey === 'plan');
+        if (!askMode || !codeMode || !planMode || !orchestrateMode || !orchestratorDebugMode || !orchestratorPlanMode) {
             throw new Error('Expected seeded modes to exist for runtime tool exposure checks.');
         }
 
         expect((await resolveRuntimeToolsForMode({ mode: askMode })).map((tool) => tool.id)).toEqual([
+            'list_files',
+            'read_file',
+            'search_files',
+        ]);
+        expect((await resolveRuntimeToolsForMode({ mode: planMode })).map((tool) => tool.id)).toEqual([
             'list_files',
             'read_file',
             'search_files',
@@ -78,6 +85,11 @@ describe('runtime contracts: permissions and tooling', () => {
             'search_files',
         ]);
         expect((await resolveRuntimeToolsForMode({ mode: orchestratorDebugMode })).map((tool) => tool.id)).toEqual([
+            'list_files',
+            'read_file',
+            'search_files',
+        ]);
+        expect((await resolveRuntimeToolsForMode({ mode: orchestratorPlanMode })).map((tool) => tool.id)).toEqual([
             'list_files',
             'read_file',
             'search_files',
@@ -159,11 +171,13 @@ describe('runtime contracts: permissions and tooling', () => {
         const readTool = tools.tools.find((item) => item.id === 'read_file');
         expect(readTool?.requiresWorkspace).toBe(true);
         expect(readTool?.capabilities).toContain('filesystem_read');
+        expect(readTool?.mutability).toBe('read_only');
         expect(tools.tools.map((item) => item.id)).toContain('search_files');
         expect(tools.tools.map((item) => item.id)).toContain('write_file');
         const writeTool = tools.tools.find((item) => item.id === 'write_file');
         expect(writeTool?.requiresWorkspace).toBe(true);
         expect(writeTool?.capabilities).toContain('filesystem_write');
+        expect(writeTool?.mutability).toBe('mutating');
 
         const allowedRead = await caller.tool.invoke({
             profileId,
@@ -188,6 +202,21 @@ describe('runtime contracts: permissions and tooling', () => {
                   : JSON.stringify(allowedReadContent);
         expect(allowedReadText).toContain('hello from tool execution test');
 
+        const allowedReadInPlan = await caller.tool.invoke({
+            profileId,
+            toolId: 'read_file',
+            topLevelTab: 'agent',
+            modeKey: 'plan',
+            workspaceFingerprint,
+            args: {
+                path: tempFile,
+            },
+        });
+        expect(allowedReadInPlan.ok).toBe(true);
+        if (!allowedReadInPlan.ok) {
+            throw new Error('Expected read_file invocation to be allowed in agent.plan mode.');
+        }
+
         const deniedMutation = await caller.tool.invoke({
             profileId,
             toolId: 'run_command',
@@ -202,6 +231,22 @@ describe('runtime contracts: permissions and tooling', () => {
             throw new Error('Expected run_command to be blocked in agent.ask mode.');
         }
         expect(deniedMutation.error).toBe('policy_denied');
+
+        const deniedPlanRunCommand = await caller.tool.invoke({
+            profileId,
+            toolId: 'run_command',
+            topLevelTab: 'agent',
+            modeKey: 'plan',
+            workspaceFingerprint,
+            args: {
+                command: 'echo blocked',
+            },
+        });
+        expect(deniedPlanRunCommand.ok).toBe(false);
+        if (deniedPlanRunCommand.ok) {
+            throw new Error('Expected run_command to be blocked in agent.plan mode.');
+        }
+        expect(deniedPlanRunCommand.error).toBe('policy_denied');
 
         const deniedWriteInAsk = await caller.tool.invoke({
             profileId,
@@ -219,6 +264,23 @@ describe('runtime contracts: permissions and tooling', () => {
             throw new Error('Expected write_file to be blocked in agent.ask mode.');
         }
         expect(deniedWriteInAsk.error).toBe('policy_denied');
+
+        const deniedWriteInPlan = await caller.tool.invoke({
+            profileId,
+            toolId: 'write_file',
+            topLevelTab: 'agent',
+            modeKey: 'plan',
+            workspaceFingerprint,
+            args: {
+                path: path.join(tempDir, 'blocked-plan.txt'),
+                content: 'blocked',
+            },
+        });
+        expect(deniedWriteInPlan.ok).toBe(false);
+        if (deniedWriteInPlan.ok) {
+            throw new Error('Expected write_file to be blocked in agent.plan mode.');
+        }
+        expect(deniedWriteInPlan.error).toBe('policy_denied');
 
         const deniedDetachedWrite = await caller.tool.invoke({
             profileId,

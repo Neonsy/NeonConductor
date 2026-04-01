@@ -51,6 +51,7 @@ export async function resolveToolDecision(input: {
     modeKey: string;
     executionPreset: 'privacy' | 'standard' | 'yolo';
     capabilities: ToolRecord['capabilities'];
+    mutability: ToolRecord['mutability'];
     toolDefaultPolicy: 'ask' | 'allow' | 'deny';
     workspaceFingerprint?: string;
     resource: string;
@@ -75,6 +76,7 @@ export async function resolveToolDecision(input: {
         modeKey: input.modeKey,
         executionPreset: input.executionPreset,
         capabilities: input.capabilities,
+        mutability: input.mutability,
         toolDefaultPolicy: input.toolDefaultPolicy,
         ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
     });

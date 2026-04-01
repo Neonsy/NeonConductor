@@ -21,7 +21,10 @@ vi.mock('@/app/backend/runtime/services/mcp/service', () => ({
     },
 }));
 
-function buildMode(toolCapabilities: NonNullable<ModeDefinition['executionPolicy']['toolCapabilities']>): ModeDefinition {
+function buildMode(input: {
+    toolCapabilities: NonNullable<ModeDefinition['executionPolicy']['toolCapabilities']>;
+    planningOnly?: boolean;
+}): ModeDefinition {
     return {
         id: 'mode_test_agent_code',
         profileId: 'profile_default',
@@ -31,7 +34,8 @@ function buildMode(toolCapabilities: NonNullable<ModeDefinition['executionPolicy
         assetKey: 'agent.code',
         prompt: {},
         executionPolicy: {
-            toolCapabilities,
+            toolCapabilities: input.toolCapabilities,
+            ...(input.planningOnly ? { planningOnly: true } : {}),
         },
         source: 'test',
         sourceKind: 'system_seed',
@@ -63,6 +67,7 @@ describe('resolveRuntimeToolsForMode', () => {
                 label: 'Write File',
                 description: 'Write a file.',
                 permissionPolicy: 'ask',
+                mutability: 'mutating',
                 capabilities: ['filesystem_write'],
                 requiresWorkspace: true,
                 allowsExternalPaths: false,
@@ -73,6 +78,7 @@ describe('resolveRuntimeToolsForMode', () => {
                 label: 'Run Command',
                 description: 'Run a command.',
                 permissionPolicy: 'ask',
+                mutability: 'mutating',
                 capabilities: ['shell'],
                 requiresWorkspace: true,
                 allowsExternalPaths: false,
@@ -83,6 +89,7 @@ describe('resolveRuntimeToolsForMode', () => {
                 label: 'List Files',
                 description: 'List files.',
                 permissionPolicy: 'ask',
+                mutability: 'read_only',
                 capabilities: ['filesystem_read'],
                 requiresWorkspace: true,
                 allowsExternalPaths: false,
@@ -93,6 +100,7 @@ describe('resolveRuntimeToolsForMode', () => {
                 label: 'Search Files',
                 description: 'Search files.',
                 permissionPolicy: 'ask',
+                mutability: 'read_only',
                 capabilities: ['filesystem_read'],
                 requiresWorkspace: true,
                 allowsExternalPaths: false,
@@ -103,6 +111,7 @@ describe('resolveRuntimeToolsForMode', () => {
                 label: 'Read File',
                 description: 'Read a file.',
                 permissionPolicy: 'ask',
+                mutability: 'read_only',
                 capabilities: ['filesystem_read'],
                 requiresWorkspace: true,
                 allowsExternalPaths: false,
@@ -114,7 +123,7 @@ describe('resolveRuntimeToolsForMode', () => {
 
     it('orders the built-in core deliberately for write-capable modes', async () => {
         const tools = await resolveRuntimeToolsForMode({
-            mode: buildMode(['filesystem_read', 'filesystem_write', 'shell']),
+            mode: buildMode({ toolCapabilities: ['filesystem_read', 'filesystem_write', 'shell'] }),
         });
 
         expect(tools.map((tool) => tool.id)).toEqual([
@@ -128,7 +137,7 @@ describe('resolveRuntimeToolsForMode', () => {
 
     it('exposes write_file to custom modes that already declare filesystem_write', async () => {
         const tools = await resolveRuntimeToolsForMode({
-            mode: buildMode(['filesystem_read', 'filesystem_write']),
+            mode: buildMode({ toolCapabilities: ['filesystem_read', 'filesystem_write'] }),
         });
 
         expect(tools.map((tool) => tool.id)).toEqual(['list_files', 'read_file', 'search_files', 'write_file']);
@@ -141,6 +150,7 @@ describe('resolveRuntimeToolsForMode', () => {
                 label: 'Write File',
                 description: 'Base editable write description.',
                 permissionPolicy: 'ask',
+                mutability: 'mutating',
                 capabilities: ['filesystem_write'],
                 requiresWorkspace: true,
                 allowsExternalPaths: false,
@@ -149,11 +159,40 @@ describe('resolveRuntimeToolsForMode', () => {
         ]);
 
         const tools = await resolveRuntimeToolsForMode({
-            mode: buildMode(['filesystem_write']),
+            mode: buildMode({ toolCapabilities: ['filesystem_write'] }),
             guidanceContext: buildGuidanceContext(),
         });
 
         expect(tools[0]?.description).toContain('Base editable write description.');
         expect(tools[0]?.description).toContain('Prefer this tool for ordinary whole-file creation or replacement');
+    });
+
+    it('filters mutating tools out of planning-only modes while keeping read-only tools', async () => {
+        mcpListRuntimeToolsMock.mockResolvedValue([
+            {
+                id: 'mcp__read_only',
+                description: 'Read-only MCP tool.',
+                inputSchema: { type: 'object', properties: {} },
+                mutability: 'read_only',
+                serverId: 'mcp_alpha',
+                toolName: 'read_only_tool',
+                resource: 'mcp:mcp_alpha:read_only_tool',
+            },
+            {
+                id: 'mcp__mutating',
+                description: 'Mutating MCP tool.',
+                inputSchema: { type: 'object', properties: {} },
+                mutability: 'mutating',
+                serverId: 'mcp_alpha',
+                toolName: 'mutating_tool',
+                resource: 'mcp:mcp_alpha:mutating_tool',
+            },
+        ]);
+
+        const tools = await resolveRuntimeToolsForMode({
+            mode: buildMode({ toolCapabilities: ['filesystem_read', 'shell', 'mcp'], planningOnly: true }),
+        });
+
+        expect(tools.map((tool) => tool.id)).toEqual(['list_files', 'read_file', 'search_files', 'mcp__read_only']);
     });
 });

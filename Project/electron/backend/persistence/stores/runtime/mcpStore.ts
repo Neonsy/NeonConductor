@@ -9,9 +9,11 @@ import {
     mcpServerToolDiscoveryStates,
     mcpServerTransports,
     mcpServerWorkingDirectoryModes,
+    toolMutabilities,
     type McpCreateServerInput,
     type McpServerConnectionState,
     type McpServerToolDiscoveryState,
+    type McpSetToolMutabilityInput,
     type McpUpdateServerInput,
 } from '@/app/backend/runtime/contracts';
 
@@ -37,6 +39,7 @@ interface McpToolRow {
     tool_name: string;
     description: string | null;
     input_schema_json: string;
+    mutability: string;
 }
 
 function parseStringArray(value: string): string[] {
@@ -57,6 +60,7 @@ function mapToolRow(row: McpToolRow): McpDiscoveredToolRecord {
         name: row.tool_name,
         ...(row.description ? { description: row.description } : {}),
         inputSchema: parseJsonRecord(row.input_schema_json),
+        mutability: parseEnumValue(row.mutability, 'mcp_server_tools.mutability', toolMutabilities),
     };
 }
 
@@ -107,7 +111,7 @@ export class McpStore {
         const { db } = getPersistence();
         let query = db
             .selectFrom('mcp_server_tools')
-            .select(['server_id', 'tool_name', 'description', 'input_schema_json'])
+            .select(['server_id', 'tool_name', 'description', 'input_schema_json', 'mutability'])
             .orderBy('server_id', 'asc')
             .orderBy('tool_name', 'asc');
 
@@ -386,6 +390,7 @@ export class McpStore {
                     tool_name: tool.name,
                     description: tool.description ?? null,
                     input_schema_json: JSON.stringify(tool.inputSchema),
+                    mutability: tool.mutability,
                     updated_at: updatedAt,
                 })
                 .execute();
@@ -402,6 +407,25 @@ export class McpStore {
             })
             .where('id', '=', input.serverId)
             .execute();
+
+        return this.getServer(input.serverId);
+    }
+
+    async setToolMutability(input: McpSetToolMutabilityInput): Promise<McpServerRecord | null> {
+        const { db } = getPersistence();
+        const updated = await db
+            .updateTable('mcp_server_tools')
+            .set({
+                mutability: input.mutability,
+                updated_at: nowIso(),
+            })
+            .where('server_id', '=', input.serverId)
+            .where('tool_name', '=', input.toolName)
+            .executeTakeFirst();
+
+        if (Number(updated.numUpdatedRows) === 0) {
+            return null;
+        }
 
         return this.getServer(input.serverId);
     }

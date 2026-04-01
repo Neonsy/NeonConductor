@@ -24,6 +24,7 @@ export async function findToolById(toolId: string): Promise<ResolvedToolDefiniti
             label: `${mcpTool.serverId}/${mcpTool.toolName}`,
             description: mcpTool.description,
             permissionPolicy: 'ask',
+            mutability: mcpTool.mutability,
             capabilities: ['mcp'],
             requiresWorkspace: false,
             allowsExternalPaths: false,

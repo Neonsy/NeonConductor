@@ -604,6 +604,7 @@ describe('persistence stores: runtime domain', () => {
                         },
                         required: ['text'],
                     },
+                    mutability: 'mutating',
                 },
             ],
             toolDiscoveryState: 'ready',

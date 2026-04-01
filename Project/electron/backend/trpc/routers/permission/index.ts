@@ -1,4 +1,4 @@
-import { permissionPolicyOverrideStore, permissionStore, toolStore } from '@/app/backend/persistence/stores';
+import { mcpStore, permissionPolicyOverrideStore, permissionStore, toolStore } from '@/app/backend/persistence/stores';
 import {
     permissionGetEffectivePolicyInputSchema,
     permissionRequestInputSchema,
@@ -39,8 +39,27 @@ export const permissionRouter = router({
             : null;
         const tool = toolId ? tools.find((item) => item.id === toolId) : null;
         const isMcpResource = !tool && input.resource.startsWith('mcp:');
+        const mcpTool = isMcpResource
+            ? await (async () => {
+                  const resourceBody = input.resource.slice('mcp:'.length);
+                  const separatorIndex = resourceBody.indexOf(':');
+                  if (separatorIndex <= 0) {
+                      return null;
+                  }
+
+                  const serverId = resourceBody.slice(0, separatorIndex);
+                  const toolName = resourceBody.slice(separatorIndex + 1);
+                  if (!serverId || !toolName) {
+                      return null;
+                  }
+
+                  const server = await mcpStore.getServer(serverId);
+                  return server?.tools.find((item) => item.name === toolName) ?? null;
+              })()
+            : null;
         const defaultPolicy = tool?.permissionPolicy ?? (isMcpResource ? 'ask' : 'deny');
         const capabilities = tool?.capabilities ?? (isMcpResource ? ['mcp'] : []);
+        const mutability = tool?.mutability ?? mcpTool?.mutability ?? 'mutating';
 
         const resolved = await resolveEffectivePermissionPolicy({
             profileId: input.profileId,
@@ -49,6 +68,7 @@ export const permissionRouter = router({
             modeKey: input.modeKey,
             executionPreset: await getExecutionPreset(input.profileId),
             capabilities,
+            mutability,
             toolDefaultPolicy: defaultPolicy,
             ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
         });

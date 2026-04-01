@@ -18,6 +18,7 @@ export function McpSettingsSection(props: { profileId: string; currentWorkspaceF
                     onEditServer={controller.startEditServerDraft}
                     onConnectServer={(server) => controller.connectServer(server)}
                     onDisconnectServer={(server) => controller.disconnectServer(server)}
+                    onSetToolMutability={(inputValue) => controller.setToolMutability(inputValue)}
                     onRequestDelete={(server) => {
                         controller.setDeleteTarget({ id: server.id, label: server.label });
                     }}

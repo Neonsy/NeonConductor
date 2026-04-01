@@ -44,6 +44,7 @@ vi.mock('@/web/trpc/client', () => ({
                                                 },
                                             },
                                         },
+                                        mutability: 'mutating',
                                     },
                                 ],
                                 envKeys: ['MCP_TOKEN', 'ANOTHER_KEY'],
@@ -88,6 +89,12 @@ vi.mock('@/web/trpc/client', () => ({
                     mutateAsync: vi.fn(),
                 }),
             },
+            setToolMutability: {
+                useMutation: () => ({
+                    isPending: false,
+                    mutateAsync: vi.fn(),
+                }),
+            },
         },
     },
 }));
@@ -103,6 +110,8 @@ describe('McpSettingsSection', () => {
         expect(html).toContain('ready');
         expect(html).toContain('echo_text');
         expect(html).toContain('Echoes text back.');
+        expect(html).toContain('mutating');
+        expect(html).toContain('Mark Read-Only');
         expect(html).toContain('MCP_TOKEN');
         expect(html).toContain('ANOTHER_KEY');
         expect(html).toContain('Env values are write-only after save.');

@@ -2,6 +2,7 @@ import { toolStore } from '@/app/backend/persistence/stores';
 import type { ProviderRuntimeToolDefinition } from '@/app/backend/providers/types';
 import { mcpService } from '@/app/backend/runtime/services/mcp/service';
 import {
+    getModeToolCapabilities,
     modeAllowsToolCapabilities,
     modeRequiresNativeTools,
 } from '@/app/backend/runtime/services/mode/toolCapabilities';
@@ -9,7 +10,9 @@ import { composeRuntimeToolDescription } from '@/app/backend/runtime/services/ru
 import type { RuntimeToolGuidanceContext } from '@/app/backend/runtime/services/runExecution/types';
 import { builtInNativeToolOrder } from '@/app/backend/runtime/services/toolExecution/builtInNativeTools';
 
-import type { ModeDefinition } from '@/shared/contracts';
+import type { ModeDefinition, ToolMutability } from '@/shared/contracts';
+
+type RuntimeExposedToolDefinition = ProviderRuntimeToolDefinition & { mutability: ToolMutability };
 
 const TOOL_INPUT_SCHEMAS: Record<string, ProviderRuntimeToolDefinition['inputSchema']> = {
     list_files: {
@@ -116,13 +119,14 @@ export async function resolveRuntimeToolsForMode(input: {
     mode: ModeDefinition;
     guidanceContext?: RuntimeToolGuidanceContext;
 }): Promise<ProviderRuntimeToolDefinition[]> {
-    if (!modeRequiresNativeTools(input.mode)) {
+    if (getModeToolCapabilities(input.mode.executionPolicy).length === 0) {
         return [];
     }
 
     const storedTools = await toolStore.list();
     const nativeTools = storedTools
         .filter((tool) => modeAllowsToolCapabilities(input.mode, tool.capabilities))
+        .filter((tool) => !input.mode.executionPolicy.planningOnly || tool.mutability === 'read_only')
         .sort((left, right) => {
             const leftIndex = builtInNativeToolOrder.indexOf(left.id as (typeof builtInNativeToolOrder)[number]);
             const rightIndex = builtInNativeToolOrder.indexOf(right.id as (typeof builtInNativeToolOrder)[number]);
@@ -144,11 +148,16 @@ export async function resolveRuntimeToolsForMode(input: {
                     ...(input.guidanceContext ? { guidanceContext: input.guidanceContext } : {}),
                 }),
                 inputSchema,
-            } satisfies ProviderRuntimeToolDefinition;
+                mutability: tool.mutability,
+            } satisfies RuntimeExposedToolDefinition;
         })
-        .filter((tool): tool is ProviderRuntimeToolDefinition => tool !== null);
+        .filter((tool): tool is RuntimeExposedToolDefinition => tool !== null);
 
-    const mcpTools = modeAllowsToolCapabilities(input.mode, ['mcp']) ? await mcpService.listRuntimeTools() : [];
+    const mcpTools = modeAllowsToolCapabilities(input.mode, ['mcp'])
+        ? (await mcpService.listRuntimeTools()).filter(
+              (tool) => !input.mode.executionPolicy.planningOnly || tool.mutability === 'read_only'
+          )
+        : [];
     return [...nativeTools, ...mcpTools];
 }
 
