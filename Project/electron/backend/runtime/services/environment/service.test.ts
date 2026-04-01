@@ -62,6 +62,7 @@ describe('workspaceEnvironmentService', () => {
             configurable: true,
         });
         queueSpawnResponses({
+            'pwsh.exe': 'C:\\Program Files\\PowerShell\\7\\pwsh.exe',
             jj: 'C:\\Tools\\jj.exe',
             git: 'C:\\Tools\\git.exe',
             node: 'C:\\Tools\\node.exe',
@@ -87,6 +88,7 @@ describe('workspaceEnvironmentService', () => {
 
         expect(result.value.platform).toBe('win32');
         expect(result.value.shellFamily).toBe('powershell');
+        expect(result.value.shellExecutable).toBe('pwsh.exe');
         expect(result.value.detectedPreferences.vcs).toBe('jj');
         expect(result.value.effectivePreferences.vcs.family).toBe('jj');
         expect(result.value.detectedPreferences.packageManager).toBe('pnpm');
@@ -128,6 +130,7 @@ describe('workspaceEnvironmentService', () => {
         }
 
         expect(result.value.platform).toBe('linux');
+        expect(result.value.shellExecutable).toBe('/bin/sh');
         expect(result.value.detectedPreferences.vcs).toBe('git');
         expect(result.value.effectivePreferences.vcs.family).toBe('jj');
         expect(result.value.effectivePreferences.vcs.mismatch).toBe(true);

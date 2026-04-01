@@ -15,6 +15,7 @@ function isPythonWorkspace(markers: WorkspaceEnvironmentMarkers): boolean {
 
 export function buildWorkspaceEnvironmentNotes(input: {
     shellFamily: WorkspaceEnvironmentSnapshot['shellFamily'];
+    shellExecutable?: WorkspaceEnvironmentSnapshot['shellExecutable'];
     markers: WorkspaceEnvironmentMarkers;
     availableCommands: WorkspaceEnvironmentCommandAvailability;
     effectivePreferences: WorkspaceEnvironmentEffectivePreferences;
@@ -22,7 +23,13 @@ export function buildWorkspaceEnvironmentNotes(input: {
     const notes: string[] = [];
 
     if (input.shellFamily === 'powershell') {
-        notes.push('Command execution uses PowerShell. Do not assume POSIX shell syntax.');
+        if (input.shellExecutable === 'pwsh.exe') {
+            notes.push('Command execution uses PowerShell 7 via pwsh.exe. Do not assume POSIX shell syntax.');
+        } else if (input.shellExecutable === 'powershell.exe') {
+            notes.push('Command execution uses legacy Windows PowerShell via powershell.exe. Do not assume POSIX shell syntax.');
+        } else {
+            notes.push('Windows command execution is configured for PowerShell, but no supported PowerShell executable was resolved.');
+        }
     } else {
         notes.push('Command execution uses a /bin/sh-style shell. Do not assume PowerShell syntax.');
     }

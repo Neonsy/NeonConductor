@@ -36,6 +36,7 @@ vi.mock('@/web/trpc/client', () => ({
 const snapshot = {
     platform: 'win32' as const,
     shellFamily: 'powershell' as const,
+    shellExecutable: 'pwsh.exe',
     workspaceRootPath: 'C:\\Repo',
     markers: {
         hasJjDirectory: true,
@@ -122,6 +123,7 @@ describe('WorkspaceEnvironmentPreviewCard', () => {
         expect(html).toContain('Tool detection preview');
         expect(html).toContain('pnpm');
         expect(html).toContain('PowerShell');
+        expect(html).toContain('pwsh.exe');
         expect(html).toContain('The pinned VCS preference');
     });
 

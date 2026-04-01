@@ -47,6 +47,7 @@ describe('workspaceEnvironmentSnapshotBuilder', () => {
         const snapshot = resolveWorkspaceEnvironmentInspection({
             platform: 'win32',
             shellFamily: 'powershell',
+            shellExecutable: 'pwsh.exe',
             workspaceRootPath: 'C:\\workspaces\\neon',
             baseWorkspaceRootPath: 'C:\\workspaces',
             markers: buildMarkers({
@@ -66,6 +67,7 @@ describe('workspaceEnvironmentSnapshotBuilder', () => {
 
         expect(snapshot.platform).toBe('win32');
         expect(snapshot.shellFamily).toBe('powershell');
+        expect(snapshot.shellExecutable).toBe('pwsh.exe');
         expect(snapshot.baseWorkspaceRootPath).toBe('C:\\workspaces');
         expect(snapshot.detectedPreferences).toEqual({
             vcs: 'jj',
@@ -85,6 +87,7 @@ describe('workspaceEnvironmentSnapshotBuilder', () => {
         const snapshot = resolveWorkspaceEnvironmentInspection({
             platform: 'linux',
             shellFamily: 'posix_sh',
+            shellExecutable: '/bin/sh',
             workspaceRootPath: '/workspaces/neon',
             markers: buildMarkers({
                 hasGitDirectory: true,
@@ -103,6 +106,7 @@ describe('workspaceEnvironmentSnapshotBuilder', () => {
             runtime: 'unknown',
             scriptRunner: 'unknown',
         });
+        expect(snapshot.shellExecutable).toBe('/bin/sh');
         expect(snapshot.effectivePreferences.vcs).toEqual({
             family: 'jj',
             source: 'override',

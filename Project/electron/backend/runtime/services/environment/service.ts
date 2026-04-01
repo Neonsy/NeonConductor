@@ -7,12 +7,12 @@ import type {
 import { errOp, okOp, type OperationalResult } from '@/app/backend/runtime/services/common/operationalError';
 import {
     resolveSupportedPlatform,
-    resolveWorkspaceShellFamily,
     workspaceCommandAvailabilityService,
 } from '@/app/backend/runtime/services/environment/workspaceCommandAvailabilityService';
 import { buildWorkspaceEnvironmentGuidance } from '@/app/backend/runtime/services/environment/workspaceEnvironmentGuidanceBuilder';
 import { buildWorkspaceEnvironmentInspection } from '@/app/backend/runtime/services/environment/workspaceEnvironmentSnapshotBuilder';
 import { normalizeWorkspacePath } from '@/app/backend/runtime/services/environment/workspaceEnvironmentPathUtils';
+import { workspaceShellResolver } from '@/app/backend/runtime/services/environment/workspaceShellResolver';
 import { workspaceMarkerScanner } from '@/app/backend/runtime/services/environment/workspaceMarkerScanner';
 
 export class WorkspaceEnvironmentService {
@@ -39,8 +39,8 @@ export class WorkspaceEnvironmentService {
             ? normalizeWorkspacePath(input.baseWorkspaceRootPath)
             : undefined;
         const platform = resolveSupportedPlatform();
-        const shellFamily = resolveWorkspaceShellFamily(platform);
-        const [markers, availableCommands] = await Promise.all([
+        const [resolvedShell, markers, availableCommands] = await Promise.all([
+            workspaceShellResolver.resolve(platform),
             workspaceMarkerScanner.scanWorkspaceMarkers(workspaceRootPath),
             workspaceCommandAvailabilityService.getAvailableCommands(platform),
         ]);
@@ -48,7 +48,8 @@ export class WorkspaceEnvironmentService {
         return okOp(
             buildWorkspaceEnvironmentInspection({
                 platform,
-                shellFamily,
+                shellFamily: resolvedShell.shellFamily,
+                ...(resolvedShell.shellExecutable ? { shellExecutable: resolvedShell.shellExecutable } : {}),
                 workspaceRootPath,
                 ...(baseWorkspaceRootPath ? { baseWorkspaceRootPath } : {}),
                 markers,

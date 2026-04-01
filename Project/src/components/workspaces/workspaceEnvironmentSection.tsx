@@ -71,6 +71,15 @@ function listAvailableCommands(snapshot: WorkspaceEnvironmentSnapshot): string {
     return labels.length > 0 ? labels.join(', ') : 'None detected';
 }
 
+function formatShellSummary(snapshot: WorkspaceEnvironmentSnapshot): string {
+    const familyLabel = formatFamilyLabel(snapshot.shellFamily);
+    if (!snapshot.shellExecutable) {
+        return `${formatFamilyLabel(snapshot.platform)} via ${familyLabel}`;
+    }
+
+    return `${formatFamilyLabel(snapshot.platform)} via ${familyLabel} (${snapshot.shellExecutable})`;
+}
+
 function RuntimeEnvironmentSummary({ snapshot }: { snapshot: WorkspaceEnvironmentSnapshot }) {
     return (
         <div className='space-y-3'>
@@ -114,9 +123,7 @@ function RuntimeEnvironmentSummary({ snapshot }: { snapshot: WorkspaceEnvironmen
                 <p className='text-muted-foreground text-[11px] font-semibold tracking-[0.12em] uppercase'>
                     Platform and Commands
                 </p>
-                <p className='mt-2 text-sm'>
-                    {formatFamilyLabel(snapshot.platform)} via {formatFamilyLabel(snapshot.shellFamily)}
-                </p>
+                <p className='mt-2 text-sm'>{formatShellSummary(snapshot)}</p>
                 <p className='text-muted-foreground mt-1 text-xs leading-5'>
                     Available commands: {listAvailableCommands(snapshot)}
                 </p>

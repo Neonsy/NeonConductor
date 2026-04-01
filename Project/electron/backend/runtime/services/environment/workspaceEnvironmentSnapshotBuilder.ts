@@ -12,6 +12,7 @@ import { buildWorkspaceEnvironmentNotes } from '@/app/backend/runtime/services/e
 export function resolveWorkspaceEnvironmentInspection(input: {
     platform: WorkspaceEnvironmentSnapshot['platform'];
     shellFamily: WorkspaceEnvironmentSnapshot['shellFamily'];
+    shellExecutable?: WorkspaceEnvironmentSnapshot['shellExecutable'];
     workspaceRootPath: string;
     baseWorkspaceRootPath?: string;
     availableCommands: WorkspaceEnvironmentCommandAvailability;
@@ -29,6 +30,7 @@ export function resolveWorkspaceEnvironmentInspection(input: {
     });
     const notes = buildWorkspaceEnvironmentNotes({
         shellFamily: input.shellFamily,
+        shellExecutable: input.shellExecutable,
         markers: input.markers,
         availableCommands: input.availableCommands,
         effectivePreferences,
@@ -37,6 +39,7 @@ export function resolveWorkspaceEnvironmentInspection(input: {
     return {
         platform: input.platform,
         shellFamily: input.shellFamily,
+        ...(input.shellExecutable ? { shellExecutable: input.shellExecutable } : {}),
         workspaceRootPath: input.workspaceRootPath,
         ...(input.baseWorkspaceRootPath ? { baseWorkspaceRootPath: input.baseWorkspaceRootPath } : {}),
         markers: input.markers,

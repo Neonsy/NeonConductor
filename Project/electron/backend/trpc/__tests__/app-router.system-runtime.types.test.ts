@@ -178,6 +178,7 @@ test('AppRouter exposes system, runtime, tooling, and registry procedure contrac
         snapshot: {
             platform: 'win32' | 'darwin' | 'linux';
             shellFamily: 'powershell' | 'posix_sh';
+            shellExecutable?: string;
             effectivePreferences: {
                 vcs: {
                     family: 'jj' | 'git' | 'unknown';

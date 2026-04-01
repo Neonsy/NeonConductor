@@ -1,6 +1,7 @@
 import { err, ok, type Result } from 'neverthrow';
 import { spawn } from 'node:child_process';
 
+import { workspaceShellResolver } from '@/app/backend/runtime/services/environment/workspaceShellResolver';
 import { readNumberArg, readStringArg } from '@/app/backend/runtime/services/toolExecution/args';
 import { createRunCommandExecutionOutput } from '@/app/backend/runtime/services/toolExecution/toolOutputCompressionPolicy';
 import type { ToolExecutionFailure, ToolExecutionOutput } from '@/app/backend/runtime/services/toolExecution/types';
@@ -17,18 +18,28 @@ function resolveTimeoutMs(args: Record<string, unknown>): number {
     return Math.max(1, Math.min(requested, MAX_TIMEOUT_MS));
 }
 
-function resolveShellInvocation(command: string): { file: string; args: string[] } {
-    if (process.platform === 'win32') {
-        return {
-            file: 'powershell.exe',
-            args: ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', command],
-        };
+async function resolveShellInvocation(
+    command: string
+): Promise<Result<{ file: string; args: string[] }, ToolExecutionFailure>> {
+    const resolvedShell = await workspaceShellResolver.resolve();
+    if (!resolvedShell.resolved || !resolvedShell.spawnFile) {
+        return err({
+            code: 'execution_failed',
+            message: 'No supported shell executable could be resolved for command execution.',
+        });
     }
 
-    return {
-        file: '/bin/sh',
+    if (resolvedShell.shellFamily === 'powershell') {
+        return ok({
+            file: resolvedShell.spawnFile,
+            args: ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', command],
+        });
+    }
+
+    return ok({
+        file: resolvedShell.spawnFile,
         args: ['-lc', command],
-    };
+    });
 }
 
 function okResult<T, E>(value: T): Result<T, E> {
@@ -54,7 +65,10 @@ export async function runCommandToolHandler(
     }
 
     const timeoutMs = resolveTimeoutMs(args);
-    const invocation = resolveShellInvocation(command);
+    const invocation = await resolveShellInvocation(command);
+    if (invocation.isErr()) {
+        return err(invocation.error);
+    }
 
     return new Promise((resolve) => {
         const startedAt = Date.now();
@@ -63,7 +77,7 @@ export async function runCommandToolHandler(
         let timedOut = false;
         let settled = false;
 
-        const child = spawn(invocation.file, invocation.args, {
+        const child = spawn(invocation.value.file, invocation.value.args, {
             cwd: context.cwd,
             windowsHide: true,
         });

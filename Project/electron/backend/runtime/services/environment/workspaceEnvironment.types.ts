@@ -29,6 +29,7 @@ export interface WorkspaceEffectivePreferenceSnapshot extends WorkspaceEnvironme
 export interface WorkspaceEnvironmentInspectionContext {
     platform: SupportedPlatform;
     shellFamily: WorkspaceEnvironmentSnapshot['shellFamily'];
+    shellExecutable?: WorkspaceEnvironmentSnapshot['shellExecutable'];
     workspaceRootPath: string;
     baseWorkspaceRootPath?: string;
     overrides: WorkspaceEnvironmentOverrides;

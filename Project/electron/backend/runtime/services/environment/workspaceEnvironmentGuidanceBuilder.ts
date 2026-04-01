@@ -3,7 +3,7 @@ import type { WorkspaceEnvironmentSnapshot } from '@/app/backend/runtime/contrac
 export function buildWorkspaceEnvironmentGuidance(snapshot: WorkspaceEnvironmentSnapshot): string {
     const lines = [
         `Effective root: ${snapshot.workspaceRootPath}.`,
-        `Platform: ${snapshot.platform}. Shell family: ${snapshot.shellFamily}.`,
+        `Platform: ${snapshot.platform}. Shell family: ${snapshot.shellFamily}.${snapshot.shellExecutable ? ` Shell executable: ${snapshot.shellExecutable}.` : ''}`,
     ];
 
     if (snapshot.baseWorkspaceRootPath) {
