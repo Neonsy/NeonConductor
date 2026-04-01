@@ -1,0 +1,113 @@
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+const { appState } = vi.hoisted(() => ({
+    appState: {
+        isPackaged: false,
+        appPath: 'C:/repo/Project',
+    },
+}));
+
+vi.mock('electron', () => ({
+    app: {
+        getAppPath: () => appState.appPath,
+        get isPackaged() {
+            return appState.isPackaged;
+        },
+    },
+}));
+
+import { VendoredRipgrepResolver } from '@/app/backend/runtime/services/environment/vendoredRipgrepResolver';
+
+const tempDirs: string[] = [];
+
+afterEach(() => {
+    for (const tempDir of tempDirs.splice(0)) {
+        rmSync(tempDir, { recursive: true, force: true });
+    }
+});
+
+describe('vendoredRipgrepResolver', () => {
+    it('resolves the development asset path for the current target when the binary exists', async () => {
+        const tempDir = mkdtempSync(path.join(os.tmpdir(), 'neon-rg-dev-'));
+        tempDirs.push(tempDir);
+        mkdirSync(path.join(tempDir, 'vendor', 'rg', 'win32-x64'), { recursive: true });
+        writeFileSync(path.join(tempDir, 'vendor', 'rg', 'win32-x64', 'rg.exe'), 'stub', 'utf8');
+        appState.appPath = tempDir;
+        appState.isPackaged = false;
+
+        const resolver = new VendoredRipgrepResolver();
+        const resolved = await resolver.resolve({
+            platform: 'win32',
+            arch: 'x64',
+        });
+
+        expect(resolved).toEqual({
+            available: true,
+            targetKey: 'win32-x64',
+            executableName: 'rg.exe',
+            executablePath: path.join(tempDir, 'vendor', 'rg', 'win32-x64', 'rg.exe'),
+        });
+    });
+
+    it('resolves the packaged resource path when the binary exists', async () => {
+        const tempDir = mkdtempSync(path.join(os.tmpdir(), 'neon-rg-packaged-'));
+        tempDirs.push(tempDir);
+        const resourcesPath = path.join(tempDir, 'resources');
+        mkdirSync(path.join(resourcesPath, 'vendor', 'rg', 'linux-x64'), { recursive: true });
+        writeFileSync(path.join(resourcesPath, 'vendor', 'rg', 'linux-x64', 'rg'), 'stub', 'utf8');
+        appState.appPath = 'ignored-for-packaged';
+        appState.isPackaged = true;
+
+        const resolver = new VendoredRipgrepResolver();
+        const resolved = await resolver.resolve({
+            platform: 'linux',
+            arch: 'x64',
+            resourcesPath,
+        });
+
+        expect(resolved).toEqual({
+            available: true,
+            targetKey: 'linux-x64',
+            executableName: 'rg',
+            executablePath: path.join(resourcesPath, 'vendor', 'rg', 'linux-x64', 'rg'),
+        });
+    });
+
+    it('returns a missing-asset resolution when the target is supported but not present', async () => {
+        const tempDir = mkdtempSync(path.join(os.tmpdir(), 'neon-rg-missing-'));
+        tempDirs.push(tempDir);
+        appState.appPath = tempDir;
+        appState.isPackaged = false;
+
+        const resolver = new VendoredRipgrepResolver();
+        const resolved = await resolver.resolve({
+            platform: 'darwin',
+            arch: 'arm64',
+        });
+
+        expect(resolved).toEqual({
+            available: false,
+            targetKey: 'darwin-arm64',
+            executableName: 'rg',
+            executablePath: path.join(tempDir, 'vendor', 'rg', 'darwin-arm64', 'rg'),
+            reason: 'missing_asset',
+        });
+    });
+
+    it('returns an unsupported-target resolution for unsupported platform and arch combinations', async () => {
+        const resolver = new VendoredRipgrepResolver();
+        const resolved = await resolver.resolve({
+            platform: 'linux',
+            arch: 'arm64',
+        });
+
+        expect(resolved).toEqual({
+            available: false,
+            reason: 'unsupported_target',
+        });
+    });
+});

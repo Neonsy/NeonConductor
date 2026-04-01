@@ -46,6 +46,29 @@ const TOOL_INPUT_SCHEMAS: Record<string, ProviderRuntimeToolDefinition['inputSch
         },
         required: ['path'],
     },
+    search_files: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+            query: {
+                type: 'string',
+                description: 'Fixed text to search for in workspace files.',
+            },
+            path: {
+                type: 'string',
+                description: 'Absolute or workspace-relative file or directory path to search. Defaults to the workspace root.',
+            },
+            caseSensitive: {
+                type: 'boolean',
+                description: 'Whether the search should be case-sensitive.',
+            },
+            maxMatches: {
+                type: 'number',
+                description: 'Maximum number of matches to return before truncating results.',
+            },
+        },
+        required: ['query'],
+    },
     run_command: {
         type: 'object',
         additionalProperties: false,

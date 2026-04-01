@@ -256,7 +256,7 @@ export interface ToolResultArtifactsTable {
     session_id: string;
     run_id: string;
     tool_name: string;
-    artifact_kind: 'command_output' | 'file_read' | 'directory_listing';
+    artifact_kind: 'command_output' | 'file_read' | 'directory_listing' | 'search_results';
     content_type: string;
     storage_kind: 'text_inline_db' | 'file_path';
     raw_text: string | null;

@@ -279,7 +279,7 @@ test('AppRouter exposes conversation and session procedure contracts to clients'
               artifact: {
                   messagePartId: string;
                   toolName: string;
-                  artifactKind: 'command_output' | 'file_read' | 'directory_listing';
+                  artifactKind: 'command_output' | 'file_read' | 'directory_listing' | 'search_results';
                   contentType: string;
                   totalBytes: number;
                   totalLines: number;

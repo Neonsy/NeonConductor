@@ -18,7 +18,7 @@ import { nowIso } from '@/app/backend/persistence/stores/shared/utils';
 import type { ToolResultArtifactRecord } from '@/app/backend/persistence/types';
 import { appLog } from '@/app/main/logging';
 
-const toolResultArtifactKinds = ['command_output', 'file_read', 'directory_listing'] as const;
+const toolResultArtifactKinds = ['command_output', 'file_read', 'directory_listing', 'search_results'] as const;
 const toolResultArtifactStorageKinds = ['text_inline_db', 'file_path'] as const;
 const toolResultArtifactPreviewStrategies = ['head_tail', 'head_only', 'bounded_list'] as const;
 const INLINE_DB_STORAGE_THRESHOLD_BYTES = 128_000;

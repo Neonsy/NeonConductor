@@ -443,7 +443,7 @@ CREATE TABLE tool_result_artifacts (
     session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
     run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
     tool_name TEXT NOT NULL,
-    artifact_kind TEXT NOT NULL CHECK (artifact_kind IN ('command_output', 'file_read', 'directory_listing')),
+    artifact_kind TEXT NOT NULL CHECK (artifact_kind IN ('command_output', 'file_read', 'directory_listing', 'search_results')),
     content_type TEXT NOT NULL,
     storage_kind TEXT NOT NULL CHECK (storage_kind IN ('text_inline_db', 'file_path')),
     raw_text TEXT NULL,

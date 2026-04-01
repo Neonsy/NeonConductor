@@ -16,7 +16,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function isToolExecutionArtifactCandidate(value: unknown): value is ToolExecutionArtifactCandidate {
     return (
         isRecord(value) &&
-        (value['kind'] === 'command_output' || value['kind'] === 'file_read' || value['kind'] === 'directory_listing') &&
+        (value['kind'] === 'command_output' ||
+            value['kind'] === 'file_read' ||
+            value['kind'] === 'directory_listing' ||
+            value['kind'] === 'search_results') &&
         value['contentType'] === 'text/plain' &&
         typeof value['rawText'] === 'string' &&
         isRecord(value['metadata'])

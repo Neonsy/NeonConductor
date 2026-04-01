@@ -1,4 +1,4 @@
-export type ToolArtifactKind = 'command_output' | 'file_read' | 'directory_listing';
+export type ToolArtifactKind = 'command_output' | 'file_read' | 'directory_listing' | 'search_results';
 export type ToolArtifactPreviewStrategy = 'head_tail' | 'head_only' | 'bounded_list';
 
 const byteFormatter = new Intl.NumberFormat('en-US', {
@@ -22,6 +22,9 @@ export function formatToolArtifactKindLabel(artifactKind: ToolArtifactKind): str
     }
     if (artifactKind === 'file_read') {
         return 'File read';
+    }
+    if (artifactKind === 'search_results') {
+        return 'Search results';
     }
 
     return 'Directory listing';

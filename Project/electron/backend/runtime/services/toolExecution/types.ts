@@ -17,6 +17,13 @@ export interface ToolExecutionFailure {
 
 export type ToolExecutionOutput = Record<string, unknown>;
 
+export interface SearchFilesMatch {
+    path: string;
+    lineNumber: number;
+    columnNumber: number;
+    lineText: string;
+}
+
 export interface CommandOutputArtifactCandidateMetadata extends Record<string, unknown> {
     command: string;
     cwd: string;
@@ -48,6 +55,18 @@ export interface DirectoryListingArtifactCandidateMetadata extends Record<string
     previewTruncated: boolean;
 }
 
+export interface SearchResultsArtifactCandidateMetadata extends Record<string, unknown> {
+    searchedPath: string;
+    query: string;
+    caseSensitive: boolean;
+    matchCount: number;
+    maxMatches: number;
+    omittedMatches: number;
+    serializedBytes: number;
+    previewTruncated: boolean;
+    searchTruncated: boolean;
+}
+
 export interface CommandOutputArtifactCandidate {
     kind: 'command_output';
     contentType: 'text/plain';
@@ -69,10 +88,18 @@ export interface DirectoryListingArtifactCandidate {
     metadata: DirectoryListingArtifactCandidateMetadata;
 }
 
+export interface SearchResultsArtifactCandidate {
+    kind: 'search_results';
+    contentType: 'text/plain';
+    rawText: string;
+    metadata: SearchResultsArtifactCandidateMetadata;
+}
+
 export type ToolExecutionArtifactCandidate =
     | CommandOutputArtifactCandidate
     | FileReadArtifactCandidate
-    | DirectoryListingArtifactCandidate;
+    | DirectoryListingArtifactCandidate
+    | SearchResultsArtifactCandidate;
 
 export type ToolInvocationOutcome =
     | {

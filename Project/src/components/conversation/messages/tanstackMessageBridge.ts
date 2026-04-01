@@ -86,7 +86,7 @@ interface ConversationImageMetadata {
     height: number;
 }
 
-const toolArtifactKinds: ToolArtifactKind[] = ['command_output', 'file_read', 'directory_listing'];
+const toolArtifactKinds: ToolArtifactKind[] = ['command_output', 'file_read', 'directory_listing', 'search_results'];
 const toolArtifactPreviewStrategies: ToolArtifactPreviewStrategy[] = ['head_tail', 'head_only', 'bounded_list'];
 
 function readArtifactKind(value: unknown): ToolArtifactKind | undefined {

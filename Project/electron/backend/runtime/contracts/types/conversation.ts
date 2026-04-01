@@ -101,7 +101,7 @@ export interface ConversationToolArtifactLine {
 export interface ConversationReadToolArtifactView {
     messagePartId: EntityId<'part'>;
     toolName: string;
-    artifactKind: 'command_output' | 'file_read' | 'directory_listing';
+    artifactKind: 'command_output' | 'file_read' | 'directory_listing' | 'search_results';
     contentType: string;
     totalBytes: number;
     totalLines: number;

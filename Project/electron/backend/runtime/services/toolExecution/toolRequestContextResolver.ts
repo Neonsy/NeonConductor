@@ -90,7 +90,7 @@ export async function resolveToolRequestContext(input: ToolInvokeInput): Promise
     if (
         workspaceRequirement === 'resolved' &&
         workspaceRootPath &&
-        (definition.tool.id === 'read_file' || definition.tool.id === 'list_files')
+        (definition.tool.id === 'read_file' || definition.tool.id === 'list_files' || definition.tool.id === 'search_files')
     ) {
         const requestedPath = typeof args['path'] === 'string' ? args['path'] : undefined;
         resolvedWorkspacePath = resolveWorkspaceToolPath(

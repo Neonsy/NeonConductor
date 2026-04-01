@@ -63,19 +63,23 @@ describe('runtime contracts: permissions and tooling', () => {
         expect((await resolveRuntimeToolsForMode({ mode: askMode })).map((tool) => tool.id)).toEqual([
             'list_files',
             'read_file',
+            'search_files',
         ]);
         expect((await resolveRuntimeToolsForMode({ mode: codeMode })).map((tool) => tool.id)).toEqual([
             'list_files',
             'read_file',
             'run_command',
+            'search_files',
         ]);
         expect((await resolveRuntimeToolsForMode({ mode: orchestrateMode })).map((tool) => tool.id)).toEqual([
             'list_files',
             'read_file',
+            'search_files',
         ]);
         expect((await resolveRuntimeToolsForMode({ mode: orchestratorDebugMode })).map((tool) => tool.id)).toEqual([
             'list_files',
             'read_file',
+            'search_files',
         ]);
     });
 
@@ -154,6 +158,7 @@ describe('runtime contracts: permissions and tooling', () => {
         const readTool = tools.tools.find((item) => item.id === 'read_file');
         expect(readTool?.requiresWorkspace).toBe(true);
         expect(readTool?.capabilities).toContain('filesystem_read');
+        expect(tools.tools.map((item) => item.id)).toContain('search_files');
 
         const allowedRead = await caller.tool.invoke({
             profileId,

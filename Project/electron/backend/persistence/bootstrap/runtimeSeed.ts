@@ -115,6 +115,12 @@ const TOOL_SEED = [
         description: 'Run a command in a sandboxed shell.',
         permissionPolicy: 'ask',
     },
+    {
+        id: 'search_files',
+        label: 'Search Files',
+        description: 'Search for fixed text in workspace files.',
+        permissionPolicy: 'ask',
+    },
 ] as const;
 
 const MODE_SEED = [

@@ -14,9 +14,11 @@ import {
     createDirectoryListingExecutionOutput,
     createReadFileExecutionOutput,
     createRunCommandExecutionOutput,
+    createSearchFilesExecutionOutput,
     prepareToolResultPersistence,
 } from '@/app/backend/runtime/services/toolExecution/toolOutputCompressionPolicy';
 import type {
+    SearchFilesMatch,
     ToolExecutionArtifactCandidate,
     ToolInvocationOutcome,
     ToolOutputEntry,
@@ -44,6 +46,15 @@ function createDirectoryEntries(count: number): ToolOutputEntry[] {
     return Array.from({ length: count }, (_, index) => ({
         path: `C:/workspace/src/file-${index}.ts`,
         kind: 'file',
+    }));
+}
+
+function createSearchMatches(count: number): SearchFilesMatch[] {
+    return Array.from({ length: count }, (_, index) => ({
+        path: `C:/workspace/src/file-${index}.ts`,
+        lineNumber: index + 1,
+        columnNumber: 3,
+        lineText: `const value${index} = ${index};`,
     }));
 }
 
@@ -330,6 +341,41 @@ describe('toolOutputCompressionPolicy', () => {
         expect(prepared.payloadArtifactMetadata.previewStrategy).toBe('bounded_list');
         expect((execution.output['entries'] as ToolOutputEntry[])).toHaveLength(50);
         expect(prepared.artifactPersistenceCandidate?.rawText).toContain('"entries"');
+        expect(prepared.artifactPersistenceCandidate?.rawText).toContain('file-259.ts');
+        expect(JSON.stringify(prepared.normalizedPayload['output'])).not.toContain('file-259.ts');
+        expect(JSON.stringify(prepared.normalizedPayload['output'])).toContain('file-49.ts');
+    });
+
+    it('artifactizes oversized search results and persists only a bounded match preview', async () => {
+        const matches = createSearchMatches(260);
+        const execution = createSearchFilesExecutionOutput({
+            searchedPath: 'C:/workspace',
+            query: 'value',
+            caseSensitive: false,
+            maxMatches: 500,
+            matches,
+            truncated: false,
+        });
+
+        const prepared = await prepareToolResultPersistence({
+            profileId: 'profile_test',
+            sessionId: 'sess_test',
+            runId: 'run_test',
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
+            toolName: 'search_files',
+            toolOutcome: createExecutedOutcome({
+                toolId: 'search_files',
+                output: execution.output,
+                artifactCandidate: execution.artifactCandidate,
+            }),
+        });
+
+        expect(prepared.payloadArtifactMetadata.artifactized).toBe(true);
+        expect(prepared.payloadArtifactMetadata.artifactKind).toBe('search_results');
+        expect(prepared.payloadArtifactMetadata.previewStrategy).toBe('bounded_list');
+        expect((execution.output['matches'] as SearchFilesMatch[])).toHaveLength(50);
+        expect(prepared.artifactPersistenceCandidate?.rawText).toContain('"matches"');
         expect(prepared.artifactPersistenceCandidate?.rawText).toContain('file-259.ts');
         expect(JSON.stringify(prepared.normalizedPayload['output'])).not.toContain('file-259.ts');
         expect(JSON.stringify(prepared.normalizedPayload['output'])).toContain('file-49.ts');

@@ -16,6 +16,12 @@ const TOOL_SAFETY_METADATA: Record<
         allowsExternalPaths: false,
         allowsIgnoredPaths: false,
     },
+    search_files: {
+        capabilities: ['filesystem_read'],
+        requiresWorkspace: true,
+        allowsExternalPaths: false,
+        allowsIgnoredPaths: false,
+    },
     run_command: {
         capabilities: ['shell'],
         requiresWorkspace: true,

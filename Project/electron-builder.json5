@@ -28,12 +28,24 @@
             { target: 'zip', arch: ['arm64', 'x64'] },
         ],
         artifactName: 'NeonConductor-Mac-${arch}-${version}-Installer.${ext}',
+        extraResources: [
+            {
+                from: 'vendor/rg/darwin-${arch}/rg',
+                to: 'vendor/rg/darwin-${arch}/rg',
+            },
+        ],
     },
     win: {
         target: [{ target: 'nsis', arch: ['x64'] }],
         artifactName: 'NeonConductor-Windows-${version}-Setup.${ext}',
         executableName: 'NeonConductor',
         signAndEditExecutable: true,
+        extraResources: [
+            {
+                from: 'vendor/rg/win32-${arch}/rg.exe',
+                to: 'vendor/rg/win32-${arch}/rg.exe',
+            },
+        ],
     },
     nsis: {
         oneClick: false,
@@ -50,6 +62,12 @@
             { target: 'rpm', arch: ['x64'] },
         ],
         artifactName: 'NeonConductor-Linux-${arch}-${version}.${ext}',
+        extraResources: [
+            {
+                from: 'vendor/rg/linux-${arch}/rg',
+                to: 'vendor/rg/linux-${arch}/rg',
+            },
+        ],
     },
     publish: [
         {

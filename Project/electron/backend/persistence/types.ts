@@ -641,7 +641,7 @@ export interface ToolResultArtifactRecord {
     sessionId: EntityId<'sess'>;
     runId: EntityId<'run'>;
     toolName: string;
-    artifactKind: 'command_output' | 'file_read' | 'directory_listing';
+    artifactKind: 'command_output' | 'file_read' | 'directory_listing' | 'search_results';
     contentType: string;
     storageKind: 'text_inline_db' | 'file_path';
     rawText?: string;

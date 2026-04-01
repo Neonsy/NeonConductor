@@ -5,6 +5,7 @@ import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
 import { serializeToolInvocationOutcome } from '@/app/backend/runtime/services/toolExecution/results';
 import { artifactSummaryService } from '@/app/backend/runtime/services/toolExecution/artifactSummaryService';
 import type {
+    SearchFilesMatch,
     ToolExecutionArtifactCandidate,
     ToolExecutionOutput,
     ToolExecutionResult,
@@ -19,6 +20,9 @@ const FILE_READ_ARTIFACT_THRESHOLD_BYTES = 32_000;
 const DIRECTORY_LISTING_PREVIEW_MAX_ENTRIES = 50;
 const DIRECTORY_LISTING_ARTIFACT_THRESHOLD_BYTES = 16_000;
 const DIRECTORY_LISTING_ARTIFACT_THRESHOLD_COUNT = 200;
+const SEARCH_RESULTS_PREVIEW_MAX_MATCHES = 50;
+const SEARCH_RESULTS_ARTIFACT_THRESHOLD_BYTES = 16_000;
+const SEARCH_RESULTS_ARTIFACT_THRESHOLD_COUNT = 200;
 const HEAD_TAIL_MARKER_TEMPLATE = '\n\n... {BYTES} bytes omitted ...\n\n';
 const HEAD_ONLY_MARKER_TEMPLATE = '\n\n... {BYTES} bytes omitted ...';
 
@@ -92,6 +96,15 @@ interface RawDirectoryListingExecution {
     entries: ToolOutputEntry[];
     truncated: boolean;
     count: number;
+}
+
+interface RawSearchFilesExecution {
+    searchedPath: string;
+    query: string;
+    caseSensitive: boolean;
+    maxMatches: number;
+    matches: SearchFilesMatch[];
+    truncated: boolean;
 }
 
 interface ArtifactizedCandidateDetails {
@@ -186,6 +199,26 @@ function buildDirectoryListingRawText(input: RawDirectoryListingExecution): stri
 
 function buildDirectoryListingPreviewEntries(entries: ToolOutputEntry[]): ToolOutputEntry[] {
     return entries.slice(0, DIRECTORY_LISTING_PREVIEW_MAX_ENTRIES);
+}
+
+function buildSearchResultsRawText(input: RawSearchFilesExecution): string {
+    return JSON.stringify(
+        {
+            searchedPath: input.searchedPath,
+            query: input.query,
+            caseSensitive: input.caseSensitive,
+            maxMatches: input.maxMatches,
+            matches: input.matches,
+            matchCount: input.matches.length,
+            truncated: input.truncated,
+        },
+        null,
+        2
+    );
+}
+
+function buildSearchResultsPreviewMatches(matches: SearchFilesMatch[]): SearchFilesMatch[] {
+    return matches.slice(0, SEARCH_RESULTS_PREVIEW_MAX_MATCHES);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -352,6 +385,45 @@ export function createDirectoryListingExecutionOutput(
     };
 }
 
+export function createSearchFilesExecutionOutput(
+    input: RawSearchFilesExecution
+): { output: ToolExecutionOutput; artifactCandidate: ToolExecutionArtifactCandidate } {
+    const rawText = buildSearchResultsRawText(input);
+    const serializedBytes = Buffer.byteLength(rawText, 'utf8');
+    const shouldPreview =
+        serializedBytes > SEARCH_RESULTS_ARTIFACT_THRESHOLD_BYTES || input.matches.length > SEARCH_RESULTS_ARTIFACT_THRESHOLD_COUNT;
+    const previewMatches = shouldPreview ? buildSearchResultsPreviewMatches(input.matches) : input.matches;
+    const previewTruncated = shouldPreview && previewMatches.length < input.matches.length;
+
+    return {
+        output: {
+            searchedPath: input.searchedPath,
+            query: input.query,
+            caseSensitive: input.caseSensitive,
+            maxMatches: input.maxMatches,
+            matches: previewMatches,
+            matchCount: input.matches.length,
+            truncated: input.truncated || previewTruncated,
+        },
+        artifactCandidate: {
+            kind: 'search_results',
+            contentType: 'text/plain',
+            rawText,
+            metadata: {
+                searchedPath: input.searchedPath,
+                query: input.query,
+                caseSensitive: input.caseSensitive,
+                matchCount: input.matches.length,
+                maxMatches: input.maxMatches,
+                omittedMatches: previewTruncated ? input.matches.length - previewMatches.length : 0,
+                serializedBytes,
+                previewTruncated,
+                searchTruncated: input.truncated,
+            },
+        },
+    };
+}
+
 function getArtifactizedCandidateDetails(
     candidate: ToolExecutionArtifactCandidate | undefined
 ): ArtifactizedCandidateDetails | null {
@@ -384,6 +456,27 @@ function getArtifactizedCandidateDetails(
             totalBytes: candidate.metadata.byteLength,
             totalLines: candidate.metadata.lineCount,
             omittedBytes: candidate.metadata.omittedBytes,
+        };
+    }
+
+    if (candidate.kind === 'search_results') {
+        const totalBytes = Buffer.byteLength(candidate.rawText, 'utf8');
+        const totalLines = countLines(candidate.rawText);
+        if (
+            totalBytes <= SEARCH_RESULTS_ARTIFACT_THRESHOLD_BYTES &&
+            candidate.metadata.matchCount <= SEARCH_RESULTS_ARTIFACT_THRESHOLD_COUNT &&
+            !candidate.metadata.previewTruncated &&
+            !candidate.metadata.searchTruncated
+        ) {
+            return null;
+        }
+
+        return {
+            candidate,
+            previewStrategy: 'bounded_list',
+            totalBytes,
+            totalLines,
+            omittedBytes: 0,
         };
     }
 

@@ -125,6 +125,54 @@ describe('toolRequestContextResolver', () => {
         expect(outcome.resolvedWorkspacePath?.absolutePath).toContain('docs');
     });
 
+    it('rewrites search_files paths through the same workspace boundary resolver', async () => {
+        const definition: ResolvedToolDefinition = {
+            tool: {
+                id: 'search_files',
+                label: 'Search Files',
+                description: 'Search for fixed text.',
+                capabilities: ['filesystem_read'],
+                requiresWorkspace: true,
+                permissionPolicy: 'allow',
+                allowsExternalPaths: false,
+                allowsIgnoredPaths: false,
+            },
+            resource: 'tool:search_files',
+            source: 'native',
+        };
+        const workspaceContext: ResolvedWorkspaceContext = {
+            kind: 'workspace',
+            workspaceFingerprint: 'ws_alpha',
+            label: 'Workspace Alpha',
+            absolutePath: 'C:/workspace-alpha',
+            executionEnvironmentMode: 'local',
+        };
+        findToolByIdMock.mockResolvedValue(definition);
+        resolveExplicitMock.mockResolvedValue(workspaceContext);
+
+        const outcome = await resolveToolRequestContext({
+            profileId: 'profile_default',
+            toolId: 'search_files',
+            topLevelTab: 'agent',
+            modeKey: 'ask',
+            workspaceFingerprint: 'ws_alpha',
+            args: {
+                path: 'src',
+                query: 'ExampleValue',
+            },
+        });
+
+        if ('kind' in outcome) {
+            throw new Error('Expected a resolved request context, not a failed outcome.');
+        }
+
+        expect(outcome.executionArgs).toMatchObject({
+            path: expect.stringContaining('workspace-alpha'),
+            query: 'ExampleValue',
+        });
+        expect(outcome.resolvedWorkspacePath?.absolutePath).toContain('src');
+    });
+
     it('attaches shell approval context for run_command inputs', async () => {
         const definition: ResolvedToolDefinition = {
             tool: {
