@@ -24,7 +24,7 @@ export function resolveSupportedPlatform(): SupportedPlatform {
     return 'linux';
 }
 
-export function resolveWorkspaceShellFamily(platform: SupportedPlatform): 'powershell' | 'posix_sh' {
+export function resolveWorkspaceShellFamily(platform: SupportedPlatform): 'powershell' | 'cmd' | 'posix_sh' {
     return platform === 'win32' ? 'powershell' : 'posix_sh';
 }
 

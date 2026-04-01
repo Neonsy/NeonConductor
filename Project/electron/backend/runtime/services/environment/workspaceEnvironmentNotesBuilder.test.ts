@@ -52,7 +52,9 @@ function buildEffectivePreferences(input: {
 describe('workspaceEnvironmentNotesBuilder', () => {
     it('describes shell, repo, runtime, and pinned override mismatches', () => {
         const notes = buildWorkspaceEnvironmentNotes({
+            platform: 'win32',
             shellFamily: 'powershell',
+            shellExecutable: 'pwsh.exe',
             markers: buildMarkers({
                 hasJjDirectory: true,
                 hasPackageJson: true,
@@ -84,7 +86,7 @@ describe('workspaceEnvironmentNotesBuilder', () => {
         });
 
         expect(notes).toEqual([
-            'Command execution uses PowerShell. Do not assume POSIX shell syntax.',
+            'Command execution uses PowerShell 7 via pwsh.exe. Do not assume POSIX shell syntax.',
             'This workspace appears to be jj-managed. Prefer jj for repo inspection and history operations.',
             'Detached git HEAD may be expected here because jj can manage the workspace.',
             'This workspace prefers pnpm.',
@@ -96,6 +98,7 @@ describe('workspaceEnvironmentNotesBuilder', () => {
 
     it('falls back to missing-tool warnings when a marker is present', () => {
         const notes = buildWorkspaceEnvironmentNotes({
+            platform: 'linux',
             shellFamily: 'posix_sh',
             markers: buildMarkers({
                 hasGitDirectory: true,
@@ -132,5 +135,35 @@ describe('workspaceEnvironmentNotesBuilder', () => {
             'This workspace signals npm via package-lock.json, but npm is not available on this machine.',
             'Do not assume Python is available for repo-local scripts.',
         ]);
+    });
+
+    it('describes cmd.exe fallback on Windows', () => {
+        const notes = buildWorkspaceEnvironmentNotes({
+            platform: 'win32',
+            shellFamily: 'cmd',
+            shellExecutable: 'cmd.exe',
+            markers: buildMarkers({}),
+            availableCommands: buildCommands({}),
+            effectivePreferences: buildEffectivePreferences({
+                vcs: {
+                    family: 'unknown',
+                    source: 'detected',
+                    requestedOverride: 'auto',
+                    available: false,
+                    mismatch: false,
+                },
+                packageManager: {
+                    family: 'unknown',
+                    source: 'detected',
+                    requestedOverride: 'auto',
+                    available: false,
+                    mismatch: false,
+                },
+            }),
+        });
+
+        expect(notes).toContain(
+            'Command execution uses Windows Command Prompt via cmd.exe fallback. Do not assume PowerShell or POSIX shell syntax.'
+        );
     });
 });

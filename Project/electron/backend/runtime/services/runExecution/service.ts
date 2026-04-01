@@ -148,6 +148,7 @@ export class RunExecutionService {
         const preparedResult = await prepareRunStart({
             ...input,
             ...(workspaceContext.kind === 'sandbox' ? { sandboxId: workspaceContext.sandbox.id } : {}),
+            workspaceContext,
         });
         if (preparedResult.isErr()) {
             appLog.warn({

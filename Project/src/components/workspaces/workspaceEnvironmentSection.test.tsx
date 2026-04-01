@@ -140,6 +140,24 @@ describe('WorkspaceEnvironmentPreviewCard', () => {
         expect(html).toContain('None detected');
     });
 
+    it('renders cmd.exe fallback clearly', () => {
+        const html = renderToStaticMarkup(
+            <WorkspaceEnvironmentPreviewCard
+                isLoading={false}
+                errorMessage={undefined}
+                snapshot={{
+                    ...snapshot,
+                    shellFamily: 'cmd',
+                    shellExecutable: 'cmd.exe',
+                }}
+                emptyMessage='No preview yet.'
+            />
+        );
+
+        expect(html).toContain('Command Prompt');
+        expect(html).toContain('cmd.exe');
+    });
+
     it('renders error state when inspection fails', () => {
         const html = renderToStaticMarkup(
             <WorkspaceEnvironmentPreviewCard

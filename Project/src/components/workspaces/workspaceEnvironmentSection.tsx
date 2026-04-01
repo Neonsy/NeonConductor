@@ -34,6 +34,22 @@ function formatFamilyLabel(value: string): string {
         return 'PowerShell';
     }
 
+    if (value === 'cmd') {
+        return 'Command Prompt';
+    }
+
+    if (value === 'win32') {
+        return 'Windows';
+    }
+
+    if (value === 'darwin') {
+        return 'macOS';
+    }
+
+    if (value === 'linux') {
+        return 'Linux';
+    }
+
     if (value === 'jj') {
         return 'Jujutsu (jj)';
     }
@@ -72,6 +88,10 @@ function listAvailableCommands(snapshot: WorkspaceEnvironmentSnapshot): string {
 }
 
 function formatShellSummary(snapshot: WorkspaceEnvironmentSnapshot): string {
+    if (snapshot.platform === 'win32' && !snapshot.shellExecutable) {
+        return 'Windows shell unresolved';
+    }
+
     const familyLabel = formatFamilyLabel(snapshot.shellFamily);
     if (!snapshot.shellExecutable) {
         return `${formatFamilyLabel(snapshot.platform)} via ${familyLabel}`;

@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process';
 
 import { workspaceShellResolver } from '@/app/backend/runtime/services/environment/workspaceShellResolver';
 import { readNumberArg, readStringArg } from '@/app/backend/runtime/services/toolExecution/args';
+import { decodeCommandOutput } from '@/app/backend/runtime/services/toolExecution/handlers/commandOutputDecoder';
 import { createRunCommandExecutionOutput } from '@/app/backend/runtime/services/toolExecution/toolOutputCompressionPolicy';
 import type { ToolExecutionFailure, ToolExecutionOutput } from '@/app/backend/runtime/services/toolExecution/types';
 
@@ -33,6 +34,13 @@ async function resolveShellInvocation(
         return ok({
             file: resolvedShell.spawnFile,
             args: ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', command],
+        });
+    }
+
+    if (resolvedShell.shellFamily === 'cmd') {
+        return ok({
+            file: resolvedShell.spawnFile,
+            args: ['/d', '/c', command],
         });
     }
 
@@ -116,8 +124,8 @@ export async function runCommandToolHandler(
             settled = true;
             clearTimeout(timeout);
 
-            const stdout = Buffer.concat(stdoutChunks).toString('utf8');
-            const stderr = Buffer.concat(stderrChunks).toString('utf8');
+            const stdout = decodeCommandOutput(Buffer.concat(stdoutChunks), process.platform);
+            const stderr = decodeCommandOutput(Buffer.concat(stderrChunks), process.platform);
             const executionOutput = createRunCommandExecutionOutput({
                 command,
                 cwd: context.cwd,

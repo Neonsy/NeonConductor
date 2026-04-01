@@ -1,8 +1,6 @@
 import { sessionAttachedRuleStore, sessionAttachedSkillStore } from '@/app/backend/persistence/stores';
-import {
-    buildWorkspaceEnvironmentGuidance,
-    workspaceEnvironmentService,
-} from '@/app/backend/runtime/services/environment/service';
+import type { WorkspaceEnvironmentSnapshot } from '@/app/backend/runtime/contracts/types/runtime';
+import { buildWorkspaceEnvironmentGuidance, workspaceEnvironmentService } from '@/app/backend/runtime/services/environment/service';
 import {
     resolveProjectInstructionDocuments,
     type ProjectInstructionDocument,
@@ -21,7 +19,7 @@ import {
     okRunExecution,
     type RunExecutionResult,
 } from '@/app/backend/runtime/services/runExecution/errors';
-import type { RunContextMessage } from '@/app/backend/runtime/services/runExecution/types';
+import type { RunContextMessage, RuntimeToolGuidanceContext } from '@/app/backend/runtime/services/runExecution/types';
 import { getWorkspacePreference } from '@/app/backend/runtime/services/workspace/preferences';
 import { workspaceContextService } from '@/app/backend/runtime/services/workspaceContext/service';
 
@@ -75,31 +73,46 @@ async function buildWorkspacePreludeMessages(input: {
         Awaited<ReturnType<typeof workspaceContextService.resolveForSession>>,
         null | { kind: 'detached' }
     >;
+    workspaceEnvironmentSnapshot?: WorkspaceEnvironmentSnapshot;
+    runtimeToolGuidanceContext?: RuntimeToolGuidanceContext;
 }): Promise<RunContextMessage[]> {
     const messages = [buildWorkspacePrelude({ workspaceContext: input.workspaceContext })];
-    const workspacePreference = await getWorkspacePreference(input.profileId, input.workspaceFingerprint);
-    const environmentSnapshotResult = await workspaceEnvironmentService.inspectWorkspaceEnvironment({
-        workspaceRootPath: input.workspaceContext.absolutePath,
-        ...(input.workspaceContext.kind === 'sandbox'
-            ? { baseWorkspaceRootPath: input.workspaceContext.baseWorkspace.absolutePath }
-            : {}),
-        ...(workspacePreference
-            ? {
-                  overrides: {
-                      ...(workspacePreference.preferredVcs ? { preferredVcs: workspacePreference.preferredVcs } : {}),
-                      ...(workspacePreference.preferredPackageManager
-                          ? { preferredPackageManager: workspacePreference.preferredPackageManager }
-                          : {}),
-                  },
-              }
-            : {}),
-    });
+    const environmentSnapshot =
+        input.workspaceEnvironmentSnapshot ??
+        (await (async () => {
+            const workspacePreference = await getWorkspacePreference(input.profileId, input.workspaceFingerprint);
+            const environmentSnapshotResult = await workspaceEnvironmentService.inspectWorkspaceEnvironment({
+                workspaceRootPath: input.workspaceContext.absolutePath,
+                ...(input.workspaceContext.kind === 'sandbox'
+                    ? { baseWorkspaceRootPath: input.workspaceContext.baseWorkspace.absolutePath }
+                    : {}),
+                ...(workspacePreference
+                    ? {
+                          overrides: {
+                              ...(workspacePreference.preferredVcs
+                                  ? { preferredVcs: workspacePreference.preferredVcs }
+                                  : {}),
+                              ...(workspacePreference.preferredPackageManager
+                                  ? { preferredPackageManager: workspacePreference.preferredPackageManager }
+                                  : {}),
+                          },
+                      }
+                    : {}),
+            });
 
-    if (environmentSnapshotResult.isOk()) {
+            return environmentSnapshotResult.isOk() ? environmentSnapshotResult.value : undefined;
+        })());
+
+    if (environmentSnapshot) {
+        const environmentGuidanceOptions = input.runtimeToolGuidanceContext
+            ? {
+                  vendoredRipgrepAvailable: input.runtimeToolGuidanceContext.vendoredRipgrepAvailable,
+              }
+            : undefined;
         messages.push(
             createSystemMessage(
                 'Environment guidance',
-                buildWorkspaceEnvironmentGuidance(environmentSnapshotResult.value)
+                buildWorkspaceEnvironmentGuidance(environmentSnapshot, environmentGuidanceOptions)
             )
         );
     }
@@ -223,6 +236,9 @@ export async function buildSessionSystemPrelude(input: {
     prompt: string;
     topLevelTab: TopLevelTab;
     workspaceFingerprint?: string;
+    workspaceContext?: Awaited<ReturnType<typeof workspaceContextService.resolveForSession>>;
+    workspaceEnvironmentSnapshot?: WorkspaceEnvironmentSnapshot;
+    runtimeToolGuidanceContext?: RuntimeToolGuidanceContext;
     resolvedMode: {
         mode: ModeDefinition;
     };
@@ -240,14 +256,16 @@ export async function buildSessionSystemPrelude(input: {
         sessionAttachedRuleStore.listBySession(input.profileId, input.sessionId),
         sessionAttachedSkillStore.listBySession(input.profileId, input.sessionId),
     ]);
-    const workspaceContext = input.workspaceFingerprint
-        ? await workspaceContextService.resolveForSession({
-              profileId: input.profileId,
-              sessionId: input.sessionId,
-              topLevelTab: input.topLevelTab,
-              allowLazySandboxCreation: false,
-          })
-        : null;
+    const workspaceContext =
+        input.workspaceContext ??
+        (input.workspaceFingerprint
+            ? await workspaceContextService.resolveForSession({
+                  profileId: input.profileId,
+                  sessionId: input.sessionId,
+                  topLevelTab: input.topLevelTab,
+                  allowLazySandboxCreation: false,
+              })
+            : null);
     const projectInstructions =
         workspaceContext && workspaceContext.kind !== 'detached'
             ? await resolveProjectInstructionDocuments({
@@ -313,6 +331,12 @@ export async function buildSessionSystemPrelude(input: {
                   profileId: input.profileId,
                   workspaceFingerprint: input.workspaceFingerprint,
                   workspaceContext,
+                  ...(input.workspaceEnvironmentSnapshot
+                      ? { workspaceEnvironmentSnapshot: input.workspaceEnvironmentSnapshot }
+                      : {}),
+                  ...(input.runtimeToolGuidanceContext
+                      ? { runtimeToolGuidanceContext: input.runtimeToolGuidanceContext }
+                      : {}),
               })
             : undefined;
 

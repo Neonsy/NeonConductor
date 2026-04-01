@@ -177,7 +177,7 @@ test('AppRouter exposes system, runtime, tooling, and registry procedure contrac
     expectTypeOf<AppRouterOutputs['runtime']['inspectWorkspaceEnvironment']>().toExtend<{
         snapshot: {
             platform: 'win32' | 'darwin' | 'linux';
-            shellFamily: 'powershell' | 'posix_sh';
+            shellFamily: 'powershell' | 'cmd' | 'posix_sh';
             shellExecutable?: string;
             effectivePreferences: {
                 vcs: {

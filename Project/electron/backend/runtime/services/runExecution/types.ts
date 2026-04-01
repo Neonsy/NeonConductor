@@ -11,6 +11,7 @@ import type {
     ProviderRuntimeDescriptor,
     ProviderRuntimeTransportFamily,
 } from '@/app/backend/providers/types';
+import type { WorkspaceEnvironmentSnapshot } from '@/app/backend/runtime/contracts/types/runtime';
 import type { RunExecutionErrorCode } from '@/app/backend/runtime/services/runExecution/errors';
 
 import type {
@@ -122,6 +123,16 @@ export interface RunContext {
     messages: RunContextMessage[];
     digest: string;
     retrievedMemory?: RetrievedMemorySummary;
+}
+
+export interface RuntimeToolGuidanceContext {
+    platform: WorkspaceEnvironmentSnapshot['platform'];
+    shellFamily: WorkspaceEnvironmentSnapshot['shellFamily'];
+    shellExecutable?: string;
+    shellResolved: boolean;
+    vendoredRipgrepAvailable: boolean;
+    workspaceEnvironmentSnapshot?: WorkspaceEnvironmentSnapshot;
+    workspaceContext?: ResolvedWorkspaceContext;
 }
 
 export interface RunTransportResolution {

@@ -29,6 +29,7 @@ export function resolveWorkspaceEnvironmentInspection(input: {
         availableCommands: input.availableCommands,
     });
     const notes = buildWorkspaceEnvironmentNotes({
+        platform: input.platform,
         shellFamily: input.shellFamily,
         shellExecutable: input.shellExecutable,
         markers: input.markers,

@@ -105,8 +105,28 @@ describe('workspaceShellResolver', () => {
         const resolvedShell = await resolver.resolve('win32');
 
         expect(resolvedShell).toEqual({
-            shellFamily: 'powershell',
+            shellFamily: 'cmd',
             resolved: false,
+        });
+    });
+
+    it('falls back to cmd.exe on Windows when PowerShell executables are unavailable', async () => {
+        Object.defineProperty(process, 'platform', {
+            value: 'win32',
+            configurable: true,
+        });
+        queueLookupResponses({
+            'cmd.exe': 'C:\\Windows\\System32\\cmd.exe',
+        });
+
+        const resolver = new WorkspaceShellResolver();
+        const resolvedShell = await resolver.resolve('win32');
+
+        expect(resolvedShell).toEqual({
+            shellFamily: 'cmd',
+            shellExecutable: 'cmd.exe',
+            spawnFile: 'C:\\Windows\\System32\\cmd.exe',
+            resolved: true,
         });
     });
 

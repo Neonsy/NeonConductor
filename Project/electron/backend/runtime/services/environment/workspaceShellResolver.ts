@@ -6,7 +6,7 @@ import type { SupportedPlatform } from '@/app/backend/runtime/services/environme
 const SHELL_LOOKUP_CACHE_TTL_MS = 5_000;
 
 export interface ResolvedWorkspaceShell {
-    shellFamily: 'powershell' | 'posix_sh';
+    shellFamily: 'powershell' | 'cmd' | 'posix_sh';
     shellExecutable?: string;
     spawnFile?: string;
     resolved: boolean;
@@ -82,10 +82,14 @@ export class WorkspaceShellResolver {
             return cached.shell;
         }
 
-        const candidates = ['pwsh.exe', 'powershell.exe'] as const;
+        const candidates = [
+            { executable: 'pwsh.exe', shellFamily: 'powershell' as const },
+            { executable: 'powershell.exe', shellFamily: 'powershell' as const },
+            { executable: 'cmd.exe', shellFamily: 'cmd' as const },
+        ] as const;
         for (const candidate of candidates) {
             const executablePath = await lookupExecutablePath({
-                candidate,
+                candidate: candidate.executable,
                 platform,
             });
             if (!executablePath) {
@@ -93,8 +97,8 @@ export class WorkspaceShellResolver {
             }
 
             const shell: ResolvedWorkspaceShell = {
-                shellFamily: 'powershell',
-                shellExecutable: candidate,
+                shellFamily: candidate.shellFamily,
+                shellExecutable: candidate.executable,
                 spawnFile: executablePath,
                 resolved: true,
             };
@@ -106,7 +110,7 @@ export class WorkspaceShellResolver {
         }
 
         const unresolvedShell: ResolvedWorkspaceShell = {
-            shellFamily: 'powershell',
+            shellFamily: 'cmd',
             resolved: false,
         };
         this.cache.set(cacheKey, {

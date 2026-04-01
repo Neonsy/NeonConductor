@@ -12,12 +12,14 @@ import {
     resolveRequestedOrDefaultRunTarget,
     verifyResolvedRunTargetAvailability,
 } from '@/app/backend/runtime/services/runExecution/resolveRunTarget';
+import { resolveRuntimeToolGuidanceContext } from '@/app/backend/runtime/services/runExecution/runtimeToolGuidanceContext';
 import { resolveRuntimeToolsForMode } from '@/app/backend/runtime/services/runExecution/tools';
 import type {
     PreparedRunStart,
     PreparedRunnableCandidate,
     StartRunInput,
 } from '@/app/backend/runtime/services/runExecution/types';
+import type { ResolvedWorkspaceContext } from '@/shared/contracts';
 
 async function resolvePreparedCandidate(input: {
     startInput: StartRunInput;
@@ -104,7 +106,11 @@ async function resolvePreparedCandidate(input: {
     return okRunExecution(fallbackResult.value);
 }
 
-export async function prepareRunStart(input: StartRunInput): Promise<RunExecutionResult<PreparedRunStart>> {
+export async function prepareRunStart(
+    input: StartRunInput & {
+        workspaceContext?: ResolvedWorkspaceContext;
+    }
+): Promise<RunExecutionResult<PreparedRunStart>> {
     const resolvedModeResult = await resolveModeExecution({
         profileId: input.profileId,
         topLevelTab: input.topLevelTab,
@@ -128,8 +134,16 @@ export async function prepareRunStart(input: StartRunInput): Promise<RunExecutio
     }
 
     const preparedCandidate = preparedCandidateResult.value;
+    const runtimeToolGuidanceContext = await resolveRuntimeToolGuidanceContext({
+        profileId: input.profileId,
+        sessionId: input.sessionId,
+        topLevelTab: input.topLevelTab,
+        ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
+        ...(input.workspaceContext ? { workspaceContext: input.workspaceContext } : {}),
+    });
     const toolDefinitions = await resolveRuntimeToolsForMode({
         mode: resolvedModeResult.value.mode,
+        guidanceContext: runtimeToolGuidanceContext,
     });
     const runContextResult = await buildRunContext({
         profileId: input.profileId,
@@ -141,6 +155,11 @@ export async function prepareRunStart(input: StartRunInput): Promise<RunExecutio
         modelId: preparedCandidate.target.modelId,
         ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
         resolvedMode: resolvedModeResult.value,
+        ...(input.workspaceContext ? { workspaceContext: input.workspaceContext } : {}),
+        ...(runtimeToolGuidanceContext.workspaceEnvironmentSnapshot
+            ? { workspaceEnvironmentSnapshot: runtimeToolGuidanceContext.workspaceEnvironmentSnapshot }
+            : {}),
+        runtimeToolGuidanceContext,
     });
     if (runContextResult.isErr()) {
         return errRunExecution(runContextResult.error.code, runContextResult.error.message, {
@@ -209,5 +228,6 @@ export async function prepareRunStart(input: StartRunInput): Promise<RunExecutio
         ...(runContext ? { runContext } : {}),
         ...(kiloModeHeader ? { kiloModeHeader } : {}),
         ...(kiloRouting ? { kiloRouting } : {}),
+        ...(input.workspaceContext ? { workspaceContext: input.workspaceContext } : {}),
     });
 }

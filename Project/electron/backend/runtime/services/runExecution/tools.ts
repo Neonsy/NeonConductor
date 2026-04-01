@@ -5,6 +5,8 @@ import {
     modeAllowsToolCapabilities,
     modeRequiresNativeTools,
 } from '@/app/backend/runtime/services/mode/toolCapabilities';
+import { composeRuntimeToolDescription } from '@/app/backend/runtime/services/runExecution/runtimeToolDescriptionBuilder';
+import type { RuntimeToolGuidanceContext } from '@/app/backend/runtime/services/runExecution/types';
 
 import type { ModeDefinition } from '@/shared/contracts';
 
@@ -92,6 +94,7 @@ export function runModeRequiresNativeTools(input: { mode: ModeDefinition }): boo
 
 export async function resolveRuntimeToolsForMode(input: {
     mode: ModeDefinition;
+    guidanceContext?: RuntimeToolGuidanceContext;
 }): Promise<ProviderRuntimeToolDefinition[]> {
     if (!modeRequiresNativeTools(input.mode)) {
         return [];
@@ -108,7 +111,11 @@ export async function resolveRuntimeToolsForMode(input: {
 
             return {
                 id: tool.id,
-                description: tool.description,
+                description: composeRuntimeToolDescription({
+                    toolId: tool.id,
+                    baseDescription: tool.description,
+                    ...(input.guidanceContext ? { guidanceContext: input.guidanceContext } : {}),
+                }),
                 inputSchema,
             } satisfies ProviderRuntimeToolDefinition;
         })

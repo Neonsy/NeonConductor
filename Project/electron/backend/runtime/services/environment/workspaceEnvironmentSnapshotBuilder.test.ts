@@ -120,4 +120,25 @@ describe('workspaceEnvironmentSnapshotBuilder', () => {
         expect(snapshot.notes).toContain('The pinned VCS preference "jj" is not available on this machine.');
         expect(snapshot.notes).toContain('The pinned package manager preference "pnpm" is not available on this machine.');
     });
+
+    it('preserves cmd shell family in Windows fallback snapshots', () => {
+        const snapshot = resolveWorkspaceEnvironmentInspection({
+            platform: 'win32',
+            shellFamily: 'cmd',
+            shellExecutable: 'cmd.exe',
+            workspaceRootPath: 'C:\\workspaces\\fallback',
+            markers: buildMarkers({}),
+            availableCommands: buildCommands({}),
+            overrides: {
+                preferredVcs: 'auto',
+                preferredPackageManager: 'auto',
+            },
+        });
+
+        expect(snapshot.shellFamily).toBe('cmd');
+        expect(snapshot.shellExecutable).toBe('cmd.exe');
+        expect(snapshot.notes).toContain(
+            'Command execution uses Windows Command Prompt via cmd.exe fallback. Do not assume PowerShell or POSIX shell syntax.'
+        );
+    });
 });

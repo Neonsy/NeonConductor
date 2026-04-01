@@ -230,7 +230,7 @@ export interface WorkspaceEnvironmentOverrides {
 
 export interface WorkspaceEnvironmentSnapshot {
     platform: 'win32' | 'darwin' | 'linux';
-    shellFamily: 'powershell' | 'posix_sh';
+    shellFamily: 'powershell' | 'cmd' | 'posix_sh';
     shellExecutable?: string;
     workspaceRootPath: string;
     baseWorkspaceRootPath?: string;

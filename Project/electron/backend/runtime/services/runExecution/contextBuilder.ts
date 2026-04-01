@@ -1,4 +1,5 @@
 import type { OperationalErrorCode } from '@/app/backend/runtime/services/common/operationalError';
+import type { WorkspaceEnvironmentSnapshot } from '@/app/backend/runtime/contracts/types/runtime';
 import { sessionContextService } from '@/app/backend/runtime/services/context/sessionContextService';
 import { buildSessionSystemPrelude } from '@/app/backend/runtime/services/runExecution/contextPrelude';
 import {
@@ -7,9 +8,9 @@ import {
     type RunExecutionResult,
     type RunExecutionErrorCode,
 } from '@/app/backend/runtime/services/runExecution/errors';
-import type { RunContext, StartRunInput } from '@/app/backend/runtime/services/runExecution/types';
+import type { RunContext, RuntimeToolGuidanceContext, StartRunInput } from '@/app/backend/runtime/services/runExecution/types';
 
-import type { ModeDefinition, RuntimeProviderId, TopLevelTab } from '@/shared/contracts';
+import type { ModeDefinition, ResolvedWorkspaceContext, RuntimeProviderId, TopLevelTab } from '@/shared/contracts';
 
 function toRunExecutionErrorCode(code: OperationalErrorCode): RunExecutionErrorCode {
     switch (code) {
@@ -43,6 +44,9 @@ export async function buildRunContext(input: {
     providerId: RuntimeProviderId;
     modelId: string;
     workspaceFingerprint?: string;
+    workspaceContext?: ResolvedWorkspaceContext;
+    workspaceEnvironmentSnapshot?: WorkspaceEnvironmentSnapshot;
+    runtimeToolGuidanceContext?: RuntimeToolGuidanceContext;
     resolvedMode: {
         mode: ModeDefinition;
     };
@@ -53,6 +57,9 @@ export async function buildRunContext(input: {
         prompt: input.prompt,
         topLevelTab: input.topLevelTab,
         ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
+        ...(input.workspaceContext ? { workspaceContext: input.workspaceContext } : {}),
+        ...(input.workspaceEnvironmentSnapshot ? { workspaceEnvironmentSnapshot: input.workspaceEnvironmentSnapshot } : {}),
+        ...(input.runtimeToolGuidanceContext ? { runtimeToolGuidanceContext: input.runtimeToolGuidanceContext } : {}),
         resolvedMode: input.resolvedMode,
     });
     if (systemPreludeResult.isErr()) {
