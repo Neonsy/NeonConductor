@@ -35,8 +35,8 @@ describe('runtime contracts: permissions and tooling', () => {
         });
         expect(agentModes.modes.map((mode) => [mode.modeKey, mode.executionPolicy.toolCapabilities ?? []])).toEqual([
             ['ask', ['filesystem_read']],
-            ['code', ['filesystem_read', 'shell', 'mcp']],
-            ['debug', ['filesystem_read', 'shell', 'mcp']],
+            ['code', ['filesystem_read', 'filesystem_write', 'shell', 'mcp']],
+            ['debug', ['filesystem_read', 'filesystem_write', 'shell', 'mcp']],
             ['plan', []],
         ]);
 
@@ -68,8 +68,9 @@ describe('runtime contracts: permissions and tooling', () => {
         expect((await resolveRuntimeToolsForMode({ mode: codeMode })).map((tool) => tool.id)).toEqual([
             'list_files',
             'read_file',
-            'run_command',
             'search_files',
+            'write_file',
+            'run_command',
         ]);
         expect((await resolveRuntimeToolsForMode({ mode: orchestrateMode })).map((tool) => tool.id)).toEqual([
             'list_files',
@@ -159,6 +160,10 @@ describe('runtime contracts: permissions and tooling', () => {
         expect(readTool?.requiresWorkspace).toBe(true);
         expect(readTool?.capabilities).toContain('filesystem_read');
         expect(tools.tools.map((item) => item.id)).toContain('search_files');
+        expect(tools.tools.map((item) => item.id)).toContain('write_file');
+        const writeTool = tools.tools.find((item) => item.id === 'write_file');
+        expect(writeTool?.requiresWorkspace).toBe(true);
+        expect(writeTool?.capabilities).toContain('filesystem_write');
 
         const allowedRead = await caller.tool.invoke({
             profileId,
@@ -197,6 +202,78 @@ describe('runtime contracts: permissions and tooling', () => {
             throw new Error('Expected run_command to be blocked in agent.ask mode.');
         }
         expect(deniedMutation.error).toBe('policy_denied');
+
+        const deniedWriteInAsk = await caller.tool.invoke({
+            profileId,
+            toolId: 'write_file',
+            topLevelTab: 'agent',
+            modeKey: 'ask',
+            workspaceFingerprint,
+            args: {
+                path: path.join(tempDir, 'blocked.txt'),
+                content: 'blocked',
+            },
+        });
+        expect(deniedWriteInAsk.ok).toBe(false);
+        if (deniedWriteInAsk.ok) {
+            throw new Error('Expected write_file to be blocked in agent.ask mode.');
+        }
+        expect(deniedWriteInAsk.error).toBe('policy_denied');
+
+        const deniedDetachedWrite = await caller.tool.invoke({
+            profileId,
+            toolId: 'write_file',
+            topLevelTab: 'chat',
+            modeKey: 'chat',
+            args: {
+                path: path.join(tempDir, 'detached.txt'),
+                content: 'detached',
+            },
+        });
+        expect(deniedDetachedWrite.ok).toBe(false);
+        if (deniedDetachedWrite.ok) {
+            throw new Error('Expected detached write_file invocation to be blocked.');
+        }
+        expect(deniedDetachedWrite.error).toBe('policy_denied');
+
+        await caller.profile.setExecutionPreset({
+            profileId,
+            preset: 'yolo',
+        });
+
+        const deniedOutsideWorkspaceWrite = await caller.tool.invoke({
+            profileId,
+            toolId: 'write_file',
+            topLevelTab: 'agent',
+            modeKey: 'code',
+            workspaceFingerprint,
+            args: {
+                path: path.join(tempDir, '..', 'outside-write.txt'),
+                content: 'outside',
+            },
+        });
+        expect(deniedOutsideWorkspaceWrite.ok).toBe(false);
+        if (deniedOutsideWorkspaceWrite.ok) {
+            throw new Error('Expected outside-workspace write_file invocation to be denied.');
+        }
+        expect(deniedOutsideWorkspaceWrite.error).toBe('policy_denied');
+
+        const deniedIgnoredWrite = await caller.tool.invoke({
+            profileId,
+            toolId: 'write_file',
+            topLevelTab: 'agent',
+            modeKey: 'code',
+            workspaceFingerprint,
+            args: {
+                path: path.join(tempDir, 'node_modules', 'blocked.txt'),
+                content: 'ignored',
+            },
+        });
+        expect(deniedIgnoredWrite.ok).toBe(false);
+        if (deniedIgnoredWrite.ok) {
+            throw new Error('Expected ignored-path write_file invocation to be blocked.');
+        }
+        expect(deniedIgnoredWrite.error).toBe('policy_denied');
 
         await caller.profile.setExecutionPreset({
             profileId,

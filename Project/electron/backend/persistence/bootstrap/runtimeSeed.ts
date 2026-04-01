@@ -121,6 +121,12 @@ const TOOL_SEED = [
         description: 'Search for fixed text in workspace files.',
         permissionPolicy: 'ask',
     },
+    {
+        id: 'write_file',
+        label: 'Write File',
+        description: 'Create or replace a UTF-8 text file in the active workspace.',
+        permissionPolicy: 'ask',
+    },
 ] as const;
 
 const MODE_SEED = [
@@ -148,7 +154,7 @@ const MODE_SEED = [
         label: 'Agent Debug',
         prompt: {},
         executionPolicy: {
-            toolCapabilities: ['filesystem_read', 'shell', 'mcp'],
+            toolCapabilities: ['filesystem_read', 'filesystem_write', 'shell', 'mcp'],
         },
     },
     {
@@ -157,7 +163,7 @@ const MODE_SEED = [
         label: 'Agent Code',
         prompt: {},
         executionPolicy: {
-            toolCapabilities: ['filesystem_read', 'shell', 'mcp'],
+            toolCapabilities: ['filesystem_read', 'filesystem_write', 'shell', 'mcp'],
         },
     },
     {

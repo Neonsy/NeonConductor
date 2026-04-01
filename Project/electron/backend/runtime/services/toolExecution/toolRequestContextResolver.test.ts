@@ -173,6 +173,54 @@ describe('toolRequestContextResolver', () => {
         expect(outcome.resolvedWorkspacePath?.absolutePath).toContain('src');
     });
 
+    it('rewrites write_file paths through the same workspace boundary resolver', async () => {
+        const definition: ResolvedToolDefinition = {
+            tool: {
+                id: 'write_file',
+                label: 'Write File',
+                description: 'Write a file.',
+                capabilities: ['filesystem_write'],
+                requiresWorkspace: true,
+                permissionPolicy: 'ask',
+                allowsExternalPaths: false,
+                allowsIgnoredPaths: false,
+            },
+            resource: 'tool:write_file',
+            source: 'native',
+        };
+        const workspaceContext: ResolvedWorkspaceContext = {
+            kind: 'workspace',
+            workspaceFingerprint: 'ws_alpha',
+            label: 'Workspace Alpha',
+            absolutePath: 'C:/workspace-alpha',
+            executionEnvironmentMode: 'local',
+        };
+        findToolByIdMock.mockResolvedValue(definition);
+        resolveExplicitMock.mockResolvedValue(workspaceContext);
+
+        const outcome = await resolveToolRequestContext({
+            profileId: 'profile_default',
+            toolId: 'write_file',
+            topLevelTab: 'agent',
+            modeKey: 'code',
+            workspaceFingerprint: 'ws_alpha',
+            args: {
+                path: 'src/generated/example.ts',
+                content: 'export const value = 1;\n',
+            },
+        });
+
+        if ('kind' in outcome) {
+            throw new Error('Expected a resolved request context, not a failed outcome.');
+        }
+
+        expect(outcome.executionArgs).toMatchObject({
+            path: expect.stringContaining('workspace-alpha'),
+            content: 'export const value = 1;\n',
+        });
+        expect(outcome.resolvedWorkspacePath?.absolutePath).toContain('generated');
+    });
+
     it('attaches shell approval context for run_command inputs', async () => {
         const definition: ResolvedToolDefinition = {
             tool: {

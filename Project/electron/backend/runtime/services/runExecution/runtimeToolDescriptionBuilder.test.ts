@@ -55,4 +55,16 @@ describe('runtimeToolDescriptionBuilder', () => {
 
         expect(description).toContain('Prefer this tool for ordinary workspace fixed-text search.');
     });
+
+    it('marks write_file as the preferred whole-file write path', () => {
+        const description = composeRuntimeToolDescription({
+            toolId: 'write_file',
+            baseDescription: 'Create or replace a UTF-8 text file in the active workspace.',
+            guidanceContext: buildGuidanceContext(),
+        });
+
+        expect(description).toContain('Prefer this tool for ordinary whole-file creation or replacement inside the workspace.');
+        expect(description).toContain('overwrite: true');
+        expect(description).toContain('run_command only when shell behavior is specifically needed');
+    });
 });

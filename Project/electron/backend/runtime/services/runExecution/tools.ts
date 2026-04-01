@@ -10,6 +10,8 @@ import type { RuntimeToolGuidanceContext } from '@/app/backend/runtime/services/
 
 import type { ModeDefinition } from '@/shared/contracts';
 
+const RUNTIME_NATIVE_TOOL_ORDER = ['list_files', 'read_file', 'search_files', 'write_file', 'run_command'] as const;
+
 const TOOL_INPUT_SCHEMAS: Record<string, ProviderRuntimeToolDefinition['inputSchema']> = {
     list_files: {
         type: 'object',
@@ -71,6 +73,25 @@ const TOOL_INPUT_SCHEMAS: Record<string, ProviderRuntimeToolDefinition['inputSch
         },
         required: ['query'],
     },
+    write_file: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+            path: {
+                type: 'string',
+                description: 'Absolute or workspace-relative file path to create or replace.',
+            },
+            content: {
+                type: 'string',
+                description: 'Full UTF-8 text content to write.',
+            },
+            overwrite: {
+                type: 'boolean',
+                description: 'Whether to replace an existing file. Defaults to false.',
+            },
+        },
+        required: ['path', 'content'],
+    },
     run_command: {
         type: 'object',
         additionalProperties: false,
@@ -103,6 +124,13 @@ export async function resolveRuntimeToolsForMode(input: {
     const storedTools = await toolStore.list();
     const nativeTools = storedTools
         .filter((tool) => modeAllowsToolCapabilities(input.mode, tool.capabilities))
+        .sort((left, right) => {
+            const leftIndex = RUNTIME_NATIVE_TOOL_ORDER.indexOf(left.id as (typeof RUNTIME_NATIVE_TOOL_ORDER)[number]);
+            const rightIndex = RUNTIME_NATIVE_TOOL_ORDER.indexOf(right.id as (typeof RUNTIME_NATIVE_TOOL_ORDER)[number]);
+            const normalizedLeftIndex = leftIndex === -1 ? Number.MAX_SAFE_INTEGER : leftIndex;
+            const normalizedRightIndex = rightIndex === -1 ? Number.MAX_SAFE_INTEGER : rightIndex;
+            return normalizedLeftIndex - normalizedRightIndex || left.label.localeCompare(right.label);
+        })
         .map((tool) => {
             const inputSchema = TOOL_INPUT_SCHEMAS[tool.id];
             if (!inputSchema) {

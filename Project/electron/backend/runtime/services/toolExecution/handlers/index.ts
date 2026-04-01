@@ -5,6 +5,7 @@ import { listFilesToolHandler } from '@/app/backend/runtime/services/toolExecuti
 import { readFileToolHandler } from '@/app/backend/runtime/services/toolExecution/handlers/readFile';
 import { runCommandToolHandler } from '@/app/backend/runtime/services/toolExecution/handlers/runCommand';
 import { searchFilesToolHandler } from '@/app/backend/runtime/services/toolExecution/handlers/searchFiles';
+import { writeFileToolHandler } from '@/app/backend/runtime/services/toolExecution/handlers/writeFile';
 import type { ToolExecutionFailure, ToolExecutionOutput } from '@/app/backend/runtime/services/toolExecution/types';
 
 export function invokeToolHandler(
@@ -24,6 +25,10 @@ export function invokeToolHandler(
 
     if (tool.id === 'search_files') {
         return searchFilesToolHandler(args);
+    }
+
+    if (tool.id === 'write_file') {
+        return writeFileToolHandler(args);
     }
 
     if (tool.id === 'run_command') {

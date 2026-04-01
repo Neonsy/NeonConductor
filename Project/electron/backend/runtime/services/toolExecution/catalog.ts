@@ -22,6 +22,12 @@ const TOOL_SAFETY_METADATA: Record<
         allowsExternalPaths: false,
         allowsIgnoredPaths: false,
     },
+    write_file: {
+        capabilities: ['filesystem_write'],
+        requiresWorkspace: true,
+        allowsExternalPaths: false,
+        allowsIgnoredPaths: false,
+    },
     run_command: {
         capabilities: ['shell'],
         requiresWorkspace: true,

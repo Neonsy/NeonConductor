@@ -79,6 +79,14 @@ function buildSearchFilesGuidance(): string {
     return 'Prefer this tool for ordinary workspace fixed-text search. Use run_command only when shell behavior is specifically needed.';
 }
 
+function buildWriteFileGuidance(): string {
+    return joinSections([
+        'Prefer this tool for ordinary whole-file creation or replacement inside the workspace.',
+        'Set `overwrite: true` only when intentionally replacing an existing file.',
+        'Use run_command only when shell behavior is specifically needed or whole-file replacement is the wrong operation.',
+    ]);
+}
+
 export function composeRuntimeToolDescription(input: {
     toolId: string;
     baseDescription: string;
@@ -94,6 +102,10 @@ export function composeRuntimeToolDescription(input: {
 
     if (input.toolId === 'search_files') {
         return joinSections([input.baseDescription, buildSearchFilesGuidance()]);
+    }
+
+    if (input.toolId === 'write_file') {
+        return joinSections([input.baseDescription, buildWriteFileGuidance()]);
     }
 
     return input.baseDescription;
