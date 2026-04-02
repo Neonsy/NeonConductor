@@ -76,21 +76,23 @@ export class ComposerImageCompressionClient {
             ComposerImageCompressionError
         >
     > {
-        return new Promise<ImageCompressionOutcome>((resolve) => {
-            this.queuedRequests.push({
-                requestId: crypto.randomUUID(),
-                clientId,
-                file,
-                resolveOutcome: resolve,
+        return (async () => {
+            const outcome = await new Promise<ImageCompressionOutcome>((resolve) => {
+                this.queuedRequests.push({
+                    requestId: crypto.randomUUID(),
+                    clientId,
+                    file,
+                    resolveOutcome: resolve,
+                });
+                this.pumpQueue();
             });
-            this.pumpQueue();
-        }).then((outcome) => {
+
             if (outcome.status === 'error') {
                 return err(outcome.error);
             }
 
             return ok(outcome.value);
-        });
+        })();
     }
 
     dispose(): void {

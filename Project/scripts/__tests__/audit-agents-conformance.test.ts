@@ -330,6 +330,47 @@ describe('auditAgentsConformance', () => {
         }
     });
 
+    it('reports raw then chains as blocking and discarded catch promises as actionable in handwritten source only', () => {
+        const rootDir = mkdtempSync(path.join(os.tmpdir(), 'agents-audit-'));
+
+        try {
+            writeFixture(
+                rootDir,
+                'src/view.tsx',
+                `
+                async function loadValue(): Promise<string> {
+                    return 'value';
+                }
+
+                function View(task: { run: () => Promise<void> }) {
+                    void task.run().catch(() => undefined);
+                    Promise.resolve(loadValue()).then(() => undefined);
+                    return null;
+                }\n`
+            );
+            writeFixture(
+                rootDir,
+                'src/view.test.tsx',
+                `
+                function TestView(task: { run: () => Promise<void> }) {
+                    void task.run().catch(() => undefined);
+                    Promise.resolve().then(() => undefined);
+                }\n`
+            );
+
+            const report = auditAgentsConformance(rootDir);
+
+            expect(report.forbiddenPromiseThenChains).toHaveLength(1);
+            expect(report.forbiddenPromiseThenChains[0]?.path).toBe('src/view.tsx');
+            expect(report.actionableAsyncOwnership).toHaveLength(1);
+            expect(report.actionableAsyncOwnership[0]?.path).toBe('src/view.tsx');
+            expect(hasBlockingViolations(report)).toBe(true);
+            expect(hasActionableReviewCandidates(report)).toBe(true);
+        } finally {
+            rmSync(rootDir, { recursive: true, force: true });
+        }
+    });
+
     it('suppresses local async handlers that already own failures with try/catch', () => {
         const rootDir = mkdtempSync(path.join(os.tmpdir(), 'agents-audit-'));
 
@@ -669,4 +710,3 @@ describe('auditAgentsConformance', () => {
         }
     });
 });
-

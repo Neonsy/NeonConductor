@@ -34,6 +34,26 @@ const nodeGlobs = [
 ];
 const nodeUntypedGlobs = ['electron/**/*.mjs', 'electron/**/__tests__/fixtures/**/*.cjs'];
 
+const strictPromiseGlobs = [
+    'electron/main/index.ts',
+    'electron/main/bootstrap/index.ts',
+    'electron/main/updates/updater.ts',
+    'electron/backend/providers/metadata/providerCatalogSyncCoordinator.ts',
+    'electron/backend/providers/adapters/openaiCompatible/realtimeWebsocket.ts',
+    'src/components/runtime/rendererReadySignal.ts',
+    'src/components/runtime/initialRendererBootStatus.ts',
+    'src/components/runtime/useRendererBootStatusReporter.ts',
+    'src/components/runtime/useRendererBootReadySignal.ts',
+    'src/components/settings/providerSettings/authenticationSection.tsx',
+    'src/components/settings/providerSettings/hooks/useProviderSettingsMutationCoordinator.ts',
+    'src/components/conversation/sidebar/sections/sidebarThreadBrowser.tsx',
+    'src/components/conversation/shell/useConversationShellViewControllers.ts',
+    'src/components/conversation/panels/useWorkflowLibraryController.ts',
+    'src/components/conversation/hooks/composerImageCompressionClient.ts',
+    'src/components/conversation/hooks/useConversationShellEditFlow.ts',
+    'src/lib/runtime/invalidation/queryInvalidation.ts',
+];
+
 const testGlobs = [
     'electron/**/*.{test,spec}.ts',
     'src/**/*.{test,spec}.{ts,tsx}',
@@ -245,6 +265,21 @@ export default [
             ...tanstackQueryRules,
             '@tanstack/query/exhaustive-deps': 'error',
             '@tanstack/query/no-unstable-deps': 'error',
+        },
+    },
+
+    {
+        files: strictPromiseGlobs,
+        rules: {
+            '@typescript-eslint/no-floating-promises': ['error', { ignoreVoid: false }],
+            '@typescript-eslint/no-misused-promises': [
+                'error',
+                {
+                    checksVoidReturn: {
+                        attributes: false,
+                    },
+                },
+            ],
         },
     },
 

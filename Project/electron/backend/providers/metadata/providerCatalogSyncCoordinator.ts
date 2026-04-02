@@ -1,17 +1,25 @@
-import { okProviderService } from '@/app/backend/providers/service/errors';
-import type { ProviderSyncResult } from '@/app/backend/providers/service/types';
 import {
     buildProviderCatalogScopeKey,
     resolveProviderCatalogFetchState,
     type ResolvedProviderCatalogContext,
     type ResolvedProviderCatalogFetchState,
 } from '@/app/backend/providers/metadata/catalogContext';
-import { ProviderCatalogReadCache } from '@/app/backend/providers/metadata/providerCatalogReadCache';
-import type { LogContext, ProviderCatalogRefreshReason } from '@/app/backend/providers/metadata/providerCatalogOrchestration.types';
-import { logBackgroundRefreshFailure, logStaleResyncFailure } from '@/app/backend/providers/metadata/providerCatalogSyncObservability';
+import type {
+    LogContext,
+    ProviderCatalogRefreshReason,
+} from '@/app/backend/providers/metadata/providerCatalogOrchestration.types';
 import { ProviderCatalogPersistenceLifecycle } from '@/app/backend/providers/metadata/providerCatalogPersistenceLifecycle';
+import { ProviderCatalogReadCache } from '@/app/backend/providers/metadata/providerCatalogReadCache';
 import { ProviderCatalogScopeInvalidationService } from '@/app/backend/providers/metadata/providerCatalogScopeInvalidationService';
+import {
+    logBackgroundRefreshFailure,
+    logStaleResyncFailure,
+} from '@/app/backend/providers/metadata/providerCatalogSyncObservability';
+import { okProviderService } from '@/app/backend/providers/service/errors';
+import type { ProviderSyncResult } from '@/app/backend/providers/service/types';
 import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
+
+import { launchBackgroundTask } from '@/shared/async/launchBackgroundTask';
 
 export class ProviderCatalogSyncCoordinator {
     private readonly refreshInFlight = new Map<string, Promise<ProviderSyncResult>>();
@@ -95,24 +103,31 @@ export class ProviderCatalogSyncCoordinator {
             ...(logContext ? { logContext } : {}),
         });
 
-        const wrappedPromise = refreshPromise.then(async (result) => {
+        const wrappedPromise = (async (): Promise<ProviderSyncResult> => {
+            const result = await refreshPromise;
+
             if (result.disposition === 'completed' && result.persistedModels) {
                 this.readCache.write(fetchState.context, result.persistedModels);
             }
 
             if (result.disposition === 'stale_during_persistence') {
-                void this.syncSupportedCatalog(profileId, providerId, true, 'background', logContext).catch((error: unknown) => {
-                    logStaleResyncFailure({
-                        profileId,
-                        providerId,
-                        error: error instanceof Error ? error.message : String(error),
-                        ...(logContext ? { logContext } : {}),
-                    });
-                });
+                launchBackgroundTask(
+                    async () => {
+                        await this.syncSupportedCatalog(profileId, providerId, true, 'background', logContext);
+                    },
+                    (error: unknown) => {
+                        logStaleResyncFailure({
+                            profileId,
+                            providerId,
+                            error: error instanceof Error ? error.message : String(error),
+                            ...(logContext ? { logContext } : {}),
+                        });
+                    }
+                );
             }
 
             return result.syncResult;
-        });
+        })();
 
         this.refreshInFlight.set(cacheKey, wrappedPromise);
         this.refreshContexts.set(cacheKey, fetchState.context);
@@ -130,7 +145,10 @@ export class ProviderCatalogSyncCoordinator {
     }
 
     scheduleBackgroundRefresh(profileId: string, providerId: RuntimeProviderId, logContext?: LogContext): void {
-        void this.syncSupportedCatalog(profileId, providerId, false, 'background', logContext).catch(
+        launchBackgroundTask(
+            async () => {
+                await this.syncSupportedCatalog(profileId, providerId, false, 'background', logContext);
+            },
             (error: unknown) => {
                 logBackgroundRefreshFailure({
                     profileId,

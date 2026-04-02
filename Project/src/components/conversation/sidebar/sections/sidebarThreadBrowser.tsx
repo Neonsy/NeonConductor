@@ -14,6 +14,7 @@ import type {
 } from '@/app/backend/persistence/types';
 import type { ProviderListItem } from '@/app/backend/providers/service/types';
 
+import { launchBackgroundTask } from '@/shared/async/launchBackgroundTask';
 import type { RuntimeProviderId, TopLevelTab } from '@/shared/contracts';
 
 interface SidebarThreadBrowserProps {
@@ -302,7 +303,8 @@ export function SidebarThreadBrowser({
                                         variant='outline'
                                         disabled={isAddingTag}
                                         onClick={() => {
-                                            void onAddTagToThread(selectedThread.id, newTagLabel).then((result) => {
+                                            launchBackgroundTask(async () => {
+                                                const result = await onAddTagToThread(selectedThread.id, newTagLabel);
                                                 if (result.ok) {
                                                     setNewTagLabel('');
                                                 }

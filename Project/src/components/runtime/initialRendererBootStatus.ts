@@ -53,9 +53,9 @@ export async function ensureInitialRendererBootStatusReport(): Promise<void> {
         reportState: 'pending',
     });
 
-    initialRendererBootStatusPromise = trpcClient.system.reportBootStatus
-        .mutate(initialRendererBootStatus)
-        .then((result) => {
+    initialRendererBootStatusPromise = (async () => {
+        try {
+            const result = await trpcClient.system.reportBootStatus.mutate(initialRendererBootStatus);
             if (!result.accepted) {
                 emitInitialRendererBootStatusSnapshot({
                     reportState: 'failed',
@@ -67,16 +67,15 @@ export async function ensureInitialRendererBootStatusReport(): Promise<void> {
             emitInitialRendererBootStatusSnapshot({
                 reportState: 'sent',
             });
-        })
-        .catch((error: unknown) => {
+        } catch (error: unknown) {
             emitInitialRendererBootStatusSnapshot({
                 reportState: 'failed',
                 reportErrorMessage: error instanceof Error ? error.message : String(error),
             });
-        })
-        .finally(() => {
+        } finally {
             initialRendererBootStatusPromise = null;
-        });
+        }
+    })();
 
     return initialRendererBootStatusPromise;
 }

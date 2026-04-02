@@ -23,15 +23,18 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061
         with:
-          version: 10
+          version: 10.28.2
       - name: Setup Node
         uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238
         with:
-          node-version: 24.13.1
+          node-version-file: Project/.nvmrc
           cache: pnpm
           cache-dependency-path: Project/pnpm-lock.yaml
       - name: Install
         run: pnpm -C Project install --frozen-lockfile
+      - name: Agent audit report
+        continue-on-error: true
+        run: pnpm -C Project audit:agents:report
       - name: Audit production dependencies
         run: pnpm -C Project audit --prod --audit-level=high
 
@@ -45,20 +48,19 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061
         with:
-          version: 10
+          version: 10.28.2
       - name: Setup Node
         uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238
         with:
-          node-version: 24.13.1
+          node-version-file: Project/.nvmrc
           cache: pnpm
           cache-dependency-path: Project/pnpm-lock.yaml
       - name: Install
         run: pnpm -C Project install --frozen-lockfile
-      - name: Lint
-        run: pnpm -C Project lint
-      - name: Typecheck
-        run: pnpm -C Project typecheck
-      - name: Test
-        run: pnpm -C Project test
+      - name: Check
+        run: pnpm -C Project check:fast
       - name: Build
-        run: pnpm -C Project build
+        run: pnpm -C Project build:app
+      - name: Agent audit report
+        continue-on-error: true
+        run: pnpm -C Project audit:agents:report

@@ -230,7 +230,7 @@ describe('bootstrapMainProcess', () => {
         const initAutoUpdater = vi.fn();
         const appRouter = {} as never;
 
-        bootstrapMainProcess(
+        await bootstrapMainProcess(
             {
                 createContext,
                 appRouter,
@@ -239,9 +239,6 @@ describe('bootstrapMainProcess', () => {
             },
             mainEntryUrl
         );
-
-        await Promise.resolve();
-        await Promise.resolve();
 
         const expectedUserDataPath = `${defaultUserDataPath}-dev`;
         const expectedDbPath = path.join(expectedUserDataPath, 'runtime', 'development', 'neonconductor.db');
@@ -312,7 +309,7 @@ describe('bootstrapMainProcess', () => {
         appState.isPackaged = true;
         const { bootstrapMainProcess } = await import('@/app/main/bootstrap');
 
-        bootstrapMainProcess(
+        await bootstrapMainProcess(
             {
                 createContext: vi.fn(() => Promise.resolve({} as never)),
                 appRouter: {} as never,
@@ -321,9 +318,6 @@ describe('bootstrapMainProcess', () => {
             },
             mainEntryUrl
         );
-
-        await Promise.resolve();
-        await Promise.resolve();
 
         expect(appSetPathSpy).not.toHaveBeenCalled();
         expect(initializePersistenceSpy).toHaveBeenCalledWith({
@@ -349,7 +343,7 @@ describe('bootstrapMainProcess', () => {
         process.env['NEONCONDUCTOR_USER_DATA_PATH'] = 'D:\\Temp\\neon-shell-validation';
         const { bootstrapMainProcess } = await import('@/app/main/bootstrap');
 
-        bootstrapMainProcess(
+        await bootstrapMainProcess(
             {
                 createContext: vi.fn(() => Promise.resolve({} as never)),
                 appRouter: {} as never,
@@ -358,9 +352,6 @@ describe('bootstrapMainProcess', () => {
             },
             mainEntryUrl
         );
-
-        await Promise.resolve();
-        await Promise.resolve();
 
         expect(appSetPathSpy).toHaveBeenCalledWith('userData', 'D:\\Temp\\neon-shell-validation');
         expect(initializePersistenceSpy).toHaveBeenCalledWith({

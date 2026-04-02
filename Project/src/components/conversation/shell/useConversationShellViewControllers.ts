@@ -5,14 +5,14 @@ import { setResolvedContextStateCache } from '@/web/components/context/contextSt
 import { useConversationShellBranchWorkflowFlow } from '@/web/components/conversation/hooks/useConversationShellBranchWorkflowFlow';
 import { useConversationShellEditFlow } from '@/web/components/conversation/hooks/useConversationShellEditFlow';
 import { useConversationShellRoutingBadge } from '@/web/components/conversation/hooks/useConversationShellRoutingBadge';
-import { buildConversationPlanOrchestrator } from '@/web/components/conversation/shell/composition/buildConversationPlanOrchestrator';
-import { buildConversationWorkspaceProjection } from '@/web/components/conversation/shell/composition/buildConversationWorkspaceProjection';
 import { buildConversationDialogProps } from '@/web/components/conversation/shell/buildConversationDialogProps';
-import { useToolArtifactViewerController } from '@/web/components/conversation/shell/useToolArtifactViewerController';
 import { buildConversationSidebarPaneProps } from '@/web/components/conversation/shell/buildConversationSidebarPaneProps';
 import { buildConversationWorkspaceSectionProps } from '@/web/components/conversation/shell/buildConversationWorkspaceSectionProps';
+import { buildConversationPlanOrchestrator } from '@/web/components/conversation/shell/composition/buildConversationPlanOrchestrator';
+import { buildConversationWorkspaceProjection } from '@/web/components/conversation/shell/composition/buildConversationWorkspaceProjection';
 import { setOrchestratorLatestCache } from '@/web/components/conversation/shell/planCache';
 import type { UseConversationShellViewControllersInput } from '@/web/components/conversation/shell/useConversationShellViewControllers.types';
+import { useToolArtifactViewerController } from '@/web/components/conversation/shell/useToolArtifactViewerController';
 import { createConversationThread } from '@/web/components/conversation/shell/workspace/createConversationThread';
 import { isEntityId, isProviderId } from '@/web/components/conversation/shell/workspace/helpers';
 import { useConversationWorkspaceActions } from '@/web/components/conversation/shell/workspace/useConversationWorkspaceActions';
@@ -20,11 +20,8 @@ import type { ThreadEntrySubmitResult } from '@/web/components/conversation/side
 
 import type { RunRecord, SessionSummaryRecord, ThreadListRecord } from '@/app/backend/persistence/types';
 
-
 import type { EntityId, RuntimeProviderId, TopLevelTab } from '@/shared/contracts';
 import { DEFAULT_COMPOSER_MAX_IMAGE_ATTACHMENTS_PER_MESSAGE } from '@/shared/contracts';
-import type { ResolvedContextState } from '@/shared/contracts/types/context';
-
 
 export function useConversationShellViewControllers(input: UseConversationShellViewControllersInput) {
     const {
@@ -277,8 +274,7 @@ export function useConversationShellViewControllers(input: UseConversationShellV
         ...(contextStateQuery.data ? { contextState: contextStateQuery.data } : {}),
         hasSelectedSession,
         maxImageAttachmentsPerMessage:
-            composerMediaSettings?.maxImageAttachmentsPerMessage ??
-            DEFAULT_COMPOSER_MAX_IMAGE_ATTACHMENTS_PER_MESSAGE,
+            composerMediaSettings?.maxImageAttachmentsPerMessage ?? DEFAULT_COMPOSER_MAX_IMAGE_ATTACHMENTS_PER_MESSAGE,
         onProfileChange,
         onModeChange,
         onReasoningEffortChange: setRequestedReasoningEffort,
@@ -314,17 +310,17 @@ export function useConversationShellViewControllers(input: UseConversationShellV
             }
             sessionActions.onModelChange(runTargetState.selectedProviderIdForComposer, modelId);
         },
-        onCompactContext: () => {
+        onCompactContext: async () => {
             const currentSessionId = selectedSessionId;
             if (!hasSelectedSession || !currentSessionId || contextStateQueryInput === skipToken) {
-                return Promise.resolve({
+                return {
                     tone: 'error' as const,
                     message: 'Context compaction is unavailable because no session is selected.',
-                });
+                };
             }
 
-            return mutations.compactSessionMutation
-                .mutateAsync({
+            try {
+                const result = await mutations.compactSessionMutation.mutateAsync({
                     profileId,
                     sessionId: currentSessionId,
                     providerId: contextStateQueryInput.providerId,
@@ -334,22 +330,22 @@ export function useConversationShellViewControllers(input: UseConversationShellV
                     ...(shellViewModel.selectedThread?.workspaceFingerprint
                         ? { workspaceFingerprint: shellViewModel.selectedThread.workspaceFingerprint }
                         : {}),
-                })
-                .then((result: { resolvedState: ResolvedContextState }) => {
-                    setResolvedContextStateCache({
-                        utils,
-                        queryInput: contextStateQueryInput,
-                        state: result.resolvedState,
-                    });
-                    return {
-                        tone: 'success' as const,
-                        message: 'Context compacted for the current session.',
-                    };
-                })
-                .catch((error: unknown) => ({
+                });
+                setResolvedContextStateCache({
+                    utils,
+                    queryInput: contextStateQueryInput,
+                    state: result.resolvedState,
+                });
+                return {
+                    tone: 'success' as const,
+                    message: 'Context compacted for the current session.',
+                };
+            } catch (error: unknown) {
+                return {
                     tone: 'error' as const,
                     message: error instanceof Error ? error.message : 'Context compaction failed.',
-                }));
+                };
+            }
         },
         focusComposerRequestKey,
         executionStrategy,
@@ -408,4 +404,3 @@ export function useConversationShellViewControllers(input: UseConversationShellV
         }),
     } as const;
 }
-

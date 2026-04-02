@@ -6,7 +6,6 @@ import { getSecretStoreInfo, initializeSecretStore } from '@/app/backend/secrets
 import type { Context } from '@/app/backend/trpc/context';
 import type { AppRouter } from '@/app/backend/trpc/router';
 import { registerWindowStateBridge } from '@/app/backend/trpc/routers/system/windowControls';
-import { handleStartupFailure } from '@/app/main/bootstrap/startupFailure';
 import { appLog, flushAppLogger, initAppLogger } from '@/app/main/logging';
 import { devServerUrl, getMainDirname, isDev } from '@/app/main/runtime/env';
 import { resolveDesktopStorage, resolveDesktopStoragePaths } from '@/app/main/runtime/storage';
@@ -24,7 +23,7 @@ interface BootstrapDeps {
     resolvePersistenceChannel: () => 'stable' | 'beta' | 'alpha';
 }
 
-export function bootstrapMainProcess(deps: BootstrapDeps, importMetaUrl: string): void {
+export async function bootstrapMainProcess(deps: BootstrapDeps, importMetaUrl: string): Promise<void> {
     const { createContext, appRouter, initAutoUpdater, resolvePersistenceChannel } = deps;
     const mainDirname = getMainDirname(importMetaUrl);
     const defaultUserDataPath = app.getPath('userData');
@@ -71,112 +70,115 @@ export function bootstrapMainProcess(deps: BootstrapDeps, importMetaUrl: string)
         return nextMainWindow;
     }
 
-    void app
-        .whenReady()
-        .then(() => {
-            initAppLogger({
-                isDev,
-                version: app.getVersion(),
-            });
-            reportMainBootStatus({
-                stage: 'main_initializing',
-            });
+    await app.whenReady();
 
-            const resolvedStorage = resolveDesktopStorage({
-                defaultUserDataPath,
-                isDev,
-                packagedRuntimeNamespace: isDev ? 'stable' : resolvePersistenceChannel(),
-            });
-            const storagePaths = resolveDesktopStoragePaths(resolvedStorage);
-            process.env['NEONCONDUCTOR_USER_DATA_PATH'] = resolvedStorage.userDataPath;
-            process.env['NEONCONDUCTOR_RUNTIME_NAMESPACE'] = resolvedStorage.runtimeNamespace;
-            process.env['NEONCONDUCTOR_PERSISTENCE_CHANNEL'] = resolvedStorage.runtimeNamespace;
-            appLog.info({
-                tag: 'runtime',
-                message: 'Runtime storage resolved.',
-                runtimeNamespace: resolvedStorage.runtimeNamespace,
-                userDataPath: resolvedStorage.userDataPath,
-                dbPath: storagePaths.dbPath,
-                isDevIsolatedStorage: resolvedStorage.isDevIsolatedStorage,
-            });
-            reportMainBootStatus({
-                stage: 'storage_ready',
-            });
+    initAppLogger({
+        isDev,
+        version: app.getVersion(),
+    });
+    reportMainBootStatus({
+        stage: 'main_initializing',
+    });
 
-            initializePersistence({
-                dbPath: storagePaths.dbPath,
-            });
-            reportMainBootStatus({
-                stage: 'persistence_ready',
-            });
-            initializeSecretStore();
-            const secretStoreInfo = getSecretStoreInfo();
-            appLog.info({
-                tag: 'secrets',
-                message: 'Provider secrets initialized.',
-                backend: secretStoreInfo.backend,
-            });
-            reportMainBootStatus({
-                stage: 'secrets_ready',
-            });
+    const resolvedStorage = resolveDesktopStorage({
+        defaultUserDataPath,
+        isDev,
+        packagedRuntimeNamespace: isDev ? 'stable' : resolvePersistenceChannel(),
+    });
+    const storagePaths = resolveDesktopStoragePaths(resolvedStorage);
+    process.env['NEONCONDUCTOR_USER_DATA_PATH'] = resolvedStorage.userDataPath;
+    process.env['NEONCONDUCTOR_RUNTIME_NAMESPACE'] = resolvedStorage.runtimeNamespace;
+    process.env['NEONCONDUCTOR_PERSISTENCE_CHANNEL'] = resolvedStorage.runtimeNamespace;
+    appLog.info({
+        tag: 'runtime',
+        message: 'Runtime storage resolved.',
+        runtimeNamespace: resolvedStorage.runtimeNamespace,
+        userDataPath: resolvedStorage.userDataPath,
+        dbPath: storagePaths.dbPath,
+        isDevIsolatedStorage: resolvedStorage.isDevIsolatedStorage,
+    });
+    reportMainBootStatus({
+        stage: 'storage_ready',
+    });
 
-            // Remove default menu bar (File, Edit, View, Help)
-            Menu.setApplicationMenu(null);
+    initializePersistence({
+        dbPath: storagePaths.dbPath,
+    });
+    reportMainBootStatus({
+        stage: 'persistence_ready',
+    });
+    initializeSecretStore();
+    const secretStoreInfo = getSecretStoreInfo();
+    appLog.info({
+        tag: 'secrets',
+        message: 'Provider secrets initialized.',
+        backend: secretStoreInfo.backend,
+    });
+    reportMainBootStatus({
+        stage: 'secrets_ready',
+    });
 
-            // Set up Content Security Policy via HTTP headers.
-            attachCspHeaders(runtimeCspOptions);
+    // Remove default menu bar (File, Edit, View, Help)
+    Menu.setApplicationMenu(null);
 
-            if (process.platform === 'win32') {
-                app.setAppUserModelId('com.neonsy.neonconductor');
-            }
+    // Set up Content Security Policy via HTTP headers.
+    attachCspHeaders(runtimeCspOptions);
 
-            mainWindow = createBootManagedMainWindow();
-            registerWindowStateBridge(mainWindow);
+    if (process.platform === 'win32') {
+        app.setAppUserModelId('com.neonsy.neonconductor');
+    }
 
-            // Wire up tRPC to handle IPC calls from the renderer
-            ipcHandler = createIPCHandler({
-                router: appRouter,
-                windows: [mainWindow],
-                createContext,
-            });
-            ipcMain.handle(PICK_DIRECTORY_CHANNEL, async () => {
-                const ownerWindow = BrowserWindow.getFocusedWindow() ?? mainWindow ?? undefined;
-                const dialogOptions: OpenDialogOptions = {
-                    title: 'Choose Workspace Folder',
-                    properties: ['openDirectory', 'createDirectory', 'dontAddToRecent'],
-                };
-                const result = ownerWindow
-                    ? await dialog.showOpenDialog(ownerWindow, dialogOptions)
-                    : await dialog.showOpenDialog(dialogOptions);
-                const absolutePath = result.filePaths[0];
+    mainWindow = createBootManagedMainWindow();
+    registerWindowStateBridge(mainWindow);
 
-                if (result.canceled || !absolutePath) {
-                    return { canceled: true } as const;
-                }
+    // Wire up tRPC to handle IPC calls from the renderer
+    ipcHandler = createIPCHandler({
+        router: appRouter,
+        windows: [mainWindow],
+        createContext,
+    });
+    ipcMain.handle(PICK_DIRECTORY_CHANNEL, async () => {
+        const ownerWindow = BrowserWindow.getFocusedWindow() ?? mainWindow ?? undefined;
+        const dialogOptions: OpenDialogOptions = {
+            title: 'Choose Workspace Folder',
+            properties: ['openDirectory', 'createDirectory', 'dontAddToRecent'],
+        };
+        const result = ownerWindow
+            ? await dialog.showOpenDialog(ownerWindow, dialogOptions)
+            : await dialog.showOpenDialog(dialogOptions);
+        const absolutePath = result.filePaths[0];
 
-                return {
-                    canceled: false as const,
-                    absolutePath,
-                };
-            });
-            reportMainBootStatus({
-                stage: 'renderer_connecting',
-                blockingPrerequisite: 'renderer_first_report',
-            });
+        if (result.canceled || !absolutePath) {
+            return { canceled: true } as const;
+        }
 
-            app.on('browser-window-created', (_event, window) => {
-                ipcHandler?.attachWindow(window);
-                registerWindowStateBridge(window);
-            });
+        return {
+            canceled: false as const,
+            absolutePath,
+        };
+    });
+    reportMainBootStatus({
+        stage: 'renderer_connecting',
+        blockingPrerequisite: 'renderer_first_report',
+    });
 
-            initAutoUpdater();
-        })
-        .catch((error: unknown) => handleStartupFailure(error));
+    app.on('browser-window-created', (_event, window) => {
+        ipcHandler.attachWindow(window);
+        registerWindowStateBridge(window);
+    });
+
+    initAutoUpdater();
 
     app.on('before-quit', () => {
         ipcMain.removeHandler(PICK_DIRECTORY_CHANNEL);
         closePersistence();
-        void flushAppLogger();
+        flushAppLogger().catch((error: unknown) => {
+            appLog.error({
+                tag: 'logging',
+                message: 'Failed to flush app logger before exit.',
+                ...(error instanceof Error ? { error: error.message } : { error: String(error) }),
+            });
+        });
     });
 
     // Standard quit behavior: exit when all windows closed (except macOS)

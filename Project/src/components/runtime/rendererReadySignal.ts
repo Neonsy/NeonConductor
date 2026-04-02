@@ -45,22 +45,21 @@ export async function ensureRendererReadySignal(): Promise<void> {
         readySignalState: 'pending',
     });
 
-    rendererReadySignalPromise = trpcClient.system.signalReady
-        .mutate()
-        .then(() => {
+    rendererReadySignalPromise = (async () => {
+        try {
+            await trpcClient.system.signalReady.mutate();
             emitRendererReadySignalSnapshot({
                 readySignalState: 'sent',
             });
-        })
-        .catch((error: unknown) => {
+        } catch (error: unknown) {
             emitRendererReadySignalSnapshot({
                 readySignalState: 'failed',
                 readySignalErrorMessage: error instanceof Error ? error.message : String(error),
             });
-        })
-        .finally(() => {
+        } finally {
             rendererReadySignalPromise = null;
-        });
+        }
+    })();
 
     return rendererReadySignalPromise;
 }

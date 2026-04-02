@@ -71,6 +71,7 @@ export interface AgentsConformanceReport {
     inlineLintSuppressions: ReviewedAuditViolation[];
     nonTestFrameworkImports: ReviewedAuditViolation[];
     forbiddenLayoutEffects: ReviewedAuditViolation[];
+    forbiddenPromiseThenChains: ReviewedAuditViolation[];
     rendererElectronImports: ReviewedAuditViolation[];
     nonPreloadElectronBridgeUsage: ReviewedAuditViolation[];
     insecureBrowserWindows: ReviewedAuditViolation[];

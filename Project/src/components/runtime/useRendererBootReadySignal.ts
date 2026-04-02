@@ -8,6 +8,8 @@ import {
     type RendererReadySignalSnapshot,
 } from '@/web/components/runtime/rendererReadySignal';
 
+import { launchBackgroundTask } from '@/shared/async/launchBackgroundTask';
+
 const isDev = import.meta.env.DEV;
 
 function getErrorMessage(error: unknown): string {
@@ -26,17 +28,22 @@ export function useRendererBootReadySignal(isReadyToSignal: boolean): RendererRe
             return;
         }
 
-        void ensureRendererReadySignal().catch((error: unknown) => {
-            if (!isDev) {
-                return;
-            }
+        launchBackgroundTask(
+            async () => {
+                await ensureRendererReadySignal();
+            },
+            (error: unknown) => {
+                if (!isDev) {
+                    return;
+                }
 
-            log.warn({
-                tag: 'window.boot',
-                message: 'Failed to send ready signal.',
-                error: getErrorMessage(error),
-            });
-        });
+                log.warn({
+                    tag: 'window.boot',
+                    message: 'Failed to send ready signal.',
+                    error: getErrorMessage(error),
+                });
+            }
+        );
     }, [isReadyToSignal, readySignalSnapshot.readySignalState]);
 
     return readySignalSnapshot;

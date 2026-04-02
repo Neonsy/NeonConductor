@@ -2,6 +2,7 @@ import { useState } from 'react';
 
 import { trpc } from '@/web/trpc/client';
 
+import { launchBackgroundTask } from '@/shared/async/launchBackgroundTask';
 import type { ProjectWorkflowRecord } from '@/shared/contracts';
 
 export type WorkflowFormMode = 'create' | 'edit';
@@ -71,9 +72,7 @@ function createEditWorkflowDraftState(workflow: ProjectWorkflowRecord): Workflow
     };
 }
 
-export function useWorkflowLibraryController(
-    input: UseWorkflowLibraryControllerInput
-): WorkflowLibraryController {
+export function useWorkflowLibraryController(input: UseWorkflowLibraryControllerInput): WorkflowLibraryController {
     const utils = trpc.useUtils();
     const workflowsQuery = trpc.workflow.list.useQuery(
         {
@@ -106,13 +105,13 @@ export function useWorkflowLibraryController(
         });
     };
 
-    const saveWorkflow = (branchAfterSave: boolean) => {
-        void (async () => {
-            setDraftState((current) => ({
-                ...current,
-                statusMessage: undefined,
-            }));
+    const saveWorkflow = (branchAfterSave: boolean): void => {
+        launchBackgroundTask(async () => {
             try {
+                setDraftState((current) => ({
+                    ...current,
+                    statusMessage: undefined,
+                }));
                 if (draftState.formMode === 'edit' && draftState.editingWorkflowId) {
                     const result = await updateWorkflowMutation.mutateAsync({
                         profileId: input.profileId,
@@ -155,18 +154,18 @@ export function useWorkflowLibraryController(
                     statusMessage: error instanceof Error ? error.message : 'Workflow save failed.',
                 }));
             }
-        })();
+        });
     };
 
-    const confirmDeleteWorkflow = (workflowId: string) => {
-        void deleteWorkflowMutation
-            .mutateAsync({
-                profileId: input.profileId,
-                workspaceFingerprint: input.workspaceFingerprint,
-                workflowId,
-                confirm: true,
-            })
-            .then(async () => {
+    const confirmDeleteWorkflow = (workflowId: string): void => {
+        launchBackgroundTask(async () => {
+            try {
+                await deleteWorkflowMutation.mutateAsync({
+                    profileId: input.profileId,
+                    workspaceFingerprint: input.workspaceFingerprint,
+                    workflowId,
+                    confirm: true,
+                });
                 setDraftState((current) => ({
                     ...current,
                     deleteCandidateId: undefined,
@@ -175,13 +174,13 @@ export function useWorkflowLibraryController(
                     resetWorkflowDraft();
                 }
                 await refreshList();
-            })
-            .catch((error: unknown) => {
+            } catch (error: unknown) {
                 setDraftState((current) => ({
                     ...current,
                     statusMessage: error instanceof Error ? error.message : 'Workflow delete failed.',
                 }));
-            });
+            }
+        });
     };
 
     return {
@@ -192,10 +191,14 @@ export function useWorkflowLibraryController(
         draftState,
         queryErrorMessage: workflowsQuery.error?.message,
         branchWithoutWorkflow: () => {
-            void input.onBranch(undefined);
+            launchBackgroundTask(async () => {
+                await input.onBranch(undefined);
+            });
         },
         branchWithWorkflow: (workflowId: string) => {
-            void input.onBranch(workflowId);
+            launchBackgroundTask(async () => {
+                await input.onBranch(workflowId);
+            });
         },
         startCreateWorkflowDraft: () => {
             setDraftState({

@@ -9,6 +9,8 @@ import electronUpdater, { type ProgressInfo } from 'electron-updater';
 
 import { appLog } from '@/app/main/logging';
 
+import { launchBackgroundTask } from '@/shared/async/launchBackgroundTask';
+
 export type UpdateChannel = 'stable' | 'beta' | 'alpha';
 type UpdateRequestKind = 'startup' | 'manual' | 'switch';
 
@@ -265,28 +267,33 @@ function startSwitchFlow(channel: UpdateChannel, options: { feedConfigured?: boo
         ? getAutoUpdater().checkForUpdates()
         : checkForUpdatesForSelectedChannel(channel, false);
 
-    void checkPromise.catch((error: unknown) => {
-        appLog.error({
-            tag: 'updates',
-            message: 'Failed to check for updates after channel switch.',
-            channel,
-            ...(error instanceof Error ? { error: error.message } : { error: String(error) }),
-        });
-        const request = activeRequest;
-        if (!request || request.kind !== 'switch' || request.channel !== channel) {
-            return;
-        }
+    launchBackgroundTask(
+        async () => {
+            await checkPromise;
+        },
+        (error: unknown) => {
+            appLog.error({
+                tag: 'updates',
+                message: 'Failed to check for updates after channel switch.',
+                channel,
+                ...(error instanceof Error ? { error: error.message } : { error: String(error) }),
+            });
+            const request = activeRequest;
+            if (!request || request.kind !== 'switch' || request.channel !== channel) {
+                return;
+            }
 
-        clearActiveRequest();
-        updateSwitchStatus({
-            phase: 'error',
-            channel,
-            percent: null,
-            message: toErrorMessage('switch'),
-            canInteract: true,
-        });
-        scheduleStatusReset(1500);
-    });
+            clearActiveRequest();
+            updateSwitchStatus({
+                phase: 'error',
+                channel,
+                percent: null,
+                message: toErrorMessage('switch'),
+                canInteract: true,
+            });
+            scheduleStatusReset(1500);
+        }
+    );
 }
 
 export function getCurrentChannel(): UpdateChannel {
@@ -596,17 +603,22 @@ export function initAutoUpdater(): void {
     });
 
     beginActiveRequest('startup', currentChannel, toBusyMessage('startup'));
-    void checkForUpdatesForSelectedChannel(currentChannel, true).catch((error: unknown) => {
-        appLog.warn({
-            tag: 'updates',
-            message: 'Initial updater check failed.',
-            ...(error instanceof Error ? { error: error.message } : { error: String(error) }),
-        });
-        const request = clearActiveRequest();
-        if (!request || request.kind !== 'startup') {
-            return;
-        }
+    launchBackgroundTask(
+        async () => {
+            await checkForUpdatesForSelectedChannel(currentChannel, true);
+        },
+        (error: unknown) => {
+            appLog.warn({
+                tag: 'updates',
+                message: 'Initial updater check failed.',
+                ...(error instanceof Error ? { error: error.message } : { error: String(error) }),
+            });
+            const request = clearActiveRequest();
+            if (!request || request.kind !== 'startup') {
+                return;
+            }
 
-        dismissUpdateStatus();
-    });
+            dismissUpdateStatus();
+        }
+    );
 }

@@ -13,6 +13,8 @@ import type {
     ProviderRuntimeUsage,
 } from '@/app/backend/providers/types';
 
+import { launchBackgroundTask } from '@/shared/async/launchBackgroundTask';
+
 interface RealtimeAccumulator {
     callId?: string;
     itemId?: string;
@@ -504,17 +506,22 @@ export async function streamOpenAIRealtimeWebSocketRuntime(input: {
                     return;
                 }
 
-                void handleRealtimeMessage(payload).catch((error: unknown) => {
-                    const errorResult = errProviderAdapter(
-                        'provider_request_failed',
-                        error instanceof Error ? error.message : 'OpenAI Realtime WebSocket processing failed.'
-                    );
-                    errorResult.match(
-                        () => undefined,
-                        () => undefined
-                    );
-                    settle(errorResult);
-                });
+                launchBackgroundTask(
+                    async () => {
+                        await handleRealtimeMessage(payload);
+                    },
+                    (error: unknown) => {
+                        const errorResult = errProviderAdapter(
+                            'provider_request_failed',
+                            error instanceof Error ? error.message : 'OpenAI Realtime WebSocket processing failed.'
+                        );
+                        errorResult.match(
+                            () => undefined,
+                            () => undefined
+                        );
+                        settle(errorResult);
+                    }
+                );
             };
 
             closeListener = (code, reason) => {

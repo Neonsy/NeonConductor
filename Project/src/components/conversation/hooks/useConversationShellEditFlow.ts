@@ -11,6 +11,7 @@ import { trpc } from '@/web/trpc/client';
 
 import type { RunRecord, SessionSummaryRecord, ThreadListRecord } from '@/app/backend/persistence/types';
 
+import { launchBackgroundTask } from '@/shared/async/launchBackgroundTask';
 import type { RuntimeProviderId, RuntimeRunOptions, SessionEditInput, TopLevelTab } from '@/shared/contracts';
 
 interface UseConversationShellEditFlowInput {
@@ -97,7 +98,7 @@ export function useConversationShellEditFlow(input: UseConversationShellEditFlow
                 replacementText: string;
                 editMode: 'truncate' | 'branch';
                 rememberChoice: boolean;
-            }) => {
+            }): Promise<void> => {
                 if (!pendingMessageEdit) {
                     return;
                 }
@@ -107,25 +108,25 @@ export function useConversationShellEditFlow(input: UseConversationShellEditFlow
                 }
 
                 input.onClearError();
-                void input
-                    .editSession({
-                        profileId: input.profileId,
-                        sessionId: input.selectedSessionId,
-                        topLevelTab: input.topLevelTab,
-                        modeKey: input.modeKey,
-                        messageId: pendingMessageEdit.messageId,
-                        replacementText: dialogInput.replacementText,
-                        editMode: dialogInput.editMode,
-                        autoStartRun: true,
-                        runtimeOptions: input.runtimeOptions,
-                        ...(input.resolvedRunTarget ? { providerId: input.resolvedRunTarget.providerId } : {}),
-                        ...(input.resolvedRunTarget ? { modelId: input.resolvedRunTarget.modelId } : {}),
-                        ...(input.selectedThread?.workspaceFingerprint
-                            ? { workspaceFingerprint: input.selectedThread.workspaceFingerprint }
-                            : {}),
-                        ...(input.selectedThread?.sandboxId ? { sandboxId: input.selectedThread.sandboxId } : {}),
-                    })
-                    .then(async (result) => {
+                launchBackgroundTask(
+                    async () => {
+                        const result = await input.editSession({
+                            profileId: input.profileId,
+                            sessionId: input.selectedSessionId,
+                            topLevelTab: input.topLevelTab,
+                            modeKey: input.modeKey,
+                            messageId: pendingMessageEdit.messageId,
+                            replacementText: dialogInput.replacementText,
+                            editMode: dialogInput.editMode,
+                            autoStartRun: true,
+                            runtimeOptions: input.runtimeOptions,
+                            ...(input.resolvedRunTarget ? { providerId: input.resolvedRunTarget.providerId } : {}),
+                            ...(input.resolvedRunTarget ? { modelId: input.resolvedRunTarget.modelId } : {}),
+                            ...(input.selectedThread?.workspaceFingerprint
+                                ? { workspaceFingerprint: input.selectedThread.workspaceFingerprint }
+                                : {}),
+                            ...(input.selectedThread?.sandboxId ? { sandboxId: input.selectedThread.sandboxId } : {}),
+                        });
                         if (!result.edited) {
                             input.onError(toEditFailureMessage(result.reason));
                             return;
@@ -168,11 +169,12 @@ export function useConversationShellEditFlow(input: UseConversationShellEditFlow
                             ...(result.run ? { run: result.run } : {}),
                             ...(result.thread ? { thread: result.thread } : {}),
                         });
-                    })
-                    .catch((error: unknown) => {
+                    },
+                    (error: unknown) => {
                         const message = error instanceof Error ? error.message : String(error);
                         input.onError(`Edit failed: ${message}`);
-                    });
+                    }
+                );
             },
         },
     };

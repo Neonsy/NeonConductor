@@ -6,6 +6,7 @@ import { ProviderCredentialSection } from '@/web/components/settings/providerSet
 import type { ProviderCredentialActionStatus } from '@/web/components/settings/providerSettings/authentication/providerCredentialSection';
 import type { ActiveAuthFlow, ProviderAuthStateView } from '@/web/components/settings/providerSettings/types';
 
+import { launchBackgroundTask } from '@/shared/async/launchBackgroundTask';
 import type { OpenAIExecutionMode, RuntimeProviderId } from '@/shared/contracts';
 
 interface ProviderAuthenticationSectionProps {
@@ -290,22 +291,23 @@ function ProviderAuthenticationDraftBoundary({
         }
 
         let cancelled = false;
-        void onLoadStoredCredential()
-            .then((credentialValue) => {
-                if (cancelled) {
-                    return;
-                }
+        const loadStoredCredential = async (): Promise<void> => {
+            const credentialValue = await onLoadStoredCredential();
+            if (cancelled) {
+                return;
+            }
 
-                setDraftState((current) =>
-                    applyHydratedKiloStoredCredential({
-                        draftState: current,
-                        selectedProviderId,
-                        credentialSource: credentialSummary?.credentialSource,
-                        credentialValue,
-                    })
-                );
-            })
-            .catch(() => undefined);
+            setDraftState((current) =>
+                applyHydratedKiloStoredCredential({
+                    draftState: current,
+                    selectedProviderId,
+                    credentialSource: credentialSummary?.credentialSource,
+                    credentialValue,
+                })
+            );
+        };
+
+        launchBackgroundTask(loadStoredCredential);
 
         return () => {
             cancelled = true;
@@ -344,21 +346,22 @@ function ProviderAuthenticationDraftBoundary({
         setCredentialActionStatus(result.status);
     };
 
-    const saveApiKey = () => {
-        void onSaveApiKey(draftState.apiKeyInput)
-            .then(() => {
-                setDraftState((current) => ({
-                    ...current,
-                    apiKeyInput: '',
-                    isCredentialVisible: false,
-                    hasLoadedStoredCredential: false,
-                }));
-            })
-            .catch(() => undefined);
+    const saveApiKey = (): void => {
+        launchBackgroundTask(async () => {
+            await onSaveApiKey(draftState.apiKeyInput);
+            setDraftState((current) => ({
+                ...current,
+                apiKeyInput: '',
+                isCredentialVisible: false,
+                hasLoadedStoredCredential: false,
+            }));
+        });
     };
 
-    const saveBaseUrlOverride = () => {
-        void onSaveBaseUrlOverride(draftState.baseUrlOverrideInput).catch(() => undefined);
+    const saveBaseUrlOverride = (): void => {
+        launchBackgroundTask(async () => {
+            await onSaveBaseUrlOverride(draftState.baseUrlOverrideInput);
+        });
     };
 
     return (

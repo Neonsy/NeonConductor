@@ -1,6 +1,6 @@
 import ts from 'typescript';
 
-import { isRendererSourceFile, isTestFile } from '@/scripts/audit/sourceFiles';
+import { isGeneratedSourceFile, isRendererSourceFile, isTestFile } from '@/scripts/audit/sourceFiles';
 
 import type { AuditSourceFile, AuditViolation } from '@/scripts/audit/types';
 
@@ -56,26 +56,6 @@ function getPropertyAccessName(callExpression: ts.CallExpression): string | unde
     }
 
     return undefined;
-}
-
-function isPromiseChainHandled(callExpression: ts.CallExpression): boolean {
-    const propertyAccessName = getPropertyAccessName(callExpression);
-    if (propertyAccessName === 'catch') {
-        return true;
-    }
-
-    if (propertyAccessName === 'then' && callExpression.arguments.length >= 2) {
-        return true;
-    }
-
-    if (propertyAccessName === 'finally' && ts.isPropertyAccessExpression(callExpression.expression)) {
-        const chainRoot = callExpression.expression.expression;
-        if (ts.isCallExpression(chainRoot)) {
-            return isPromiseChainHandled(chainRoot);
-        }
-    }
-
-    return false;
 }
 
 function containsMissingSentinel(node: ts.Node): boolean {
@@ -171,8 +151,7 @@ function functionBodyCanRejectOutward(
     const declarationName =
         ts.isFunctionDeclaration(declaration) && declaration.name
             ? declaration.name.text
-            : ts.isVariableDeclaration(declaration.parent) &&
-                ts.isIdentifier(declaration.parent.name)
+            : ts.isVariableDeclaration(declaration.parent) && ts.isIdentifier(declaration.parent.name)
               ? declaration.parent.name.text
               : undefined;
 
@@ -220,7 +199,7 @@ function functionBodyCanRejectOutward(
                 return !protectedByCatch;
             }
 
-            if (getPropertyAccessName(node) === 'then' && !isPromiseChainHandled(node)) {
+            if (getPropertyAccessName(node) === 'then') {
                 return !protectedByCatch;
             }
 
@@ -249,7 +228,7 @@ export function collectAsyncOwnershipViolations(files: AuditSourceFile[]): Audit
     const violations: AuditViolation[] = [];
 
     for (const file of files) {
-        if (isTestFile(file.relativePath) || !isRendererSourceFile(file.relativePath)) {
+        if (isTestFile(file.relativePath) || isGeneratedSourceFile(file.relativePath, file.content)) {
             continue;
         }
 
@@ -268,7 +247,7 @@ export function collectAsyncOwnershipViolations(files: AuditSourceFile[]): Audit
                 const propertyAccessName = getPropertyAccessName(callExpression);
 
                 const discardsAsyncMutation = propertyAccessName === 'mutateAsync' || propertyAccessName === 'refetch';
-                const discardsUnhandledThen = propertyAccessName === 'then' && !isPromiseChainHandled(callExpression);
+                const discardsDiscardedCatch = propertyAccessName === 'catch';
                 const discardsRejectingLocalAsyncCall =
                     ts.isIdentifier(callExpression.expression) &&
                     (() => {
@@ -280,7 +259,7 @@ export function collectAsyncOwnershipViolations(files: AuditSourceFile[]): Audit
                         return functionBodyCanRejectOutward(localAsyncDeclaration, asyncDeclarations, new Set());
                     })();
 
-                if (discardsAsyncMutation || discardsUnhandledThen || discardsRejectingLocalAsyncCall) {
+                if (discardsAsyncMutation || discardsDiscardedCatch || discardsRejectingLocalAsyncCall) {
                     pushUniqueViolation(violations, {
                         path: file.relativePath,
                         line: getLineNumber(sourceFile, node),
@@ -288,6 +267,40 @@ export function collectAsyncOwnershipViolations(files: AuditSourceFile[]): Audit
                             'Review discarded async action and own the rejection path with await/catch or a fail-closed helper.',
                     });
                 }
+            }
+
+            ts.forEachChild(node, visit);
+        }
+
+        visit(sourceFile);
+    }
+
+    return violations;
+}
+
+export function collectPromiseThenViolations(files: AuditSourceFile[]): AuditViolation[] {
+    const violations: AuditViolation[] = [];
+
+    for (const file of files) {
+        if (isTestFile(file.relativePath) || isGeneratedSourceFile(file.relativePath, file.content)) {
+            continue;
+        }
+
+        const sourceFile = ts.createSourceFile(
+            file.relativePath,
+            file.content,
+            ts.ScriptTarget.Latest,
+            true,
+            ts.ScriptKind.TSX
+        );
+
+        function visit(node: ts.Node): void {
+            if (ts.isCallExpression(node) && getPropertyAccessName(node) === 'then') {
+                pushUniqueViolation(violations, {
+                    path: file.relativePath,
+                    line: getLineNumber(sourceFile, node),
+                    message: 'Promise.then chains are not allowed in handwritten non-test source; use await instead.',
+                });
             }
 
             ts.forEachChild(node, visit);
@@ -376,4 +389,3 @@ export function collectCallSiteCastViolations(files: AuditSourceFile[]): AuditVi
 
     return violations;
 }
-

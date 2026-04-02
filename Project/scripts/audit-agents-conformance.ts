@@ -1,13 +1,13 @@
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-
 import { buildAuditSummary, formatAuditWorklist } from '@/scripts/audit/reporting';
 import { annotateReviewCategories } from '@/scripts/audit/reviewManifest';
 import {
     collectAsyncOwnershipViolations,
     collectCallSiteCastViolations,
     collectPlaceholderQueryInputViolations,
+    collectPromiseThenViolations,
 } from '@/scripts/audit/rules/astActionableRules';
 import {
     collectRepositoryTextFiles,
@@ -420,6 +420,7 @@ function buildReportFromCategories(categories: AuditCategoryReport[]): AgentsCon
         inlineLintSuppressions: findViolations('inline-lint-suppressions'),
         nonTestFrameworkImports: findViolations('non-test-framework-imports'),
         forbiddenLayoutEffects: findViolations('forbidden-layout-effects'),
+        forbiddenPromiseThenChains: findViolations('forbidden-promise-then-chains'),
         rendererElectronImports: findViolations('renderer-electron-imports'),
         nonPreloadElectronBridgeUsage: findViolations('non-preload-electron-bridge-usage'),
         insecureBrowserWindows: findViolations('insecure-browserwindows'),
@@ -539,6 +540,12 @@ export function auditAgentsConformance(rootDir: string): AgentsConformanceReport
                 message:
                     'useLayoutEffect is not allowed unless the file is explicitly allowlisted for a proven pre-paint layout need.',
             }),
+        },
+        {
+            key: 'forbidden-promise-then-chains',
+            label: 'Forbidden promise then chains',
+            lane: 'blocking',
+            violations: collectPromiseThenViolations(sourceFiles),
         },
         {
             key: 'renderer-electron-imports',
@@ -722,4 +729,3 @@ if (isDirectExecution(import.meta.url)) {
         worklistOptions,
     });
 }
-

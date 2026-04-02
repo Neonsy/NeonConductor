@@ -9,6 +9,8 @@ import {
     type BootStatusSnapshot,
 } from '@/app/shared/splashContract';
 
+import { launchBackgroundTask } from '@/shared/async/launchBackgroundTask';
+
 const isDev = import.meta.env.DEV;
 
 function getErrorMessage(error: unknown): string {
@@ -37,18 +39,23 @@ export function useRendererBootStatusReporter(status: BootStatusSnapshot): void 
             });
         }
 
-        void trpcClient.system.reportBootStatus.mutate(nextStatus).catch((error: unknown) => {
-            if (!isDev) {
-                return;
-            }
+        launchBackgroundTask(
+            async () => {
+                await trpcClient.system.reportBootStatus.mutate(nextStatus);
+            },
+            (error: unknown) => {
+                if (!isDev) {
+                    return;
+                }
 
-            log.warn({
-                tag: 'window.boot',
-                message: 'Failed to report renderer boot status.',
-                stage: nextStatus.stage,
-                blockingPrerequisite: nextStatus.blockingPrerequisite,
-                error: getErrorMessage(error),
-            });
-        });
+                log.warn({
+                    tag: 'window.boot',
+                    message: 'Failed to report renderer boot status.',
+                    stage: nextStatus.stage,
+                    blockingPrerequisite: nextStatus.blockingPrerequisite,
+                    error: getErrorMessage(error),
+                });
+            }
+        );
     }, [statusDisplaySignature, statusSignature]);
 }

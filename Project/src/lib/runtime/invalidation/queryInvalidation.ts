@@ -2,8 +2,8 @@ import type { RuntimeEventContext, TrpcUtils } from '@/web/lib/runtime/invalidat
 
 import type { EntityId } from '@/shared/contracts';
 
-function toVoidPromise<TResult>(task: Promise<TResult>): Promise<void> {
-    return task.then(() => undefined);
+async function toVoidPromise<TResult>(task: Promise<TResult>): Promise<void> {
+    await task;
 }
 
 export function addInvalidation(invalidations: Promise<void>[], task: Promise<void> | undefined): void {
@@ -150,14 +150,16 @@ export function invalidateOrchestratorLatest(utils: TrpcUtils, context: RuntimeE
 }
 
 export function invalidateProfileQueries(utils: TrpcUtils, profileId: string | undefined): Promise<void> {
-    return Promise.all([
-        utils.profile.list.invalidate(),
-        utils.profile.getActive.invalidate(),
-        utils.profile.getExecutionPreset.invalidate(),
-        utils.profile.getUtilityModel.invalidate(),
-        utils.profile.getMemoryRetrievalModel.invalidate(),
-        invalidateShellBootstrap(utils, profileId),
-    ]).then(() => undefined);
+    return toVoidPromise(
+        Promise.all([
+            utils.profile.list.invalidate(),
+            utils.profile.getActive.invalidate(),
+            utils.profile.getExecutionPreset.invalidate(),
+            utils.profile.getUtilityModel.invalidate(),
+            utils.profile.getMemoryRetrievalModel.invalidate(),
+            invalidateShellBootstrap(utils, profileId),
+        ])
+    );
 }
 
 export async function invalidateRuntimeResetQueries(utils: TrpcUtils): Promise<void> {

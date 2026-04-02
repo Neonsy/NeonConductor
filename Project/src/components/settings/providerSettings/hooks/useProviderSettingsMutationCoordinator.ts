@@ -1,5 +1,4 @@
 import { methodLabel } from '@/web/components/settings/providerSettings/helpers';
-import { patchProviderCache } from '@/web/components/settings/providerSettings/providerSettingsCache';
 import {
     getApiKeySavedStatusMessage,
     getAuthFlowCancelledStatusMessage,
@@ -17,12 +16,14 @@ import {
     getProviderNotFoundStatusMessage,
     getUnsupportedDefaultProviderStatusMessage,
 } from '@/web/components/settings/providerSettings/hooks/providerSettingsStatusPolicy';
+import { patchProviderCache } from '@/web/components/settings/providerSettings/providerSettingsCache';
 import type { ActiveAuthFlow } from '@/web/components/settings/providerSettings/types';
 import { isOneOf } from '@/web/lib/typeGuards/isOneOf';
 import { trpc } from '@/web/trpc/client';
 
 import type { ProviderAuthStateRecord } from '@/app/backend/persistence/types';
 
+import { launchBackgroundTask } from '@/shared/async/launchBackgroundTask';
 import { providerIds, type RuntimeProviderId } from '@/shared/contracts';
 
 interface UseProviderSettingsMutationCoordinatorInput {
@@ -63,12 +64,33 @@ export function useProviderSettingsMutationCoordinator(input: UseProviderSetting
     };
 
     const invalidateShellBootstrap = () => {
-        void utils.runtime.getShellBootstrap.invalidate({ profileId: input.profileId });
+        launchBackgroundTask(async () => {
+            await utils.runtime.getShellBootstrap.invalidate({ profileId: input.profileId });
+        });
+    };
+
+    const invalidateCredentialQueries = (providerId: RuntimeProviderId) => {
+        launchBackgroundTask(async () => {
+            await Promise.all([
+                utils.provider.getCredentialSummary.invalidate({
+                    profileId: input.profileId,
+                    providerId,
+                }),
+                utils.provider.getCredentialValue.invalidate({
+                    profileId: input.profileId,
+                    providerId,
+                }),
+            ]);
+        });
     };
 
     const invalidateCodexUsageAndRateLimits = () => {
-        void utils.provider.getOpenAISubscriptionUsage.invalidate({ profileId: input.profileId });
-        void utils.provider.getOpenAISubscriptionRateLimits.invalidate({ profileId: input.profileId });
+        launchBackgroundTask(async () => {
+            await Promise.all([
+                utils.provider.getOpenAISubscriptionUsage.invalidate({ profileId: input.profileId }),
+                utils.provider.getOpenAISubscriptionRateLimits.invalidate({ profileId: input.profileId }),
+            ]);
+        });
     };
 
     const setDefaultMutation = trpc.provider.setDefault.useMutation({
@@ -110,14 +132,7 @@ export function useProviderSettingsMutationCoordinator(input: UseProviderSetting
                 providerId: variables.providerId,
                 authState: result.state,
             });
-            void utils.provider.getCredentialSummary.invalidate({
-                profileId: input.profileId,
-                providerId: variables.providerId,
-            });
-            void utils.provider.getCredentialValue.invalidate({
-                profileId: input.profileId,
-                providerId: variables.providerId,
-            });
+            invalidateCredentialQueries(variables.providerId);
             if (variables.providerId === 'openai_codex') {
                 invalidateCodexUsageAndRateLimits();
             }
@@ -235,7 +250,9 @@ export function useProviderSettingsMutationCoordinator(input: UseProviderSetting
                 updatedAt: new Date().toISOString(),
             });
             if (variables.providerId === 'kilo' && result.verificationUri) {
-                void openExternalUrlMutation.mutateAsync({ url: result.verificationUri }).catch(() => undefined);
+                launchBackgroundTask(async () => {
+                    await openExternalUrlMutation.mutateAsync({ url: result.verificationUri });
+                });
             }
             if (variables.providerId === 'openai_codex') {
                 invalidateCodexUsageAndRateLimits();
@@ -256,26 +273,21 @@ export function useProviderSettingsMutationCoordinator(input: UseProviderSetting
             input.setStatusMessage(getAuthFlowCompletedStatusMessage(result.flow.status, result.state.authState));
             input.setActiveAuthFlow(undefined);
             if (variables.providerId === 'kilo') {
-                void utils.provider.getAccountContext.invalidate({
-                    profileId: input.profileId,
-                    providerId: 'kilo',
+                launchBackgroundTask(async () => {
+                    await Promise.all([
+                        utils.provider.getAccountContext.invalidate({
+                            profileId: input.profileId,
+                            providerId: 'kilo',
+                        }),
+                        syncCatalogMutation.mutateAsync({
+                            profileId: input.profileId,
+                            providerId: 'kilo',
+                            force: true,
+                        }),
+                    ]);
                 });
-                void syncCatalogMutation
-                    .mutateAsync({
-                        profileId: input.profileId,
-                        providerId: 'kilo',
-                        force: true,
-                    })
-                    .catch(() => undefined);
             }
-            void utils.provider.getCredentialSummary.invalidate({
-                profileId: input.profileId,
-                providerId: variables.providerId,
-            });
-            void utils.provider.getCredentialValue.invalidate({
-                profileId: input.profileId,
-                providerId: variables.providerId,
-            });
+            invalidateCredentialQueries(variables.providerId);
             if (variables.providerId === 'openai_codex') {
                 invalidateCodexUsageAndRateLimits();
             }
