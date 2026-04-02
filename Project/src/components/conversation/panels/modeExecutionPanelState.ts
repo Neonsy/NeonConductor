@@ -17,6 +17,10 @@ export interface ModeExecutionPlanView {
     id: EntityId<'plan'>;
     status: 'awaiting_answers' | 'draft' | 'approved' | 'implementing' | 'implemented' | 'failed' | 'cancelled';
     summaryMarkdown: string;
+    currentRevisionId: EntityId<'prev'>;
+    currentRevisionNumber: number;
+    approvedRevisionId?: EntityId<'prev'>;
+    approvedRevisionNumber?: number;
     questions: PlanQuestionView[];
     items: PlanItemView[];
 }

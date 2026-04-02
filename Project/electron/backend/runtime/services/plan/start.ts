@@ -37,6 +37,8 @@ export async function startPlanFlow(
         sessionId: input.sessionId,
         topLevelTab: input.topLevelTab,
         planId: plan.id,
+        revisionId: plan.currentRevisionId,
+        revisionNumber: plan.currentRevisionNumber,
     });
     await appendPlanQuestionRequestedEvents({
         planId: plan.id,

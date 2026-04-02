@@ -688,6 +688,10 @@ export interface PlanRecord {
     summaryMarkdown: string;
     questions: PlanQuestionRecord[];
     answers: Record<string, string>;
+    currentRevisionId: EntityId<'prev'>;
+    currentRevisionNumber: number;
+    approvedRevisionId?: EntityId<'prev'>;
+    approvedRevisionNumber?: number;
     workspaceFingerprint?: string;
     implementationRunId?: EntityId<'run'>;
     orchestratorRunId?: EntityId<'orch'>;
@@ -707,6 +711,24 @@ export interface PlanItemRecord {
     errorMessage?: string;
     createdAt: string;
     updatedAt: string;
+}
+
+export interface PlanRevisionRecord {
+    id: EntityId<'prev'>;
+    planId: EntityId<'plan'>;
+    revisionNumber: number;
+    summaryMarkdown: string;
+    createdByKind: 'start' | 'revise';
+    createdAt: string;
+    supersededAt?: string;
+}
+
+export interface PlanRevisionItemRecord {
+    id: EntityId<'step'>;
+    planRevisionId: EntityId<'prev'>;
+    sequence: number;
+    description: string;
+    createdAt: string;
 }
 
 export interface OrchestratorRunRecord {

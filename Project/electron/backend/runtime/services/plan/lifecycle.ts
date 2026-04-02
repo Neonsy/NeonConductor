@@ -1,6 +1,6 @@
 import { planStore } from '@/app/backend/persistence/stores';
 import type { PlanAnswerQuestionInput, PlanRecordView, PlanReviseInput } from '@/app/backend/runtime/contracts';
-import { appendPlanQuestionAnsweredEvent } from '@/app/backend/runtime/services/plan/events';
+import { appendPlanQuestionAnsweredEvent, appendPlanRevisedEvent } from '@/app/backend/runtime/services/plan/events';
 import { requirePlanView } from '@/app/backend/runtime/services/plan/views';
 
 export async function answerPlanQuestion(
@@ -26,15 +26,22 @@ export async function answerPlanQuestion(
 export async function revisePlan(
     input: PlanReviseInput
 ): Promise<{ found: false } | { found: true; plan: PlanRecordView }> {
-    const revised = await planStore.revise(input.planId, input.summaryMarkdown);
+    const descriptions = input.items
+        .map((item) => item.description.trim())
+        .filter((description) => description.length > 0);
+    const revised = await planStore.revise(input.planId, input.summaryMarkdown, descriptions);
     if (!revised || revised.profileId !== input.profileId) {
         return { found: false };
     }
 
-    const descriptions = input.items
-        .map((item) => item.description.trim())
-        .filter((description) => description.length > 0);
-    const items = await planStore.replaceItems(input.planId, descriptions);
+    await appendPlanRevisedEvent({
+        profileId: input.profileId,
+        planId: input.planId,
+        revisionId: revised.currentRevisionId,
+        revisionNumber: revised.currentRevisionNumber,
+    });
+
+    const items = await planStore.listItems(input.planId);
 
     return {
         found: true,

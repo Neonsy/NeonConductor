@@ -71,15 +71,20 @@ describe('runtime contracts: planning and orchestrator', () => {
             questionId: 'constraints',
             answer: 'Keep it deterministic.',
         });
-        await caller.plan.revise({
+        const revised = await caller.plan.revise({
             profileId,
             planId: started.plan.id,
             summaryMarkdown: '# Single child plan',
             items: [{ description: 'Only child step' }],
         });
+        expect(revised.found).toBe(true);
+        if (!revised.found) {
+            throw new Error('Expected child-guard revision.');
+        }
         await caller.plan.approve({
             profileId,
             planId: started.plan.id,
+            revisionId: revised.plan.currentRevisionId,
         });
 
         const implemented = await caller.plan.implement({
@@ -132,15 +137,20 @@ describe('runtime contracts: planning and orchestrator', () => {
             questionId: 'constraints',
             answer: 'This should be rejected.',
         });
-        await caller.plan.revise({
+        const childRevised = await caller.plan.revise({
             profileId,
             planId: childPlan.plan.id,
             summaryMarkdown: '# Nested child orchestrator attempt',
             items: [{ description: 'Nested step' }],
         });
+        expect(childRevised.found).toBe(true);
+        if (!childRevised.found) {
+            throw new Error('Expected nested child revision.');
+        }
         await caller.plan.approve({
             profileId,
             planId: childPlan.plan.id,
+            revisionId: childRevised.plan.currentRevisionId,
         });
 
         await expect(
@@ -190,15 +200,20 @@ describe('runtime contracts: planning and orchestrator', () => {
             questionId: 'constraints',
             answer: 'Fail closed if the delegated worker cannot start.',
         });
-        await caller.plan.revise({
+        const revised = await caller.plan.revise({
             profileId,
             planId: started.plan.id,
             summaryMarkdown: '# Failed child start plan',
             items: [{ description: 'Delegated child start should reject.' }],
         });
+        expect(revised.found).toBe(true);
+        if (!revised.found) {
+            throw new Error('Expected rollback revision.');
+        }
         await caller.plan.approve({
             profileId,
             planId: started.plan.id,
+            revisionId: revised.plan.currentRevisionId,
         });
 
         const startRunSpy = vi.spyOn(runExecutionService, 'startRun').mockResolvedValue({

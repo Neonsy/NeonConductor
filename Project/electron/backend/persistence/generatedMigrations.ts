@@ -886,6 +886,8 @@ CREATE TABLE plan_records (
     summary_markdown TEXT NOT NULL,
     questions_json TEXT NOT NULL DEFAULT '[]',
     answers_json TEXT NOT NULL DEFAULT '{}',
+    current_revision_id TEXT NOT NULL,
+    approved_revision_id TEXT NULL,
     workspace_fingerprint TEXT NULL,
     implementation_run_id TEXT NULL,
     orchestrator_run_id TEXT NULL,
@@ -895,6 +897,27 @@ CREATE TABLE plan_records (
     updated_at TEXT NOT NULL,
     FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
     FOREIGN KEY (implementation_run_id) REFERENCES runs(id) ON DELETE SET NULL
+);
+
+CREATE TABLE plan_revisions (
+    id TEXT PRIMARY KEY,
+    plan_id TEXT NOT NULL,
+    revision_number INTEGER NOT NULL CHECK (revision_number > 0),
+    summary_markdown TEXT NOT NULL,
+    created_by_kind TEXT NOT NULL CHECK (created_by_kind IN ('start', 'revise')),
+    created_at TEXT NOT NULL,
+    superseded_at TEXT NULL,
+    FOREIGN KEY (plan_id) REFERENCES plan_records(id) ON DELETE CASCADE,
+    UNIQUE (plan_id, revision_number)
+);
+
+CREATE TABLE plan_revision_items (
+    id TEXT PRIMARY KEY,
+    plan_revision_id TEXT NOT NULL,
+    sequence INTEGER NOT NULL,
+    description TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (plan_revision_id) REFERENCES plan_revisions(id) ON DELETE CASCADE
 );
 
 CREATE TABLE plan_items (

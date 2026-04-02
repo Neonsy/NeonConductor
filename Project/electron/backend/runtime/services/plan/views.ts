@@ -38,6 +38,10 @@ export function toPlanView(
         status: plan.status,
         sourcePrompt: plan.sourcePrompt,
         summaryMarkdown: plan.summaryMarkdown,
+        currentRevisionId: plan.currentRevisionId,
+        currentRevisionNumber: plan.currentRevisionNumber,
+        ...(plan.approvedRevisionId ? { approvedRevisionId: plan.approvedRevisionId } : {}),
+        ...(plan.approvedRevisionNumber !== undefined ? { approvedRevisionNumber: plan.approvedRevisionNumber } : {}),
         questions: plan.questions.map((question) => ({
             id: question.id,
             question: question.question,

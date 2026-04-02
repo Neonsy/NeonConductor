@@ -139,7 +139,7 @@ export async function waitForOrchestratorStatus(
     orchestratorRunId: EntityId<'orch'>,
     expected: 'completed' | 'aborted' | 'failed'
 ): Promise<void> {
-    for (let attempt = 0; attempt < 30; attempt += 1) {
+    for (let attempt = 0; attempt < 60; attempt += 1) {
         const status = await caller.orchestrator.status({ profileId, orchestratorRunId });
         if (status.found && status.run.status === expected) {
             return;

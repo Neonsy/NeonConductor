@@ -74,16 +74,21 @@ describe('runtime contracts: planning and orchestrator', () => {
         });
         expect(answered.found).toBe(true);
 
-        await caller.plan.revise({
+        const revised = await caller.plan.revise({
             profileId,
             planId: started.plan.id,
             summaryMarkdown: '# Orchestrator Plan\n\nExecute two sequential tasks.',
             items: [{ description: 'Step one task' }, { description: 'Step two task' }],
         });
+        expect(revised.found).toBe(true);
+        if (!revised.found) {
+            throw new Error('Expected sequential orchestrator revision.');
+        }
 
         const approved = await caller.plan.approve({
             profileId,
             planId: started.plan.id,
+            revisionId: revised.plan.currentRevisionId,
         });
         expect(approved.found).toBe(true);
 
@@ -197,15 +202,20 @@ describe('runtime contracts: planning and orchestrator', () => {
             questionId: 'constraints',
             answer: 'Parallel child lanes should fail closed.',
         });
-        await caller.plan.revise({
+        const revised = await caller.plan.revise({
             profileId,
             planId: started.plan.id,
             summaryMarkdown: '# Parallel Orchestrator Plan',
             items: [{ description: 'Parallel step one' }, { description: 'Parallel step two' }],
         });
+        expect(revised.found).toBe(true);
+        if (!revised.found) {
+            throw new Error('Expected parallel orchestrator revision.');
+        }
         await caller.plan.approve({
             profileId,
             planId: started.plan.id,
+            revisionId: revised.plan.currentRevisionId,
         });
 
         const implemented = await caller.plan.implement({
@@ -361,15 +371,20 @@ describe('runtime contracts: planning and orchestrator', () => {
             questionId: 'constraints',
             answer: 'Keep abort terminal and require a fresh approval before retry.',
         });
-        await caller.plan.revise({
+        const revised = await caller.plan.revise({
             profileId,
             planId: started.plan.id,
             summaryMarkdown: '# Parallel Abort Recovery Plan',
             items: [{ description: 'Parallel child one' }, { description: 'Parallel child two' }],
         });
+        expect(revised.found).toBe(true);
+        if (!revised.found) {
+            throw new Error('Expected abort-recovery revision.');
+        }
         await caller.plan.approve({
             profileId,
             planId: started.plan.id,
+            revisionId: revised.plan.currentRevisionId,
         });
 
         const firstImplementation = await caller.plan.implement({
@@ -504,6 +519,7 @@ describe('runtime contracts: planning and orchestrator', () => {
         const reapproved = await caller.plan.approve({
             profileId,
             planId: started.plan.id,
+            revisionId: revised.plan.currentRevisionId,
         });
         expect(reapproved.found).toBe(true);
         if (!reapproved.found) {

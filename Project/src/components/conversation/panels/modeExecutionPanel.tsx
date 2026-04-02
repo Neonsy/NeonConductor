@@ -92,6 +92,8 @@ export function ModeExecutionPanel({
                         <div className='space-y-3'>
                             <p className='text-xs'>
                                 Status: <span className='font-medium'>{activePlan.status}</span>
+                                {' · '}
+                                Revision: <span className='font-medium'>{String(activePlan.currentRevisionNumber)}</span>
                             </p>
                             {activePlan.questions.map((question) => (
                                 <div key={question.id} className='space-y-1'>
@@ -245,7 +247,7 @@ export function ModeExecutionPanel({
                                     variant='outline'
                                     disabled={isPlanMutating || activePlan.status === 'approved'}
                                     onClick={() => {
-                                        onApprovePlan(activePlan.id);
+                                        onApprovePlan(activePlan.id, activePlan.currentRevisionId);
                                     }}>
                                     Approve
                                 </Button>

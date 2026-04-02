@@ -253,15 +253,20 @@ name: Delegated Repo Search
             questionId: 'constraints',
             answer: 'Keep the child on the same sandbox and inherit attached registry context.',
         });
-        await caller.plan.revise({
+        const revised = await caller.plan.revise({
             profileId,
             planId: started.plan.id,
             summaryMarkdown: '# Delegated Context Plan',
             items: [{ description: 'Execute one delegated child with inherited context.' }],
         });
+        expect(revised.found).toBe(true);
+        if (!revised.found) {
+            throw new Error('Expected delegated context revision.');
+        }
         await caller.plan.approve({
             profileId,
             planId: started.plan.id,
+            revisionId: revised.plan.currentRevisionId,
         });
 
         const implemented = await caller.plan.implement({
@@ -435,15 +440,20 @@ name: Delegated Repo Search
             questionId: 'constraints',
             answer: 'Do not create or bind a sandbox for the child lane.',
         });
-        await caller.plan.revise({
+        const revised = await caller.plan.revise({
             profileId,
             planId: started.plan.id,
             summaryMarkdown: '# Local Delegation Plan',
             items: [{ description: 'Run one delegated local child.' }],
         });
+        expect(revised.found).toBe(true);
+        if (!revised.found) {
+            throw new Error('Expected local delegation revision.');
+        }
         await caller.plan.approve({
             profileId,
             planId: started.plan.id,
+            revisionId: revised.plan.currentRevisionId,
         });
 
         const implemented = await caller.plan.implement({
@@ -567,15 +577,20 @@ name: Delegated Repo Search
             questionId: 'constraints',
             answer: 'Fail closed and reconcile plan state.',
         });
-        await caller.plan.revise({
+        const revised = await caller.plan.revise({
             profileId,
             planId: started.plan.id,
             summaryMarkdown: '# Abort Orchestrator Plan',
             items: [{ description: 'Long-running delegated child' }],
         });
+        expect(revised.found).toBe(true);
+        if (!revised.found) {
+            throw new Error('Expected abort-plan revision.');
+        }
         await caller.plan.approve({
             profileId,
             planId: started.plan.id,
+            revisionId: revised.plan.currentRevisionId,
         });
 
         const implemented = await caller.plan.implement({

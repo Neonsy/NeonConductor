@@ -65,17 +65,19 @@ export class PlanService {
         return revisePlan(input);
     }
 
-    async approve(
-        profileId: string,
-        planId: EntityId<'plan'>
-    ): Promise<Result<{ found: false } | { found: true; plan: PlanRecordView }, PlanServiceError>> {
-        const result = await approvePlan(profileId, planId);
+    async approve(input: {
+        profileId: string;
+        planId: EntityId<'plan'>;
+        revisionId: EntityId<'prev'>;
+    }): Promise<Result<{ found: false } | { found: true; plan: PlanRecordView }, PlanServiceError>> {
+        const result = await approvePlan(input.profileId, input.planId, input.revisionId);
         if (result.isErr()) {
             appLog.warn({
                 tag: 'plan',
                 message: 'Rejected plan.approve request.',
-                profileId,
-                planId,
+                profileId: input.profileId,
+                planId: input.planId,
+                revisionId: input.revisionId,
                 code: result.error.code,
                 error: result.error.message,
             });

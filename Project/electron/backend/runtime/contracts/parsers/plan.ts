@@ -85,7 +85,13 @@ export function parsePlanReviseInput(input: unknown): PlanReviseInput {
 }
 
 export function parsePlanApproveInput(input: unknown): PlanApproveInput {
-    return parsePlanGetInput(input);
+    const source = readObject(input, 'input');
+
+    return {
+        profileId: readProfileId(source),
+        planId: readEntityId(source.planId, 'planId', 'plan'),
+        revisionId: readEntityId(source.revisionId, 'revisionId', 'prev'),
+    };
 }
 
 export function parsePlanImplementInput(input: unknown): PlanImplementInput {

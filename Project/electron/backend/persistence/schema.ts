@@ -841,6 +841,8 @@ export interface PlanRecordsTable {
     summary_markdown: string;
     questions_json: string;
     answers_json: string;
+    current_revision_id: string;
+    approved_revision_id: string | null;
     workspace_fingerprint: string | null;
     implementation_run_id: string | null;
     orchestrator_run_id: string | null;
@@ -848,6 +850,24 @@ export interface PlanRecordsTable {
     implemented_at: string | null;
     created_at: string;
     updated_at: string;
+}
+
+export interface PlanRevisionsTable {
+    id: string;
+    plan_id: string;
+    revision_number: number;
+    summary_markdown: string;
+    created_by_kind: string;
+    created_at: string;
+    superseded_at: string | null;
+}
+
+export interface PlanRevisionItemsTable {
+    id: string;
+    plan_revision_id: string;
+    sequence: number;
+    description: string;
+    created_at: string;
 }
 
 export interface PlanItemsTable {
@@ -970,6 +990,8 @@ export interface DatabaseSchema {
     provider_discovery_snapshots: ProviderDiscoverySnapshotsTable;
     kilo_model_routing_preferences: KiloModelRoutingPreferencesTable;
     plan_records: PlanRecordsTable;
+    plan_revisions: PlanRevisionsTable;
+    plan_revision_items: PlanRevisionItemsTable;
     plan_items: PlanItemsTable;
     orchestrator_runs: OrchestratorRunsTable;
     orchestrator_steps: OrchestratorStepsTable;

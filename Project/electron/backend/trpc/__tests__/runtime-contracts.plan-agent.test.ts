@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { planStore } from '@/app/backend/persistence/stores';
 import {
     createCaller,
     createSessionInScope,
@@ -110,6 +111,8 @@ describe('runtime contracts: planning and orchestrator', () => {
             prompt: 'Build a safe implementation plan for this task.',
         });
         expect(started.plan.status).toBe('awaiting_answers');
+        expect(started.plan.currentRevisionNumber).toBe(1);
+        expect(started.plan.currentRevisionId).toMatch(/^prev_/);
 
         const answeredScope = await caller.plan.answerQuestion({
             profileId,
@@ -148,16 +151,21 @@ describe('runtime contracts: planning and orchestrator', () => {
             throw new Error('Expected plan revision.');
         }
         expect(revised.plan.items.length).toBe(2);
+        expect(revised.plan.currentRevisionNumber).toBe(2);
+        expect(revised.plan.approvedRevisionId).toBeUndefined();
 
         const approved = await caller.plan.approve({
             profileId,
             planId: started.plan.id,
+            revisionId: revised.plan.currentRevisionId,
         });
         expect(approved.found).toBe(true);
         if (!approved.found) {
             throw new Error('Expected plan approval.');
         }
         expect(approved.plan.status).toBe('approved');
+        expect(approved.plan.approvedRevisionId).toBe(revised.plan.currentRevisionId);
+        expect(approved.plan.approvedRevisionNumber).toBe(2);
 
         const implemented = await caller.plan.implement({
             profileId,
@@ -186,5 +194,97 @@ describe('runtime contracts: planning and orchestrator', () => {
             throw new Error('Expected plan state lookup.');
         }
         expect(planState.plan.status).toBe('implemented');
+    });
+
+    it('keeps immutable revision history, rejects stale approval, and resolves the approved revision snapshot', async () => {
+        const caller = createCaller();
+
+        const created = await createSessionInScope(caller, profileId, {
+            scope: 'workspace',
+            workspaceFingerprint: 'wsf_agent_plan_revisions',
+            title: 'Agent planning revisions thread',
+            kind: 'local',
+            topLevelTab: 'agent',
+        });
+
+        const started = await caller.plan.start({
+            profileId,
+            sessionId: created.session.id,
+            topLevelTab: 'agent',
+            modeKey: 'plan',
+            prompt: 'Build a revision-aware implementation plan.',
+        });
+        expect(started.plan.currentRevisionNumber).toBe(1);
+
+        await caller.plan.answerQuestion({
+            profileId,
+            planId: started.plan.id,
+            questionId: 'scope',
+            answer: 'Capture the first approved revision and then revise it.',
+        });
+        await caller.plan.answerQuestion({
+            profileId,
+            planId: started.plan.id,
+            questionId: 'constraints',
+            answer: 'Preserve immutable history.',
+        });
+
+        const firstRevision = await caller.plan.revise({
+            profileId,
+            planId: started.plan.id,
+            summaryMarkdown: '# Revision One',
+            items: [{ description: 'Initial item' }],
+        });
+        expect(firstRevision.found).toBe(true);
+        if (!firstRevision.found) {
+            throw new Error('Expected first revision.');
+        }
+        expect(firstRevision.plan.currentRevisionNumber).toBe(2);
+
+        const approved = await caller.plan.approve({
+            profileId,
+            planId: started.plan.id,
+            revisionId: firstRevision.plan.currentRevisionId,
+        });
+        expect(approved.found).toBe(true);
+        if (!approved.found) {
+            throw new Error('Expected plan approval.');
+        }
+
+        const secondRevision = await caller.plan.revise({
+            profileId,
+            planId: started.plan.id,
+            summaryMarkdown: '# Revision Two',
+            items: [{ description: 'Updated item' }, { description: 'Follow-up item' }],
+        });
+        expect(secondRevision.found).toBe(true);
+        if (!secondRevision.found) {
+            throw new Error('Expected second revision.');
+        }
+        expect(secondRevision.plan.currentRevisionNumber).toBe(3);
+        expect(secondRevision.plan.approvedRevisionId).toBe(firstRevision.plan.currentRevisionId);
+        expect(secondRevision.plan.approvedRevisionNumber).toBe(2);
+
+        await expect(
+            caller.plan.approve({
+                profileId,
+                planId: started.plan.id,
+                revisionId: firstRevision.plan.currentRevisionId,
+            })
+        ).rejects.toThrow(/stale plan revision/i);
+
+        const revisions = await planStore.listRevisions(started.plan.id);
+        expect(revisions.map((revision) => revision.revisionNumber)).toEqual([1, 2, 3]);
+        expect(revisions[1]?.summaryMarkdown).toBe('# Revision One');
+        expect(revisions[1]?.supersededAt).toBeDefined();
+        expect(revisions[2]?.summaryMarkdown).toBe('# Revision Two');
+        expect(revisions[2]?.supersededAt).toBeUndefined();
+
+        const approvedSnapshot = await planStore.resolveApprovedRevisionSnapshot({
+            planId: started.plan.id,
+        });
+        expect(approvedSnapshot?.revision.id).toBe(firstRevision.plan.currentRevisionId);
+        expect(approvedSnapshot?.revision.revisionNumber).toBe(2);
+        expect(approvedSnapshot?.items.map((item) => item.description)).toEqual(['Initial item']);
     });
 });

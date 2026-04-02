@@ -14,6 +14,8 @@ describe('resolveModeExecutionDraftState', () => {
             id: 'plan_1',
             status: 'draft',
             summaryMarkdown: 'Server Summary',
+            currentRevisionId: 'prev_1',
+            currentRevisionNumber: 1,
             questions: [{ id: 'q_1', question: 'Question?', answer: 'Server Answer' }],
             items: [{ id: 'step_1', sequence: 1, description: 'Server Item', status: 'pending' }],
         } as const;
@@ -61,6 +63,8 @@ describe('resolveModeExecutionDraftState', () => {
                     id: 'plan_1',
                     status: 'approved',
                     summaryMarkdown: 'Approved summary',
+                    currentRevisionId: 'prev_1',
+                    currentRevisionNumber: 2,
                     questions: [],
                     items: [{ id: 'step_1', sequence: 1, description: 'Child task', status: 'pending' }],
                 },
@@ -91,6 +95,8 @@ describe('resolveModeExecutionDraftState', () => {
         expect(html).toContain('Parallel');
         expect(html).toContain('Open worker lane');
         expect(html).toContain('Active run run_1');
+        expect(html).toContain('Revision');
+        expect(html).toContain('2');
     });
 
     it('resolves an explicit orchestrator-facing panel model from the raw inputs', () => {

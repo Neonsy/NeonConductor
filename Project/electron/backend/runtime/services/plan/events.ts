@@ -7,6 +7,8 @@ export async function appendPlanStartedEvent(input: {
     sessionId: EntityId<'sess'>;
     topLevelTab: TopLevelTab;
     planId: EntityId<'plan'>;
+    revisionId: EntityId<'prev'>;
+    revisionNumber: number;
 }): Promise<void> {
     await runtimeEventLogService.append(
         runtimeStatusEvent({
@@ -19,6 +21,8 @@ export async function appendPlanStartedEvent(input: {
                 sessionId: input.sessionId,
                 topLevelTab: input.topLevelTab,
                 planId: input.planId,
+                revisionId: input.revisionId,
+                revisionNumber: input.revisionNumber,
             },
         })
     );
@@ -66,7 +70,34 @@ export async function appendPlanQuestionAnsweredEvent(input: {
     );
 }
 
-export async function appendPlanApprovedEvent(input: { profileId: string; planId: EntityId<'plan'> }): Promise<void> {
+export async function appendPlanRevisedEvent(input: {
+    profileId: string;
+    planId: EntityId<'plan'>;
+    revisionId: EntityId<'prev'>;
+    revisionNumber: number;
+}): Promise<void> {
+    await runtimeEventLogService.append(
+        runtimeStatusEvent({
+            entityType: 'plan',
+            domain: 'plan',
+            entityId: input.planId,
+            eventType: 'plan.revised',
+            payload: {
+                planId: input.planId,
+                profileId: input.profileId,
+                revisionId: input.revisionId,
+                revisionNumber: input.revisionNumber,
+            },
+        })
+    );
+}
+
+export async function appendPlanApprovedEvent(input: {
+    profileId: string;
+    planId: EntityId<'plan'>;
+    revisionId: EntityId<'prev'>;
+    revisionNumber: number;
+}): Promise<void> {
     await runtimeEventLogService.append(
         runtimeStatusEvent({
             entityType: 'plan',
@@ -76,6 +107,8 @@ export async function appendPlanApprovedEvent(input: { profileId: string; planId
             payload: {
                 planId: input.planId,
                 profileId: input.profileId,
+                revisionId: input.revisionId,
+                revisionNumber: input.revisionNumber,
             },
         })
     );

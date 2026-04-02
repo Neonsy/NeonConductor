@@ -30,7 +30,7 @@ export const planRouter = router({
         return planService.revise(input);
     }),
     approve: publicProcedure.input(planApproveInputSchema).mutation(async ({ input }) => {
-        const result = await planService.approve(input.profileId, input.planId);
+        const result = await planService.approve(input);
         return unwrapResultOrThrow(result, toPlanTrpcError);
     }),
     implement: publicProcedure.input(planImplementInputSchema).mutation(async ({ input }) => {

@@ -45,7 +45,9 @@ export interface PlanReviseInput extends PlanGetInput {
     items: PlanDraftItemInput[];
 }
 
-export type PlanApproveInput = PlanGetInput;
+export interface PlanApproveInput extends PlanGetInput {
+    revisionId: EntityId<'prev'>;
+}
 
 export interface PlanImplementInput extends PlanGetInput {
     runtimeOptions: RuntimeRunOptions;
@@ -64,6 +66,10 @@ export interface PlanRecordView {
     status: PlanStatus;
     sourcePrompt: string;
     summaryMarkdown: string;
+    currentRevisionId: EntityId<'prev'>;
+    currentRevisionNumber: number;
+    approvedRevisionId?: EntityId<'prev'>;
+    approvedRevisionNumber?: number;
     questions: PlanQuestion[];
     items: Array<{
         id: EntityId<'step'>;

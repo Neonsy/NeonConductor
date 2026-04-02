@@ -4,6 +4,7 @@ import { buildConversationPlanOrchestrator } from '@/web/components/conversation
 import { runConversationPlanMutation } from '@/web/components/conversation/shell/composition/planImplementationController';
 
 import type { OrchestratorRunRecord, OrchestratorStepRecord } from '@/app/backend/persistence/types';
+
 import type { PlanRecordView, RuntimeRunOptions } from '@/shared/contracts';
 
 function createRuntimeOptions(): RuntimeRunOptions {
@@ -32,6 +33,10 @@ function createPlanRecord(): PlanRecordView {
         status: 'approved',
         sourcePrompt: 'Ship it',
         summaryMarkdown: 'Approved summary',
+        currentRevisionId: 'prev_1',
+        currentRevisionNumber: 2,
+        approvedRevisionId: 'prev_1',
+        approvedRevisionNumber: 2,
         questions: [],
         items: [
             {
@@ -101,6 +106,58 @@ describe('runConversationPlanMutation', () => {
 
         expect(applyResult).toHaveBeenCalledWith({ found: true });
         expect(onError).not.toHaveBeenCalled();
+    });
+
+    it('forwards the current revision id when approving a visible plan', async () => {
+        const planApproveMutation = {
+            isPending: false,
+            mutateAsync: vi.fn().mockResolvedValue({
+                found: true as const,
+                plan: createPlanRecord(),
+            }),
+        };
+
+        const orchestrator = buildConversationPlanOrchestrator({
+            profileId: 'profile_default',
+            applyPlanWorkspaceUpdate: vi.fn(),
+            applyOrchestratorWorkspaceUpdate: vi.fn(),
+            onError: vi.fn(),
+            resolvedRunTarget: undefined,
+            runtimeOptions: createRuntimeOptions(),
+            workspaceFingerprint: 'ws_1',
+            activePlan: createPlanRecord(),
+            orchestratorView: undefined,
+            planStartMutation: {
+                isPending: false,
+                mutateAsync: vi.fn(),
+            },
+            planAnswerMutation: {
+                isPending: false,
+                mutateAsync: vi.fn(),
+            },
+            planReviseMutation: {
+                isPending: false,
+                mutateAsync: vi.fn(),
+            },
+            planApproveMutation,
+            planImplementMutation: {
+                isPending: false,
+                mutateAsync: vi.fn(),
+            },
+            orchestratorAbortMutation: {
+                isPending: false,
+                mutateAsync: vi.fn(),
+            },
+        });
+
+        orchestrator.actionController.onApprovePlan('plan_1', 'prev_1');
+        await flushAsyncActions();
+
+        expect(planApproveMutation.mutateAsync).toHaveBeenCalledWith({
+            profileId: 'profile_default',
+            planId: 'plan_1',
+            revisionId: 'prev_1',
+        });
     });
 
     it('routes rejected mutation errors through the provided error handler', async () => {

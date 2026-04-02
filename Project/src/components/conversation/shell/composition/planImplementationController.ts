@@ -58,6 +58,7 @@ export interface CreatePlanImplementationControllerInput {
         {
             profileId: string;
             planId: EntityId<'plan'>;
+            revisionId: EntityId<'prev'>;
         },
         { found: false } | { found: true; plan: PlanRecordView }
     >;
@@ -94,7 +95,7 @@ export interface ConversationPlanActionController {
     isOrchestratorMutating: boolean;
     onAnswerQuestion: (planId: EntityId<'plan'>, questionId: string, answer: string) => void;
     onRevisePlan: (planId: EntityId<'plan'>, summaryMarkdown: string, items: string[]) => void;
-    onApprovePlan: (planId: EntityId<'plan'>) => void;
+    onApprovePlan: (planId: EntityId<'plan'>, revisionId: EntityId<'prev'>) => void;
     onImplementPlan: (planId: EntityId<'plan'>, executionStrategy: OrchestratorExecutionStrategy) => void;
     onAbortOrchestrator: (orchestratorRunId: EntityId<'orch'>) => void;
 }
@@ -167,13 +168,14 @@ export function createPlanImplementationController(
                 errorPrefix: 'Plan revision failed',
             });
         },
-        onApprovePlan: (planId) => {
+        onApprovePlan: (planId, revisionId) => {
             void runConversationPlanMutation({
                 mutation: {
                     mutateAsync: () =>
                         input.planApproveMutation.mutateAsync({
                             profileId: input.profileId,
                             planId,
+                            revisionId,
                         }),
                 },
                 applyResult: (result) => {
