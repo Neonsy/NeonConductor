@@ -15,6 +15,7 @@ import { buildResolvedContextStateQueryInput } from '@/web/components/conversati
 import type { ConversationModeOption } from '@/web/components/conversation/shell/workspace/helpers';
 
 function createMode(input: {
+    topLevelTab?: ConversationModeOption['topLevelTab'];
     modeKey: string;
     workflowCapabilities?: ConversationModeOption['executionPolicy']['workflowCapabilities'];
     behaviorFlags?: ConversationModeOption['executionPolicy']['behaviorFlags'];
@@ -22,6 +23,7 @@ function createMode(input: {
 }): ConversationModeOption {
     return {
         id: `mode_${input.modeKey}`,
+        topLevelTab: input.topLevelTab ?? 'agent',
         modeKey: input.modeKey,
         label: input.modeKey,
         executionPolicy: {
@@ -116,7 +118,11 @@ describe('conversation query input builders', () => {
                 profileId: 'profile_default',
                 selectedSessionId: 'sess_real',
                 topLevelTab: 'orchestrator',
-                activeMode: createMode({ modeKey: 'custom_orchestrator', workflowCapabilities: ['orchestration'] }),
+                activeMode: createMode({
+                    topLevelTab: 'orchestrator',
+                    modeKey: 'custom_orchestrator',
+                    workflowCapabilities: ['orchestration'],
+                }),
             })
         ).toEqual({
             profileId: 'profile_default',
@@ -127,7 +133,11 @@ describe('conversation query input builders', () => {
                 profileId: 'profile_default',
                 selectedSessionId: 'sess_real',
                 topLevelTab: 'orchestrator',
-                activeMode: createMode({ modeKey: 'custom_orchestrator', workflowCapabilities: ['orchestration'] }),
+                activeMode: createMode({
+                    topLevelTab: 'orchestrator',
+                    modeKey: 'custom_orchestrator',
+                    workflowCapabilities: ['orchestration'],
+                }),
             })
         ).toBe(skipToken);
         expect(
@@ -135,7 +145,11 @@ describe('conversation query input builders', () => {
                 profileId: 'profile_default',
                 selectedSessionId: 'sess_real',
                 topLevelTab: 'orchestrator',
-                activeMode: createMode({ modeKey: 'custom_plan', workflowCapabilities: ['planning'] }),
+                activeMode: createMode({
+                    topLevelTab: 'orchestrator',
+                    modeKey: 'custom_plan',
+                    workflowCapabilities: ['planning'],
+                }),
             })
         ).toEqual({
             profileId: 'profile_default',

@@ -29,8 +29,7 @@ import type {
 } from '@/web/components/conversation/shell/useConversationShellViewControllers.types';
 import {
     isEntityId,
-    modeCanExecuteRuns,
-    modeRequiresNativeTools,
+    resolveModeRoutingIntent,
     modeSupportsOrchestrationWorkflow,
     modeSupportsPlanningWorkflow,
 } from '@/web/components/conversation/shell/workspace/helpers';
@@ -54,13 +53,13 @@ export function useConversationShellRuntimeState(
     } = input;
 
     const activeMode = modes.find((candidate) => candidate.modeKey === modeKey);
-    const activeModeRequiresNativeTools = modeRequiresNativeTools(activeMode);
+    const activeModeRoutingIntent = resolveModeRoutingIntent(activeMode);
     const activeModeSupportsPlanningWorkflow = modeSupportsPlanningWorkflow(activeMode);
     const activeModeSupportsOrchestrationWorkflow = modeSupportsOrchestrationWorkflow(activeMode);
     const isPlanningComposerMode =
         (input.topLevelTab === 'agent' || input.topLevelTab === 'orchestrator') && activeModeSupportsPlanningWorkflow;
     const isOrchestrationWorkflowMode = input.topLevelTab === 'orchestrator' && activeModeSupportsOrchestrationWorkflow;
-    const imageAttachmentsAllowed = input.topLevelTab !== 'orchestrator' && modeCanExecuteRuns(activeMode);
+    const imageAttachmentsAllowed = activeModeRoutingIntent.allowsImageAttachments;
 
     const [tabSwitchNotice, setTabSwitchNotice] = useState<string | undefined>(undefined);
     const [focusComposerRequestKey, setFocusComposerRequestKey] = useState(0);
@@ -176,9 +175,8 @@ export function useConversationShellRuntimeState(
         mainViewDraftTarget,
         sessionOverride: sessionActions.sessionOverride,
         runs: selectionState.sessionRunSelection.runs,
-        topLevelTab: input.topLevelTab,
         modeKey,
-        requiresNativeTools: activeModeRequiresNativeTools,
+        ...(activeMode ? { activeMode } : {}),
         imageAttachmentsAllowed,
     });
 
@@ -233,7 +231,7 @@ export function useConversationShellRuntimeState(
         sandboxId: workspaceScope.kind === 'sandbox' ? workspaceScope.sandboxId : undefined,
         isPlanningComposerMode,
         imageAttachmentsAllowed,
-        activeModeRequiresNativeTools,
+        ...(activeMode ? { activeMode } : {}),
         queries,
         mutations,
         uiState,

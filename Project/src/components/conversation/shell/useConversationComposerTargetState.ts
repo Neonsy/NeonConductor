@@ -2,6 +2,10 @@ import type {
     ConversationSessionActions,
     ConversationShellMainViewDraftTarget,
 } from '@/web/components/conversation/shell/useConversationShellViewControllers.types';
+import {
+    resolveModeRoutingIntent,
+    type ConversationModeOption,
+} from '@/web/components/conversation/shell/workspace/helpers';
 import { useConversationRunTarget } from '@/web/components/conversation/shell/workspace/useConversationRunTarget';
 import {
     getProviderControlDefaults,
@@ -13,7 +17,6 @@ import {
 import type { RunRecord } from '@/app/backend/persistence/types';
 
 import type { RuntimeShellBootstrap } from '@/shared/contracts';
-import type { TopLevelTab } from '@/shared/contracts';
 
 interface UseConversationComposerTargetStateInput {
     shellBootstrapData: RuntimeShellBootstrap | undefined;
@@ -22,9 +25,8 @@ interface UseConversationComposerTargetStateInput {
     mainViewDraftTarget: ConversationShellMainViewDraftTarget;
     sessionOverride: ConversationSessionActions['sessionOverride'];
     runs: RunRecord[];
-    topLevelTab: TopLevelTab;
+    activeMode?: ConversationModeOption;
     modeKey: string;
-    requiresNativeTools: boolean;
     imageAttachmentsAllowed: boolean;
 }
 
@@ -43,8 +45,7 @@ export function useConversationComposerTargetState(input: UseConversationCompose
         ...(preferredWorkspacePreference ? { workspacePreference: preferredWorkspacePreference } : {}),
         ...(input.mainViewDraftTarget ? { mainViewDraft: input.mainViewDraftTarget } : {}),
         runs: input.runs,
-        topLevelTab: input.topLevelTab,
-        requiresTools: input.requiresNativeTools,
+        ...(input.activeMode ? { routingIntent: resolveModeRoutingIntent(input.activeMode) } : {}),
         modeKey: input.modeKey,
         imageAttachmentsAllowed: input.imageAttachmentsAllowed,
         ...(input.sessionOverride ? { sessionOverride: input.sessionOverride } : {}),

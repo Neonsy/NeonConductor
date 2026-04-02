@@ -12,3 +12,11 @@ export {
     modeSupportsPlanningWorkflow,
     modeUsesReadOnlyExecution,
 } from '@/shared/modeBehavior';
+
+export {
+    isSupportedModeSpecialistAlias,
+    resolveModeCompatibilityRequirements,
+    resolveModeRoutingIntent,
+    resolveModeSpecialistAlias,
+    resolveSpecialistAliasRoutingIntent,
+} from '@/shared/modeRouting';

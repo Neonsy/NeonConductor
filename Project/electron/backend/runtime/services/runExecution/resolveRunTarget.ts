@@ -1,5 +1,6 @@
 import { providerStore } from '@/app/backend/persistence/stores';
 import { toSupportedProviderIdResult } from '@/app/backend/providers/registry';
+import { resolveModeRoutingIntent } from '@/app/backend/runtime/services/mode/routing';
 import {
     errRunExecution,
     okRunExecution,
@@ -7,12 +8,7 @@ import {
 } from '@/app/backend/runtime/services/runExecution/errors';
 import type { ResolvedRunTarget } from '@/app/backend/runtime/services/runExecution/types';
 
-import {
-    findProviderSpecialistDefault,
-    isSupportedProviderSpecialistDefaultTarget,
-    type RuntimeProviderId,
-    type TopLevelTab,
-} from '@/shared/contracts';
+import { findProviderSpecialistDefault, type ModeDefinition, type RuntimeProviderId } from '@/shared/contracts';
 import { canonicalizeProviderModelId } from '@/shared/kiloModels';
 
 function tryAssertProviderId(value: string): RuntimeProviderId | undefined {
@@ -28,8 +24,7 @@ export async function resolveRequestedOrDefaultRunTarget(input: {
     profileId: string;
     providerId?: string;
     modelId?: string;
-    topLevelTab?: TopLevelTab;
-    modeKey?: string;
+    mode?: ModeDefinition;
 }): Promise<RunExecutionResult<ResolvedRunTarget>> {
     let providerId: RuntimeProviderId | undefined;
     if (input.providerId) {
@@ -62,17 +57,10 @@ export async function resolveRequestedOrDefaultRunTarget(input: {
         providerStore.getSpecialistDefaults(input.profileId),
     ]);
 
-    const specialistTarget =
-        input.topLevelTab && input.modeKey
-            ? {
-                  topLevelTab: input.topLevelTab,
-                  modeKey: input.modeKey,
-              }
-            : undefined;
-    const specialistDefault =
-        specialistTarget && isSupportedProviderSpecialistDefaultTarget(specialistTarget)
-            ? findProviderSpecialistDefault(specialistDefaults, specialistTarget)
-            : undefined;
+    const specialistAlias = resolveModeRoutingIntent(input.mode).specialistAlias;
+    const specialistDefault = specialistAlias
+        ? findProviderSpecialistDefault(specialistDefaults, specialistAlias)
+        : undefined;
 
     const defaultProviderId = specialistDefault?.providerId ?? defaults.providerId;
     providerId = tryAssertProviderId(defaultProviderId);

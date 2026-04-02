@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { kiloFrontierModelId } from '@/shared/kiloModels';
+import type { ModeDefinition } from '@/shared/contracts';
 
 const providerStoreMock = vi.hoisted(() => ({
     getDefaults: vi.fn(),
@@ -16,6 +17,32 @@ import {
     resolveRequestedOrDefaultRunTarget,
     verifyResolvedRunTargetAvailability,
 } from '@/app/backend/runtime/services/runExecution/resolveRunTarget';
+
+function createMode(input: {
+    topLevelTab: ModeDefinition['topLevelTab'];
+    modeKey: string;
+    runtimeProfile?: ModeDefinition['executionPolicy']['runtimeProfile'];
+}): ModeDefinition {
+    return {
+        id: `mode_${input.topLevelTab}_${input.modeKey}`,
+        profileId: 'profile_default',
+        topLevelTab: input.topLevelTab,
+        modeKey: input.modeKey,
+        label: input.modeKey,
+        assetKey: `${input.topLevelTab}.${input.modeKey}`,
+        prompt: {},
+        executionPolicy: {
+            ...(input.runtimeProfile ? { runtimeProfile: input.runtimeProfile } : {}),
+        },
+        source: 'test',
+        sourceKind: 'system_seed',
+        scope: 'system',
+        enabled: true,
+        precedence: 0,
+        createdAt: '2026-04-02T00:00:00.000Z',
+        updatedAt: '2026-04-02T00:00:00.000Z',
+    };
+}
 
 describe('resolveRunTarget boundaries', () => {
     beforeEach(() => {
@@ -79,8 +106,11 @@ describe('resolveRunTarget boundaries', () => {
         ]);
         const result = await resolveRequestedOrDefaultRunTarget({
             profileId: 'profile_default',
-            topLevelTab: 'agent',
-            modeKey: 'code',
+            mode: createMode({
+                topLevelTab: 'agent',
+                modeKey: 'code',
+                runtimeProfile: 'mutating_agent',
+            }),
         });
 
         expect(result.isOk()).toBe(true);
@@ -106,6 +136,35 @@ describe('resolveRunTarget boundaries', () => {
         }
         expect(providerStoreMock.getDefaults).not.toHaveBeenCalled();
         expect(providerStoreMock.getSpecialistDefaults).not.toHaveBeenCalled();
+        expect(result.value).toEqual({
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
+        });
+    });
+
+    it('falls back to the shared default for custom modes without a supported specialist alias', async () => {
+        providerStoreMock.getSpecialistDefaults.mockResolvedValue([
+            {
+                topLevelTab: 'agent',
+                modeKey: 'code',
+                providerId: 'kilo',
+                modelId: kiloFrontierModelId,
+            },
+        ]);
+
+        const result = await resolveRequestedOrDefaultRunTarget({
+            profileId: 'profile_default',
+            mode: createMode({
+                topLevelTab: 'agent',
+                modeKey: 'custom_reviewer',
+                runtimeProfile: 'mutating_agent',
+            }),
+        });
+
+        expect(result.isOk()).toBe(true);
+        if (result.isErr()) {
+            throw new Error(result.error.message);
+        }
         expect(result.value).toEqual({
             providerId: 'openai',
             modelId: 'openai/gpt-5',

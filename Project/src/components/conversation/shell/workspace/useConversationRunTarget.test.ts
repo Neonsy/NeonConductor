@@ -7,6 +7,19 @@ import type { ProviderModelRecord, RunRecord } from '@/app/backend/persistence/t
 import type { ProviderListItem } from '@/app/backend/providers/service/types';
 
 import { kiloFrontierModelId } from '@/shared/kiloModels';
+import type { ModeRoutingIntent } from '@/shared/modeRouting';
+
+function createRoutingIntent(input?: {
+    requiresNativeTools?: boolean;
+    allowsImageAttachments?: boolean;
+    specialistAlias?: ModeRoutingIntent['specialistAlias'];
+}): ModeRoutingIntent {
+    return {
+        requiresNativeTools: input?.requiresNativeTools ?? false,
+        allowsImageAttachments: input?.allowsImageAttachments ?? true,
+        ...(input?.specialistAlias ? { specialistAlias: input.specialistAlias } : {}),
+    };
+}
 
 function createProvider(input: {
     id: ProviderListItem['id'];
@@ -118,7 +131,7 @@ describe('useConversationRunTarget', () => {
                 modelId: 'openai/gpt-5-no-tools',
             },
             runs: [createRun({ providerId: 'openai', modelId: 'openai/gpt-5-no-tools' })],
-            requiresTools: true,
+            routingIntent: createRoutingIntent({ requiresNativeTools: true }),
         });
 
         expect(state.resolvedRunTarget).toEqual({
@@ -154,7 +167,7 @@ describe('useConversationRunTarget', () => {
             ],
             defaults: undefined,
             runs: [createRun({ providerId: 'openai', modelId: 'openai/gpt-5-text' })],
-            requiresTools: true,
+            routingIntent: createRoutingIntent({ requiresNativeTools: true }),
         });
 
         expect(state.resolvedRunTarget).toEqual({
@@ -189,7 +202,7 @@ describe('useConversationRunTarget', () => {
                 modelId: kiloFrontierModelId,
             },
             runs: [],
-            requiresTools: false,
+            routingIntent: createRoutingIntent(),
         });
 
         expect(state.resolvedRunTarget).toEqual({
@@ -236,7 +249,7 @@ describe('useConversationRunTarget', () => {
                 modelId: 'moonshot/kimi-k2.5',
             },
             runs: [],
-            requiresTools: false,
+            routingIntent: createRoutingIntent(),
         });
 
         expect(state.resolvedRunTarget).toEqual({
@@ -290,9 +303,14 @@ describe('useConversationRunTarget', () => {
                 updatedAt: '2026-03-12T12:00:00.000Z',
             },
             runs: [],
-            topLevelTab: 'agent',
+            routingIntent: createRoutingIntent({
+                requiresNativeTools: true,
+                specialistAlias: {
+                    topLevelTab: 'agent',
+                    modeKey: 'code',
+                },
+            }),
             modeKey: 'code',
-            requiresTools: true,
         });
 
         expect(state.resolvedRunTarget).toEqual({
@@ -331,7 +349,7 @@ describe('useConversationRunTarget', () => {
                 modelId: 'openai/gpt-5-no-tools',
             },
             runs: [createRun({ providerId: 'moonshot', modelId: 'moonshot/kimi-k2.5' })],
-            requiresTools: true,
+            routingIntent: createRoutingIntent({ requiresNativeTools: true }),
         });
 
         expect(state.resolvedRunTarget).toEqual({

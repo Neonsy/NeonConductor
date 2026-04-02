@@ -17,6 +17,7 @@ import {
 } from '@/web/components/conversation/shell/workspace/helpers';
 
 function createMode(input: {
+    topLevelTab?: ConversationModeOption['topLevelTab'];
     modeKey: string;
     planningOnly?: boolean;
     toolCapabilities?: ConversationModeOption['executionPolicy']['toolCapabilities'];
@@ -25,6 +26,7 @@ function createMode(input: {
 }): ConversationModeOption {
     return {
         id: `mode_${input.modeKey}`,
+        topLevelTab: input.topLevelTab ?? 'agent',
         modeKey: input.modeKey,
         label: input.modeKey,
         executionPolicy: {
@@ -111,7 +113,13 @@ describe('conversation shell mode helpers', () => {
             true
         );
         expect(
-            modeRequiresNativeTools(createMode({ modeKey: 'orchestrate', toolCapabilities: ['filesystem_read'] }))
+            modeRequiresNativeTools(
+                createMode({
+                    topLevelTab: 'orchestrator',
+                    modeKey: 'orchestrate',
+                    toolCapabilities: ['filesystem_read'],
+                })
+            )
         ).toBe(true);
         expect(
             modeRequiresNativeTools(createMode({ modeKey: 'code', toolCapabilities: ['filesystem_read', 'shell'] }))

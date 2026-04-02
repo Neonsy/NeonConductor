@@ -6,6 +6,7 @@ import type {
     RuntimeProviderId,
 } from '@/app/backend/runtime/contracts';
 import type { ProviderSpecialistDefaultRecord } from '@/app/backend/runtime/contracts/types/provider';
+import { isSupportedModeSpecialistAlias } from '@/app/backend/runtime/services/mode/routing';
 import { appLog } from '@/app/main/logging';
 
 export async function getDefaults(profileId: string): Promise<{ providerId: string; modelId: string }> {
@@ -82,11 +83,7 @@ export async function setSpecialistDefault(input: {
     specialistDefaults: ProviderSpecialistDefaultRecord[];
     specialistDefault?: ProviderSpecialistDefaultRecord;
 }> {
-    const supportedTarget =
-        (input.topLevelTab === 'agent' &&
-            (input.modeKey === 'ask' || input.modeKey === 'code' || input.modeKey === 'debug')) ||
-        (input.topLevelTab === 'orchestrator' && (input.modeKey === 'orchestrate' || input.modeKey === 'debug'));
-    if (!supportedTarget) {
+    if (!isSupportedModeSpecialistAlias({ topLevelTab: input.topLevelTab, modeKey: input.modeKey })) {
         return {
             success: false,
             reason: 'specialist_default_not_supported',

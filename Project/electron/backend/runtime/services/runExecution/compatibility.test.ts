@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const providerStoreMock = vi.hoisted(() => ({
-    getModelCapabilities: vi.fn(),
+    getModelReadState: vi.fn(),
 }));
 
 const getExecutionPreferenceStateMock = vi.hoisted(() => vi.fn());
@@ -73,6 +73,25 @@ function createModelCapabilities(input?: {
     } as const;
 }
 
+function createModelReadState(input?: {
+    supportsTools?: boolean;
+    supportsVision?: boolean;
+    supportsRealtimeWebSocket?: boolean;
+}) {
+    return {
+        kind: 'valid',
+        model: {
+            id: 'openai/gpt-test',
+            providerId: 'openai',
+            label: 'GPT Test',
+            features: createModelCapabilities(input).features,
+            runtime: createModelCapabilities(input).runtime,
+            source: 'test',
+            updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+    } as const;
+}
+
 describe('prepareRunnableCandidate', () => {
     beforeEach(() => {
         vi.clearAllMocks();
@@ -84,7 +103,7 @@ describe('prepareRunnableCandidate', () => {
                 apiKey: 'test-key',
             },
         });
-        providerStoreMock.getModelCapabilities.mockResolvedValue(createModelCapabilities());
+        providerStoreMock.getModelReadState.mockResolvedValue(createModelReadState());
         getExecutionPreferenceStateMock.mockResolvedValue({
             isOk: () => true,
             isErr: () => false,
@@ -141,8 +160,8 @@ describe('prepareRunnableCandidate', () => {
     });
 
     it('returns a vision incompatibility before protocol resolution when attachments need vision support', async () => {
-        providerStoreMock.getModelCapabilities.mockResolvedValue(
-            createModelCapabilities({
+        providerStoreMock.getModelReadState.mockResolvedValue(
+            createModelReadState({
                 supportsVision: false,
             })
         );

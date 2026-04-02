@@ -24,7 +24,10 @@ describe('model compatibility helpers', () => {
             },
             {
                 surface: 'conversation',
-                requiresTools: true,
+                routingRequirements: {
+                    requiresNativeTools: true,
+                    allowsImageAttachments: true,
+                },
                 modeKey: 'code',
             }
         );
@@ -129,7 +132,10 @@ describe('model compatibility helpers', () => {
             },
             {
                 surface: 'conversation',
-                requiresTools: true,
+                routingRequirements: {
+                    requiresNativeTools: true,
+                    allowsImageAttachments: true,
+                },
                 modeKey: 'code',
             }
         );

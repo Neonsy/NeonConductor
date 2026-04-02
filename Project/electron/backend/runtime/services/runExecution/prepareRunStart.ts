@@ -29,8 +29,7 @@ async function resolvePreparedCandidate(input: {
     const explicitTargetRequested = startInput.providerId !== undefined || startInput.modelId !== undefined;
     const requestedTargetResult = await resolveRequestedOrDefaultRunTarget({
         profileId: startInput.profileId,
-        topLevelTab: startInput.topLevelTab,
-        modeKey: startInput.modeKey,
+        mode: mode.mode,
         ...(startInput.providerId ? { providerId: startInput.providerId } : {}),
         ...(startInput.modelId ? { modelId: startInput.modelId } : {}),
     });

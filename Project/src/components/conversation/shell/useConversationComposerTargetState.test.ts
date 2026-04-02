@@ -149,9 +149,16 @@ describe('useConversationComposerTargetState', () => {
             mainViewDraftTarget: undefined,
             sessionOverride: undefined,
             runs: [],
-            topLevelTab: 'chat',
+            activeMode: {
+                id: 'mode_chat',
+                topLevelTab: 'chat',
+                modeKey: 'chat',
+                label: 'Chat',
+                executionPolicy: {
+                    runtimeProfile: 'general',
+                },
+            },
             modeKey: 'chat',
-            requiresNativeTools: false,
             imageAttachmentsAllowed: true,
         });
 

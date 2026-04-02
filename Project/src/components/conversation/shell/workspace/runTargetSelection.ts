@@ -1,3 +1,4 @@
+import { isProviderId, type RunTargetSelection } from '@/web/components/conversation/shell/workspace/helpers';
 import {
     buildModelPickerOption,
     getModelCompatibilityPriority,
@@ -8,16 +9,12 @@ import {
 import type { ProviderModelRecord, RunRecord } from '@/app/backend/persistence/types';
 import type { ProviderListItem } from '@/app/backend/providers/service/types';
 
-import {
-    findProviderSpecialistDefault,
-    isSupportedProviderSpecialistDefaultTarget,
-} from '@/shared/contracts';
-import type { RuntimeProviderId, TopLevelTab } from '@/shared/contracts';
+import { findProviderSpecialistDefault } from '@/shared/contracts';
+import type { RuntimeProviderId } from '@/shared/contracts';
 import type { ProviderSpecialistDefaultRecord } from '@/shared/contracts/types/provider';
 import type { WorkspacePreferenceRecord } from '@/shared/contracts/types/runtime';
 import { canonicalizeProviderModelId } from '@/shared/kiloModels';
-
-import { isProviderId, type RunTargetSelection } from '@/web/components/conversation/shell/workspace/helpers';
+import type { ModeRoutingIntent } from '@/shared/modeRouting';
 
 export type ExecutionTargetResolutionSource =
     | 'session_override'
@@ -67,8 +64,7 @@ export interface ConversationRunTargetInput {
     sessionOverride?: { providerId?: RuntimeProviderId; modelId?: string };
     mainViewDraft?: { providerId?: RuntimeProviderId; modelId?: string };
     runs: RunRecord[];
-    topLevelTab?: TopLevelTab;
-    requiresTools?: boolean;
+    routingIntent?: ModeRoutingIntent;
     modeKey?: string;
     hasPendingImageAttachments?: boolean;
     imageAttachmentsAllowed?: boolean;
@@ -144,7 +140,7 @@ function buildRankedModelOptions(modelOptions: ModelPickerOption[]): ModelPicker
 export function buildExecutionTargetCompatibilityModel(input: {
     providers: ProviderListItem[];
     providerModels: ProviderModelRecord[];
-    requiresTools?: boolean;
+    routingIntent?: ModeRoutingIntent;
     modeKey?: string;
     hasPendingImageAttachments?: boolean;
     imageAttachmentsAllowed?: boolean;
@@ -165,7 +161,7 @@ export function buildExecutionTargetCompatibilityModel(input: {
                 provider,
                 compatibilityContext: {
                     surface: 'conversation',
-                    requiresTools: input.requiresTools,
+                    ...(input.routingIntent ? { routingRequirements: input.routingIntent } : {}),
                     ...(input.modeKey ? { modeKey: input.modeKey } : {}),
                     hasPendingImageAttachments: input.hasPendingImageAttachments,
                     imageAttachmentsAllowed: input.imageAttachmentsAllowed,
@@ -219,23 +215,15 @@ export function resolveExecutionTarget(input: {
     sessionOverride?: { providerId?: RuntimeProviderId; modelId?: string };
     mainViewDraft?: { providerId?: RuntimeProviderId; modelId?: string };
     runs: RunRecord[];
-    topLevelTab?: TopLevelTab;
+    routingIntent?: ModeRoutingIntent;
     modeKey?: string;
 }): {
     resolvedRunTarget: RunTargetSelection | undefined;
     resolvedExecutionTarget: ResolvedExecutionTarget | undefined;
 } {
-    const specialistTarget =
-        input.topLevelTab && input.modeKey
-            ? {
-                  topLevelTab: input.topLevelTab,
-                  modeKey: input.modeKey,
-              }
-            : undefined;
-    const matchingSpecialistDefault =
-        specialistTarget && isSupportedProviderSpecialistDefaultTarget(specialistTarget)
-            ? findProviderSpecialistDefault(input.specialistDefaults ?? [], specialistTarget)
-            : undefined;
+    const matchingSpecialistDefault = input.routingIntent?.specialistAlias
+        ? findProviderSpecialistDefault(input.specialistDefaults ?? [], input.routingIntent.specialistAlias)
+        : undefined;
 
     function resolveFromOption(source: ExecutionTargetResolutionSource, providerId: RuntimeProviderId, modelId: string) {
         const option = input.compatibilityModel.getOption(providerId, modelId);
@@ -410,7 +398,7 @@ export function buildConversationRunTargetModel(input: ConversationRunTargetInpu
         ...(input.sessionOverride !== undefined ? { sessionOverride: input.sessionOverride } : {}),
         ...(input.mainViewDraft !== undefined ? { mainViewDraft: input.mainViewDraft } : {}),
         runs: input.runs,
-        ...(input.topLevelTab !== undefined ? { topLevelTab: input.topLevelTab } : {}),
+        ...(input.routingIntent ? { routingIntent: input.routingIntent } : {}),
         ...(input.modeKey !== undefined ? { modeKey: input.modeKey } : {}),
     });
 

@@ -1,11 +1,11 @@
 import { getProviderRuntimeBehavior } from '@/app/backend/providers/behaviors';
 import type { ProviderModelCapabilities } from '@/app/backend/providers/types';
+import { resolveModeCompatibilityRequirements } from '@/app/backend/runtime/services/mode/routing';
 import {
     errRunExecution,
     okRunExecution,
     type RunExecutionResult,
 } from '@/app/backend/runtime/services/runExecution/errors';
-import { runModeRequiresNativeTools } from '@/app/backend/runtime/services/runExecution/tools';
 
 import type {
     ModeDefinition,
@@ -42,12 +42,9 @@ export function validateRunCapabilities(input: ValidateRunCapabilitiesInput): Ru
         });
     }
 
-    if (
-        runModeRequiresNativeTools({
-            mode: input.mode,
-        }) &&
-        !input.modelCapabilities.features.supportsTools
-    ) {
+    const compatibilityRequirements = resolveModeCompatibilityRequirements(input.mode);
+
+    if (compatibilityRequirements.requiresNativeTools && !input.modelCapabilities.features.supportsTools) {
         return errRunExecution(
             'runtime_option_invalid',
             `Model "${input.modelId}" does not support native tool calling and cannot run in mode "${input.mode.modeKey}".`,

@@ -1,11 +1,12 @@
 import { useState } from 'react';
 
 import { buildModelPickerOption } from '@/web/components/modelSelection/modelCapabilities';
-import { createFailClosedAsyncAction } from '@/web/lib/async/createFailClosedAsyncAction';
+import type { ModelPickerOption } from '@/web/components/modelSelection/modelCapabilities';
 import {
     buildProviderSettingsFeedback,
     type ProviderSettingsFeedbackState,
 } from '@/web/components/settings/providerSettings/hooks/providerSettingsFeedback';
+import { createFailClosedAsyncAction } from '@/web/lib/async/createFailClosedAsyncAction';
 import {
     getProviderControlDefaults,
     getProviderControlSpecialistDefaults,
@@ -18,11 +19,11 @@ import { trpc } from '@/web/trpc/client';
 
 import type { ProviderModelRecord } from '@/app/backend/persistence/types';
 import type { ProviderListItem } from '@/app/backend/providers/service/types';
-import type { ModelPickerOption } from '@/web/components/modelSelection/modelCapabilities';
 
 import { findProviderSpecialistDefault, providerSpecialistDefaultTargets } from '@/shared/contracts';
 import { providerIds } from '@/shared/contracts';
 import { canonicalizeProviderModelId } from '@/shared/kiloModels';
+import { resolveSpecialistAliasRoutingIntent } from '@/shared/modeRouting';
 
 function isRuntimeProviderId(value: string | undefined): value is ProviderListItem['id'] {
     return isOneOf(value, providerIds);
@@ -31,7 +32,7 @@ function isRuntimeProviderId(value: string | undefined): value is ProviderListIt
 function createModeOptions(input: {
     providers: Array<Pick<ProviderListItem, 'id' | 'label' | 'authState' | 'authMethod'>>;
     providerModels: ProviderModelRecord[];
-    modeKey: 'ask' | 'code' | 'debug' | 'orchestrate';
+    target: (typeof providerSpecialistDefaultTargets)[number];
 }) {
     return input.providers.flatMap((provider) =>
         input.providerModels
@@ -42,8 +43,8 @@ function createModeOptions(input: {
                     provider,
                     compatibilityContext: {
                         surface: 'conversation',
-                        requiresTools: true,
-                        modeKey: input.modeKey,
+                        routingRequirements: resolveSpecialistAliasRoutingIntent(input.target),
+                        modeKey: input.target.modeKey,
                     },
                 })
             )
@@ -121,7 +122,7 @@ export function useProviderSpecialistDefaultsController(input: { profileId: stri
                     const modeOptions = createModeOptions({
                         providers,
                         providerModels,
-                        modeKey: target.modeKey,
+                        target,
                     });
                     const savedSpecialistDefault = findProviderSpecialistDefault(specialistDefaults, target);
                     const fallbackProviderId =
@@ -173,7 +174,7 @@ export function useProviderSpecialistDefaultsController(input: { profileId: stri
                     const modeOptions = createModeOptions({
                         providers,
                         providerModels,
-                        modeKey: target.modeKey,
+                        target,
                     });
                     const savedSpecialistDefault = findProviderSpecialistDefault(specialistDefaults, target);
                     const fallbackProviderId =
@@ -245,6 +246,8 @@ export function useProviderSpecialistDefaultsController(input: { profileId: stri
         }),
         groups,
         isSaving: setSpecialistDefaultMutation.isPending,
-        saveSpecialistDefault: createFailClosedAsyncAction(saveSpecialistDefaultInternal),
+        saveSpecialistDefault: (inputValue) => {
+            void createFailClosedAsyncAction(saveSpecialistDefaultInternal)(inputValue);
+        },
     };
 }

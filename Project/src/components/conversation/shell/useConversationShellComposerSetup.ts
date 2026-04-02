@@ -12,11 +12,11 @@ import type {
     ConversationSessionWorkspaceUpdate,
     ConversationUiState,
 } from '@/web/components/conversation/shell/useConversationShellViewControllers.types';
+import { resolveModeRoutingIntent, type ConversationModeOption } from '@/web/components/conversation/shell/workspace/helpers';
 import { buildModelPickerOption } from '@/web/components/modelSelection/modelCapabilities';
 import { listProviderControlProviders } from '@/web/lib/providerControl/selectors';
 import { PROGRESSIVE_QUERY_OPTIONS } from '@/web/lib/query/progressiveQueryOptions';
 import { trpc } from '@/web/trpc/client';
-
 
 import {
     DEFAULT_COMPOSER_IMAGE_COMPRESSION_CONCURRENCY,
@@ -25,8 +25,7 @@ import {
 import type { EntityId } from '@/shared/contracts';
 import type { RuntimeProviderId, TopLevelTab } from '@/shared/contracts';
 import type { ResolvedContextState, ResolvedContextStateInput } from '@/shared/contracts/types/context';
-
-
+import type { ModeRoutingIntent } from '@/shared/modeRouting';
 
 interface UseConversationShellComposerSetupInput {
     profileId: string;
@@ -37,7 +36,7 @@ interface UseConversationShellComposerSetupInput {
     sandboxId: EntityId<'sb'> | undefined;
     isPlanningComposerMode: boolean;
     imageAttachmentsAllowed: boolean;
-    activeModeRequiresNativeTools: boolean;
+    activeMode?: ConversationModeOption;
     queries: ConversationQueries;
     mutations: ConversationMutations;
     uiState: ConversationUiState;
@@ -55,7 +54,7 @@ export function buildConversationComposerModelOptions(input: {
           >['providerControl']['entries'][number]['provider'][]
         | undefined;
     modelsByProvider: ConversationRunTargetState['modelsByProvider'];
-    activeModeRequiresNativeTools: boolean;
+    activeModeRoutingIntent?: ModeRoutingIntent;
     modeKey: string;
     imageAttachmentsAllowed: boolean;
     hasPendingImageAttachments: boolean;
@@ -68,7 +67,7 @@ export function buildConversationComposerModelOptions(input: {
                     provider,
                     compatibilityContext: {
                         surface: 'conversation',
-                        requiresTools: input.activeModeRequiresNativeTools,
+                        ...(input.activeModeRoutingIntent ? { routingRequirements: input.activeModeRoutingIntent } : {}),
                         modeKey: input.modeKey,
                         hasPendingImageAttachments: input.hasPendingImageAttachments,
                         imageAttachmentsAllowed: input.imageAttachmentsAllowed,
@@ -205,7 +204,7 @@ export function useConversationShellComposerSetup(input: UseConversationShellCom
     const composerModelOptions = buildConversationComposerModelOptions({
         providers: listProviderControlProviders(input.queries.shellBootstrapQuery.data?.providerControl),
         modelsByProvider: input.runTargetState.modelsByProvider,
-        activeModeRequiresNativeTools: input.activeModeRequiresNativeTools,
+        ...(input.activeMode ? { activeModeRoutingIntent: resolveModeRoutingIntent(input.activeMode) } : {}),
         modeKey: input.modeKey,
         imageAttachmentsAllowed: input.imageAttachmentsAllowed,
         hasPendingImageAttachments: composer.pendingImages.length > 0,

@@ -10,6 +10,7 @@ import type {
     RuntimeProviderId,
     RuntimeReasoningEffort,
 } from '@/shared/contracts';
+import type { ModeCompatibilityRequirements } from '@/shared/modeRouting';
 
 export type ModelCompatibilityState = RuntimeCompatibilityState;
 
@@ -45,6 +46,7 @@ export interface ModelPickerOption {
 interface ModelCompatibilityContext {
     surface: 'conversation' | 'settings';
     provider?: Pick<ProviderListItem, 'id' | 'label' | 'authState' | 'authMethod'>;
+    routingRequirements?: ModeCompatibilityRequirements | undefined;
     requiresTools?: boolean | undefined;
     modeKey?: string | undefined;
     hasPendingImageAttachments?: boolean | undefined;
@@ -127,8 +129,13 @@ export function resolveModelCompatibility(
         };
     }
 
+    const allowsImageAttachments =
+        context.routingRequirements?.allowsImageAttachments ?? context.imageAttachmentsAllowed;
+    const requiresNativeTools =
+        context.routingRequirements?.requiresNativeTools ?? context.requiresTools;
+
     if (context.hasPendingImageAttachments) {
-        if (context.imageAttachmentsAllowed === false) {
+        if (allowsImageAttachments === false) {
             return {
                 state: 'incompatible',
                 scope: 'runtime',
@@ -150,7 +157,7 @@ export function resolveModelCompatibility(
         }
     }
 
-    if (context.requiresTools && !model.features.supportsTools) {
+    if (requiresNativeTools && !model.features.supportsTools) {
         return {
             state: 'incompatible',
             scope: 'model',

@@ -24,6 +24,13 @@ import {
     modeSupportsPlanningWorkflow,
     modeUsesReadOnlyExecution,
 } from '@/shared/modeBehavior';
+import {
+    isSupportedModeSpecialistAlias,
+    resolveModeCompatibilityRequirements,
+    resolveModeRoutingIntent,
+    resolveModeSpecialistAlias,
+    resolveSpecialistAliasRoutingIntent,
+} from '@/shared/modeRouting';
 
 export {
     modeCanExecuteRuns,
@@ -36,6 +43,11 @@ export {
     modeSupportsOrchestrationWorkflow,
     modeSupportsPlanningWorkflow,
     modeUsesReadOnlyExecution,
+    isSupportedModeSpecialistAlias,
+    resolveModeCompatibilityRequirements,
+    resolveModeRoutingIntent,
+    resolveModeSpecialistAlias,
+    resolveSpecialistAliasRoutingIntent,
 };
 
 export const DEFAULT_REASONING_EFFORT: RuntimeReasoningEffort = 'medium';
@@ -76,7 +88,10 @@ export interface RunTargetSelection {
     modelId: string;
 }
 
-export type ConversationModeOption = Pick<ModeDefinitionRecord, 'id' | 'modeKey' | 'label' | 'executionPolicy'>;
+export type ConversationModeOption = Pick<
+    ModeDefinitionRecord,
+    'id' | 'topLevelTab' | 'modeKey' | 'label' | 'executionPolicy'
+>;
 
 export function getModeWorkflowCapabilities(mode: ConversationModeOption | undefined) {
     return mode ? getModeWorkflowCapabilitiesForPolicy(mode.executionPolicy) : [];
