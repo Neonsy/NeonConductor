@@ -1,4 +1,5 @@
 import type { OptimisticConversationUserMessage } from '@/web/components/conversation/messages/optimisticUserMessage';
+import type { PlanningDepth } from '@/web/components/conversation/shell/planningDepth';
 import {
     formatRunStartRejection,
     isEntityId,
@@ -6,16 +7,20 @@ import {
 } from '@/web/components/conversation/shell/workspace/helpers';
 import { isProviderRunnable, type RunStartRejectedResultLike } from '@/web/lib/runtimeCapabilityIssue';
 
-import type { RuntimeRunOptions } from '@/shared/contracts';
 import type {
     ComposerImageAttachmentInput,
     EntityId,
     PlanStartInput,
     PlanRecordView,
     RuntimeProviderId,
+    RuntimeRunOptions,
     SessionStartRunInput,
     TopLevelTab,
 } from '@/shared/contracts';
+
+type ComposerPlanStartInput = PlanStartInput & {
+    planningDepth?: PlanningDepth;
+};
 
 interface ProviderAuthView {
     label: string;
@@ -45,12 +50,13 @@ interface SubmitPromptInput<
     profileId: string;
     topLevelTab: TopLevelTab;
     modeKey: string;
+    planningDepthSelection: PlanningDepth;
     workspaceFingerprint: string | undefined;
     sandboxId?: EntityId<'sb'>;
     resolvedRunTarget: RunTargetSelection | undefined;
     runtimeOptions: RuntimeRunOptions;
     providerById: Map<RuntimeProviderId, ProviderAuthView>;
-    startPlan: (input: PlanStartInput) => Promise<TPlanStartResult>;
+    startPlan: (input: ComposerPlanStartInput) => Promise<TPlanStartResult>;
     startRun: (input: SessionStartRunInput) => Promise<TRunStartAcceptedResult | RunStartRejectedResult>;
     onPromptCleared: () => void;
     onPlanStarted: (result: TPlanStartResult) => void;
@@ -86,6 +92,7 @@ export async function submitPrompt<
                 sessionId: input.selectedSessionId,
                 topLevelTab: input.topLevelTab,
                 modeKey: input.modeKey,
+                planningDepth: input.planningDepthSelection,
                 prompt: trimmedPrompt,
                 ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
             });

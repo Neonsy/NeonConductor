@@ -93,6 +93,37 @@ describe('startPlanFlow', () => {
         expect(mocks.planStore.create).toHaveBeenCalled();
     });
 
+    it('seeds advanced planning depth with a conservative scaffold', async () => {
+        mocks.resolveModesForTab.mockResolvedValue([buildPlanningMode('custom_plan', ['planning'])]);
+
+        const result = await startPlanFlow({
+            profileId: 'profile_default',
+            sessionId: 'sess_1' as never,
+            topLevelTab: 'agent',
+            modeKey: 'custom_plan',
+            prompt: 'Draft an advanced plan for the migration',
+            planningDepth: 'advanced',
+        });
+
+        expect(result.isOk()).toBe(true);
+        expect(mocks.planStore.create).toHaveBeenCalledWith(
+            expect.objectContaining({
+                planningDepth: 'advanced',
+                advancedSnapshot: expect.objectContaining({
+                    evidenceMarkdown: expect.stringContaining('Source Prompt'),
+                    observationsMarkdown: expect.stringContaining('Observations'),
+                    rootCauseMarkdown: expect.stringContaining('Root Cause'),
+                    phases: expect.arrayContaining([
+                        expect.objectContaining({
+                            id: 'phase_1',
+                            sequence: 1,
+                        }),
+                    ]),
+                }),
+            })
+        );
+    });
+
     it('rejects non-planning modes', async () => {
         mocks.resolveModesForTab.mockResolvedValue([buildPlanningMode('custom_code')]);
 

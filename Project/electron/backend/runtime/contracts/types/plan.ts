@@ -26,8 +26,31 @@ export interface PlanQuestion {
     answer?: string;
 }
 
+export type PlanPlanningDepth = 'simple' | 'advanced';
+
 export interface PlanDraftItemInput {
     description: string;
+}
+
+export interface PlanPhaseOutlineInput {
+    id: string;
+    sequence: number;
+    title: string;
+    goalMarkdown: string;
+    exitCriteriaMarkdown: string;
+}
+
+export type PlanPhaseOutlineView = PlanPhaseOutlineInput;
+
+export interface PlanAdvancedSnapshotInput {
+    evidenceMarkdown: string;
+    observationsMarkdown: string;
+    rootCauseMarkdown: string;
+    phases: PlanPhaseOutlineInput[];
+}
+
+export interface PlanAdvancedSnapshotView extends PlanAdvancedSnapshotInput {
+    createdAt: string;
 }
 
 export interface PlanCreateVariantInput extends PlanGetInput {
@@ -60,6 +83,7 @@ export interface PlanStartInput extends ProfileInput {
     topLevelTab: TopLevelTab;
     modeKey: string;
     prompt: string;
+    planningDepth?: PlanPlanningDepth;
     workspaceFingerprint?: string;
 }
 
@@ -80,7 +104,10 @@ export interface PlanAnswerQuestionInput extends PlanGetInput {
 export interface PlanReviseInput extends PlanGetInput {
     summaryMarkdown: string;
     items: PlanDraftItemInput[];
+    advancedSnapshot?: PlanAdvancedSnapshotInput;
 }
+
+export type PlanEnterAdvancedPlanningInput = PlanGetInput;
 
 export interface PlanApproveInput extends PlanGetInput {
     revisionId: EntityId<'prev'>;
@@ -186,9 +213,11 @@ export interface PlanRecordView {
     sessionId: EntityId<'sess'>;
     topLevelTab: TopLevelTab;
     modeKey: string;
+    planningDepth?: PlanPlanningDepth;
     status: PlanStatus;
     sourcePrompt: string;
     summaryMarkdown: string;
+    advancedSnapshot?: PlanAdvancedSnapshotView;
     currentRevisionId: EntityId<'prev'>;
     currentRevisionNumber: number;
     currentVariantId: EntityId<'pvar'>;

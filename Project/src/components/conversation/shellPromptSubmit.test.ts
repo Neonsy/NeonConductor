@@ -20,6 +20,7 @@ describe('submitPrompt', () => {
             profileId: 'profile_default',
             topLevelTab: 'agent',
             modeKey: 'plan',
+            planningDepthSelection: 'advanced',
             workspaceFingerprint: 'wsf_test',
             resolvedRunTarget: undefined,
             runtimeOptions: DEFAULT_RUN_OPTIONS,
@@ -37,6 +38,7 @@ describe('submitPrompt', () => {
             sessionId: 'sess_test',
             topLevelTab: 'agent',
             modeKey: 'plan',
+            planningDepth: 'advanced',
             prompt: 'Build a plan',
             workspaceFingerprint: 'wsf_test',
         });
@@ -56,6 +58,7 @@ describe('submitPrompt', () => {
             profileId: 'profile_default',
             topLevelTab: 'chat',
             modeKey: 'chat',
+            planningDepthSelection: 'simple',
             workspaceFingerprint: undefined,
             resolvedRunTarget: {
                 providerId: 'openai',
@@ -96,6 +99,7 @@ describe('submitPrompt', () => {
             profileId: 'profile_default',
             topLevelTab: 'chat',
             modeKey: 'chat',
+            planningDepthSelection: 'simple',
             workspaceFingerprint: undefined,
             resolvedRunTarget: {
                 providerId: 'kilo',
@@ -179,6 +183,7 @@ describe('submitPrompt', () => {
             profileId: 'profile_default',
             topLevelTab: 'chat',
             modeKey: 'chat',
+            planningDepthSelection: 'simple',
             workspaceFingerprint: undefined,
             resolvedRunTarget: {
                 providerId: 'openai',
@@ -230,6 +235,7 @@ describe('submitPrompt', () => {
             profileId: 'profile_default',
             topLevelTab: 'chat',
             modeKey: 'chat',
+            planningDepthSelection: 'simple',
             workspaceFingerprint: undefined,
             resolvedRunTarget: {
                 providerId: 'openai',
@@ -287,6 +293,7 @@ describe('submitPrompt', () => {
             profileId: 'profile_default',
             topLevelTab: 'chat',
             modeKey: 'chat',
+            planningDepthSelection: 'simple',
             workspaceFingerprint: undefined,
             resolvedRunTarget: {
                 providerId: 'openai',

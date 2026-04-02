@@ -7,6 +7,7 @@ import type {
     PlanCreateVariantInput,
     PlanGenerateDraftInput,
     PlanImplementInput,
+    PlanEnterAdvancedPlanningInput,
     PlanRecordView,
     PlanRaiseFollowUpInput,
     PlanReviseInput,
@@ -16,6 +17,7 @@ import type {
 } from '@/app/backend/runtime/contracts';
 import { approvePlan } from '@/app/backend/runtime/services/plan/approval';
 import { generatePlanDraft } from '@/app/backend/runtime/services/plan/draftGeneration';
+import { enterAdvancedPlanning as enterAdvancedPlanningFlow } from '@/app/backend/runtime/services/plan/enterAdvancedPlanning';
 import { errPlan, okPlan, type PlanServiceError } from '@/app/backend/runtime/services/plan/errors';
 import { implementApprovedPlan } from '@/app/backend/runtime/services/plan/implementation';
 import { answerPlanQuestion, cancelPlan, revisePlan } from '@/app/backend/runtime/services/plan/lifecycle';
@@ -78,6 +80,25 @@ export class PlanService {
 
     async revise(input: PlanReviseInput): Promise<{ found: false } | { found: true; plan: PlanRecordView }> {
         return revisePlan(input);
+    }
+
+    async enterAdvancedPlanning(
+        input: PlanEnterAdvancedPlanningInput
+    ): Promise<Result<{ found: false } | { found: true; plan: PlanRecordView }, PlanServiceError>> {
+        const result = await enterAdvancedPlanningFlow(input);
+        if (result.isErr()) {
+            appLog.warn({
+                tag: 'plan',
+                message: 'Rejected plan.enterAdvancedPlanning request.',
+                profileId: input.profileId,
+                planId: input.planId,
+                code: result.error.code,
+                error: result.error.message,
+            });
+            return result;
+        }
+
+        return okPlan(result.value);
     }
 
     async createVariant(

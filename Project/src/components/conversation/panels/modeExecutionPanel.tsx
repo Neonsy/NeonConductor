@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { MarkdownContent } from '@/web/components/content/markdown/markdownContent';
+import { PlanningDepthToggle } from '@/web/components/conversation/panels/modeExecutionPanelAdvancedPlanning';
 import { PlanArtifactView, PlanEditView } from '@/web/components/conversation/panels/modeExecutionPanelSections';
 import {
     resolveModeExecutionDraftState,
@@ -13,6 +14,7 @@ import {
     type ModeExecutionPlanView,
 } from '@/web/components/conversation/panels/modeExecutionPanelState';
 import type { ConversationPlanActionController } from '@/web/components/conversation/shell/composition/planImplementationController';
+import type { PlanningDepth } from '@/web/components/conversation/shell/planningDepth';
 import { Button } from '@/web/components/ui/button';
 
 import type { EntityId, OrchestratorExecutionStrategy, TopLevelTab } from '@/shared/contracts';
@@ -25,6 +27,7 @@ export interface ModeExecutionPanelProps {
     topLevelTab: TopLevelTab;
     showPlanSurface: boolean;
     showOrchestratorSurface: boolean;
+    planningDepthSelection: PlanningDepth;
     activePlan?: PlanView;
     isLoadingPlan: boolean;
     orchestratorView?: OrchestratorView;
@@ -32,6 +35,7 @@ export interface ModeExecutionPanelProps {
     selectedExecutionStrategy: OrchestratorExecutionStrategy;
     canConfigureExecutionStrategy: boolean;
     onExecutionStrategyChange: (executionStrategy: OrchestratorExecutionStrategy) => void;
+    onPlanningDepthSelectionChange: (nextPlanningDepth: PlanningDepth) => void;
     onSelectChildThread?: (threadId: EntityId<'thr'>) => void;
     onCreateVariant?: (planId: EntityId<'plan'>, revisionId: EntityId<'prev'>) => void;
     onActivateVariant?: (planId: EntityId<'plan'>, variantId: EntityId<'pvar'>) => void;
@@ -130,6 +134,7 @@ export function ModeExecutionPanel({
     topLevelTab,
     showPlanSurface,
     showOrchestratorSurface,
+    planningDepthSelection,
     activePlan,
     isLoadingPlan,
     orchestratorView,
@@ -137,6 +142,7 @@ export function ModeExecutionPanel({
     selectedExecutionStrategy,
     canConfigureExecutionStrategy,
     onExecutionStrategyChange,
+    onPlanningDepthSelectionChange,
     onSelectChildThread,
     onCreateVariant,
     onActivateVariant,
@@ -172,6 +178,7 @@ export function ModeExecutionPanel({
         onCancelPlan,
         onApprovePlan,
         onImplementPlan,
+        onEnterAdvancedPlanning,
         onAbortOrchestrator,
     } = actionController;
 
@@ -183,6 +190,8 @@ export function ModeExecutionPanel({
     const summaryDraft = resolvedDraftState?.summaryDraft ?? '';
     const itemsDraft = resolvedDraftState?.itemsDraft ?? '';
     const answerByQuestionId = resolvedDraftState?.answerByQuestionId ?? {};
+    const planningDepth = resolvedDraftState?.planningDepth ?? planningDepthSelection;
+    const advancedSnapshot = resolvedDraftState?.advancedSnapshot;
 
     function updateDraftState(
         plan: PlanView,
@@ -216,7 +225,9 @@ export function ModeExecutionPanel({
                             <PlanEditView
                                 summaryDraft={summaryDraft}
                                 itemsDraft={itemsDraft}
+                                planningDepth={planningDepth}
                                 isPlanMutating={isPlanMutating}
+                                {...(advancedSnapshot ? { advancedSnapshot } : {})}
                                 onSummaryDraftChange={(next) => {
                                     updateDraftState(activePlan, (current) => ({
                                         ...current,
@@ -229,13 +240,19 @@ export function ModeExecutionPanel({
                                         itemsDraft: next,
                                     }));
                                 }}
+                                onAdvancedSnapshotChange={(nextSnapshot) => {
+                                    updateDraftState(activePlan, (current) => ({
+                                        ...current,
+                                        advancedSnapshot: nextSnapshot,
+                                    }));
+                                }}
                                 onSaveDraft={() => {
                                     const items = itemsDraft
                                         .split('\n')
                                         .map((item) => item.trim())
                                         .filter((item) => item.length > 0);
                                     setPanelModeState(undefined);
-                                    onRevisePlan(activePlan.id, summaryDraft.trim(), items);
+                                    onRevisePlan(activePlan.id, summaryDraft.trim(), items, advancedSnapshot);
                                 }}
                                 onDiscardEdits={() => {
                                     setDraftState(undefined);
@@ -247,12 +264,19 @@ export function ModeExecutionPanel({
                                 plan={activePlan}
                                 artifactState={artifactState}
                                 answerByQuestionId={answerByQuestionId}
+                                planningDepth={planningDepth}
                                 isPlanMutating={isPlanMutating}
+                                {...(advancedSnapshot ? { advancedSnapshot } : {})}
                                 canConfigureExecutionStrategy={
                                     topLevelTab === 'orchestrator' && canConfigureExecutionStrategy
                                 }
                                 selectedExecutionStrategy={selectedExecutionStrategy}
                                 onExecutionStrategyChange={onExecutionStrategyChange}
+                                onUpgradeToAdvancedPlanning={() => {
+                                    setDraftState(undefined);
+                                    setPanelModeState(undefined);
+                                    onEnterAdvancedPlanning(activePlan.id);
+                                }}
                                 onQuestionAnswerDraftChange={(planId, questionId, answer) => {
                                     if (activePlanId !== planId) {
                                         return;
@@ -297,9 +321,20 @@ export function ModeExecutionPanel({
                             />
                         )
                     ) : (
-                        <p className='text-muted-foreground text-xs'>
-                            Submit a planning prompt to create a plan artifact for this session.
-                        </p>
+                        <div className='space-y-3'>
+                            <PlanningDepthToggle
+                                selectedPlanningDepth={planningDepthSelection}
+                                onPlanningDepthChange={onPlanningDepthSelectionChange}
+                                disabled={isLoadingPlan}
+                            />
+                            <p className='text-muted-foreground text-xs'>
+                                Simple planning keeps the current artifact compact. Advanced planning adds evidence,
+                                observations, root cause, and a structured phase outline.
+                            </p>
+                            <p className='text-muted-foreground text-xs'>
+                                Submit a planning prompt to create a plan artifact for this session.
+                            </p>
+                        </div>
                     )}
                 </div>
             ) : null}

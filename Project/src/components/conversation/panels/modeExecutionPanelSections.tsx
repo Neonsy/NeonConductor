@@ -1,5 +1,10 @@
 import { MarkdownContent } from '@/web/components/content/markdown/markdownContent';
 import {
+    AdvancedPlanningArtifactSections,
+    AdvancedPlanningEditor,
+    type ModeExecutionAdvancedPlanningSnapshotDraft,
+} from '@/web/components/conversation/panels/modeExecutionPanelAdvancedPlanning';
+import {
     PlanHistorySection,
     PlanRecoveryBannerSection,
     PlanVariantSwitcherSection,
@@ -8,6 +13,7 @@ import type {
     ModeExecutionPlanArtifactState,
     ModeExecutionPlanView,
 } from '@/web/components/conversation/panels/modeExecutionPanelState';
+import type { PlanningDepth } from '@/web/components/conversation/shell/planningDepth';
 import { Button } from '@/web/components/ui/button';
 
 import type { EntityId, OrchestratorExecutionStrategy } from '@/shared/contracts';
@@ -64,6 +70,11 @@ function PlanArtifactStatusSection({ artifactState }: PlanArtifactStatusProps) {
                     className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${STATUS_TONE_CLASSES[artifactState.statusTone]}`}>
                     {artifactState.statusLabel}
                 </span>
+                {artifactState.planningDepth === 'advanced' ? (
+                    <span className='border-emerald-500/25 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium'>
+                        Advanced planning
+                    </span>
+                ) : null}
                 <span className='text-muted-foreground text-xs'>
                     Current revision: <span className='font-medium'>{artifactState.revisionLabel}</span>
                 </span>
@@ -214,25 +225,20 @@ function PlanArtifactQuestionsSection({
 }
 
 interface PlanArtifactEvidenceProps {
-    artifactState: ModeExecutionPlanArtifactState;
+    advancedSnapshot: ModeExecutionAdvancedPlanningSnapshotDraft;
 }
 
-function PlanArtifactEvidenceSection({ artifactState }: PlanArtifactEvidenceProps) {
+function PlanArtifactEvidenceSection({ advancedSnapshot }: PlanArtifactEvidenceProps) {
     return (
         <section className='space-y-2'>
             <div>
                 <p className='text-sm font-semibold'>Evidence</p>
                 <p className='text-muted-foreground text-xs'>
-                    This section is derived from the existing prompt, intake answers, and revision metadata only.
+                    This section keeps the advanced evidence scaffold next to the active revision.
                 </p>
             </div>
-            <div className='space-y-2'>
-                {artifactState.evidenceLines.map((line) => (
-                    <div key={line.label} className='border-border/70 bg-background rounded-xl border px-3 py-2'>
-                        <p className='text-[11px] font-medium tracking-wide uppercase'>{line.label}</p>
-                        <p className='text-xs'>{line.value}</p>
-                    </div>
-                ))}
+            <div className='border-border bg-background rounded-xl border p-3'>
+                <MarkdownContent markdown={advancedSnapshot.evidenceMarkdown} className='space-y-2' />
             </div>
         </section>
     );
@@ -287,6 +293,7 @@ interface PlanArtifactActionBarProps {
     selectedExecutionStrategy: OrchestratorExecutionStrategy;
     canConfigureExecutionStrategy: boolean;
     onExecutionStrategyChange: (executionStrategy: OrchestratorExecutionStrategy) => void;
+    onUpgradeToAdvancedPlanning: () => void;
     onGenerateDraft: () => void;
     onEnterEditMode: () => void;
     onCancelPlan: () => void;
@@ -300,6 +307,7 @@ function PlanArtifactActionBar({
     selectedExecutionStrategy,
     canConfigureExecutionStrategy,
     onExecutionStrategyChange,
+    onUpgradeToAdvancedPlanning,
     onGenerateDraft,
     onEnterEditMode,
     onCancelPlan,
@@ -343,6 +351,18 @@ function PlanArtifactActionBar({
                         onGenerateDraft();
                     }}>
                     Generate Draft
+                </Button>
+            ) : null}
+            {artifactState.canEnterAdvancedPlanning ? (
+                <Button
+                    type='button'
+                    size='sm'
+                    variant='outline'
+                    disabled={isPlanMutating}
+                    onClick={() => {
+                        onUpgradeToAdvancedPlanning();
+                    }}>
+                    Upgrade to Advanced Planning
                 </Button>
             ) : null}
             {artifactState.canRevise ? (
@@ -399,9 +419,12 @@ function PlanArtifactActionBar({
 interface PlanEditModeProps {
     summaryDraft: string;
     itemsDraft: string;
+    planningDepth: PlanningDepth;
+    advancedSnapshot?: ModeExecutionAdvancedPlanningSnapshotDraft;
     isPlanMutating: boolean;
     onSummaryDraftChange: (next: string) => void;
     onItemsDraftChange: (next: string) => void;
+    onAdvancedSnapshotChange?: (next: ModeExecutionAdvancedPlanningSnapshotDraft) => void;
     onSaveDraft: () => void;
     onDiscardEdits: () => void;
 }
@@ -409,9 +432,12 @@ interface PlanEditModeProps {
 function PlanEditMode({
     summaryDraft,
     itemsDraft,
+    planningDepth,
+    advancedSnapshot,
     isPlanMutating,
     onSummaryDraftChange,
     onItemsDraftChange,
+    onAdvancedSnapshotChange,
     onSaveDraft,
     onDiscardEdits,
 }: PlanEditModeProps) {
@@ -448,6 +474,13 @@ function PlanEditMode({
                     The save action will persist a new revision and return to the structured artifact view.
                 </p>
             </div>
+            {planningDepth === 'advanced' && advancedSnapshot && onAdvancedSnapshotChange ? (
+                <AdvancedPlanningEditor
+                    snapshot={advancedSnapshot}
+                    isPlanMutating={isPlanMutating}
+                    onSnapshotChange={onAdvancedSnapshotChange}
+                />
+            ) : null}
             <div className='flex flex-wrap gap-2'>
                 <Button
                     type='button'
@@ -478,10 +511,13 @@ interface PlanArtifactViewProps {
     plan: ModeExecutionPlanView;
     artifactState: ModeExecutionPlanArtifactState;
     answerByQuestionId: Record<string, string>;
+    planningDepth: PlanningDepth;
+    advancedSnapshot?: ModeExecutionAdvancedPlanningSnapshotDraft;
     isPlanMutating: boolean;
     canConfigureExecutionStrategy: boolean;
     selectedExecutionStrategy: OrchestratorExecutionStrategy;
     onExecutionStrategyChange: (executionStrategy: OrchestratorExecutionStrategy) => void;
+    onUpgradeToAdvancedPlanning: () => void;
     onQuestionAnswerDraftChange: (planId: ModeExecutionPlanView['id'], questionId: string, answer: string) => void;
     onAnswerQuestion: (planId: ModeExecutionPlanView['id'], questionId: string, answer: string) => void;
     onGenerateDraft: () => void;
@@ -500,10 +536,13 @@ export function PlanArtifactView({
     plan,
     artifactState,
     answerByQuestionId,
+    planningDepth,
+    advancedSnapshot,
     isPlanMutating,
     canConfigureExecutionStrategy,
     selectedExecutionStrategy,
     onExecutionStrategyChange,
+    onUpgradeToAdvancedPlanning,
     onQuestionAnswerDraftChange,
     onAnswerQuestion,
     onGenerateDraft,
@@ -544,7 +583,12 @@ export function PlanArtifactView({
                 onQuestionAnswerDraftChange={onQuestionAnswerDraftChange}
                 onAnswerQuestion={onAnswerQuestion}
             />
-            <PlanArtifactEvidenceSection artifactState={artifactState} />
+            {planningDepth === 'advanced' && advancedSnapshot ? (
+                <>
+                    <PlanArtifactEvidenceSection advancedSnapshot={advancedSnapshot} />
+                    <AdvancedPlanningArtifactSections snapshot={advancedSnapshot} />
+                </>
+            ) : null}
             <PlanArtifactItemsSection plan={plan} />
             <PlanHistorySection
                 plan={plan}
@@ -562,6 +606,7 @@ export function PlanArtifactView({
                 selectedExecutionStrategy={selectedExecutionStrategy}
                 canConfigureExecutionStrategy={canConfigureExecutionStrategy}
                 onExecutionStrategyChange={onExecutionStrategyChange}
+                onUpgradeToAdvancedPlanning={onUpgradeToAdvancedPlanning}
                 onGenerateDraft={onGenerateDraft}
                 onEnterEditMode={onEnterEditMode}
                 onCancelPlan={onCancelPlan}

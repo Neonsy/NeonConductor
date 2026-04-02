@@ -1,3 +1,5 @@
+import type { ModeExecutionAdvancedPlanningSnapshotDraft } from '@/web/components/conversation/panels/modeExecutionPanelAdvancedPlanning';
+
 import type {
     EntityId,
     OrchestratorExecutionStrategy,
@@ -84,6 +86,8 @@ export interface ModeExecutionDraftState {
     summaryDraft: string;
     itemsDraft: string;
     answerByQuestionId: Record<string, string>;
+    planningDepth: NonNullable<ModeExecutionPlanView['planningDepth']>;
+    advancedSnapshot?: ModeExecutionAdvancedPlanningSnapshotDraft;
 }
 
 export interface ModeExecutionPlanPanelModeState {
@@ -187,6 +191,8 @@ export function resolveModeExecutionDraftState(input: {
         answerByQuestionId: Object.fromEntries(
             input.activePlan.questions.map((question) => [question.id, question.answer ?? ''])
         ),
+        planningDepth: input.activePlan.planningDepth ?? 'simple',
+        ...(input.activePlan.advancedSnapshot ? { advancedSnapshot: input.activePlan.advancedSnapshot } : {}),
     };
 }
 
@@ -206,12 +212,8 @@ export type ModeExecutionPlanPanelMode = 'artifact' | 'edit';
 
 export type ModeExecutionPlanStatusTone = 'neutral' | 'info' | 'success' | 'warning' | 'destructive';
 
-export interface ModeExecutionPlanArtifactEvidenceLine {
-    label: string;
-    value: string;
-}
-
 export interface ModeExecutionPlanArtifactState {
+    planningDepth: NonNullable<ModeExecutionPlanView['planningDepth']>;
     statusLabel: string;
     statusDescription: string;
     statusTone: ModeExecutionPlanStatusTone;
@@ -235,7 +237,7 @@ export interface ModeExecutionPlanArtifactState {
     canApprove: boolean;
     canImplement: boolean;
     canCancel: boolean;
-    evidenceLines: ModeExecutionPlanArtifactEvidenceLine[];
+    canEnterAdvancedPlanning: boolean;
 }
 
 export function resolveModeExecutionPlanPanelMode(input: {
@@ -689,13 +691,11 @@ export function resolveModeExecutionPlanArtifactState(input: {
     const currentRevisionLabel = readRevisionLabel(plan.currentRevisionNumber, plan.currentRevisionId);
     const hasApprovedRevision = Boolean(plan.approvedRevisionId);
     const approvedRevisionMatchesCurrent = plan.approvedRevisionId === plan.currentRevisionId;
-    const answeredQuestions = plan.questions.filter(
-        (question) => typeof question.answer === 'string' && question.answer.trim().length > 0
-    );
     const currentVariantLabel = readVariantLabel(currentVariant, plan.currentVariantName) ?? 'Current variant';
     const approvedVariantLabel = plan.approvedVariantId
         ? readVariantLabel(approvedVariant, plan.approvedVariantName ?? plan.approvedVariantId)
         : undefined;
+    const planningDepth = plan.planningDepth ?? 'simple';
     const history = planHistory.length
         ? sortHistoryEntriesNewestFirst(
               planHistory.map((entry) =>
@@ -727,6 +727,7 @@ export function resolveModeExecutionPlanArtifactState(input: {
         });
 
     return {
+        planningDepth,
         statusLabel: readPlanStatusLabel(plan.status),
         statusDescription: readPlanStatusDescription(plan),
         statusTone: readStatusTone(plan.status),
@@ -769,30 +770,6 @@ export function resolveModeExecutionPlanArtifactState(input: {
             plan.status === 'draft' ||
             plan.status === 'approved' ||
             plan.status === 'failed',
-        evidenceLines: [
-            {
-                label: 'Source prompt',
-                value: plan.sourcePrompt,
-            },
-            {
-                label: 'Intake answers',
-                value:
-                    answeredQuestions.length > 0
-                        ? answeredQuestions
-                              .map(
-                                  (question) => `${question.question} ${question.answer ? `- ${question.answer}` : ''}`
-                              )
-                              .join(' · ')
-                        : 'No intake answers have been recorded yet.',
-            },
-            {
-                label: 'Revision state',
-                value: approvedRevisionMatchesCurrent
-                    ? `The approved revision matches ${currentRevisionLabel}.`
-                    : approvedRevisionLabel
-                      ? `Current draft ${currentRevisionLabel} is ahead of ${approvedRevisionLabel}.`
-                      : `Current draft ${currentRevisionLabel} has not been approved yet.`,
-            },
-        ],
+        canEnterAdvancedPlanning: planningDepth === 'simple' && plan.status !== 'implementing',
     };
 }

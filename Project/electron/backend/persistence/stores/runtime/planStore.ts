@@ -11,6 +11,7 @@ import {
 import type {
     PlanItemRecord,
     PlanFollowUpRecord,
+    PlanRevisionAdvancedSnapshotRecord,
     PlanQuestionRecord,
     PlanRecord,
     PlanRevisionItemRecord,
@@ -19,8 +20,18 @@ import type {
     PlanViewProjection,
     RuntimeEventRecordV1,
 } from '@/app/backend/persistence/types';
-import { planItemStatuses, planStatuses, topLevelTabs } from '@/app/backend/runtime/contracts';
-import type { EntityId, TopLevelTab } from '@/app/backend/runtime/contracts';
+import {
+    planItemStatuses,
+    planStatuses,
+    topLevelTabs,
+} from '@/app/backend/runtime/contracts';
+import type {
+    EntityId,
+    PlanAdvancedSnapshotInput,
+    PlanAdvancedSnapshotView,
+    PlanPlanningDepth,
+    TopLevelTab,
+} from '@/app/backend/runtime/contracts';
 import { createEntityId } from '@/app/backend/runtime/identity/entityIds';
 import { hasUnansweredRequiredQuestions } from '@/app/backend/runtime/services/plan/intake';
 
@@ -64,6 +75,7 @@ type PlanRecordRow = {
     session_id: string;
     top_level_tab: string;
     mode_key: string;
+    planning_depth: string;
     status: string;
     source_prompt: string;
     summary_markdown: string;
@@ -92,6 +104,15 @@ type PlanRevisionRow = {
     created_at: string;
     previous_revision_id: string | null;
     superseded_at: string | null;
+};
+
+type PlanRevisionAdvancedSnapshotRow = {
+    plan_revision_id: string;
+    evidence_markdown: string;
+    observations_markdown: string;
+    root_cause_markdown: string;
+    phases_json: string;
+    created_at: string;
 };
 
 type PlanVariantRow = {
@@ -244,6 +265,82 @@ function mapPlanFollowUpRecord(row: PlanFollowUpRow): PlanFollowUpRecord {
         createdAt: row.created_at,
         ...(row.resolved_at ? { resolvedAt: row.resolved_at } : {}),
         ...(row.dismissed_at ? { dismissedAt: row.dismissed_at } : {}),
+    };
+}
+
+function isPlanPhaseOutlineRecord(
+    value: unknown
+): value is PlanAdvancedSnapshotView['phases'][number] {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        return false;
+    }
+
+    const record = value as Record<string, unknown>;
+    return (
+        typeof record['id'] === 'string' &&
+        typeof record['sequence'] === 'number' &&
+        Number.isInteger(record['sequence']) &&
+        record['sequence'] > 0 &&
+        typeof record['title'] === 'string' &&
+        typeof record['goalMarkdown'] === 'string' &&
+        typeof record['exitCriteriaMarkdown'] === 'string'
+    );
+}
+
+function mapPlanAdvancedSnapshotRecord(row: PlanRevisionAdvancedSnapshotRow): PlanRevisionAdvancedSnapshotRecord {
+    let parsedPhases: unknown;
+    try {
+        parsedPhases = JSON.parse(row.phases_json);
+    } catch {
+        throw new Error(
+            `Invalid plan revision advanced snapshot phases JSON for revision ${row.plan_revision_id}.`
+        );
+    }
+
+    if (!isJsonUnknownArray(parsedPhases)) {
+        throw new Error(
+            `Invalid plan revision advanced snapshot phases JSON for revision ${row.plan_revision_id}: expected array.`
+        );
+    }
+
+    const phases = parsedPhases;
+    const normalizedPhases = phases.map((phase, index) => {
+        if (!isPlanPhaseOutlineRecord(phase)) {
+            throw new Error(
+                `Invalid plan revision advanced snapshot phase at index ${String(index)} for revision ${row.plan_revision_id}.`
+            );
+        }
+
+        return {
+            id: phase.id,
+            sequence: phase.sequence,
+            title: phase.title,
+            goalMarkdown: phase.goalMarkdown,
+            exitCriteriaMarkdown: phase.exitCriteriaMarkdown,
+        };
+    });
+
+    return {
+        planRevisionId: parseEntityId(row.plan_revision_id, 'plan_revision_advanced_snapshots.plan_revision_id', 'prev'),
+        evidenceMarkdown: row.evidence_markdown,
+        observationsMarkdown: row.observations_markdown,
+        rootCauseMarkdown: row.root_cause_markdown,
+        phases: normalizedPhases,
+        createdAt: row.created_at,
+    };
+}
+
+function toPlanAdvancedSnapshotView(snapshot: PlanRevisionAdvancedSnapshotRecord | null): PlanAdvancedSnapshotView | undefined {
+    if (!snapshot) {
+        return undefined;
+    }
+
+    return {
+        evidenceMarkdown: snapshot.evidenceMarkdown,
+        observationsMarkdown: snapshot.observationsMarkdown,
+        rootCauseMarkdown: snapshot.rootCauseMarkdown,
+        phases: snapshot.phases,
+        createdAt: snapshot.createdAt,
     };
 }
 
@@ -840,6 +937,34 @@ export class PlanStore {
         );
     }
 
+    private async getPlanRevisionAdvancedSnapshotRowByRevisionId(
+        db: PlanStoreDb,
+        revisionId: EntityId<'prev'>
+    ): Promise<PlanRevisionAdvancedSnapshotRow | null> {
+        return (
+            (await db
+                .selectFrom('plan_revision_advanced_snapshots')
+                .selectAll()
+                .where('plan_revision_id', '=', revisionId)
+                .executeTakeFirst()) ?? null
+        );
+    }
+
+    private async hydratePlanRevisionRecord(
+        db: PlanStoreDb,
+        row: PlanRevisionRow
+    ): Promise<PlanRevisionRecord> {
+        const snapshotRow = await this.getPlanRevisionAdvancedSnapshotRowByRevisionId(
+            db,
+            parseEntityId(row.id, 'plan_revisions.id', 'prev')
+        );
+
+        return {
+            ...mapPlanRevisionRecord(row),
+            ...(snapshotRow ? { advancedSnapshot: mapPlanAdvancedSnapshotRecord(snapshotRow) } : {}),
+        };
+    }
+
     private async getPlanVariantRowById(
         db: PlanStoreDb,
         variantId: EntityId<'pvar'>
@@ -907,6 +1032,7 @@ export class PlanStore {
         if (!currentRevisionRow) {
             throw new Error(`Missing current revision "${row.current_revision_id}" for plan ${row.id}.`);
         }
+        const currentRevision = await this.hydratePlanRevisionRecord(db, currentRevisionRow);
 
         const approvedRevisionRow = row.approved_revision_id
             ? await this.getPlanRevisionRowById(
@@ -914,6 +1040,12 @@ export class PlanStore {
                   parseEntityId(row.approved_revision_id, 'plan_records.approved_revision_id', 'prev')
               )
             : null;
+        const approvedRevision = approvedRevisionRow
+            ? await this.hydratePlanRevisionRecord(db, approvedRevisionRow)
+            : null;
+        const advancedSnapshot = currentRevision.advancedSnapshot
+            ? toPlanAdvancedSnapshotView(currentRevision.advancedSnapshot)
+            : undefined;
 
         return {
             id: parseEntityId(row.id, 'plan_records.id', 'plan'),
@@ -921,13 +1053,15 @@ export class PlanStore {
             sessionId: parseEntityId(row.session_id, 'plan_records.session_id', 'sess'),
             topLevelTab: parseEnumValue(row.top_level_tab, 'plan_records.top_level_tab', topLevelTabs),
             modeKey: row.mode_key,
+            planningDepth: parseEnumValue(row.planning_depth, 'plan_records.planning_depth', ['simple', 'advanced']),
             status: parseEnumValue(row.status, 'plan_records.status', planStatuses),
             sourcePrompt: row.source_prompt,
             summaryMarkdown: row.summary_markdown,
+            ...(advancedSnapshot ? { advancedSnapshot } : {}),
             questions: parsePlanQuestions(row),
             answers: parsePlanAnswers(row),
             currentRevisionId: parseEntityId(row.current_revision_id, 'plan_records.current_revision_id', 'prev'),
-            currentRevisionNumber: currentRevisionRow.revision_number,
+            currentRevisionNumber: currentRevision.revisionNumber,
             currentVariantId: parseEntityId(row.current_variant_id, 'plan_records.current_variant_id', 'pvar'),
             ...(row.approved_revision_id
                 ? {
@@ -936,9 +1070,9 @@ export class PlanStore {
                           'plan_records.approved_revision_id',
                           'prev'
                       ),
-                  }
+                }
                 : {}),
-            ...(approvedRevisionRow ? { approvedRevisionNumber: approvedRevisionRow.revision_number } : {}),
+            ...(approvedRevision ? { approvedRevisionNumber: approvedRevision.revisionNumber } : {}),
             ...(row.approved_variant_id
                 ? {
                       approvedVariantId: parseEntityId(
@@ -986,6 +1120,7 @@ export class PlanStore {
             previousRevisionId?: EntityId<'prev'>;
             itemDescriptions: string[];
             timestamp: string;
+            advancedSnapshot?: PlanAdvancedSnapshotInput;
         }
     ): Promise<void> {
         await db
@@ -1002,6 +1137,20 @@ export class PlanStore {
                 superseded_at: null,
             })
             .execute();
+
+        if (input.advancedSnapshot) {
+            await db
+                .insertInto('plan_revision_advanced_snapshots')
+                .values({
+                    plan_revision_id: input.revisionId,
+                    evidence_markdown: input.advancedSnapshot.evidenceMarkdown,
+                    observations_markdown: input.advancedSnapshot.observationsMarkdown,
+                    root_cause_markdown: input.advancedSnapshot.rootCauseMarkdown,
+                    phases_json: JSON.stringify(input.advancedSnapshot.phases),
+                    created_at: input.timestamp,
+                })
+                .execute();
+        }
 
         if (input.itemDescriptions.length === 0) {
             return;
@@ -1055,9 +1204,11 @@ export class PlanStore {
         sessionId: EntityId<'sess'>;
         topLevelTab: TopLevelTab;
         modeKey: string;
+        planningDepth?: PlanPlanningDepth;
         sourcePrompt: string;
         summaryMarkdown: string;
         questions: PlanQuestionRecord[];
+        advancedSnapshot?: PlanAdvancedSnapshotInput;
         workspaceFingerprint?: string;
     }): Promise<PlanRecord> {
         const db = this.getDb();
@@ -1075,6 +1226,7 @@ export class PlanStore {
                     session_id: input.sessionId,
                     top_level_tab: input.topLevelTab,
                     mode_key: input.modeKey,
+                    planning_depth: input.planningDepth ?? 'simple',
                     status: input.questions.length > 0 ? 'awaiting_answers' : 'draft',
                     source_prompt: input.sourcePrompt,
                     summary_markdown: input.summaryMarkdown,
@@ -1094,17 +1246,6 @@ export class PlanStore {
                 })
                 .execute();
 
-            await this.insertRevisionInTransaction(transaction, {
-                planId,
-                variantId,
-                revisionId,
-                revisionNumber: 1,
-                summaryMarkdown: input.summaryMarkdown,
-                createdByKind: 'start',
-                itemDescriptions: [],
-                timestamp: now,
-            });
-
             await transaction
                 .insertInto('plan_variants')
                 .values({
@@ -1116,6 +1257,18 @@ export class PlanStore {
                     archived_at: null,
                 })
                 .execute();
+
+            await this.insertRevisionInTransaction(transaction, {
+                planId,
+                variantId,
+                revisionId,
+                revisionNumber: 1,
+                summaryMarkdown: input.summaryMarkdown,
+                createdByKind: 'start',
+                itemDescriptions: [],
+                timestamp: now,
+                ...(input.advancedSnapshot ? { advancedSnapshot: input.advancedSnapshot } : {}),
+            });
         });
 
         const row = await this.getPlanRecordRowById(db, planId);
@@ -1203,14 +1356,15 @@ export class PlanStore {
     }
 
     async listRevisions(planId: EntityId<'plan'>): Promise<PlanRevisionRecord[]> {
-        const rows = await this.getDb()
+        const db = this.getDb();
+        const rows = await db
             .selectFrom('plan_revisions')
             .selectAll()
             .where('plan_id', '=', planId)
             .orderBy('revision_number', 'asc')
             .execute();
 
-        return rows.map(mapPlanRevisionRecord);
+        return Promise.all(rows.map((row) => this.hydratePlanRevisionRecord(db, row)));
     }
 
     async listRevisionItems(planRevisionId: EntityId<'prev'>): Promise<PlanRevisionItemRecord[]> {
@@ -1218,8 +1372,9 @@ export class PlanStore {
     }
 
     async getRevisionById(planRevisionId: EntityId<'prev'>): Promise<PlanRevisionRecord | null> {
-        const row = await this.getPlanRevisionRowById(this.getDb(), planRevisionId);
-        return row ? mapPlanRevisionRecord(row) : null;
+        const db = this.getDb();
+        const row = await this.getPlanRevisionRowById(db, planRevisionId);
+        return row ? this.hydratePlanRevisionRecord(db, row) : null;
     }
 
     async getCurrentRevision(planId: EntityId<'plan'>): Promise<PlanRevisionRecord | null> {
@@ -1244,14 +1399,21 @@ export class PlanStore {
 
     async resolveApprovedRevisionSnapshot(input: {
         planId: EntityId<'plan'>;
-    }): Promise<{ revision: PlanRevisionRecord; items: PlanRevisionItemRecord[] } | null> {
+    }): Promise<
+        | { revision: PlanRevisionRecord; items: PlanRevisionItemRecord[]; advancedSnapshot?: PlanRevisionRecord['advancedSnapshot'] }
+        | null
+    > {
         const revision = await this.getApprovedRevision(input.planId);
         if (!revision) {
             return null;
         }
 
         const items = await this.listRevisionItems(revision.id);
-        return { revision, items };
+        return {
+            revision,
+            items,
+            ...(revision.advancedSnapshot ? { advancedSnapshot: revision.advancedSnapshot } : {}),
+        };
     }
 
     async setAnswer(planId: EntityId<'plan'>, questionId: string, answer: string): Promise<PlanRecord | null> {
@@ -1293,7 +1455,10 @@ export class PlanStore {
     async revise(
         planId: EntityId<'plan'>,
         summaryMarkdown: string,
-        descriptions: string[]
+        descriptions: string[],
+        options?: {
+            advancedSnapshot?: PlanAdvancedSnapshotInput;
+        }
     ): Promise<PlanRecord | null> {
         const db = this.getDb();
         const normalizedDescriptions = descriptions
@@ -1314,9 +1479,23 @@ export class PlanStore {
                 throw new Error(`Missing current revision "${existing.current_revision_id}" for plan ${planId}.`);
             }
 
+            const currentAdvancedSnapshot = await this.getPlanRevisionAdvancedSnapshotRowByRevisionId(
+                transaction,
+                parseEntityId(currentRevision.id, 'plan_revisions.id', 'prev')
+            );
+            const isAdvancedPlan =
+                parseEnumValue(existing.planning_depth, 'plan_records.planning_depth', ['simple', 'advanced']) ===
+                'advanced';
+            if (options?.advancedSnapshot && !isAdvancedPlan) {
+                return null;
+            }
+
             const now = nowIso();
             const nextRevisionId = createEntityId('prev');
             const nextRevisionNumber = currentRevision.revision_number + 1;
+            const revisionAdvancedSnapshot =
+                options?.advancedSnapshot ??
+                (currentAdvancedSnapshot ? mapPlanAdvancedSnapshotRecord(currentAdvancedSnapshot) : undefined);
 
             await transaction
                 .updateTable('plan_revisions')
@@ -1341,6 +1520,7 @@ export class PlanStore {
                 ),
                 itemDescriptions: normalizedDescriptions,
                 timestamp: now,
+                ...(revisionAdvancedSnapshot ? { advancedSnapshot: revisionAdvancedSnapshot } : {}),
             });
 
             await transaction
@@ -1348,7 +1528,8 @@ export class PlanStore {
                 .set({
                     current_revision_id: nextRevisionId,
                     summary_markdown: summaryMarkdown,
-                    status: 'draft',
+                    status:
+                        isAdvancedPlan && existing.status === 'awaiting_answers' ? 'awaiting_answers' : 'draft',
                     updated_at: now,
                 })
                 .where('id', '=', planId)
@@ -1363,6 +1544,97 @@ export class PlanStore {
         }
 
         return this.getByIdFromDb(db, revisedPlanId);
+    }
+
+    async enterAdvancedPlanning(
+        planId: EntityId<'plan'>,
+        advancedSnapshot: PlanAdvancedSnapshotInput
+    ): Promise<PlanRecord | null> {
+        const db = this.getDb();
+        const advancedPlanId = await db.transaction().execute(async (transaction) => {
+            const existing = await this.getPlanRecordRowById(transaction, planId);
+            if (!existing) {
+                return null;
+            }
+
+            if (
+                parseEnumValue(existing.status, 'plan_records.status', planStatuses) === 'implementing' ||
+                parseEnumValue(existing.planning_depth, 'plan_records.planning_depth', ['simple', 'advanced']) ===
+                    'advanced'
+            ) {
+                return null;
+            }
+
+            const currentRevision = await this.getPlanRevisionRowById(
+                transaction,
+                parseEntityId(existing.current_revision_id, 'plan_records.current_revision_id', 'prev')
+            );
+            if (!currentRevision) {
+                throw new Error(`Missing current revision "${existing.current_revision_id}" for plan ${planId}.`);
+            }
+
+            const currentRevisionItems = await this.listRevisionItemsInDb(
+                transaction,
+                parseEntityId(currentRevision.id, 'plan_revisions.id', 'prev')
+            );
+            const now = nowIso();
+            const nextRevisionId = createEntityId('prev');
+            const nextRevisionNumber = currentRevision.revision_number + 1;
+            const nextStatus = existing.status === 'awaiting_answers' ? 'awaiting_answers' : 'draft';
+
+            await transaction
+                .updateTable('plan_revisions')
+                .set({
+                    superseded_at: now,
+                })
+                .where('id', '=', currentRevision.id)
+                .where('superseded_at', 'is', null)
+                .execute();
+
+            await this.insertRevisionInTransaction(transaction, {
+                planId,
+                variantId: parseEntityId(existing.current_variant_id, 'plan_records.current_variant_id', 'pvar'),
+                revisionId: nextRevisionId,
+                revisionNumber: nextRevisionNumber,
+                summaryMarkdown: currentRevision.summary_markdown,
+                createdByKind: 'revise',
+                previousRevisionId: parseEntityId(
+                    existing.current_revision_id,
+                    'plan_records.current_revision_id',
+                    'prev'
+                ),
+                itemDescriptions: currentRevisionItems.map((item) => item.description),
+                timestamp: now,
+                advancedSnapshot: advancedSnapshot,
+            });
+
+            await transaction
+                .updateTable('plan_records')
+                .set({
+                    current_revision_id: nextRevisionId,
+                    summary_markdown: currentRevision.summary_markdown,
+                    planning_depth: 'advanced',
+                    status: nextStatus,
+                    updated_at: now,
+                })
+                .where('id', '=', planId)
+                .execute();
+
+            await this.replaceLiveItemsInTransaction(
+                transaction,
+                planId,
+                currentRevisionItems.map((item) => item.description),
+                now
+            );
+
+            return planId;
+        });
+
+        if (!advancedPlanId) {
+            return null;
+        }
+
+        return this.getByIdFromDb(db, parseEntityId(advancedPlanId, 'plan_records.id', 'plan'));
     }
 
     async approve(
@@ -1454,6 +1726,10 @@ export class PlanStore {
             if (!sourceRevision || sourceRevision.plan_id !== planId) {
                 return null;
             }
+            const sourceRevisionAdvancedSnapshot = await this.getPlanRevisionAdvancedSnapshotRowByRevisionId(
+                transaction,
+                sourceRevisionId
+            );
 
             const sourceRevisionItems = await this.listRevisionItemsInDb(transaction, sourceRevisionId);
             const variantRows = await transaction
@@ -1491,6 +1767,9 @@ export class PlanStore {
                 previousRevisionId: sourceRevisionId,
                 itemDescriptions: sourceRevisionItems.map((item) => item.description),
                 timestamp: now,
+                ...(sourceRevisionAdvancedSnapshot
+                    ? { advancedSnapshot: mapPlanAdvancedSnapshotRecord(sourceRevisionAdvancedSnapshot) }
+                    : {}),
             });
 
             await transaction
@@ -1597,6 +1876,10 @@ export class PlanStore {
             if (!sourceRevision || sourceRevision.plan_id !== planId) {
                 return null;
             }
+            const sourceRevisionAdvancedSnapshot = await this.getPlanRevisionAdvancedSnapshotRowByRevisionId(
+                transaction,
+                sourceRevisionId
+            );
 
             const targetVariantId = variantId ?? parseEntityId(existing.current_variant_id, 'plan_records.current_variant_id', 'pvar');
             const targetVariant = await this.getPlanVariantRowById(transaction, targetVariantId);
@@ -1633,6 +1916,9 @@ export class PlanStore {
                 previousRevisionId: parseEntityId(targetVariantHead.id, 'plan_revisions.id', 'prev'),
                 itemDescriptions: sourceRevisionItems.map((item) => item.description),
                 timestamp: now,
+                ...(sourceRevisionAdvancedSnapshot
+                    ? { advancedSnapshot: mapPlanAdvancedSnapshotRecord(sourceRevisionAdvancedSnapshot) }
+                    : {}),
             });
 
             await transaction

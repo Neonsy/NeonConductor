@@ -15,6 +15,7 @@ import {
 } from '@/web/components/conversation/hooks/conversationComposerPendingImageQueue';
 import type { OptimisticConversationUserMessage } from '@/web/components/conversation/messages/optimisticUserMessage';
 import { submitPrompt as submitPromptFromComposer } from '@/web/components/conversation/shell/actions/promptSubmit';
+import type { PlanningDepth } from '@/web/components/conversation/shell/planningDepth';
 
 import type {
     EntityId,
@@ -25,6 +26,10 @@ import type {
     SessionStartRunInput,
     TopLevelTab,
 } from '@/shared/contracts';
+
+type ComposerPlanStartInput = PlanStartInput & {
+    planningDepth?: PlanningDepth;
+};
 
 interface ProviderAuthView {
     label: string;
@@ -58,7 +63,8 @@ interface UseConversationShellComposerInput<
     imageCompressionConcurrency: number;
     imageAttachmentBlockedReason?: string;
     submitBlockedReason?: string;
-    startPlan: (input: PlanStartInput) => Promise<TPlanStartResult>;
+    planningDepthSelection: PlanningDepth;
+    startPlan: (input: ComposerPlanStartInput) => Promise<TPlanStartResult>;
     startRun: (input: SessionStartRunInput) => Promise<TRunStartAcceptedResult | TRunStartRejectedResult>;
     onPlanStarted: (result: TPlanStartResult) => void;
     onRunStarted: (result: TRunStartAcceptedResult) => void;
@@ -320,6 +326,7 @@ export function useConversationShellComposer<
                 profileId: input.profileId,
                 topLevelTab: input.topLevelTab,
                 modeKey: input.modeKey,
+                planningDepthSelection: input.planningDepthSelection,
                 workspaceFingerprint: input.workspaceFingerprint,
                 ...(input.sandboxId ? { sandboxId: input.sandboxId } : {}),
                 resolvedRunTarget: input.resolvedRunTarget,

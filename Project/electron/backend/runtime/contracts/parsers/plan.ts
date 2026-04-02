@@ -2,9 +2,11 @@ import { orchestratorExecutionStrategies, topLevelTabs } from '@/app/backend/run
 import {
     createParser,
     parseRuntimeRunOptions,
+    readArray,
     readEntityId,
     readEnumValue,
     readObject,
+    readOptionalNumber,
     readOptionalString,
     readProfileId,
     readProviderId,
@@ -20,16 +22,22 @@ import type {
     PlanGetActiveInput,
     PlanGetInput,
     PlanImplementInput,
+    PlanAdvancedSnapshotInput,
     PlanRaiseFollowUpInput,
     PlanReviseInput,
     PlanResolveFollowUpInput,
     PlanResumeFromRevisionInput,
+    PlanEnterAdvancedPlanningInput,
     PlanStartInput,
 } from '@/app/backend/runtime/contracts/types';
 
 export function parsePlanStartInput(input: unknown): PlanStartInput {
     const source = readObject(input, 'input');
     const workspaceFingerprint = readOptionalString(source.workspaceFingerprint, 'workspaceFingerprint');
+    const planningDepth =
+        source.planningDepth !== undefined
+            ? readEnumValue(source.planningDepth, 'planningDepth', ['simple', 'advanced'] as const)
+            : undefined;
 
     return {
         profileId: readProfileId(source),
@@ -37,7 +45,36 @@ export function parsePlanStartInput(input: unknown): PlanStartInput {
         topLevelTab: readEnumValue(source.topLevelTab, 'topLevelTab', topLevelTabs),
         modeKey: readString(source.modeKey, 'modeKey'),
         prompt: readString(source.prompt, 'prompt'),
+        ...(planningDepth ? { planningDepth } : {}),
         ...(workspaceFingerprint ? { workspaceFingerprint } : {}),
+    };
+}
+
+function parsePlanPhaseOutlineInput(input: unknown, field: string): PlanAdvancedSnapshotInput['phases'][number] {
+    const source = readObject(input, field);
+    const sequence = readOptionalNumber(source.sequence, `${field}.sequence`);
+    if (sequence === undefined || !Number.isInteger(sequence) || sequence <= 0) {
+        throw new Error(`Invalid "${field}.sequence": expected positive integer.`);
+    }
+
+    return {
+        id: readString(source.id, `${field}.id`),
+        sequence,
+        title: readString(source.title, `${field}.title`),
+        goalMarkdown: readString(source.goalMarkdown, `${field}.goalMarkdown`),
+        exitCriteriaMarkdown: readString(source.exitCriteriaMarkdown, `${field}.exitCriteriaMarkdown`),
+    };
+}
+
+function parsePlanAdvancedSnapshotInput(input: unknown): PlanAdvancedSnapshotInput {
+    const source = readObject(input, 'advancedSnapshot');
+    const phases = readArray(source.phases, 'advancedSnapshot.phases');
+
+    return {
+        evidenceMarkdown: readString(source.evidenceMarkdown, 'advancedSnapshot.evidenceMarkdown'),
+        observationsMarkdown: readString(source.observationsMarkdown, 'advancedSnapshot.observationsMarkdown'),
+        rootCauseMarkdown: readString(source.rootCauseMarkdown, 'advancedSnapshot.rootCauseMarkdown'),
+        phases: phases.map((phase, index) => parsePlanPhaseOutlineInput(phase, `advancedSnapshot.phases[${String(index)}]`)),
     };
 }
 
@@ -88,6 +125,16 @@ export function parsePlanReviseInput(input: unknown): PlanReviseInput {
                 description: readString(itemSource.description, `items[${String(index)}].description`),
             };
         }),
+        ...(source.advancedSnapshot ? { advancedSnapshot: parsePlanAdvancedSnapshotInput(source.advancedSnapshot) } : {}),
+    };
+}
+
+export function parsePlanEnterAdvancedPlanningInput(input: unknown): PlanEnterAdvancedPlanningInput {
+    const source = readObject(input, 'input');
+
+    return {
+        profileId: readProfileId(source),
+        planId: readEntityId(source.planId, 'planId', 'plan'),
     };
 }
 
@@ -209,6 +256,7 @@ export const planGetInputSchema = createParser(parsePlanGetInput);
 export const planGetActiveInputSchema = createParser(parsePlanGetActiveInput);
 export const planAnswerQuestionInputSchema = createParser(parsePlanAnswerQuestionInput);
 export const planReviseInputSchema = createParser(parsePlanReviseInput);
+export const planEnterAdvancedPlanningInputSchema = createParser(parsePlanEnterAdvancedPlanningInput);
 export const planCreateVariantInputSchema = createParser(parsePlanCreateVariantInput);
 export const planActivateVariantInputSchema = createParser(parsePlanActivateVariantInput);
 export const planResumeFromRevisionInputSchema = createParser(parsePlanResumeFromRevisionInput);

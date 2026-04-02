@@ -10,6 +10,7 @@ export async function appendPlanStartedEvent(input: {
     revisionId: EntityId<'prev'>;
     revisionNumber: number;
     variantId?: EntityId<'pvar'> | undefined;
+    planningDepth?: 'simple' | 'advanced';
 }): Promise<void> {
     await runtimeEventLogService.append(
         runtimeStatusEvent({
@@ -25,6 +26,7 @@ export async function appendPlanStartedEvent(input: {
                 revisionId: input.revisionId,
                 revisionNumber: input.revisionNumber,
                 ...(input.variantId ? { variantId: input.variantId } : {}),
+                ...(input.planningDepth ? { planningDepth: input.planningDepth } : {}),
             },
         })
     );
@@ -90,6 +92,38 @@ export async function appendPlanRevisedEvent(input: {
                 profileId: input.profileId,
                 revisionId: input.revisionId,
                 revisionNumber: input.revisionNumber,
+                ...(input.variantId ? { variantId: input.variantId } : {}),
+            },
+        })
+    );
+}
+
+export async function appendPlanAdvancedPlanningEnteredEvent(input: {
+    profileId: string;
+    planId: EntityId<'plan'>;
+    priorRevisionId: EntityId<'prev'>;
+    priorRevisionNumber: number;
+    revisionId: EntityId<'prev'>;
+    revisionNumber: number;
+    variantId?: EntityId<'pvar'> | undefined;
+    previousPlanningDepth: 'simple' | 'advanced';
+    planningDepth: 'advanced';
+}): Promise<void> {
+    await runtimeEventLogService.append(
+        runtimeStatusEvent({
+            entityType: 'plan',
+            domain: 'plan',
+            entityId: input.planId,
+            eventType: 'plan.advanced_planning.entered',
+            payload: {
+                planId: input.planId,
+                profileId: input.profileId,
+                priorRevisionId: input.priorRevisionId,
+                priorRevisionNumber: input.priorRevisionNumber,
+                revisionId: input.revisionId,
+                revisionNumber: input.revisionNumber,
+                previousPlanningDepth: input.previousPlanningDepth,
+                planningDepth: input.planningDepth,
                 ...(input.variantId ? { variantId: input.variantId } : {}),
             },
         })

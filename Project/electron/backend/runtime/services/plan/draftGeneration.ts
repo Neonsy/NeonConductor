@@ -3,6 +3,7 @@ import type { PlanRecord } from '@/app/backend/persistence/types';
 import type { PlanGenerateDraftInput, PlanRecordView } from '@/app/backend/runtime/contracts';
 import { generatePlainTextFromMessages } from '@/app/backend/runtime/services/common/plainTextGeneration';
 import { resolveSummaryGenerationTarget } from '@/app/backend/runtime/services/common/summaryGenerationTarget';
+import { buildAdvancedPlanningSnapshotScaffold } from '@/app/backend/runtime/services/plan/advancedPlanningScaffold';
 import { errPlan, okPlan, type PlanServiceError } from '@/app/backend/runtime/services/plan/errors';
 import {
     appendPlanDraftGeneratedEvent,
@@ -211,8 +212,26 @@ export async function generatePlanDraft(
     const fallbackDraft = buildDeterministicDraft(plan);
     const finalDraft = generatedDraft ?? fallbackDraft;
     const generationMode = generatedDraft ? 'model' : 'deterministic_fallback';
+    const advancedSnapshot =
+        plan.planningDepth === 'advanced'
+            ? plan.advancedSnapshot ??
+              buildAdvancedPlanningSnapshotScaffold({
+                  sourcePrompt: plan.sourcePrompt,
+                  questions: plan.questions,
+                  answers: plan.answers,
+                  status: plan.status,
+                  currentRevisionNumber: plan.currentRevisionNumber,
+                  planningDepth: plan.planningDepth,
+                  itemDescriptions: finalDraft.itemDescriptions,
+                  ...(plan.approvedRevisionNumber !== undefined
+                      ? { approvedRevisionNumber: plan.approvedRevisionNumber }
+                      : {}),
+              })
+            : undefined;
 
-    const revised = await planStore.revise(input.planId, finalDraft.summaryMarkdown, finalDraft.itemDescriptions);
+    const revised = await planStore.revise(input.planId, finalDraft.summaryMarkdown, finalDraft.itemDescriptions, {
+        ...(advancedSnapshot ? { advancedSnapshot } : {}),
+    });
     if (!revised || revised.profileId !== input.profileId) {
         return errPlan('draft_generation_failed', 'Plan draft generation could not persist the generated revision.');
     }

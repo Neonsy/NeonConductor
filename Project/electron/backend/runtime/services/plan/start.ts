@@ -1,5 +1,6 @@
 import { planStore } from '@/app/backend/persistence/stores';
 import type { PlanRecordView, PlanStartInput } from '@/app/backend/runtime/contracts';
+import { buildAdvancedPlanningSnapshotScaffold } from '@/app/backend/runtime/services/plan/advancedPlanningScaffold';
 import {
     errPlan,
     type PlanServiceError,
@@ -34,17 +35,32 @@ export async function startPlanFlow(
         topLevelTab: input.topLevelTab,
         ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
     });
+    const planningDepth = input.planningDepth ?? 'simple';
+    const advancedSnapshot =
+        planningDepth === 'advanced'
+            ? buildAdvancedPlanningSnapshotScaffold({
+                  sourcePrompt: input.prompt,
+                  questions,
+                  answers: {},
+                  status: questions.length > 0 ? 'awaiting_answers' : 'draft',
+                  currentRevisionNumber: 1,
+                  planningDepth,
+                  itemDescriptions: [],
+              })
+            : undefined;
     const plan = await planStore.create({
         profileId: input.profileId,
         sessionId: input.sessionId,
         topLevelTab: input.topLevelTab,
         modeKey: input.modeKey,
+        planningDepth,
         sourcePrompt: input.prompt.trim(),
         summaryMarkdown: createInitialPlanSummary({
             prompt: input.prompt,
             questions,
         }),
         questions,
+        ...(advancedSnapshot ? { advancedSnapshot } : {}),
         ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
     });
 
@@ -56,6 +72,7 @@ export async function startPlanFlow(
         revisionId: plan.currentRevisionId,
         revisionNumber: plan.currentRevisionNumber,
         variantId: plan.currentVariantId,
+        planningDepth,
     });
     await appendPlanQuestionRequestedEvents({
         planId: plan.id,

@@ -16,6 +16,7 @@ import {
     resolveOrchestratorStrategyRootThreadId,
     updateOrchestratorExecutionStrategyDraft,
 } from '@/web/components/conversation/shell/orchestratorExecutionStrategyDrafts';
+import { DEFAULT_PLANNING_DEPTH, type PlanningDepth } from '@/web/components/conversation/shell/planningDepth';
 import { useConversationQueries } from '@/web/components/conversation/shell/queries/useConversationQueries';
 import { useConversationComposerTargetState } from '@/web/components/conversation/shell/useConversationComposerTargetState';
 import { useConversationShellCacheHandlers } from '@/web/components/conversation/shell/useConversationShellCacheHandlers';
@@ -62,6 +63,8 @@ export function useConversationShellRuntimeState(
     const imageAttachmentsAllowed = activeModeRoutingIntent.allowsImageAttachments;
 
     const [tabSwitchNotice, setTabSwitchNotice] = useState<string | undefined>(undefined);
+    const [planningDepthSelection, setPlanningDepthSelection] =
+        useState<PlanningDepth>(DEFAULT_PLANNING_DEPTH);
     const [focusComposerRequestKey, setFocusComposerRequestKey] = useState(0);
     const [executionStrategyDraftsByRootThreadId, setExecutionStrategyDraftsByRootThreadId] = useState<
         Record<string, OrchestratorExecutionStrategy>
@@ -231,6 +234,7 @@ export function useConversationShellRuntimeState(
         sandboxId: workspaceScope.kind === 'sandbox' ? workspaceScope.sandboxId : undefined,
         isPlanningComposerMode,
         imageAttachmentsAllowed,
+        planningDepthSelection,
         ...(activeMode ? { activeMode } : {}),
         queries,
         mutations,
@@ -240,6 +244,9 @@ export function useConversationShellRuntimeState(
         applyPlanWorkspaceUpdate: cacheHandlers.applyPlanWorkspaceUpdate,
         applySessionWorkspaceUpdate: cacheHandlers.applySessionWorkspaceUpdate,
         cacheResolvedContextState: cacheHandlers.cacheResolvedContextState,
+        onPlanningDepthCommitted: () => {
+            setPlanningDepthSelection(DEFAULT_PLANNING_DEPTH);
+        },
     });
 
     clearComposerRunSubmitError = composerSetup.composer.clearRunSubmitError;
@@ -273,6 +280,7 @@ export function useConversationShellRuntimeState(
         modes: input.modes,
         isPlanningComposerMode,
         isOrchestrationWorkflowMode,
+        planningDepthSelection,
         selectedWorkspaceFingerprint,
         isSidebarCollapsed: input.isSidebarCollapsed,
         onToggleSidebarCollapsed: input.onToggleSidebarCollapsed,
@@ -282,6 +290,7 @@ export function useConversationShellRuntimeState(
         onProfileChange,
         tabSwitchNotice,
         setTabSwitchNotice,
+        setPlanningDepthSelection,
         focusComposerRequestKey,
         setFocusComposerRequestKey,
         setRequestedReasoningEffort,

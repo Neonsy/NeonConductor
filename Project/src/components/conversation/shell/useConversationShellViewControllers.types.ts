@@ -8,6 +8,7 @@ import type { BranchWorkflowDialogProps } from '@/web/components/conversation/pa
 import type { MessageEditDialogProps } from '@/web/components/conversation/panels/messageEditDialog';
 import type { ToolArtifactViewerDialogProps } from '@/web/components/conversation/panels/toolArtifactViewerDialog';
 import { useConversationMutations } from '@/web/components/conversation/shell/actions/useConversationMutations';
+import type { PlanningDepth } from '@/web/components/conversation/shell/planningDepth';
 import { useConversationQueries } from '@/web/components/conversation/shell/queries/useConversationQueries';
 import type { useConversationShellSelectionState } from '@/web/components/conversation/shell/useConversationShellSelectionState';
 import type { ConversationModeOption } from '@/web/components/conversation/shell/workspace/helpers';
@@ -64,6 +65,7 @@ export interface ShellRuntimeControllerState {
     modes: ConversationModeOption[];
     isPlanningComposerMode: boolean;
     isOrchestrationWorkflowMode: boolean;
+    planningDepthSelection: PlanningDepth;
     selectedWorkspaceFingerprint: string | undefined;
     onModeChange: (modeKey: string) => void;
     onTopLevelTabChange: (nextTab: TopLevelTab) => void;
@@ -73,6 +75,7 @@ export interface ShellRuntimeControllerState {
     onToggleSidebarCollapsed: () => void;
     tabSwitchNotice: string | undefined;
     setTabSwitchNotice: (message: string | undefined) => void;
+    setPlanningDepthSelection: React.Dispatch<React.SetStateAction<PlanningDepth>>;
     focusComposerRequestKey: number;
     setFocusComposerRequestKey: React.Dispatch<React.SetStateAction<number>>;
     setRequestedReasoningEffort: React.Dispatch<React.SetStateAction<RuntimeReasoningEffort>>;

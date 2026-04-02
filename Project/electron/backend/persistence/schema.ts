@@ -838,6 +838,7 @@ export interface PlanRecordsTable {
     session_id: string;
     top_level_tab: string;
     mode_key: string;
+    planning_depth: string;
     status: string;
     source_prompt: string;
     summary_markdown: string;
@@ -866,6 +867,15 @@ export interface PlanRevisionsTable {
     created_at: string;
     previous_revision_id: string | null;
     superseded_at: string | null;
+}
+
+export interface PlanRevisionAdvancedSnapshotsTable {
+    plan_revision_id: string;
+    evidence_markdown: string;
+    observations_markdown: string;
+    root_cause_markdown: string;
+    phases_json: string;
+    created_at: string;
 }
 
 export interface PlanRevisionItemsTable {
@@ -1022,6 +1032,7 @@ export interface DatabaseSchema {
     kilo_model_routing_preferences: KiloModelRoutingPreferencesTable;
     plan_records: PlanRecordsTable;
     plan_revisions: PlanRevisionsTable;
+    plan_revision_advanced_snapshots: PlanRevisionAdvancedSnapshotsTable;
     plan_revision_items: PlanRevisionItemsTable;
     plan_variants: PlanVariantsTable;
     plan_follow_ups: PlanFollowUpsTable;

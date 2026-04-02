@@ -6,6 +6,7 @@ import type { OrchestratorRunRecord, OrchestratorStepRecord } from '@/app/backen
 import { launchBackgroundTask } from '@/shared/async/launchBackgroundTask';
 import type {
     EntityId,
+    PlanAdvancedSnapshotInput,
     OrchestratorExecutionStrategy,
     PlanRecordView,
     RuntimeProviderId,
@@ -55,6 +56,14 @@ export interface CreatePlanImplementationControllerInput {
             planId: EntityId<'plan'>;
             summaryMarkdown: string;
             items: Array<{ description: string }>;
+            advancedSnapshot?: PlanAdvancedSnapshotInput;
+        },
+        ConversationActivePlanData
+    >;
+    planEnterAdvancedPlanningMutation: MutationLike<
+        {
+            profileId: string;
+            planId: EntityId<'plan'>;
         },
         ConversationActivePlanData
     >;
@@ -155,7 +164,13 @@ export interface ConversationPlanActionController {
     isPlanMutating: boolean;
     isOrchestratorMutating: boolean;
     onAnswerQuestion: (planId: EntityId<'plan'>, questionId: string, answer: string) => void;
-    onRevisePlan: (planId: EntityId<'plan'>, summaryMarkdown: string, items: string[]) => void;
+    onRevisePlan: (
+        planId: EntityId<'plan'>,
+        summaryMarkdown: string,
+        items: string[],
+        advancedSnapshot?: PlanAdvancedSnapshotInput
+    ) => void;
+    onEnterAdvancedPlanning: (planId: EntityId<'plan'>) => void;
     onCreateVariant: (planId: EntityId<'plan'>, sourceRevisionId: EntityId<'prev'>) => void;
     onActivateVariant: (planId: EntityId<'plan'>, variantId: EntityId<'pvar'>) => void;
     onResumeFromRevision: (planId: EntityId<'plan'>, sourceRevisionId: EntityId<'prev'>) => void;
@@ -196,6 +211,7 @@ export function createPlanImplementationController(
             input.planStartMutation.isPending ||
             input.planAnswerMutation.isPending ||
             input.planReviseMutation.isPending ||
+            input.planEnterAdvancedPlanningMutation.isPending ||
             input.planCreateVariantMutation.isPending ||
             input.planActivateVariantMutation.isPending ||
             input.planResumeFromRevisionMutation.isPending ||
@@ -225,7 +241,7 @@ export function createPlanImplementationController(
                 });
             });
         },
-        onRevisePlan: (planId, summaryMarkdown, items) => {
+        onRevisePlan: (planId, summaryMarkdown, items, advancedSnapshot) => {
             launchBackgroundTask(async () => {
                 await runConversationPlanMutation({
                     mutation: {
@@ -235,6 +251,7 @@ export function createPlanImplementationController(
                                 planId,
                                 summaryMarkdown,
                                 items: items.map((description) => ({ description })),
+                                ...(advancedSnapshot ? { advancedSnapshot } : {}),
                             }),
                     },
                     applyResult: (result) => {
@@ -242,6 +259,24 @@ export function createPlanImplementationController(
                     },
                     onError: input.onError,
                     errorPrefix: 'Plan revision failed',
+                });
+            });
+        },
+        onEnterAdvancedPlanning: (planId) => {
+            launchBackgroundTask(async () => {
+                await runConversationPlanMutation({
+                    mutation: {
+                        mutateAsync: () =>
+                            input.planEnterAdvancedPlanningMutation.mutateAsync({
+                                profileId: input.profileId,
+                                planId,
+                            }),
+                    },
+                    applyResult: (result) => {
+                        input.applyPlanWorkspaceUpdate(result);
+                    },
+                    onError: input.onError,
+                    errorPrefix: 'Advanced planning upgrade failed',
                 });
             });
         },

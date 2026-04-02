@@ -38,7 +38,9 @@ export async function revisePlan(
     const descriptions = input.items
         .map((item) => item.description.trim())
         .filter((description) => description.length > 0);
-    const revised = await planStore.revise(input.planId, input.summaryMarkdown, descriptions);
+    const revised = await planStore.revise(input.planId, input.summaryMarkdown, descriptions, {
+        ...(input.advancedSnapshot ? { advancedSnapshot: input.advancedSnapshot } : {}),
+    });
     if (!revised || revised.profileId !== input.profileId) {
         return { found: false };
     }

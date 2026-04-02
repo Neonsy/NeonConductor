@@ -35,6 +35,7 @@ import type {
     ModeDefinition,
     ModePromptDefinition,
     OpenAIExecutionMode,
+    PlanAdvancedSnapshotView,
     ProviderAuthFlowStatus,
     ProviderAuthFlowType,
     ProviderAuthMethod,
@@ -50,6 +51,7 @@ import type {
     RuntimeReasoningEffort,
     RuntimeReasoningSummary,
     RuntimeProviderId,
+    PlanPlanningDepth,
     RulesetDefinition,
     RunStatus,
     SkillfileDefinition,
@@ -693,9 +695,11 @@ export interface PlanRecord {
     sessionId: EntityId<'sess'>;
     topLevelTab: 'chat' | 'agent' | 'orchestrator';
     modeKey: string;
+    planningDepth?: PlanPlanningDepth;
     status: 'awaiting_answers' | 'draft' | 'approved' | 'implementing' | 'implemented' | 'failed' | 'cancelled';
     sourcePrompt: string;
     summaryMarkdown: string;
+    advancedSnapshot?: PlanAdvancedSnapshotView;
     questions: PlanQuestionRecord[];
     answers: Record<string, string>;
     currentRevisionId: EntityId<'prev'>;
@@ -736,6 +740,16 @@ export interface PlanRevisionRecord {
     createdAt: string;
     previousRevisionId?: EntityId<'prev'>;
     supersededAt?: string;
+    advancedSnapshot?: PlanRevisionAdvancedSnapshotRecord;
+}
+
+export interface PlanRevisionAdvancedSnapshotRecord {
+    planRevisionId: EntityId<'prev'>;
+    evidenceMarkdown: string;
+    observationsMarkdown: string;
+    rootCauseMarkdown: string;
+    phases: PlanAdvancedSnapshotView['phases'];
+    createdAt: string;
 }
 
 export interface PlanRevisionItemRecord {

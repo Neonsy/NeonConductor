@@ -8,6 +8,7 @@ import {
     planGetActiveInputSchema,
     planGetInputSchema,
     planImplementInputSchema,
+    planEnterAdvancedPlanningInputSchema,
     planRaiseFollowUpInputSchema,
     planReviseInputSchema,
     planResolveFollowUpInputSchema,
@@ -35,6 +36,10 @@ export const planRouter = router({
     }),
     revise: publicProcedure.input(planReviseInputSchema).mutation(async ({ input }) => {
         return planService.revise(input);
+    }),
+    enterAdvancedPlanning: publicProcedure.input(planEnterAdvancedPlanningInputSchema).mutation(async ({ input }) => {
+        const result = await planService.enterAdvancedPlanning(input);
+        return unwrapResultOrThrow(result, toPlanTrpcError);
     }),
     createVariant: publicProcedure.input(planCreateVariantInputSchema).mutation(async ({ input }) => {
         const result = await planService.createVariant(input);

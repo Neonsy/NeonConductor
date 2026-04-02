@@ -12,6 +12,25 @@ import {
     resolveModeExecutionOrchestratorPanelState,
 } from '@/web/components/conversation/panels/modeExecutionPanelState';
 
+function createActionController() {
+    return {
+        isPlanMutating: false,
+        isOrchestratorMutating: false,
+        onAnswerQuestion: vi.fn(),
+        onRevisePlan: vi.fn(),
+        onEnterAdvancedPlanning: vi.fn(),
+        onCreateVariant: vi.fn(),
+        onActivateVariant: vi.fn(),
+        onResumeFromRevision: vi.fn(),
+        onResolveFollowUp: vi.fn(),
+        onGenerateDraft: vi.fn(),
+        onCancelPlan: vi.fn(),
+        onApprovePlan: vi.fn(),
+        onImplementPlan: vi.fn(),
+        onAbortOrchestrator: vi.fn(),
+    };
+}
+
 describe('resolveModeExecutionDraftState', () => {
     it('keeps keyed plan drafts instead of replacing them with refreshed plan data', () => {
         const activePlan = {
@@ -44,6 +63,7 @@ describe('resolveModeExecutionDraftState', () => {
                     answerByQuestionId: {
                         q_1: 'Unsaved Answer',
                     },
+                    planningDepth: 'simple',
                 },
             })
         ).toEqual({
@@ -54,6 +74,7 @@ describe('resolveModeExecutionDraftState', () => {
             answerByQuestionId: {
                 q_1: 'Unsaved Answer',
             },
+            planningDepth: 'simple',
         });
     });
 
@@ -88,6 +109,7 @@ describe('resolveModeExecutionDraftState', () => {
                     answerByQuestionId: {
                         scope: 'Unsaved Answer',
                     },
+                    planningDepth: 'simple',
                 },
             })
         ).toEqual({
@@ -98,6 +120,7 @@ describe('resolveModeExecutionDraftState', () => {
             answerByQuestionId: {
                 scope: 'Server Answer v2',
             },
+            planningDepth: 'simple',
         });
     });
 
@@ -198,24 +221,12 @@ describe('resolveModeExecutionDraftState', () => {
                 topLevelTab: 'orchestrator',
                 showPlanSurface: true,
                 showOrchestratorSurface: true,
+                planningDepthSelection: 'simple',
                 isLoadingPlan: false,
-                actionController: {
-                    isPlanMutating: false,
-                    isOrchestratorMutating: false,
-                    onAnswerQuestion: vi.fn(),
-                    onRevisePlan: vi.fn(),
-                    onCreateVariant: vi.fn(),
-                    onActivateVariant: vi.fn(),
-                    onResumeFromRevision: vi.fn(),
-                    onResolveFollowUp: vi.fn(),
-                    onGenerateDraft: vi.fn(),
-                    onCancelPlan: vi.fn(),
-                    onApprovePlan: vi.fn(),
-                    onImplementPlan: vi.fn(),
-                    onAbortOrchestrator: vi.fn(),
-                },
+                actionController: createActionController(),
                 selectedExecutionStrategy: 'parallel',
                 canConfigureExecutionStrategy: true,
+                onPlanningDepthSelectionChange: vi.fn(),
                 activePlan: {
                     id: 'plan_1',
                     status: 'approved',
@@ -267,11 +278,109 @@ describe('resolveModeExecutionDraftState', () => {
         expect(html).toContain('Revision 2 (prev_1)');
         expect(html).toContain('Questions');
         expect(html).toContain('Summary');
-        expect(html).toContain('Evidence');
         expect(html).toContain('Ordered Items');
         expect(html).toContain('Revise');
         expect(html).toContain('Implement');
         expect(html).toContain('Cancel');
+    });
+
+    it('shows the simple and advanced planning selector before the first plan starts', () => {
+        const html = renderToStaticMarkup(
+            createElement(ModeExecutionPanel, {
+                topLevelTab: 'agent',
+                showPlanSurface: true,
+                showOrchestratorSurface: false,
+                planningDepthSelection: 'simple',
+                isLoadingPlan: false,
+                actionController: createActionController(),
+                selectedExecutionStrategy: 'delegate',
+                canConfigureExecutionStrategy: false,
+                onPlanningDepthSelectionChange: vi.fn(),
+                onExecutionStrategyChange: vi.fn(),
+            })
+        );
+
+        expect(html).toContain('Planning depth');
+        expect(html).toContain('Simple planning');
+        expect(html).toContain('Advanced planning');
+        expect(html).toContain('Add evidence, observations, root cause, and a structured phase outline.');
+    });
+
+    it('renders advanced planning badge and scaffold sections when advanced planning is selected', () => {
+        const html = renderToStaticMarkup(
+            createElement(ModeExecutionPanel, {
+                topLevelTab: 'agent',
+                showPlanSurface: true,
+                showOrchestratorSurface: false,
+                planningDepthSelection: 'advanced',
+                isLoadingPlan: false,
+                actionController: createActionController(),
+                selectedExecutionStrategy: 'delegate',
+                canConfigureExecutionStrategy: false,
+                onPlanningDepthSelectionChange: vi.fn(),
+                onExecutionStrategyChange: vi.fn(),
+                activePlan: {
+                    id: 'plan_1',
+                    status: 'draft',
+                    planningDepth: 'advanced',
+                    summaryMarkdown: 'Summary',
+                    sourcePrompt: 'Ship the advanced lane.',
+                    advancedSnapshot: {
+                        evidenceMarkdown: '### Source prompt\nShip the advanced lane.',
+                        observationsMarkdown: '- Advanced planning is active.',
+                        rootCauseMarkdown: 'Root cause is still being refined.',
+                        phases: [
+                            {
+                                id: 'phase_1',
+                                sequence: 1,
+                                title: 'Frame the plan',
+                                goalMarkdown: 'Set the plan direction.',
+                                exitCriteriaMarkdown: 'The plan has a structured scaffold.',
+                            },
+                            {
+                                id: 'phase_2',
+                                sequence: 2,
+                                title: 'Sequence the work',
+                                goalMarkdown: 'Organize the ordered work.',
+                                exitCriteriaMarkdown: 'The work is ready for phase detail.',
+                            },
+                        ],
+                    },
+                    currentRevisionId: 'prev_1',
+                    currentRevisionNumber: 1,
+                    questions: [
+                        {
+                            id: 'scope',
+                            question: 'What should ship?',
+                            category: 'deliverable',
+                            required: true,
+                            answer: 'The advanced lane.',
+                        },
+                    ],
+                    items: [
+                        {
+                            id: 'step_1',
+                            sequence: 1,
+                            description: 'First structured phase',
+                            status: 'pending',
+                        },
+                        {
+                            id: 'step_2',
+                            sequence: 2,
+                            description: 'Second structured phase',
+                            status: 'pending',
+                        },
+                    ],
+                } as never,
+            })
+        );
+
+        expect(html).toContain('Advanced planning');
+        expect(html).toContain('Evidence');
+        expect(html).toContain('Observations');
+        expect(html).toContain('Root Cause');
+        expect(html).toContain('Phase Outline');
+        expect(html).toContain('Frame the plan');
     });
 
     it('resolves an explicit orchestrator-facing panel model from the raw inputs', () => {
@@ -461,24 +570,12 @@ describe('resolveModeExecutionDraftState', () => {
                 topLevelTab: 'agent',
                 showPlanSurface: true,
                 showOrchestratorSurface: false,
+                planningDepthSelection: 'simple',
                 isLoadingPlan: false,
-                actionController: {
-                    isPlanMutating: false,
-                    isOrchestratorMutating: false,
-                    onAnswerQuestion: vi.fn(),
-                    onRevisePlan: vi.fn(),
-                    onCreateVariant: vi.fn(),
-                    onActivateVariant: vi.fn(),
-                    onResumeFromRevision: vi.fn(),
-                    onResolveFollowUp: vi.fn(),
-                    onGenerateDraft: vi.fn(),
-                    onCancelPlan: vi.fn(),
-                    onApprovePlan: vi.fn(),
-                    onImplementPlan: vi.fn(),
-                    onAbortOrchestrator: vi.fn(),
-                },
+                actionController: createActionController(),
                 selectedExecutionStrategy: 'delegate',
                 canConfigureExecutionStrategy: false,
+                onPlanningDepthSelectionChange: vi.fn(),
                 activePlan: {
                     id: 'plan_1',
                     status: 'failed',
@@ -628,6 +725,7 @@ describe('resolveModeExecutionDraftState', () => {
         expect(html).toContain('Main branch');
         expect(html).toContain('Recovery branch');
         expect(html).toContain('Create Variant');
+        expect(html).toContain('Upgrade to Advanced Planning');
         expect(html).toContain('History');
         expect(html).toContain('Variant created');
         expect(html).toContain('Open follow-up');
@@ -648,24 +746,12 @@ describe('ModeExecutionPanel capability gating', () => {
                 topLevelTab: 'agent',
                 showPlanSurface: false,
                 showOrchestratorSurface: false,
+                planningDepthSelection: 'simple',
                 isLoadingPlan: false,
-                actionController: {
-                    isPlanMutating: false,
-                    isOrchestratorMutating: false,
-                    onAnswerQuestion: vi.fn(),
-                    onRevisePlan: vi.fn(),
-                    onCreateVariant: vi.fn(),
-                    onActivateVariant: vi.fn(),
-                    onResumeFromRevision: vi.fn(),
-                    onResolveFollowUp: vi.fn(),
-                    onGenerateDraft: vi.fn(),
-                    onCancelPlan: vi.fn(),
-                    onApprovePlan: vi.fn(),
-                    onImplementPlan: vi.fn(),
-                    onAbortOrchestrator: vi.fn(),
-                },
+                actionController: createActionController(),
                 selectedExecutionStrategy: 'delegate',
                 canConfigureExecutionStrategy: false,
+                onPlanningDepthSelectionChange: vi.fn(),
                 onExecutionStrategyChange: vi.fn(),
             })
         );

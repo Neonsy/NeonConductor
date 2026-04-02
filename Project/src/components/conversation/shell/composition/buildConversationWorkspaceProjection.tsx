@@ -13,6 +13,7 @@ import {
 } from '@/web/components/conversation/sessions/workspace/workspacePanelModel';
 import type { useConversationMutations } from '@/web/components/conversation/shell/actions/useConversationMutations';
 import { buildConversationPlanOrchestrator } from '@/web/components/conversation/shell/composition/buildConversationPlanOrchestrator';
+import type { PlanningDepth } from '@/web/components/conversation/shell/planningDepth';
 import type { useConversationQueries } from '@/web/components/conversation/shell/queries/useConversationQueries';
 import { isEntityId } from '@/web/components/conversation/shell/workspace/helpers';
 import type { useConversationWorkspaceActions } from '@/web/components/conversation/shell/workspace/useConversationWorkspaceActions';
@@ -35,6 +36,7 @@ interface BuildConversationWorkspaceProjectionInput {
     modeKey: string;
     isPlanningComposerMode: boolean;
     isOrchestrationWorkflowMode: boolean;
+    planningDepthSelection: PlanningDepth;
     modes: SessionWorkspacePanelProps['modes'];
     reasoningEffort: RuntimeReasoningEffort;
     selectedModelSupportsReasoning: boolean;
@@ -71,6 +73,7 @@ interface BuildConversationWorkspaceProjectionInput {
     onExecutionStrategyChange: (executionStrategy: OrchestratorExecutionStrategy) => void;
     onSelectChildThread: (threadId: EntityId<'thr'>) => void;
     onOpenToolArtifact: NonNullable<SessionWorkspacePanelProps['onOpenToolArtifact']>;
+    setPlanningDepthSelection: (nextPlanningDepth: PlanningDepth) => void;
 }
 
 export function buildConversationWorkspaceProjection(
@@ -149,6 +152,7 @@ export function buildConversationWorkspaceProjection(
                 topLevelTab={input.topLevelTab}
                 showPlanSurface={input.isPlanningComposerMode}
                 showOrchestratorSurface={input.isOrchestrationWorkflowMode}
+                planningDepthSelection={input.planningDepthSelection}
                 isLoadingPlan={input.queries.activePlanQuery.isPending}
                 actionController={input.planOrchestrator.actionController}
                 selectedExecutionStrategy={input.executionStrategy}
@@ -158,6 +162,7 @@ export function buildConversationWorkspaceProjection(
                     ? { orchestratorView: input.planOrchestrator.orchestratorView }
                     : {})}
                 onExecutionStrategyChange={input.onExecutionStrategyChange}
+                onPlanningDepthSelectionChange={input.setPlanningDepthSelection}
                 onSelectChildThread={input.onSelectChildThread}
                 onCreateVariant={input.planOrchestrator.actionController.onCreateVariant}
                 onActivateVariant={input.planOrchestrator.actionController.onActivateVariant}

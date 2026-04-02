@@ -33,6 +33,7 @@ export function useConversationShellViewControllers(input: UseConversationShellV
         modes,
         isPlanningComposerMode,
         isOrchestrationWorkflowMode,
+        planningDepthSelection,
         selectedWorkspaceFingerprint,
         onModeChange,
         onTopLevelTabChange,
@@ -42,6 +43,7 @@ export function useConversationShellViewControllers(input: UseConversationShellV
         onToggleSidebarCollapsed,
         tabSwitchNotice,
         setTabSwitchNotice,
+        setPlanningDepthSelection,
         focusComposerRequestKey,
         setFocusComposerRequestKey,
         setRequestedReasoningEffort,
@@ -194,6 +196,7 @@ export function useConversationShellViewControllers(input: UseConversationShellV
         planStartMutation: mutations.planStartMutation,
         planAnswerMutation: mutations.planAnswerMutation,
         planReviseMutation: mutations.planReviseMutation,
+        planEnterAdvancedPlanningMutation: mutations.planEnterAdvancedPlanningMutation,
         planCreateVariantMutation: mutations.planCreateVariantMutation,
         planActivateVariantMutation: mutations.planActivateVariantMutation,
         planResumeFromRevisionMutation: mutations.planResumeFromRevisionMutation,
@@ -260,6 +263,7 @@ export function useConversationShellViewControllers(input: UseConversationShellV
         modeKey,
         isPlanningComposerMode,
         isOrchestrationWorkflowMode,
+        planningDepthSelection,
         modes,
         reasoningEffort: effectiveReasoningEffort,
         selectedModelSupportsReasoning,
@@ -367,6 +371,7 @@ export function useConversationShellViewControllers(input: UseConversationShellV
             uiState.setSelectedRunId(undefined);
         },
         onOpenToolArtifact: toolArtifactViewer.openToolArtifact,
+        setPlanningDepthSelection,
     });
 
     return {

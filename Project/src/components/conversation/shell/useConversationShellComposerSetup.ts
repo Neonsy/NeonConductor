@@ -3,6 +3,7 @@ import { skipToken } from '@tanstack/react-query';
 import { useConversationShellComposer } from '@/web/components/conversation/hooks/useConversationShellComposer';
 import { buildResolvedContextStateQueryInput } from '@/web/components/conversation/shell/conversationShellRuntimeState';
 import type { ConversationReasoningState } from '@/web/components/conversation/shell/conversationShellRuntimeState';
+import type { PlanningDepth } from '@/web/components/conversation/shell/planningDepth';
 import type {
     AcceptedRunStartResult,
     ConversationMutations,
@@ -35,6 +36,7 @@ interface UseConversationShellComposerSetupInput {
     workspaceFingerprint: string | undefined;
     sandboxId: EntityId<'sb'> | undefined;
     isPlanningComposerMode: boolean;
+    planningDepthSelection: PlanningDepth;
     imageAttachmentsAllowed: boolean;
     activeMode?: ConversationModeOption;
     queries: ConversationQueries;
@@ -45,6 +47,7 @@ interface UseConversationShellComposerSetupInput {
     applyPlanWorkspaceUpdate: (planResult: ConversationPlanWorkspaceUpdateResult) => void;
     applySessionWorkspaceUpdate: (sessionUpdate: ConversationSessionWorkspaceUpdate) => void;
     cacheResolvedContextState: (queryInput: ResolvedContextStateInput, state: ResolvedContextState) => void;
+    onPlanningDepthCommitted?: () => void;
 }
 
 export function buildConversationComposerModelOptions(input: {
@@ -154,6 +157,7 @@ export function useConversationShellComposerSetup(input: UseConversationShellCom
         isPlanningMode: input.isPlanningComposerMode,
         topLevelTab: input.topLevelTab,
         modeKey: input.modeKey,
+        planningDepthSelection: input.planningDepthSelection,
         workspaceFingerprint: input.workspaceFingerprint,
         ...(input.sandboxId ? { sandboxId: input.sandboxId } : {}),
         resolvedRunTarget: input.runTargetState.resolvedRunTarget,
@@ -169,13 +173,17 @@ export function useConversationShellComposerSetup(input: UseConversationShellCom
             ? { imageAttachmentBlockedReason: preComposerImageAttachmentBlockedReason }
             : {}),
         ...(preComposerSubmitBlockedReason ? { submitBlockedReason: preComposerSubmitBlockedReason } : {}),
-        startPlan: input.mutations.planStartMutation.mutateAsync,
+        startPlan: async (planStartInput) =>
+            await input.mutations.planStartMutation.mutateAsync({
+                ...planStartInput,
+            } as Parameters<typeof input.mutations.planStartMutation.mutateAsync>[0]),
         startRun: input.mutations.startRunMutation.mutateAsync,
         onPlanStarted: (result) => {
             input.applyPlanWorkspaceUpdate({
                 found: true,
                 plan: result.plan,
             });
+            input.onPlanningDepthCommitted?.();
         },
         onRunStarted: (acceptedRun) => {
             input.uiState.setSelectedRunId(acceptedRun.run.id);

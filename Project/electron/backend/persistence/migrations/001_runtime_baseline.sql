@@ -872,6 +872,7 @@ CREATE TABLE plan_records (
     session_id TEXT NOT NULL,
     top_level_tab TEXT NOT NULL CHECK (top_level_tab IN ('chat', 'agent', 'orchestrator')),
     mode_key TEXT NOT NULL,
+    planning_depth TEXT NOT NULL DEFAULT 'simple' CHECK (planning_depth IN ('simple', 'advanced')),
     status TEXT NOT NULL CHECK (status IN ('awaiting_answers', 'draft', 'approved', 'implementing', 'implemented', 'failed', 'cancelled')),
     source_prompt TEXT NOT NULL,
     summary_markdown TEXT NOT NULL,
@@ -904,6 +905,16 @@ CREATE TABLE plan_revisions (
     superseded_at TEXT NULL,
     FOREIGN KEY (plan_id) REFERENCES plan_records(id) ON DELETE CASCADE,
     UNIQUE (plan_id, revision_number)
+);
+
+CREATE TABLE plan_revision_advanced_snapshots (
+    plan_revision_id TEXT PRIMARY KEY,
+    evidence_markdown TEXT NOT NULL,
+    observations_markdown TEXT NOT NULL,
+    root_cause_markdown TEXT NOT NULL,
+    phases_json TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (plan_revision_id) REFERENCES plan_revisions(id) ON DELETE CASCADE
 );
 
 CREATE TABLE plan_revision_items (
