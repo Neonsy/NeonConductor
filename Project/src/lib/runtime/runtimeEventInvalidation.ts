@@ -62,6 +62,7 @@ const runtimeEventInvalidators: Record<
     checkpoint: async (utils, _event, context) => {
         await invalidateSessionQueries(utils, context);
     },
+    flow: invalidateNoopDomain,
     orchestrator: async (utils, _event, context) => {
         await invalidateOrchestratorQueries(utils, context);
     },

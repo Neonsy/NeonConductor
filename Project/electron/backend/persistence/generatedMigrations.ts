@@ -1036,6 +1036,39 @@ CREATE TABLE plan_items (
     FOREIGN KEY (run_id) REFERENCES runs(id) ON DELETE SET NULL
 );
 
+CREATE TABLE flow_definitions (
+    id TEXT PRIMARY KEY,
+    profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    origin_kind TEXT NOT NULL CHECK (origin_kind IN ('canonical', 'branch_workflow_adapter')),
+    workspace_fingerprint TEXT NULL REFERENCES workspace_roots(fingerprint) ON DELETE CASCADE,
+    source_branch_workflow_id TEXT NULL,
+    label TEXT NOT NULL,
+    description TEXT NULL,
+    enabled INTEGER NOT NULL CHECK (enabled IN (0, 1)),
+    trigger_kind TEXT NOT NULL CHECK (trigger_kind IN ('manual')),
+    steps_json TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    CHECK (
+        (origin_kind = 'canonical' AND workspace_fingerprint IS NULL AND source_branch_workflow_id IS NULL)
+        OR
+        (origin_kind = 'branch_workflow_adapter' AND workspace_fingerprint IS NOT NULL AND source_branch_workflow_id IS NOT NULL)
+    )
+);
+
+CREATE TABLE flow_instances (
+    id TEXT PRIMARY KEY,
+    profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    flow_definition_id TEXT NOT NULL REFERENCES flow_definitions(id) ON DELETE RESTRICT,
+    status TEXT NOT NULL CHECK (status IN ('queued', 'running', 'approval_required', 'failed', 'completed', 'cancelled')),
+    current_step_index INTEGER NOT NULL CHECK (current_step_index >= 0),
+    definition_snapshot_json TEXT NOT NULL,
+    started_at TEXT NULL,
+    finished_at TEXT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
 CREATE TABLE orchestrator_runs (
     id TEXT PRIMARY KEY,
     profile_id TEXT NOT NULL,
@@ -1500,6 +1533,19 @@ CREATE INDEX idx_plan_revision_evidence_attachments_worker
 
 CREATE UNIQUE INDEX idx_plan_items_plan_sequence
     ON plan_items(plan_id, sequence);
+
+CREATE INDEX idx_flow_definitions_profile_origin_updated_at
+    ON flow_definitions(profile_id, origin_kind, updated_at DESC);
+
+CREATE UNIQUE INDEX idx_flow_definitions_branch_adapter_identity
+    ON flow_definitions(profile_id, workspace_fingerprint, source_branch_workflow_id)
+    WHERE origin_kind = 'branch_workflow_adapter';
+
+CREATE INDEX idx_flow_instances_profile_created_at
+    ON flow_instances(profile_id, created_at DESC);
+
+CREATE INDEX idx_flow_instances_definition_created_at
+    ON flow_instances(flow_definition_id, created_at DESC);
 
 CREATE UNIQUE INDEX idx_plan_variants_plan_name
     ON plan_variants(plan_id, name);

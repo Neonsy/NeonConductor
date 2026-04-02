@@ -14,6 +14,8 @@ interface WorkspaceResolvedCounts {
     checkpointIds: string[];
     rulesetIds: string[];
     skillfileIds: string[];
+    flowDefinitionIds: string[];
+    flowInstanceIds: string[];
     entityIds: string[];
 }
 
@@ -98,6 +100,36 @@ async function listCheckpointIds(db: RuntimeResetDatabase, sessionIds: string[])
     }
 
     const rows = await db.selectFrom('checkpoints').select('id').where('session_id', 'in', sessionIds).execute();
+    return rows.map((row) => row.id);
+}
+
+async function listFlowDefinitionIds(
+    db: RuntimeResetDatabase,
+    target: Extract<RuntimeResetInput['target'], 'workspace' | 'workspace_all'>,
+    workspaceFingerprint?: string
+): Promise<string[]> {
+    let query = db.selectFrom('flow_definitions').select('id').where('origin_kind', '=', 'branch_workflow_adapter');
+
+    if (target === 'workspace') {
+        query = query.where('workspace_fingerprint', '=', workspaceFingerprint ?? '');
+    } else {
+        query = query.where('workspace_fingerprint', 'is not', null);
+    }
+
+    const rows = await query.execute();
+    return rows.map((row) => row.id);
+}
+
+async function listFlowInstanceIds(db: RuntimeResetDatabase, flowDefinitionIds: string[]): Promise<string[]> {
+    if (flowDefinitionIds.length === 0) {
+        return [];
+    }
+
+    const rows = await db
+        .selectFrom('flow_instances')
+        .select('id')
+        .where('flow_definition_id', 'in', flowDefinitionIds)
+        .execute();
     return rows.map((row) => row.id);
 }
 
@@ -200,6 +232,8 @@ async function resolveWorkspaceCounts(
     const checkpointIds = await listCheckpointIds(db, sessionIds);
     const rulesetIds = await listWorkspaceParityIds(db, 'rulesets', target, workspaceFingerprint);
     const skillfileIds = await listWorkspaceParityIds(db, 'skillfiles', target, workspaceFingerprint);
+    const flowDefinitionIds = await listFlowDefinitionIds(db, target, workspaceFingerprint);
+    const flowInstanceIds = await listFlowInstanceIds(db, flowDefinitionIds);
 
     const threadTagRows = threadIds.length
         ? await db
@@ -220,6 +254,8 @@ async function resolveWorkspaceCounts(
         ...tagIds,
         ...rulesetIds,
         ...skillfileIds,
+        ...flowDefinitionIds,
+        ...flowInstanceIds,
     ]);
 
     return {
@@ -246,6 +282,8 @@ async function resolveWorkspaceCounts(
         checkpointIds,
         rulesetIds,
         skillfileIds,
+        flowDefinitionIds,
+        flowInstanceIds,
         entityIds,
     };
 }
@@ -253,6 +291,14 @@ async function resolveWorkspaceCounts(
 async function applyWorkspaceDelete(db: RuntimeResetDatabase, resolved: WorkspaceResolvedCounts): Promise<void> {
     if (resolved.entityIds.length > 0) {
         await db.deleteFrom('runtime_events').where('entity_id', 'in', resolved.entityIds).execute();
+    }
+
+    if (resolved.flowInstanceIds.length > 0) {
+        await db.deleteFrom('flow_instances').where('id', 'in', resolved.flowInstanceIds).execute();
+    }
+
+    if (resolved.flowDefinitionIds.length > 0) {
+        await db.deleteFrom('flow_definitions').where('id', 'in', resolved.flowDefinitionIds).execute();
     }
 
     await toolResultArtifactStore.deleteBySessionIds(resolved.sessionIds);

@@ -6,6 +6,9 @@ import type {
 import type {
     ComposerMediaSettings,
     ContextCompactionSource,
+    FlowDefinitionOriginKind,
+    FlowDefinitionRecord as RuntimeFlowDefinitionRecord,
+    FlowInstanceRecord as RuntimeFlowInstanceRecord,
     PlanFollowUpView,
     PlanHistoryEntry,
     PlanRecoveryBanner,
@@ -355,6 +358,7 @@ export const runtimeEntityTypes = [
     'diff',
     'checkpoint',
     'plan',
+    'flow',
     'orchestrator',
     'message',
     'messagePart',
@@ -373,6 +377,7 @@ export const runtimeEventDomains = [
     'provider',
     'diff',
     'plan',
+    'flow',
     'checkpoint',
     'orchestrator',
     'profile',
@@ -380,6 +385,7 @@ export const runtimeEventDomains = [
     'tool',
     'mcp',
     'runtime',
+    'flow',
 ] as const;
 
 export type RuntimeEventDomain = (typeof runtimeEventDomains)[number];
@@ -613,6 +619,31 @@ export interface RunRecord {
     abortedAt?: string;
     errorCode?: string;
     errorMessage?: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export type FlowDefinitionRecord = RuntimeFlowDefinitionRecord;
+export type FlowInstanceRecord = RuntimeFlowInstanceRecord;
+
+export interface FlowDefinitionPersistenceRecord {
+    id: string;
+    profileId: string;
+    originKind: FlowDefinitionOriginKind;
+    workspaceFingerprint?: string;
+    sourceBranchWorkflowId?: string;
+    definition: FlowDefinitionRecord;
+}
+
+export interface FlowInstancePersistenceRecord {
+    id: string;
+    profileId: string;
+    flowDefinitionId: string;
+    originKind: FlowDefinitionOriginKind;
+    workspaceFingerprint?: string;
+    sourceBranchWorkflowId?: string;
+    instance: FlowInstanceRecord;
+    definitionSnapshot: FlowDefinitionRecord;
     createdAt: string;
     updatedAt: string;
 }

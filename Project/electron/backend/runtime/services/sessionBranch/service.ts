@@ -223,6 +223,7 @@ export class SessionBranchService {
                       profileId: input.profileId,
                       workspaceFingerprint: thread.workspaceFingerprint,
                       ...(thread.sandboxId ? { sandboxId: thread.sandboxId } : {}),
+                      sourceBranchWorkflowId: resolvedBranchWorkflow.id,
                       flowDefinition: adaptBranchWorkflowToFlowDefinition(resolvedBranchWorkflow),
                   })
                 : { status: 'not_requested' as const };

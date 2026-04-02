@@ -61,7 +61,7 @@ describe('flow skeleton', () => {
             now: '2026-04-02T00:00:01.000Z',
         });
         expect(started.flowInstance.status).toBe('running');
-        expect(started.event.eventType).toBe('flow.started');
+        expect(started.event.kind).toBe('flow.started');
 
         const stepStarted = startFlowStep({
             flowDefinition: normalized,
@@ -69,14 +69,17 @@ describe('flow skeleton', () => {
             stepIndex: 0,
             now: '2026-04-02T00:00:02.000Z',
         });
-        expect(stepStarted).toEqual({
-            eventType: 'flow.step_started',
+        expect(stepStarted).toMatchObject({
+            kind: 'flow.step_started',
             flowDefinitionId: 'flow_install',
             flowInstanceId: 'flow_instance_test',
-            stepId: 'step_install',
-            stepIndex: 0,
-            stepKind: 'legacy_command',
             at: '2026-04-02T00:00:02.000Z',
+            payload: {
+                stepIndex: 0,
+                stepId: 'step_install',
+                stepKind: 'legacy_command',
+                status: 'running',
+            },
         });
 
         const stepCompleted = completeFlowStep({
@@ -85,7 +88,7 @@ describe('flow skeleton', () => {
             stepIndex: 0,
             now: '2026-04-02T00:00:03.000Z',
         });
-        expect(stepCompleted.eventType).toBe('flow.step_completed');
+        expect(stepCompleted.kind).toBe('flow.step_completed');
 
         const approvalRequired = requireFlowApproval({
             flowDefinition: normalized,
@@ -94,7 +97,7 @@ describe('flow skeleton', () => {
             now: '2026-04-02T00:00:04.000Z',
         });
         expect(approvalRequired.flowInstance.status).toBe('approval_required');
-        expect(approvalRequired.event.eventType).toBe('flow.approval_required');
+        expect(approvalRequired.event.kind).toBe('flow.approval_required');
 
         const failed = failFlowInstance({
             flowDefinition: normalized,
@@ -105,10 +108,13 @@ describe('flow skeleton', () => {
         });
         expect(failed.flowInstance.status).toBe('failed');
         expect(failed.event).toMatchObject({
-            eventType: 'flow.failed',
-            message: 'boom',
-            stepId: 'step_install',
-            stepIndex: 0,
+            kind: 'flow.failed',
+            payload: {
+                errorMessage: 'boom',
+                status: 'failed',
+                stepId: 'step_install',
+                stepIndex: 0,
+            },
         });
 
         const cancelled = cancelFlowInstance({
@@ -117,7 +123,7 @@ describe('flow skeleton', () => {
             now: '2026-04-02T00:00:06.000Z',
         });
         expect(cancelled.flowInstance.status).toBe('cancelled');
-        expect(cancelled.event.eventType).toBe('flow.cancelled');
+        expect(cancelled.event.kind).toBe('flow.cancelled');
 
         const completed = completeFlowInstance({
             flowDefinition: normalized,
@@ -126,6 +132,6 @@ describe('flow skeleton', () => {
         });
         expect(completed.flowInstance.status).toBe('completed');
         expect(completed.flowInstance.currentStepIndex).toBe(1);
-        expect(completed.event.eventType).toBe('flow.completed');
+        expect(completed.event.kind).toBe('flow.completed');
     });
 });

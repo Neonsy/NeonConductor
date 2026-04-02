@@ -1,4 +1,5 @@
 import {
+    flowDefinitionOriginKinds,
     flowInstanceStatuses,
     flowStepKinds,
     flowTriggerKinds,
@@ -9,14 +10,24 @@ import {
     createParser,
     readArray,
     readBoolean,
+    readProfileId,
     readEnumValue,
     readObject,
     readOptionalString,
     readString,
 } from '@/app/backend/runtime/contracts/parsers/helpers';
 import type {
+    FlowDefinitionCreateInput,
+    FlowDefinitionDeleteInput,
+    FlowDefinitionGetInput,
+    FlowDefinitionListInput,
     FlowDefinitionRecord,
+    FlowDefinitionUpdateInput,
+    FlowDefinitionView,
+    FlowInstanceGetInput,
     FlowInstanceRecord,
+    FlowInstanceListInput,
+    FlowInstanceView,
     FlowStepDefinition,
 } from '@/app/backend/runtime/contracts/types/flow';
 
@@ -116,8 +127,110 @@ export function parseFlowInstanceRecord(input: unknown): FlowInstanceRecord {
     };
 }
 
-export function parseFlowLifecycleEvent(input: unknown): FlowLifecycleEvent {
+export function parseFlowDefinitionListInput(input: unknown): FlowDefinitionListInput {
     const source = readObject(input, 'input');
+    return {
+        profileId: readProfileId(source),
+    };
+}
+
+export function parseFlowDefinitionGetInput(input: unknown): FlowDefinitionGetInput {
+    const source = readObject(input, 'input');
+    return {
+        profileId: readProfileId(source),
+        flowDefinitionId: readString(source.flowDefinitionId, 'flowDefinitionId'),
+    };
+}
+
+export function parseFlowDefinitionCreateInput(input: unknown): FlowDefinitionCreateInput {
+    const source = readObject(input, 'input');
+    const description = readOptionalString(source.description, 'description');
+
+    return {
+        profileId: readProfileId(source),
+        label: readString(source.label, 'label'),
+        ...(description ? { description } : {}),
+        enabled: readBoolean(source.enabled, 'enabled'),
+        triggerKind: readEnumValue(source.triggerKind, 'triggerKind', flowTriggerKinds),
+        steps: readArray(source.steps, 'steps').map((step, index) =>
+            parseFlowStepDefinition(step, `steps[${String(index)}]`)
+        ),
+    };
+}
+
+export function parseFlowDefinitionUpdateInput(input: unknown): FlowDefinitionUpdateInput {
+    const source = readObject(input, 'input');
+    const description = readOptionalString(source.description, 'description');
+
+    return {
+        profileId: readProfileId(source),
+        flowDefinitionId: readString(source.flowDefinitionId, 'flowDefinitionId'),
+        label: readString(source.label, 'label'),
+        ...(description ? { description } : {}),
+        enabled: readBoolean(source.enabled, 'enabled'),
+        triggerKind: readEnumValue(source.triggerKind, 'triggerKind', flowTriggerKinds),
+        steps: readArray(source.steps, 'steps').map((step, index) =>
+            parseFlowStepDefinition(step, `steps[${String(index)}]`)
+        ),
+    };
+}
+
+export function parseFlowDefinitionDeleteInput(input: unknown): FlowDefinitionDeleteInput {
+    const source = readObject(input, 'input');
+    return {
+        profileId: readProfileId(source),
+        flowDefinitionId: readString(source.flowDefinitionId, 'flowDefinitionId'),
+        confirm: readBoolean(source.confirm, 'confirm'),
+    };
+}
+
+export function parseFlowInstanceListInput(input: unknown): FlowInstanceListInput {
+    const source = readObject(input, 'input');
+    return {
+        profileId: readProfileId(source),
+    };
+}
+
+export function parseFlowInstanceGetInput(input: unknown): FlowInstanceGetInput {
+    const source = readObject(input, 'input');
+    return {
+        profileId: readProfileId(source),
+        flowInstanceId: readString(source.flowInstanceId, 'flowInstanceId'),
+    };
+}
+
+export function parseFlowDefinitionView(input: unknown): FlowDefinitionView {
+    const source = readObject(input, 'input');
+    const workspaceFingerprint = readOptionalString(source.workspaceFingerprint, 'workspaceFingerprint');
+    const sourceBranchWorkflowId = readOptionalString(source.sourceBranchWorkflowId, 'sourceBranchWorkflowId');
+
+    return {
+        definition: parseFlowDefinitionRecord(source.definition),
+        originKind: readEnumValue(source.originKind, 'originKind', flowDefinitionOriginKinds),
+        ...(workspaceFingerprint ? { workspaceFingerprint } : {}),
+        ...(sourceBranchWorkflowId ? { sourceBranchWorkflowId } : {}),
+    };
+}
+
+export function parseFlowInstanceView(input: unknown): FlowInstanceView {
+    const source = readObject(input, 'input');
+    const workspaceFingerprint = readOptionalString(source.workspaceFingerprint, 'workspaceFingerprint');
+    const sourceBranchWorkflowId = readOptionalString(source.sourceBranchWorkflowId, 'sourceBranchWorkflowId');
+
+    return {
+        instance: parseFlowInstanceRecord(source.instance),
+        definitionSnapshot: parseFlowDefinitionRecord(source.definitionSnapshot),
+        lifecycleEvents: readArray(source.lifecycleEvents, 'lifecycleEvents').map((event, index) =>
+            parseFlowLifecycleEvent(event, `lifecycleEvents[${String(index)}]`)
+        ),
+        originKind: readEnumValue(source.originKind, 'originKind', flowDefinitionOriginKinds),
+        ...(workspaceFingerprint ? { workspaceFingerprint } : {}),
+        ...(sourceBranchWorkflowId ? { sourceBranchWorkflowId } : {}),
+    };
+}
+
+export function parseFlowLifecycleEvent(input: unknown, field = 'input'): FlowLifecycleEvent {
+    const source = readObject(input, field);
     const kind = readEnumValue(source.kind, 'kind', flowLifecycleEventKinds);
     const flowDefinitionId = readString(source.flowDefinitionId, 'flowDefinitionId');
     const flowInstanceId = readString(source.flowInstanceId, 'flowInstanceId');
@@ -243,3 +356,12 @@ export function parseFlowLifecycleEvent(input: unknown): FlowLifecycleEvent {
 export const flowDefinitionRecordSchema = createParser(parseFlowDefinitionRecord);
 export const flowInstanceRecordSchema = createParser(parseFlowInstanceRecord);
 export const flowLifecycleEventSchema = createParser(parseFlowLifecycleEvent);
+export const flowDefinitionListInputSchema = createParser(parseFlowDefinitionListInput);
+export const flowDefinitionGetInputSchema = createParser(parseFlowDefinitionGetInput);
+export const flowDefinitionCreateInputSchema = createParser(parseFlowDefinitionCreateInput);
+export const flowDefinitionUpdateInputSchema = createParser(parseFlowDefinitionUpdateInput);
+export const flowDefinitionDeleteInputSchema = createParser(parseFlowDefinitionDeleteInput);
+export const flowInstanceListInputSchema = createParser(parseFlowInstanceListInput);
+export const flowInstanceGetInputSchema = createParser(parseFlowInstanceGetInput);
+export const flowDefinitionViewSchema = createParser(parseFlowDefinitionView);
+export const flowInstanceViewSchema = createParser(parseFlowInstanceView);

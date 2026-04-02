@@ -98,6 +98,9 @@ export const flowInstanceStatuses = [
 ] as const;
 export type FlowInstanceStatus = (typeof flowInstanceStatuses)[number];
 
+export const flowDefinitionOriginKinds = ['canonical', 'branch_workflow_adapter'] as const;
+export type FlowDefinitionOriginKind = (typeof flowDefinitionOriginKinds)[number];
+
 export const toolMutabilities = ['read_only', 'mutating'] as const;
 export type ToolMutability = (typeof toolMutabilities)[number];
 

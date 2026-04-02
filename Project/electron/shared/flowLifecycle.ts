@@ -16,6 +16,7 @@ export type FlowLifecycleEventKind = (typeof flowLifecycleEventKinds)[number];
 export interface FlowLifecycleEventBase<TKind extends FlowLifecycleEventKind, TPayload> {
     id: string;
     kind: TKind;
+    eventType?: TKind;
     flowDefinitionId: string;
     flowInstanceId: string;
     at: string;
@@ -91,6 +92,7 @@ function buildFlowLifecycleEvent<TKind extends FlowLifecycleEventKind, TPayload>
     return {
         id: input.id ?? `flow_event_${randomUUID()}`,
         kind: input.kind,
+        eventType: input.kind,
         flowDefinitionId: input.flowDefinitionId,
         flowInstanceId: input.flowInstanceId,
         at: input.at ?? new Date().toISOString(),

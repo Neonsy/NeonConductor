@@ -8,6 +8,7 @@ export { appPromptLayerSettingsStore } from '@/app/backend/persistence/stores/ru
 export { builtInModePromptOverrideStore } from '@/app/backend/persistence/stores/runtime/builtInModePromptOverrideStore';
 export { conversationStore } from '@/app/backend/persistence/stores/conversation/conversationStore';
 export { diffStore } from '@/app/backend/persistence/stores/runtime/diffStore';
+export { flowStore } from '@/app/backend/persistence/stores/runtime/flowStore';
 export { kiloRoutingPreferenceStore } from '@/app/backend/persistence/stores/provider/kiloRoutingPreferenceStore';
 export { marketplaceStore } from '@/app/backend/persistence/stores/registry/marketplaceStore';
 export { messageStore } from '@/app/backend/persistence/stores/conversation/messages/messageStore';

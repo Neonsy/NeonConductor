@@ -131,6 +131,64 @@ test('AppRouter exposes conversation and session procedure contracts to clients'
         command: string;
         enabled: boolean;
     }>();
+    expectTypeOf<AppRouterInputs['flow']['createDefinition']>().toExtend<{
+        profileId: string;
+        label: string;
+        enabled: boolean;
+        triggerKind: 'manual';
+        steps: Array<{ kind: 'legacy_command' | 'mode_run' | 'workflow' | 'approval_gate' }>;
+        description?: string;
+    }>();
+    expectTypeOf<AppRouterInputs['flow']['getInstance']>().toExtend<{
+        profileId: string;
+        flowInstanceId: string;
+    }>();
+    expectTypeOf<AppRouterInputs['flow']['listDefinitions']>().toExtend<{
+        profileId: string;
+    }>();
+    expectTypeOf<AppRouterInputs['flow']['getDefinition']>().toExtend<{
+        profileId: string;
+        flowDefinitionId: string;
+    }>();
+    expectTypeOf<AppRouterInputs['flow']['createDefinition']>().toExtend<{
+        profileId: string;
+        label: string;
+        description?: string;
+        enabled: boolean;
+        triggerKind: 'manual';
+        steps: Array<
+            | { kind: 'legacy_command'; id: string; label: string; command: string }
+            | { kind: 'mode_run'; id: string; label: string; topLevelTab: 'chat' | 'agent' | 'orchestrator'; modeKey: string }
+            | { kind: 'workflow'; id: string; label: string; workflowCapability: string }
+            | { kind: 'approval_gate'; id: string; label: string }
+        >;
+    }>();
+    expectTypeOf<AppRouterInputs['flow']['updateDefinition']>().toExtend<{
+        profileId: string;
+        flowDefinitionId: string;
+        label: string;
+        description?: string;
+        enabled: boolean;
+        triggerKind: 'manual';
+        steps: Array<
+            | { kind: 'legacy_command'; id: string; label: string; command: string }
+            | { kind: 'mode_run'; id: string; label: string; topLevelTab: 'chat' | 'agent' | 'orchestrator'; modeKey: string }
+            | { kind: 'workflow'; id: string; label: string; workflowCapability: string }
+            | { kind: 'approval_gate'; id: string; label: string }
+        >;
+    }>();
+    expectTypeOf<AppRouterInputs['flow']['deleteDefinition']>().toExtend<{
+        profileId: string;
+        flowDefinitionId: string;
+        confirm: boolean;
+    }>();
+    expectTypeOf<AppRouterInputs['flow']['listInstances']>().toExtend<{
+        profileId: string;
+    }>();
+    expectTypeOf<AppRouterInputs['flow']['getInstance']>().toExtend<{
+        profileId: string;
+        flowInstanceId: string;
+    }>();
     expectTypeOf<AppRouterInputs['session']['getAttachedSkills']>().toExtend<{
         profileId: string;
         sessionId: string;
@@ -227,6 +285,80 @@ test('AppRouter exposes conversation and session procedure contracts to clients'
         skillfiles: Array<{ assetKey: string; name: string }>;
         missingAssetKeys?: string[];
     }>();
+    expectTypeOf<AppRouterOutputs['flow']['listDefinitions']>().toExtend<{
+        flowDefinitions: Array<{
+            originKind: 'canonical' | 'branch_workflow_adapter';
+            definition: {
+                id: string;
+                label: string;
+            };
+        }>;
+    }>();
+    expectTypeOf<AppRouterOutputs['flow']['getInstance']>().toExtend<
+        | {
+              found: false;
+          }
+        | {
+              found: true;
+              flowInstance: {
+                  originKind: 'canonical' | 'branch_workflow_adapter';
+                  instance: {
+                      id: string;
+                      status: 'queued' | 'running' | 'approval_required' | 'failed' | 'completed' | 'cancelled';
+                  };
+                  definitionSnapshot: {
+                      id: string;
+                      steps: Array<{ kind: 'legacy_command' | 'mode_run' | 'workflow' | 'approval_gate' }>;
+                  };
+                  lifecycleEvents: Array<{
+                      kind:
+                          | 'flow.started'
+                          | 'flow.step_started'
+                          | 'flow.step_completed'
+                          | 'flow.approval_required'
+                          | 'flow.failed'
+                          | 'flow.cancelled'
+                          | 'flow.completed';
+                  }>;
+              };
+          }
+    >();
+    expectTypeOf<AppRouterOutputs['flow']['listDefinitions']>().toExtend<{
+        flowDefinitions: Array<{
+            definition: { id: string; label: string };
+            originKind: 'canonical' | 'branch_workflow_adapter';
+        }>;
+    }>();
+    expectTypeOf<AppRouterOutputs['flow']['getDefinition']>().toExtend<
+        | { found: false }
+        | {
+              found: true;
+              flowDefinition: {
+                  definition: { id: string; label: string };
+                  originKind: 'canonical' | 'branch_workflow_adapter';
+              };
+          }
+    >();
+    expectTypeOf<AppRouterOutputs['flow']['listInstances']>().toExtend<{
+        flowInstances: Array<{
+            instance: { id: string; flowDefinitionId: string; status: 'queued' | 'running' | 'approval_required' | 'failed' | 'completed' | 'cancelled' };
+            definitionSnapshot: { id: string; label: string };
+            lifecycleEvents: Array<{ kind: string; flowDefinitionId: string; flowInstanceId: string }>;
+            originKind: 'canonical' | 'branch_workflow_adapter';
+        }>;
+    }>();
+    expectTypeOf<AppRouterOutputs['flow']['getInstance']>().toExtend<
+        | { found: false }
+        | {
+              found: true;
+              flowInstance: {
+                  instance: { id: string; flowDefinitionId: string; status: 'queued' | 'running' | 'approval_required' | 'failed' | 'completed' | 'cancelled' };
+                  definitionSnapshot: { id: string; label: string };
+                  lifecycleEvents: Array<{ kind: string; flowDefinitionId: string; flowInstanceId: string }>;
+                  originKind: 'canonical' | 'branch_workflow_adapter';
+              };
+          }
+    >();
     expectTypeOf<AppRouterOutputs['diff']['listByRun']>().toExtend<{
         diffs: Array<{
             artifact: { kind: 'git'; files: Array<{ path: string }> } | { kind: 'unsupported'; detail: string };

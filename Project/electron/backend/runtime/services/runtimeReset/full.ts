@@ -281,6 +281,8 @@ async function applyFullReset(db: RuntimeResetDatabase): Promise<void> {
     await db.deleteFrom('provider_model_catalog').execute();
     await db.deleteFrom('provider_discovery_snapshots').execute();
     await db.deleteFrom('kilo_model_routing_preferences').execute();
+    await db.deleteFrom('flow_instances').execute();
+    await db.deleteFrom('flow_definitions').execute();
     await db.deleteFrom('mcp_server_env_secrets').execute();
     await db.deleteFrom('mcp_server_tools').execute();
     await db.deleteFrom('permission_policy_overrides').execute();

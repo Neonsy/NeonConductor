@@ -1,5 +1,7 @@
 import type { Generated } from 'kysely';
 
+import type { FlowDefinitionOriginKind } from '@/app/backend/runtime/contracts/enums';
+
 export interface ProfilesTable {
     id: string;
     name: string;
@@ -972,6 +974,34 @@ export interface PlanItemsTable {
     updated_at: string;
 }
 
+export interface FlowDefinitionsTable {
+    id: string;
+    profile_id: string;
+    origin_kind: FlowDefinitionOriginKind;
+    workspace_fingerprint: string | null;
+    source_branch_workflow_id: string | null;
+    label: string;
+    description: string | null;
+    enabled: 0 | 1;
+    trigger_kind: string;
+    steps_json: string;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface FlowInstancesTable {
+    id: string;
+    profile_id: string;
+    flow_definition_id: string;
+    status: string;
+    current_step_index: number;
+    definition_snapshot_json: string;
+    started_at: string | null;
+    finished_at: string | null;
+    created_at: string;
+    updated_at: string;
+}
+
 export interface OrchestratorRunsTable {
     id: string;
     profile_id: string;
@@ -1090,6 +1120,8 @@ export interface DatabaseSchema {
     plan_variants: PlanVariantsTable;
     plan_follow_ups: PlanFollowUpsTable;
     plan_items: PlanItemsTable;
+    flow_definitions: FlowDefinitionsTable;
+    flow_instances: FlowInstancesTable;
     orchestrator_runs: OrchestratorRunsTable;
     orchestrator_steps: OrchestratorStepsTable;
     permission_policy_overrides: PermissionPolicyOverridesTable;

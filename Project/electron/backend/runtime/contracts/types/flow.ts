@@ -1,9 +1,12 @@
 import type {
+    FlowDefinitionOriginKind,
     FlowInstanceStatus,
     FlowTriggerKind,
     TopLevelTab,
     WorkflowCapability,
 } from '@/app/backend/runtime/contracts/enums';
+import type { ProfileInput } from '@/app/backend/runtime/contracts/types/common';
+import type { FlowLifecycleEvent as SharedFlowLifecycleEvent } from '@/shared/flowLifecycle';
 
 export interface FlowLegacyCommandStepDefinition {
     kind: 'legacy_command';
@@ -59,57 +62,54 @@ export interface FlowInstanceRecord {
     finishedAt?: string;
 }
 
-export type FlowLifecycleEvent =
-    | {
-          eventType: 'flow.started';
-          flowDefinitionId: string;
-          flowInstanceId: string;
-          at: string;
-      }
-    | {
-          eventType: 'flow.step_started';
-          flowDefinitionId: string;
-          flowInstanceId: string;
-          stepId: string;
-          stepIndex: number;
-          stepKind: FlowStepDefinition['kind'];
-          at: string;
-      }
-    | {
-          eventType: 'flow.step_completed';
-          flowDefinitionId: string;
-          flowInstanceId: string;
-          stepId: string;
-          stepIndex: number;
-          stepKind: FlowStepDefinition['kind'];
-          at: string;
-      }
-    | {
-          eventType: 'flow.approval_required';
-          flowDefinitionId: string;
-          flowInstanceId: string;
-          stepId: string;
-          stepIndex: number;
-          at: string;
-      }
-    | {
-          eventType: 'flow.failed';
-          flowDefinitionId: string;
-          flowInstanceId: string;
-          message: string;
-          stepId?: string;
-          stepIndex?: number;
-          at: string;
-      }
-    | {
-          eventType: 'flow.cancelled';
-          flowDefinitionId: string;
-          flowInstanceId: string;
-          at: string;
-      }
-    | {
-          eventType: 'flow.completed';
-          flowDefinitionId: string;
-          flowInstanceId: string;
-          at: string;
-      };
+export type FlowLifecycleEvent = SharedFlowLifecycleEvent;
+
+export interface FlowDefinitionView {
+    definition: FlowDefinitionRecord;
+    originKind: FlowDefinitionOriginKind;
+    workspaceFingerprint?: string;
+    sourceBranchWorkflowId?: string;
+}
+
+export interface FlowInstanceView {
+    instance: FlowInstanceRecord;
+    definitionSnapshot: FlowDefinitionRecord;
+    lifecycleEvents: FlowLifecycleEvent[];
+    originKind: FlowDefinitionOriginKind;
+    workspaceFingerprint?: string;
+    sourceBranchWorkflowId?: string;
+}
+
+export type FlowDefinitionListInput = ProfileInput;
+
+export interface FlowDefinitionGetInput extends ProfileInput {
+    flowDefinitionId: string;
+}
+
+export interface FlowDefinitionCreateInput extends ProfileInput {
+    label: string;
+    description?: string;
+    enabled: boolean;
+    triggerKind: FlowTriggerKind;
+    steps: FlowStepDefinition[];
+}
+
+export interface FlowDefinitionUpdateInput extends ProfileInput {
+    flowDefinitionId: string;
+    label: string;
+    description?: string;
+    enabled: boolean;
+    triggerKind: FlowTriggerKind;
+    steps: FlowStepDefinition[];
+}
+
+export interface FlowDefinitionDeleteInput extends ProfileInput {
+    flowDefinitionId: string;
+    confirm: boolean;
+}
+
+export type FlowInstanceListInput = ProfileInput;
+
+export interface FlowInstanceGetInput extends ProfileInput {
+    flowInstanceId: string;
+}

@@ -1,8 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+    parseFlowDefinitionCreateInput,
+    parseFlowDefinitionDeleteInput,
     parseFlowDefinitionRecord,
+    parseFlowDefinitionView,
+    parseFlowInstanceGetInput,
     parseFlowInstanceRecord,
+    parseFlowInstanceView,
     parseFlowLifecycleEvent,
 } from '@/app/backend/runtime/contracts/parsers/flow';
 
@@ -148,5 +153,112 @@ describe('flow parsers', () => {
                 at: '2026-04-02T00:00:03.000Z',
             })
         ).toThrow('kind');
+    });
+
+    it('parses flow CRUD inputs and persisted views', () => {
+        expect(
+            parseFlowDefinitionCreateInput({
+                profileId: 'profile_test',
+                label: 'Ship flow',
+                description: 'Test definition',
+                enabled: true,
+                triggerKind: 'manual',
+                steps: [
+                    {
+                        kind: 'approval_gate',
+                        id: 'step_gate',
+                        label: 'Approve',
+                    },
+                ],
+            })
+        ).toMatchObject({
+            profileId: 'profile_test',
+            label: 'Ship flow',
+            triggerKind: 'manual',
+        });
+
+        expect(
+            parseFlowDefinitionDeleteInput({
+                profileId: 'profile_test',
+                flowDefinitionId: 'flow_123',
+                confirm: true,
+            })
+        ).toEqual({
+            profileId: 'profile_test',
+            flowDefinitionId: 'flow_123',
+            confirm: true,
+        });
+
+        expect(
+            parseFlowInstanceGetInput({
+                profileId: 'profile_test',
+                flowInstanceId: 'flow_instance_123',
+            })
+        ).toEqual({
+            profileId: 'profile_test',
+            flowInstanceId: 'flow_instance_123',
+        });
+
+        expect(
+            parseFlowDefinitionView({
+                definition: {
+                    id: 'flow_setup',
+                    label: 'Setup',
+                    enabled: true,
+                    triggerKind: 'manual',
+                    steps: [],
+                    createdAt: '2026-04-02T00:00:00.000Z',
+                    updatedAt: '2026-04-02T00:00:00.000Z',
+                },
+                originKind: 'canonical',
+            })
+        ).toMatchObject({
+            originKind: 'canonical',
+            definition: {
+                id: 'flow_setup',
+            },
+        });
+
+        expect(
+            parseFlowInstanceView({
+                instance: {
+                    id: 'flow_instance_setup',
+                    flowDefinitionId: 'flow_setup',
+                    status: 'completed',
+                    currentStepIndex: 1,
+                    startedAt: '2026-04-02T00:00:01.000Z',
+                    finishedAt: '2026-04-02T00:00:02.000Z',
+                },
+                definitionSnapshot: {
+                    id: 'flow_setup',
+                    label: 'Setup',
+                    enabled: true,
+                    triggerKind: 'manual',
+                    steps: [],
+                    createdAt: '2026-04-02T00:00:00.000Z',
+                    updatedAt: '2026-04-02T00:00:00.000Z',
+                },
+                lifecycleEvents: [
+                    {
+                        kind: 'flow.completed',
+                        flowDefinitionId: 'flow_setup',
+                        flowInstanceId: 'flow_instance_setup',
+                        id: 'flow_event_1',
+                        at: '2026-04-02T00:00:02.000Z',
+                        payload: {
+                            completedStepCount: 1,
+                            status: 'completed',
+                        },
+                    },
+                ],
+                originKind: 'canonical',
+            })
+        ).toMatchObject({
+            originKind: 'canonical',
+            instance: {
+                id: 'flow_instance_setup',
+            },
+            lifecycleEvents: [{ kind: 'flow.completed' }],
+        });
     });
 });

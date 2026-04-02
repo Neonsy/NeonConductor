@@ -7,6 +7,16 @@ import type {
     FlowStepDefinition,
 } from '@/app/backend/runtime/contracts/types/flow';
 
+import {
+    createFlowApprovalRequiredLifecycleEvent,
+    createFlowCancelledLifecycleEvent,
+    createFlowCompletedLifecycleEvent,
+    createFlowFailedLifecycleEvent,
+    createFlowStartedLifecycleEvent,
+    createFlowStepCompletedLifecycleEvent,
+    createFlowStepStartedLifecycleEvent,
+} from '@/shared/flowLifecycle';
+
 function cloneFlowStep(step: FlowStepDefinition): FlowStepDefinition {
     if (step.kind === 'legacy_command') {
         return { ...step };
@@ -61,12 +71,13 @@ export function startFlowInstance(input: {
             status: 'running',
             startedAt: at,
         },
-        event: {
-            eventType: 'flow.started',
+        event: createFlowStartedLifecycleEvent({
             flowDefinitionId: input.flowDefinition.id,
             flowInstanceId: input.flowInstance.id,
+            triggerKind: input.flowDefinition.triggerKind,
+            stepCount: input.flowDefinition.steps.length,
             at,
-        },
+        }),
     };
 }
 
@@ -78,15 +89,14 @@ export function startFlowStep(input: {
 }): FlowLifecycleEvent {
     const step = readFlowStep(input.flowDefinition, input.stepIndex);
 
-    return {
-        eventType: 'flow.step_started',
+    return createFlowStepStartedLifecycleEvent({
         flowDefinitionId: input.flowDefinition.id,
         flowInstanceId: input.flowInstance.id,
-        stepId: step.id,
         stepIndex: input.stepIndex,
+        stepId: step.id,
         stepKind: step.kind,
         at: input.now ?? new Date().toISOString(),
-    };
+    });
 }
 
 export function completeFlowStep(input: {
@@ -97,15 +107,14 @@ export function completeFlowStep(input: {
 }): FlowLifecycleEvent {
     const step = readFlowStep(input.flowDefinition, input.stepIndex);
 
-    return {
-        eventType: 'flow.step_completed',
+    return createFlowStepCompletedLifecycleEvent({
         flowDefinitionId: input.flowDefinition.id,
         flowInstanceId: input.flowInstance.id,
-        stepId: step.id,
         stepIndex: input.stepIndex,
+        stepId: step.id,
         stepKind: step.kind,
         at: input.now ?? new Date().toISOString(),
-    };
+    });
 }
 
 export function requireFlowApproval(input: {
@@ -123,14 +132,15 @@ export function requireFlowApproval(input: {
             status: 'approval_required',
             currentStepIndex: input.stepIndex,
         },
-        event: {
-            eventType: 'flow.approval_required',
+        event: createFlowApprovalRequiredLifecycleEvent({
             flowDefinitionId: input.flowDefinition.id,
             flowInstanceId: input.flowInstance.id,
-            stepId: step.id,
             stepIndex: input.stepIndex,
+            stepId: step.id,
+            stepKind: step.kind,
+            reason: 'Flow requires explicit approval before continuing.',
             at,
-        },
+        }),
     };
 }
 
@@ -151,14 +161,13 @@ export function failFlowInstance(input: {
             ...(at ? { finishedAt: at } : {}),
             ...(input.stepIndex !== undefined ? { currentStepIndex: input.stepIndex } : {}),
         },
-        event: {
-            eventType: 'flow.failed',
+        event: createFlowFailedLifecycleEvent({
             flowDefinitionId: input.flowDefinition.id,
             flowInstanceId: input.flowInstance.id,
-            message: input.message,
+            errorMessage: input.message,
             at,
-            ...(step ? { stepId: step.id, stepIndex: input.stepIndex } : {}),
-        },
+            ...(step ? { stepId: step.id, stepIndex: input.stepIndex, stepKind: step.kind } : {}),
+        }),
     };
 }
 
@@ -175,12 +184,11 @@ export function cancelFlowInstance(input: {
             status: 'cancelled',
             finishedAt: at,
         },
-        event: {
-            eventType: 'flow.cancelled',
+        event: createFlowCancelledLifecycleEvent({
             flowDefinitionId: input.flowDefinition.id,
             flowInstanceId: input.flowInstance.id,
             at,
-        },
+        }),
     };
 }
 
@@ -198,12 +206,12 @@ export function completeFlowInstance(input: {
             currentStepIndex: input.flowDefinition.steps.length,
             finishedAt: at,
         },
-        event: {
-            eventType: 'flow.completed',
+        event: createFlowCompletedLifecycleEvent({
             flowDefinitionId: input.flowDefinition.id,
             flowInstanceId: input.flowInstance.id,
+            completedStepCount: input.flowDefinition.steps.length,
             at,
-        },
+        }),
     };
 }
 

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { permissionStore, threadStore } from '@/app/backend/persistence/stores';
 import { buildShellApprovalContext } from '@/app/backend/runtime/services/toolExecution/shellApproval';
 import {
+    getPersistence,
     runtimeContractProfileId,
     registerRuntimeContractHooks,
     createCaller,
@@ -97,8 +98,15 @@ describe('runtime contracts: conversation and runs', () => {
             throw new Error(`Expected workflow branch to succeed, received "${branched.reason}".`);
         }
         expect(branched.branchWorkflowExecution.status).toBe('not_requested');
+        expect(branched.branchWorkflowExecution.flowDefinitionId).toBeUndefined();
+        expect(branched.branchWorkflowExecution.flowInstanceId).toBeUndefined();
         expect(branched.thread.sandboxId).toBeDefined();
         expect(branched.thread.sandboxId).not.toBe(sourceThreadRecord?.thread.sandboxId);
+
+        const flowDefinitions = await getPersistence().db.selectFrom('flow_definitions').selectAll().execute();
+        const flowInstances = await getPersistence().db.selectFrom('flow_instances').selectAll().execute();
+        expect(flowDefinitions).toHaveLength(0);
+        expect(flowInstances).toHaveLength(0);
     });
 
     it('creates a permission request for branch workflows that need shell approval and keeps the branch', async () => {
@@ -192,9 +200,56 @@ describe('runtime contracts: conversation and runs', () => {
         if (branched.branchWorkflowExecution.status !== 'approval_required') {
             throw new Error('Expected workflow approval requirement.');
         }
+        expect(branched.branchWorkflowExecution.flowDefinitionId).toBeDefined();
+        expect(branched.branchWorkflowExecution.flowInstanceId).toBeDefined();
+        if (!branched.branchWorkflowExecution.flowDefinitionId || !branched.branchWorkflowExecution.flowInstanceId) {
+            throw new Error('Expected persisted flow provenance for approval-required branch workflow.');
+        }
         const permissionRequestId = branched.branchWorkflowExecution.requestId;
         const pendingPermissions = await caller.permission.listPending();
         expect(pendingPermissions.requests.some((request) => request.id === permissionRequestId)).toBe(true);
+
+        const flowDefinition = await getPersistence().db
+            .selectFrom('flow_definitions')
+            .selectAll()
+            .where('id', '=', branched.branchWorkflowExecution.flowDefinitionId)
+            .executeTakeFirstOrThrow();
+        expect(flowDefinition.origin_kind).toBe('branch_workflow_adapter');
+        expect(flowDefinition.profile_id).toBe(profileId);
+        expect(flowDefinition.workspace_fingerprint).toBe(workspaceFingerprint);
+        expect(flowDefinition.source_branch_workflow_id).toBe(branchWorkflow.branchWorkflow.id);
+        expect(JSON.parse(flowDefinition.steps_json)).toEqual([
+            {
+                kind: 'legacy_command',
+                id: `${flowDefinition.id}:legacy_command`,
+                label: 'Install deps',
+                command: 'pnpm install',
+            },
+        ]);
+
+        const flowInstance = await getPersistence().db
+            .selectFrom('flow_instances')
+            .selectAll()
+            .where('id', '=', branched.branchWorkflowExecution.flowInstanceId)
+            .executeTakeFirstOrThrow();
+        expect(flowInstance.flow_definition_id).toBe(flowDefinition.id);
+        expect(flowInstance.status).toBe('approval_required');
+        expect(flowInstance.current_step_index).toBe(0);
+        expect(flowInstance.started_at).toBeDefined();
+        expect(flowInstance.finished_at).toBeNull();
+
+        const flowEvents = await getPersistence().db
+            .selectFrom('runtime_events')
+            .selectAll()
+            .where('entity_type', '=', 'flow')
+            .where('entity_id', '=', flowInstance.id)
+            .orderBy('sequence', 'asc')
+            .execute();
+        expect(flowEvents.map((event) => event.event_type)).toEqual([
+            'flow.started',
+            'flow.step_started',
+            'flow.approval_required',
+        ]);
 
         const branchStatus = await caller.session.status({
             profileId,
@@ -310,7 +365,42 @@ describe('runtime contracts: conversation and runs', () => {
             throw new Error(`Expected workflow branch to succeed, received "${branched.reason}".`);
         }
         expect(branched.branchWorkflowExecution.status).toBe('failed');
+        expect(branched.branchWorkflowExecution.flowDefinitionId).toBeDefined();
+        expect(branched.branchWorkflowExecution.flowInstanceId).toBeDefined();
+        if (!branched.branchWorkflowExecution.flowDefinitionId || !branched.branchWorkflowExecution.flowInstanceId) {
+            throw new Error('Expected persisted flow provenance for failed branch workflow.');
+        }
         expect(branched.sessionId).not.toBe(created.session.id);
+
+        const flowDefinition = await getPersistence().db
+            .selectFrom('flow_definitions')
+            .selectAll()
+            .where('id', '=', branched.branchWorkflowExecution.flowDefinitionId)
+            .executeTakeFirstOrThrow();
+        expect(flowDefinition.origin_kind).toBe('branch_workflow_adapter');
+        expect(flowDefinition.profile_id).toBe(profileId);
+        expect(flowDefinition.workspace_fingerprint).toBe(workspaceFingerprint);
+        expect(flowDefinition.source_branch_workflow_id).toBe(branchWorkflow.branchWorkflow.id);
+
+        const flowInstance = await getPersistence().db
+            .selectFrom('flow_instances')
+            .selectAll()
+            .where('id', '=', branched.branchWorkflowExecution.flowInstanceId)
+            .executeTakeFirstOrThrow();
+        expect(flowInstance.flow_definition_id).toBe(flowDefinition.id);
+        expect(flowInstance.status).toBe('failed');
+        expect(flowInstance.current_step_index).toBe(0);
+        expect(flowInstance.started_at).toBeDefined();
+        expect(flowInstance.finished_at).toBeDefined();
+
+        const flowEvents = await getPersistence().db
+            .selectFrom('runtime_events')
+            .selectAll()
+            .where('entity_type', '=', 'flow')
+            .where('entity_id', '=', flowInstance.id)
+            .orderBy('sequence', 'asc')
+            .execute();
+        expect(flowEvents.map((event) => event.event_type)).toEqual(['flow.started', 'flow.step_started', 'flow.failed']);
 
         const sourceRunsAfterBranch = await caller.session.listRuns({
             profileId,
