@@ -54,9 +54,32 @@ export interface PlanAdvancedSnapshotView extends PlanAdvancedSnapshotInput {
 }
 
 export type PlanPhaseStatus = 'not_started' | 'draft' | 'approved' | 'implementing' | 'implemented' | 'cancelled';
+export type PlanPhaseVerificationOutcome = 'passed' | 'failed';
+export type PlanPhaseVerificationStatus = 'not_applicable' | 'pending' | 'passed' | 'failed';
 
 export interface PlanPhaseDraftItemInput {
     description: string;
+}
+
+export interface PlanPhaseVerificationDiscrepancyInput {
+    title: string;
+    detailsMarkdown: string;
+}
+
+export interface PlanPhaseVerificationDiscrepancyView extends PlanPhaseVerificationDiscrepancyInput {
+    id: string;
+    sequence: number;
+    createdAt: string;
+}
+
+export interface PlanPhaseVerificationView {
+    id: string;
+    planPhaseId: string;
+    planPhaseRevisionId: string;
+    outcome: PlanPhaseVerificationOutcome;
+    summaryMarkdown: string;
+    discrepancies: PlanPhaseVerificationDiscrepancyView[];
+    createdAt: string;
 }
 
 export interface PlanPhaseRevisionItemView {
@@ -75,9 +98,10 @@ export interface PlanPhaseRevisionView {
     revisionNumber: number;
     summaryMarkdown: string;
     items: PlanPhaseRevisionItemView[];
-    createdByKind: 'expand' | 'revise';
+    createdByKind: 'expand' | 'revise' | 'replan';
     createdAt: string;
     previousRevisionId?: string;
+    sourceVerificationId?: string;
     supersededAt?: string;
 }
 
@@ -96,8 +120,15 @@ export interface PlanPhaseRecordView {
     currentRevisionNumber: number;
     approvedRevisionId?: string;
     approvedRevisionNumber?: number;
+    implementedRevisionId?: string;
+    implementedRevisionNumber?: number;
     summaryMarkdown: string;
     items: PlanPhaseRevisionItemView[];
+    verificationStatus: PlanPhaseVerificationStatus;
+    latestVerification?: PlanPhaseVerificationView;
+    verifications: PlanPhaseVerificationView[];
+    canStartVerification: boolean;
+    canStartReplan: boolean;
     createdAt: string;
     updatedAt: string;
     approvedAt?: string;
@@ -283,6 +314,19 @@ export interface PlanCancelPhaseInput extends PlanGetInput {
     phaseId: string;
 }
 
+export interface PlanVerifyPhaseInput extends PlanGetInput {
+    phaseId: string;
+    phaseRevisionId: string;
+    outcome: PlanPhaseVerificationOutcome;
+    summaryMarkdown: string;
+    discrepancies: PlanPhaseVerificationDiscrepancyInput[];
+}
+
+export interface PlanStartPhaseReplanInput extends PlanGetInput {
+    phaseId: string;
+    verificationId: string;
+}
+
 export type PlanCancelInput = PlanGetInput;
 
 export interface PlanVariantView {
@@ -341,7 +385,9 @@ export interface PlanHistoryEntry {
         | 'phase_implementation_started'
         | 'phase_implementation_completed'
         | 'phase_implementation_failed'
-        | 'phase_cancelled';
+        | 'phase_cancelled'
+        | 'phase_verification_recorded'
+        | 'phase_replan_started';
     title: string;
     detail?: string;
     createdAt: string;
@@ -350,6 +396,10 @@ export interface PlanHistoryEntry {
     phaseSequence?: number | undefined;
     phaseTitle?: string | undefined;
     phaseRevisionNumber?: number | undefined;
+    verificationId?: string | undefined;
+    verificationOutcome?: PlanPhaseVerificationOutcome | undefined;
+    discrepancyCount?: number | undefined;
+    sourceVerificationId?: string | undefined;
     revisionId?: EntityId<'prev'> | undefined;
     revisionNumber?: number | undefined;
     variantId?: EntityId<'pvar'> | undefined;

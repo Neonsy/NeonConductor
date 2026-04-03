@@ -4,6 +4,7 @@ import { getDefaultProfileId, resetPersistenceForTests } from '@/app/backend/per
 import {
     conversationStore,
     planPhaseStore,
+    planPhaseVerificationStore,
     planStore,
     runStore,
     sessionStore,
@@ -186,7 +187,7 @@ describe('planPhaseStore', () => {
             planId: plan.id,
             planPhaseId: createdPhase.id,
             phaseRevisionId: revisedPhase.currentRevisionId,
-            implementationRunId: phaseRun.id as EntityId<'run'>,
+            implementationRunId: phaseRun.id,
         });
         expect(implementingPhase?.status).toBe('implementing');
 
@@ -196,6 +197,24 @@ describe('planPhaseStore', () => {
             phaseRevisionId: revisedPhase.currentRevisionId,
         });
         expect(implementedPhase?.status).toBe('implemented');
+
+        const blockedUntilVerification = await planPhaseStore.getNextExpandablePhaseOutlineId({
+            planId: plan.id,
+            planRevisionId: plan.currentRevisionId,
+            planVariantId: plan.currentVariantId,
+            advancedSnapshot: plan.advancedSnapshot,
+        });
+        expect(blockedUntilVerification).toBeNull();
+
+        const verification = await planPhaseVerificationStore.createVerification({
+            planId: plan.id,
+            planPhaseId: createdPhase.id,
+            planPhaseRevisionId: revisedPhase.currentRevisionId,
+            outcome: 'passed',
+            summaryMarkdown: 'The implemented phase satisfied the approved exit criteria.',
+            discrepancies: [],
+        });
+        expect(verification).not.toBeNull();
 
         const nextExpandableOutlineId = await planPhaseStore.getNextExpandablePhaseOutlineId({
             planId: plan.id,

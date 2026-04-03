@@ -29,6 +29,7 @@ export { permissionStore } from '@/app/backend/persistence/stores/runtime/permis
 export { permissionPolicyOverrideStore } from '@/app/backend/persistence/stores/runtime/permissionPolicyOverrideStore';
 export { planStore } from '@/app/backend/persistence/stores/runtime/planStore';
 export { planPhaseStore } from '@/app/backend/persistence/stores/runtime/planPhaseStore';
+export { planPhaseVerificationStore } from '@/app/backend/persistence/stores/runtime/planPhaseVerificationStore';
 export { profileStore } from '@/app/backend/persistence/stores/profile/profileStore';
 export { profileContextSettingsStore } from '@/app/backend/persistence/stores/profile/profileContextSettingsStore';
 export { providerSecretStore } from '@/app/backend/persistence/stores/profile/providerSecretStore';

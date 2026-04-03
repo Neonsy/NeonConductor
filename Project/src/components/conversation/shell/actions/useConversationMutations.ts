@@ -22,6 +22,8 @@ export function useConversationMutations() {
         planApprovePhaseMutation: trpc.plan.approvePhase.useMutation(),
         planImplementPhaseMutation: trpc.plan.implementPhase.useMutation(),
         planCancelPhaseMutation: trpc.plan.cancelPhase.useMutation(),
+        planVerifyPhaseMutation: trpc.plan.verifyPhase.useMutation(),
+        planStartPhaseReplanMutation: trpc.plan.startPhaseReplan.useMutation(),
         planEnterAdvancedPlanningMutation: trpc.plan.enterAdvancedPlanning.useMutation(),
         planCreateVariantMutation: trpc.plan.createVariant.useMutation(),
         planActivateVariantMutation: trpc.plan.activateVariant.useMutation(),

@@ -14,6 +14,7 @@ import {
     planImplementInputSchema,
     planImplementPhaseInputSchema,
     planEnterAdvancedPlanningInputSchema,
+    planStartPhaseReplanInputSchema,
     planRaiseFollowUpInputSchema,
     planReviseInputSchema,
     planRevisePhaseInputSchema,
@@ -21,6 +22,7 @@ import {
     planResumeFromRevisionInputSchema,
     planStartResearchBatchInputSchema,
     planStartInputSchema,
+    planVerifyPhaseInputSchema,
 } from '@/app/backend/runtime/contracts';
 import { planService } from '@/app/backend/runtime/services/plan/service';
 import { publicProcedure, router } from '@/app/backend/trpc/init';
@@ -67,6 +69,14 @@ export const planRouter = router({
     }),
     cancelPhase: publicProcedure.input(planCancelPhaseInputSchema).mutation(async ({ input }) => {
         const result = await planService.cancelPhase(input);
+        return unwrapResultOrThrow(result, toPlanTrpcError);
+    }),
+    verifyPhase: publicProcedure.input(planVerifyPhaseInputSchema).mutation(async ({ input }) => {
+        const result = await planService.verifyPhase(input);
+        return unwrapResultOrThrow(result, toPlanTrpcError);
+    }),
+    startPhaseReplan: publicProcedure.input(planStartPhaseReplanInputSchema).mutation(async ({ input }) => {
+        const result = await planService.startPhaseReplan(input);
         return unwrapResultOrThrow(result, toPlanTrpcError);
     }),
     enterAdvancedPlanning: publicProcedure.input(planEnterAdvancedPlanningInputSchema).mutation(async ({ input }) => {

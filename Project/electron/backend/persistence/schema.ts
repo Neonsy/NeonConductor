@@ -891,6 +891,7 @@ export interface PlanPhasesTable {
     status: string;
     current_revision_id: string;
     approved_revision_id: string | null;
+    implemented_revision_id: string | null;
     implementation_run_id: string | null;
     orchestrator_run_id: string | null;
     created_at: string;
@@ -905,6 +906,7 @@ export interface PlanPhaseRevisionsTable {
     revision_number: number;
     summary_markdown: string;
     created_by_kind: string;
+    source_verification_id: string | null;
     created_at: string;
     previous_revision_id: string | null;
     superseded_at: string | null;
@@ -915,6 +917,24 @@ export interface PlanPhaseRevisionItemsTable {
     plan_phase_revision_id: string;
     sequence: number;
     description: string;
+    created_at: string;
+}
+
+export interface PlanPhaseVerificationsTable {
+    id: string;
+    plan_phase_id: string;
+    plan_phase_revision_id: string;
+    outcome: string;
+    summary_markdown: string;
+    created_at: string;
+}
+
+export interface PlanPhaseVerificationDiscrepanciesTable {
+    id: string;
+    verification_id: string;
+    sequence: number;
+    title: string;
+    details_markdown: string;
     created_at: string;
 }
 
@@ -1170,6 +1190,8 @@ export interface DatabaseSchema {
     plan_phases: PlanPhasesTable;
     plan_phase_revisions: PlanPhaseRevisionsTable;
     plan_phase_revision_items: PlanPhaseRevisionItemsTable;
+    plan_phase_verifications: PlanPhaseVerificationsTable;
+    plan_phase_verification_discrepancies: PlanPhaseVerificationDiscrepanciesTable;
     plan_research_batches: PlanResearchBatchesTable;
     plan_research_workers: PlanResearchWorkersTable;
     plan_revision_evidence_attachments: PlanRevisionEvidenceAttachmentsTable;

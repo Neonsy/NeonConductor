@@ -27,6 +27,8 @@ export type EntityIdPrefix =
     | 'pph'
     | 'pprv'
     | 'ppi'
+    | 'ppv'
+    | 'ppvd'
     | 'prb'
     | 'prw'
     | 'pea'

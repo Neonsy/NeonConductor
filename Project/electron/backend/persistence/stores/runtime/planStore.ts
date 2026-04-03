@@ -1,6 +1,7 @@
 import { getPersistence } from '@/app/backend/persistence/db';
 import type { DatabaseSchema } from '@/app/backend/persistence/schema';
 import { planPhaseStore } from '@/app/backend/persistence/stores/runtime/planPhaseStore';
+import { planPhaseVerificationStore } from '@/app/backend/persistence/stores/runtime/planPhaseVerificationStore';
 import { runtimeEventStore } from '@/app/backend/persistence/stores/runtime/runtimeEventStore';
 import { parseEntityId, parseEnumValue, parseJsonRecord } from '@/app/backend/persistence/stores/shared/rowParsers';
 import {
@@ -15,6 +16,8 @@ import type {
     PlanPhaseRecord,
     PlanPhaseRevisionItemRecord,
     PlanPhaseRevisionRecord,
+    PlanPhaseVerificationDiscrepancyRecord,
+    PlanPhaseVerificationRecord,
     PlanEvidenceAttachmentRecord,
     PlanResearchBatchRecord,
     PlanResearchWorkerRecord,
@@ -1153,6 +1156,81 @@ function buildPlanHistoryEntries(input: {
                               : undefined,
                 });
                 break;
+            case 'plan.phase.verification.recorded':
+                entries.push({
+                    id: event.eventId,
+                    kind: 'phase_verification_recorded',
+                    title:
+                        typeof event.payload['phaseTitle'] === 'string'
+                            ? `Phase verified: ${event.payload['phaseTitle']}`
+                            : 'Phase verified',
+                    detail:
+                        event.payload['outcome'] === 'failed'
+                            ? typeof event.payload['discrepancyCount'] === 'number'
+                                ? `Verification failed with ${String(event.payload['discrepancyCount'])} discrepancies.`
+                                : 'Verification failed.'
+                            : 'Verification passed.',
+                    createdAt: event.createdAt,
+                    phaseId:
+                        typeof event.payload['phaseId'] === 'string'
+                            ? (event.payload['phaseId'] as EntityId<'pph'>)
+                            : undefined,
+                    phaseRevisionId:
+                        typeof event.payload['phaseRevisionId'] === 'string'
+                            ? (event.payload['phaseRevisionId'] as EntityId<'pprv'>)
+                            : undefined,
+                    phaseSequence:
+                        typeof event.payload['phaseSequence'] === 'number' ? event.payload['phaseSequence'] : undefined,
+                    phaseTitle:
+                        typeof event.payload['phaseTitle'] === 'string' ? event.payload['phaseTitle'] : undefined,
+                    phaseRevisionNumber:
+                        typeof event.payload['phaseRevisionNumber'] === 'number'
+                            ? event.payload['phaseRevisionNumber']
+                            : undefined,
+                    verificationId:
+                        typeof event.payload['verificationId'] === 'string'
+                            ? (event.payload['verificationId'] as EntityId<'ppv'>)
+                            : undefined,
+                    verificationOutcome:
+                        event.payload['outcome'] === 'failed' ? 'failed' : event.payload['outcome'] === 'passed' ? 'passed' : undefined,
+                    discrepancyCount:
+                        typeof event.payload['discrepancyCount'] === 'number'
+                            ? event.payload['discrepancyCount']
+                            : undefined,
+                });
+                break;
+            case 'plan.phase.replan.started':
+                entries.push({
+                    id: event.eventId,
+                    kind: 'phase_replan_started',
+                    title:
+                        typeof event.payload['phaseTitle'] === 'string'
+                            ? `Phase replan started: ${event.payload['phaseTitle']}`
+                            : 'Phase replan started',
+                    detail: 'Opened a new draft from the failed verification without rewriting implemented history.',
+                    createdAt: event.createdAt,
+                    phaseId:
+                        typeof event.payload['phaseId'] === 'string'
+                            ? (event.payload['phaseId'] as EntityId<'pph'>)
+                            : undefined,
+                    phaseRevisionId:
+                        typeof event.payload['phaseRevisionId'] === 'string'
+                            ? (event.payload['phaseRevisionId'] as EntityId<'pprv'>)
+                            : undefined,
+                    phaseSequence:
+                        typeof event.payload['phaseSequence'] === 'number' ? event.payload['phaseSequence'] : undefined,
+                    phaseTitle:
+                        typeof event.payload['phaseTitle'] === 'string' ? event.payload['phaseTitle'] : undefined,
+                    phaseRevisionNumber:
+                        typeof event.payload['phaseRevisionNumber'] === 'number'
+                            ? event.payload['phaseRevisionNumber']
+                            : undefined,
+                    sourceVerificationId:
+                        typeof event.payload['sourceVerificationId'] === 'string'
+                            ? (event.payload['sourceVerificationId'] as EntityId<'ppv'>)
+                            : undefined,
+                });
+                break;
             default:
                 break;
         }
@@ -1280,6 +1358,8 @@ function buildPlanViewProjection(input: {
     phases: PlanPhaseRecord[];
     phaseRevisions: PlanPhaseRevisionRecord[];
     phaseRevisionItems: PlanPhaseRevisionItemRecord[];
+    phaseVerifications: PlanPhaseVerificationRecord[];
+    phaseVerificationDiscrepancies: PlanPhaseVerificationDiscrepancyRecord[];
     researchBatches: PlanResearchBatchRecord[];
     researchWorkers: PlanResearchWorkerRecord[];
     evidenceAttachments: PlanEvidenceAttachmentRecord[];
@@ -1330,6 +1410,8 @@ function buildPlanViewProjection(input: {
         phases: input.phases,
         phaseRevisions: input.phaseRevisions,
         phaseRevisionItems: input.phaseRevisionItems,
+        phaseVerifications: input.phaseVerifications,
+        phaseVerificationDiscrepancies: input.phaseVerificationDiscrepancies,
         researchBatches: input.researchBatches,
         researchWorkers: input.researchWorkers,
         evidenceAttachments: input.evidenceAttachments,
@@ -3055,6 +3137,9 @@ export class PlanStore {
         const researchWorkers = researchBatches.length
             ? await this.listResearchWorkersInDb(db, researchBatches.map((batch) => batch.id))
             : [];
+        const verificationProjection = phaseProjection.phases.length
+            ? await planPhaseVerificationStore.listProjectionData(planId)
+            : { phaseVerifications: [], phaseVerificationDiscrepancies: [] };
 
         const history = buildPlanHistoryEntries({
             plan,
@@ -3078,6 +3163,8 @@ export class PlanStore {
             phases: phaseProjection.phases,
             phaseRevisions: phaseProjection.phaseRevisions,
             phaseRevisionItems: phaseProjection.phaseRevisionItems,
+            phaseVerifications: verificationProjection.phaseVerifications,
+            phaseVerificationDiscrepancies: verificationProjection.phaseVerificationDiscrepancies,
             researchBatches,
             researchWorkers,
             evidenceAttachments,

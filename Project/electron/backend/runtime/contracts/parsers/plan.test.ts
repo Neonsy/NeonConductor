@@ -3,8 +3,10 @@ import { describe, expect, it } from 'vitest';
 import {
     parsePlanAbortResearchBatchInput,
     parsePlanReviseInput,
+    parsePlanStartPhaseReplanInput,
     parsePlanStartInput,
     parsePlanStartResearchBatchInput,
+    parsePlanVerifyPhaseInput,
 } from '@/app/backend/runtime/contracts/parsers/plan';
 
 describe('plan parsers', () => {
@@ -155,5 +157,53 @@ describe('plan parsers', () => {
                 },
             })
         ).toThrow(/workerCount/i);
+    });
+
+    it('parses phase verification input with ordered discrepancies', () => {
+        expect(
+            parsePlanVerifyPhaseInput({
+                profileId: 'profile_default',
+                planId: 'plan_1',
+                phaseId: 'pph_1',
+                phaseRevisionId: 'pprv_1',
+                outcome: 'failed',
+                summaryMarkdown: 'Verification found a mismatch.',
+                discrepancies: [
+                    {
+                        title: 'Missing validation',
+                        detailsMarkdown: 'The implemented phase skipped one required validation path.',
+                    },
+                ],
+            })
+        ).toMatchObject({
+            profileId: 'profile_default',
+            planId: 'plan_1',
+            phaseId: 'pph_1',
+            phaseRevisionId: 'pprv_1',
+            outcome: 'failed',
+            summaryMarkdown: 'Verification found a mismatch.',
+            discrepancies: [
+                {
+                    title: 'Missing validation',
+                    detailsMarkdown: 'The implemented phase skipped one required validation path.',
+                },
+            ],
+        });
+    });
+
+    it('parses phase replan input with typed verification ids', () => {
+        expect(
+            parsePlanStartPhaseReplanInput({
+                profileId: 'profile_default',
+                planId: 'plan_1',
+                phaseId: 'pph_1',
+                verificationId: 'ppv_1',
+            })
+        ).toMatchObject({
+            profileId: 'profile_default',
+            planId: 'plan_1',
+            phaseId: 'pph_1',
+            verificationId: 'ppv_1',
+        });
     });
 });

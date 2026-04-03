@@ -151,8 +151,16 @@ export function buildPlanPhaseViews(input: {
             currentRevisionNumber: phase.currentRevisionNumber,
             ...(phase.approvedRevisionId ? { approvedRevisionId: phase.approvedRevisionId } : {}),
             ...(phase.approvedRevisionNumber !== undefined ? { approvedRevisionNumber: phase.approvedRevisionNumber } : {}),
+            ...(phase.implementedRevisionId ? { implementedRevisionId: phase.implementedRevisionId } : {}),
+            ...(phase.implementedRevisionNumber !== undefined
+                ? { implementedRevisionNumber: phase.implementedRevisionNumber }
+                : {}),
             summaryMarkdown: currentRevision.summaryMarkdown,
             items: (currentRevision.items ?? []).map(toPhaseRevisionItemView),
+            verificationStatus: phase.status === 'implemented' ? 'pending' : 'not_applicable',
+            verifications: [],
+            canStartVerification: false,
+            canStartReplan: false,
             createdAt: phase.createdAt,
             updatedAt: phase.updatedAt,
             ...(phase.approvedAt ? { approvedAt: phase.approvedAt } : {}),

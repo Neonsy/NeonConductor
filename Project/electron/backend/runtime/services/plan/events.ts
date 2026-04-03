@@ -488,6 +488,78 @@ export async function appendPlanPhaseCancelledEvent(input: {
     );
 }
 
+export async function appendPlanPhaseVerificationRecordedEvent(input: {
+    profileId: string;
+    planId: EntityId<'plan'>;
+    phaseId: EntityId<'pph'>;
+    phaseRevisionId: EntityId<'pprv'>;
+    phaseOutlineId: string;
+    phaseSequence: number;
+    phaseTitle: string;
+    phaseRevisionNumber: number;
+    verificationId: EntityId<'ppv'>;
+    outcome: 'passed' | 'failed';
+    discrepancyCount: number;
+    variantId?: EntityId<'pvar'> | undefined;
+}): Promise<void> {
+    await runtimeEventLogService.append(
+        runtimeStatusEvent({
+            entityType: 'plan',
+            domain: 'plan',
+            entityId: input.planId,
+            eventType: 'plan.phase.verification.recorded',
+            payload: {
+                planId: input.planId,
+                profileId: input.profileId,
+                phaseId: input.phaseId,
+                phaseRevisionId: input.phaseRevisionId,
+                phaseOutlineId: input.phaseOutlineId,
+                phaseSequence: input.phaseSequence,
+                phaseTitle: input.phaseTitle,
+                phaseRevisionNumber: input.phaseRevisionNumber,
+                verificationId: input.verificationId,
+                outcome: input.outcome,
+                discrepancyCount: input.discrepancyCount,
+                ...(input.variantId ? { variantId: input.variantId } : {}),
+            },
+        })
+    );
+}
+
+export async function appendPlanPhaseReplanStartedEvent(input: {
+    profileId: string;
+    planId: EntityId<'plan'>;
+    phaseId: EntityId<'pph'>;
+    phaseRevisionId: EntityId<'pprv'>;
+    phaseOutlineId: string;
+    phaseSequence: number;
+    phaseTitle: string;
+    phaseRevisionNumber: number;
+    sourceVerificationId: EntityId<'ppv'>;
+    variantId?: EntityId<'pvar'> | undefined;
+}): Promise<void> {
+    await runtimeEventLogService.append(
+        runtimeStatusEvent({
+            entityType: 'plan',
+            domain: 'plan',
+            entityId: input.planId,
+            eventType: 'plan.phase.replan.started',
+            payload: {
+                planId: input.planId,
+                profileId: input.profileId,
+                phaseId: input.phaseId,
+                phaseRevisionId: input.phaseRevisionId,
+                phaseOutlineId: input.phaseOutlineId,
+                phaseSequence: input.phaseSequence,
+                phaseTitle: input.phaseTitle,
+                phaseRevisionNumber: input.phaseRevisionNumber,
+                sourceVerificationId: input.sourceVerificationId,
+                ...(input.variantId ? { variantId: input.variantId } : {}),
+            },
+        })
+    );
+}
+
 export async function appendPlanImplementationStartedEvent(
     input:
         | {

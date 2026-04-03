@@ -924,6 +924,7 @@ CREATE TABLE plan_phases (
     status TEXT NOT NULL CHECK (status IN ('not_started', 'draft', 'approved', 'implementing', 'implemented', 'cancelled')),
     current_revision_id TEXT NOT NULL,
     approved_revision_id TEXT NULL,
+    implemented_revision_id TEXT NULL,
     implementation_run_id TEXT NULL REFERENCES runs(id) ON DELETE SET NULL,
     orchestrator_run_id TEXT NULL REFERENCES orchestrator_runs(id) ON DELETE SET NULL,
     created_at TEXT NOT NULL,
@@ -942,7 +943,8 @@ CREATE TABLE plan_phase_revisions (
     plan_phase_id TEXT NOT NULL,
     revision_number INTEGER NOT NULL CHECK (revision_number > 0),
     summary_markdown TEXT NOT NULL,
-    created_by_kind TEXT NOT NULL CHECK (created_by_kind IN ('expand', 'revise')),
+    created_by_kind TEXT NOT NULL CHECK (created_by_kind IN ('expand', 'revise', 'replan')),
+    source_verification_id TEXT NULL,
     created_at TEXT NOT NULL,
     previous_revision_id TEXT NULL,
     superseded_at TEXT NULL,
@@ -958,6 +960,26 @@ CREATE TABLE plan_phase_revision_items (
     created_at TEXT NOT NULL,
     FOREIGN KEY (plan_phase_revision_id) REFERENCES plan_phase_revisions(id) ON DELETE CASCADE,
     UNIQUE (plan_phase_revision_id, sequence)
+);
+
+CREATE TABLE plan_phase_verifications (
+    id TEXT PRIMARY KEY,
+    plan_phase_id TEXT NOT NULL REFERENCES plan_phases(id) ON DELETE CASCADE,
+    plan_phase_revision_id TEXT NOT NULL REFERENCES plan_phase_revisions(id) ON DELETE CASCADE,
+    outcome TEXT NOT NULL CHECK (outcome IN ('passed', 'failed')),
+    summary_markdown TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    UNIQUE (plan_phase_revision_id)
+);
+
+CREATE TABLE plan_phase_verification_discrepancies (
+    id TEXT PRIMARY KEY,
+    verification_id TEXT NOT NULL REFERENCES plan_phase_verifications(id) ON DELETE CASCADE,
+    sequence INTEGER NOT NULL CHECK (sequence > 0),
+    title TEXT NOT NULL,
+    details_markdown TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    UNIQUE (verification_id, sequence)
 );
 
 CREATE TABLE plan_revision_advanced_snapshots (

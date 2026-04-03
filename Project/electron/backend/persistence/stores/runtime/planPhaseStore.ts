@@ -1,11 +1,13 @@
 import { getPersistence } from '@/app/backend/persistence/db';
 import type { DatabaseSchema } from '@/app/backend/persistence/schema';
+import { planPhaseVerificationStore } from '@/app/backend/persistence/stores/runtime/planPhaseVerificationStore';
 import { parseEntityId, parseEnumValue } from '@/app/backend/persistence/stores/shared/rowParsers';
 import { nowIso } from '@/app/backend/persistence/stores/shared/utils';
 import type {
     PlanPhaseRecord,
     PlanPhaseRevisionItemRecord,
     PlanPhaseRevisionRecord,
+    PlanPhaseVerificationRecord,
 } from '@/app/backend/persistence/types';
 import type {
     PlanAdvancedSnapshotView,
@@ -40,6 +42,7 @@ type PlanPhaseRow = {
     status: string;
     current_revision_id: string;
     approved_revision_id: string | null;
+    implemented_revision_id: string | null;
     implementation_run_id: string | null;
     orchestrator_run_id: string | null;
     created_at: string;
@@ -54,6 +57,7 @@ type PlanPhaseRevisionRow = {
     revision_number: number;
     summary_markdown: string;
     created_by_kind: string;
+    source_verification_id: string | null;
     created_at: string;
     previous_revision_id: string | null;
     superseded_at: string | null;
@@ -107,12 +111,14 @@ function mapPhaseRevisionItem(row: PlanPhaseRevisionItemRow): PlanPhaseRevisionI
 }
 
 function mapPhaseRevision(row: PlanPhaseRevisionRow, items: PlanPhaseRevisionItemRecord[]): PlanPhaseRevisionRecord {
+    const createdByKind =
+        row.created_by_kind === 'expand' ? 'expand' : row.created_by_kind === 'replan' ? 'replan' : 'revise';
     return {
         id: parseEntityId(row.id, 'plan_phase_revisions.id', 'pprv'),
         planPhaseId: parseEntityId(row.plan_phase_id, 'plan_phase_revisions.plan_phase_id', 'pph'),
         revisionNumber: row.revision_number,
         summaryMarkdown: row.summary_markdown,
-        createdByKind: row.created_by_kind === 'expand' ? 'expand' : 'revise',
+        createdByKind,
         createdAt: row.created_at,
         ...(row.previous_revision_id
             ? {
@@ -120,6 +126,15 @@ function mapPhaseRevision(row: PlanPhaseRevisionRow, items: PlanPhaseRevisionIte
                       row.previous_revision_id,
                       'plan_phase_revisions.previous_revision_id',
                       'pprv'
+                  ),
+              }
+            : {}),
+        ...(row.source_verification_id
+            ? {
+                  sourceVerificationId: parseEntityId(
+                      row.source_verification_id,
+                      'plan_phase_revisions.source_verification_id',
+                      'ppv'
                   ),
               }
             : {}),
@@ -258,6 +273,15 @@ export class PlanPhaseStore {
                 );
             }
 
+            const implementedRevision = row.implemented_revision_id
+                ? phaseRevisions.find((revision) => revision.id === row.implemented_revision_id)
+                : undefined;
+            if (row.implemented_revision_id && !implementedRevision) {
+                throw new DataCorruptionError(
+                    `Missing implemented phase revision "${row.implemented_revision_id}" for phase "${row.id}".`
+                );
+            }
+
             return {
                 id: parseEntityId(row.id, 'plan_phases.id', 'pph'),
                 planId: parseEntityId(row.plan_id, 'plan_phases.plan_id', 'plan'),
@@ -275,6 +299,16 @@ export class PlanPhaseStore {
                     ? {
                           approvedRevisionId: approvedRevision.id,
                           approvedRevisionNumber: approvedRevision.revisionNumber,
+                      }
+                    : {}),
+                ...(implementedRevision
+                    ? {
+                          implementedRevisionId: parseEntityId(
+                              implementedRevision.id,
+                              'plan_phases.implemented_revision_id',
+                              'pprv'
+                          ),
+                          implementedRevisionNumber: implementedRevision.revisionNumber,
                       }
                     : {}),
                 summaryMarkdown: currentRevision.summaryMarkdown,
@@ -459,6 +493,16 @@ export class PlanPhaseStore {
         }
 
         const phases = await this.listForPlanRevision(input);
+        const { phaseVerifications } = await planPhaseVerificationStore.listForPlanRevision(input);
+        const verificationsByPhaseId = new Map<string, PlanPhaseVerificationRecord[]>();
+        for (const verification of phaseVerifications) {
+            const verifications = verificationsByPhaseId.get(verification.planPhaseId) ?? [];
+            verifications.push(verification);
+            verificationsByPhaseId.set(verification.planPhaseId, verifications);
+        }
+        for (const verifications of verificationsByPhaseId.values()) {
+            verifications.sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+        }
         if (phases.some((phase) => phase.status === 'cancelled')) {
             return null;
         }
@@ -472,11 +516,28 @@ export class PlanPhaseStore {
             if (!phase) {
                 const allPriorImplemented = outlines
                     .filter((priorOutline) => priorOutline.sequence < outline.sequence)
-                    .every((priorOutline) => phaseBySequence.get(priorOutline.sequence)?.status === 'implemented');
+                    .every((priorOutline) => {
+                        const priorPhase = phaseBySequence.get(priorOutline.sequence);
+                        if (!priorPhase || priorPhase.status !== 'implemented') {
+                            return false;
+                        }
+
+                        const latestVerification = verificationsByPhaseId
+                            .get(priorPhase.id)
+                            ?.find((verification) => verification.planPhaseRevisionId === priorPhase.implementedRevisionId);
+                        return latestVerification?.outcome === 'passed';
+                    });
                 return allPriorImplemented ? outline.id : null;
             }
 
             if (phase.status !== 'implemented') {
+                return null;
+            }
+
+            const latestVerification = verificationsByPhaseId
+                .get(phase.id)
+                ?.find((verification) => verification.planPhaseRevisionId === phase.implementedRevisionId);
+            if (latestVerification?.outcome !== 'passed') {
                 return null;
             }
         }
@@ -559,6 +620,7 @@ export class PlanPhaseStore {
                     status: 'draft',
                     current_revision_id: phaseRevisionId,
                     approved_revision_id: null,
+                    implemented_revision_id: null,
                     implementation_run_id: null,
                     orchestrator_run_id: null,
                     created_at: now,
@@ -576,6 +638,7 @@ export class PlanPhaseStore {
                     revision_number: 1,
                     summary_markdown: input.summaryMarkdown,
                     created_by_kind: 'expand',
+                    source_verification_id: null,
                     created_at: now,
                     previous_revision_id: null,
                     superseded_at: null,
@@ -664,6 +727,7 @@ export class PlanPhaseStore {
                     revision_number: nextRevisionNumber,
                     summary_markdown: input.summaryMarkdown,
                     created_by_kind: 'revise',
+                    source_verification_id: null,
                     created_at: now,
                     previous_revision_id: currentRevision.id,
                     superseded_at: null,
@@ -837,8 +901,123 @@ export class PlanPhaseStore {
                 .updateTable('plan_phases')
                 .set({
                     status: 'implemented',
+                    implemented_revision_id: input.phaseRevisionId,
                     implemented_at: now,
                     updated_at: now,
+                })
+                .where('id', '=', input.planPhaseId)
+                .execute();
+
+            await transaction
+                .updateTable('plan_records')
+                .set({
+                    updated_at: now,
+                })
+                .where('id', '=', input.planId)
+                .execute();
+
+            return input.planPhaseId;
+        });
+
+        if (!phaseId) {
+            return null;
+        }
+
+        return this.getById(phaseId);
+    }
+
+    async startPhaseReplan(input: {
+        planId: string;
+        planPhaseId: string;
+        sourcePhaseRevisionId: string;
+        sourceVerificationId: string;
+        summaryMarkdown: string;
+        itemDescriptions: string[];
+        timestamp?: string;
+    }): Promise<PlanPhaseRecord | null> {
+        const db = this.getDb();
+        const now = input.timestamp ?? nowIso();
+
+        const phaseId = await db.transaction().execute(async (transaction) => {
+            const phase = await transaction.selectFrom('plan_phases').selectAll().where('id', '=', input.planPhaseId).executeTakeFirst();
+            if (!phase || phase.plan_id !== input.planId) {
+                return null;
+            }
+            if (phase.status !== 'implemented' || phase.implemented_revision_id !== input.sourcePhaseRevisionId) {
+                return null;
+            }
+
+            const currentRevision = await transaction
+                .selectFrom('plan_phase_revisions')
+                .selectAll()
+                .where('id', '=', input.sourcePhaseRevisionId)
+                .executeTakeFirst();
+            if (!currentRevision || currentRevision.plan_phase_id !== input.planPhaseId) {
+                return null;
+            }
+
+            const verification = await transaction
+                .selectFrom('plan_phase_verifications')
+                .selectAll()
+                .where('id', '=', input.sourceVerificationId)
+                .where('plan_phase_id', '=', input.planPhaseId)
+                .where('plan_phase_revision_id', '=', input.sourcePhaseRevisionId)
+                .where('outcome', '=', 'failed')
+                .executeTakeFirst();
+            if (!verification) {
+                return null;
+            }
+
+            const nextRevisionId = createEntityId('pprv');
+            const nextRevisionNumber = currentRevision.revision_number + 1;
+
+            await transaction
+                .updateTable('plan_phase_revisions')
+                .set({
+                    superseded_at: now,
+                })
+                .where('id', '=', currentRevision.id)
+                .where('superseded_at', 'is', null)
+                .execute();
+
+            await transaction
+                .insertInto('plan_phase_revisions')
+                .values({
+                    id: nextRevisionId,
+                    plan_phase_id: input.planPhaseId,
+                    revision_number: nextRevisionNumber,
+                    summary_markdown: input.summaryMarkdown,
+                    created_by_kind: 'replan',
+                    source_verification_id: input.sourceVerificationId,
+                    created_at: now,
+                    previous_revision_id: currentRevision.id,
+                    superseded_at: null,
+                })
+                .execute();
+
+            if (input.itemDescriptions.length > 0) {
+                await transaction
+                    .insertInto('plan_phase_revision_items')
+                    .values(
+                        input.itemDescriptions.map((description, index) => ({
+                            id: createEntityId('ppi'),
+                            plan_phase_revision_id: nextRevisionId,
+                            sequence: index + 1,
+                            description,
+                            created_at: now,
+                        }))
+                    )
+                    .execute();
+            }
+
+            await transaction
+                .updateTable('plan_phases')
+                .set({
+                    current_revision_id: nextRevisionId,
+                    approved_revision_id: null,
+                    status: 'draft',
+                    updated_at: now,
+                    approved_at: null,
                 })
                 .where('id', '=', input.planPhaseId)
                 .execute();

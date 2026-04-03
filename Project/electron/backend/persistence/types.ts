@@ -13,6 +13,7 @@ import type {
     PlanHistoryEntry,
     PlanRecoveryBanner,
     PlanPhaseRevisionItemView,
+    PlanPhaseVerificationOutcome,
     PlanPhaseStatus,
     PlanVariantView,
     MemoryCausalLinkRecord as RuntimeMemoryCausalLinkRecord,
@@ -805,9 +806,10 @@ export interface PlanPhaseRevisionRecord {
     planPhaseId: string;
     revisionNumber: number;
     summaryMarkdown: string;
-    createdByKind: 'expand' | 'revise';
+    createdByKind: 'expand' | 'revise' | 'replan';
     createdAt: string;
     previousRevisionId?: string;
+    sourceVerificationId?: string;
     supersededAt?: string;
     items?: PlanPhaseRevisionItemRecord[];
 }
@@ -827,6 +829,8 @@ export interface PlanPhaseRecord {
     currentRevisionNumber: number;
     approvedRevisionId?: string;
     approvedRevisionNumber?: number;
+    implementedRevisionId?: string;
+    implementedRevisionNumber?: number;
     summaryMarkdown: string;
     items: PlanPhaseRevisionItemView[];
     createdAt: string;
@@ -835,6 +839,24 @@ export interface PlanPhaseRecord {
     implementedAt?: string;
     implementationRunId?: EntityId<'run'>;
     orchestratorRunId?: EntityId<'orch'>;
+}
+
+export interface PlanPhaseVerificationDiscrepancyRecord {
+    id: string;
+    verificationId: string;
+    sequence: number;
+    title: string;
+    detailsMarkdown: string;
+    createdAt: string;
+}
+
+export interface PlanPhaseVerificationRecord {
+    id: string;
+    planPhaseId: string;
+    planPhaseRevisionId: string;
+    outcome: PlanPhaseVerificationOutcome;
+    summaryMarkdown: string;
+    createdAt: string;
 }
 
 export interface PlanResearchBatchRecord {
@@ -925,6 +947,8 @@ export interface PlanViewProjection {
     phases: PlanPhaseRecord[];
     phaseRevisions: PlanPhaseRevisionRecord[];
     phaseRevisionItems: PlanPhaseRevisionItemRecord[];
+    phaseVerifications: PlanPhaseVerificationRecord[];
+    phaseVerificationDiscrepancies: PlanPhaseVerificationDiscrepancyRecord[];
     researchBatches: PlanResearchBatchRecord[];
     researchWorkers: PlanResearchWorkerRecord[];
     evidenceAttachments: PlanEvidenceAttachmentRecord[];

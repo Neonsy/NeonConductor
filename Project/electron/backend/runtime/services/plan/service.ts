@@ -19,8 +19,10 @@ import type {
     PlanRevisePhaseInput,
     PlanResolveFollowUpInput,
     PlanResumeFromRevisionInput,
+    PlanStartPhaseReplanInput,
     PlanStartResearchBatchInput,
     PlanStartInput,
+    PlanVerifyPhaseInput,
 } from '@/app/backend/runtime/contracts';
 import { approvePlan } from '@/app/backend/runtime/services/plan/approval';
 import { generatePlanDraft } from '@/app/backend/runtime/services/plan/draftGeneration';
@@ -35,6 +37,10 @@ import {
     implementPhase as implementApprovedPlanPhase,
     revisePhase as revisePlanPhase,
 } from '@/app/backend/runtime/services/plan/phaseService';
+import {
+    startPhaseReplan as startPlanPhaseReplan,
+    verifyPhase as verifyPlanPhase,
+} from '@/app/backend/runtime/services/plan/phaseVerificationService';
 import {
     activatePlanVariant,
     createPlanVariant,
@@ -234,6 +240,48 @@ export class PlanService {
                 profileId: input.profileId,
                 planId: input.planId,
                 phaseId: input.phaseId,
+                code: result.error.code,
+                error: result.error.message,
+            });
+            return result;
+        }
+
+        return okPlan(result.value);
+    }
+
+    async verifyPhase(
+        input: PlanVerifyPhaseInput
+    ): Promise<Result<{ found: false } | { found: true; plan: PlanRecordView }, PlanServiceError>> {
+        const result = await verifyPlanPhase(input);
+        if (result.isErr()) {
+            appLog.warn({
+                tag: 'plan',
+                message: 'Rejected plan.verifyPhase request.',
+                profileId: input.profileId,
+                planId: input.planId,
+                phaseId: input.phaseId,
+                phaseRevisionId: input.phaseRevisionId,
+                code: result.error.code,
+                error: result.error.message,
+            });
+            return result;
+        }
+
+        return okPlan(result.value);
+    }
+
+    async startPhaseReplan(
+        input: PlanStartPhaseReplanInput
+    ): Promise<Result<{ found: false } | { found: true; plan: PlanRecordView }, PlanServiceError>> {
+        const result = await startPlanPhaseReplan(input);
+        if (result.isErr()) {
+            appLog.warn({
+                tag: 'plan',
+                message: 'Rejected plan.startPhaseReplan request.',
+                profileId: input.profileId,
+                planId: input.planId,
+                phaseId: input.phaseId,
+                verificationId: input.verificationId,
                 code: result.error.code,
                 error: result.error.message,
             });

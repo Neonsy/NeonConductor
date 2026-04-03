@@ -300,6 +300,221 @@ describe('resolveModeExecutionDraftState', () => {
         );
     });
 
+    it('requires a passed verification before the next roadmap phase can expand', () => {
+        const failedPhaseState = resolveModeExecutionPlanPhaseState({
+            activePlan: {
+                id: 'plan_1',
+                status: 'approved',
+                planningDepth: 'advanced',
+                summaryMarkdown: 'Approved summary',
+                sourcePrompt: 'Ship the phase detail lane.',
+                currentRevisionId: 'prev_2',
+                currentRevisionNumber: 2,
+                approvedRevisionId: 'prev_1',
+                approvedRevisionNumber: 1,
+                advancedSnapshot: {
+                    evidenceMarkdown: '### Evidence\nReady for phase expansion.',
+                    observationsMarkdown: '- The roadmap is approved.',
+                    rootCauseMarkdown: 'The plan has settled on a stable approach.',
+                    phases: [
+                        {
+                            id: 'phase_1',
+                            sequence: 1,
+                            title: 'Frame the plan',
+                            goalMarkdown: 'Set the direction.',
+                            exitCriteriaMarkdown: 'The plan is ready to detail.',
+                        },
+                        {
+                            id: 'phase_2',
+                            sequence: 2,
+                            title: 'Detail the work',
+                            goalMarkdown: 'Expand the next phase.',
+                            exitCriteriaMarkdown: 'The next phase is ready for execution.',
+                        },
+                    ],
+                },
+                phases: [
+                    {
+                        id: 'phase_record_1',
+                        planId: 'plan_1',
+                        planRevisionId: 'prev_1',
+                        variantId: 'pvar_main',
+                        phaseOutlineId: 'phase_1',
+                        phaseSequence: 1,
+                        title: 'Frame the plan',
+                        goalMarkdown: 'Set the direction.',
+                        exitCriteriaMarkdown: 'The plan is ready to detail.',
+                        status: 'implemented',
+                        currentRevisionId: 'phase_rev_1',
+                        currentRevisionNumber: 1,
+                        implementedRevisionId: 'phase_rev_1',
+                        implementedRevisionNumber: 1,
+                        verificationStatus: 'failed',
+                        canStartVerification: false,
+                        canStartReplan: true,
+                        latestVerification: {
+                            id: 'phase_verification_1',
+                            planPhaseId: 'phase_record_1',
+                            planPhaseRevisionId: 'phase_rev_1',
+                            outcome: 'failed',
+                            summaryMarkdown: 'The implementation drifted from the approved exit criteria.',
+                            discrepancies: [
+                                {
+                                    id: 'phase_verification_discrepancy_1',
+                                    sequence: 1,
+                                    title: 'Exit criteria mismatch',
+                                    detailsMarkdown: 'The implemented work did not satisfy the verified outcome.',
+                                    createdAt: '2026-04-03T10:02:00.000Z',
+                                },
+                            ],
+                            createdAt: '2026-04-03T10:02:00.000Z',
+                        },
+                        verifications: [
+                            {
+                                id: 'phase_verification_1',
+                                planPhaseId: 'phase_record_1',
+                                planPhaseRevisionId: 'phase_rev_1',
+                                outcome: 'failed',
+                                summaryMarkdown: 'The implementation drifted from the approved exit criteria.',
+                                discrepancies: [
+                                    {
+                                        id: 'phase_verification_discrepancy_1',
+                                        sequence: 1,
+                                        title: 'Exit criteria mismatch',
+                                        detailsMarkdown: 'The implemented work did not satisfy the verified outcome.',
+                                        createdAt: '2026-04-03T10:02:00.000Z',
+                                    },
+                                ],
+                                createdAt: '2026-04-03T10:02:00.000Z',
+                            },
+                        ],
+                        summaryMarkdown: 'Detailed phase summary',
+                        items: [
+                            {
+                                id: 'phase_item_1',
+                                sequence: 1,
+                                description: 'Detailed phase item',
+                                status: 'completed',
+                            },
+                        ],
+                        createdAt: '2026-04-02T10:00:00.000Z',
+                        updatedAt: '2026-04-03T10:05:00.000Z',
+                        implementedAt: '2026-04-03T10:00:00.000Z',
+                    },
+                ],
+            } as never,
+        });
+
+        expect(failedPhaseState).toEqual(
+            expect.objectContaining({
+                canExpandNextPhase: false,
+                nextExpandablePhaseOutlineId: undefined,
+                currentPhase: expect.objectContaining({
+                    verificationStatus: 'failed',
+                    canStartReplan: true,
+                }),
+            })
+        );
+
+        const passedPhaseState = resolveModeExecutionPlanPhaseState({
+            activePlan: {
+                id: 'plan_1',
+                status: 'approved',
+                planningDepth: 'advanced',
+                summaryMarkdown: 'Approved summary',
+                sourcePrompt: 'Ship the phase detail lane.',
+                currentRevisionId: 'prev_2',
+                currentRevisionNumber: 2,
+                approvedRevisionId: 'prev_1',
+                approvedRevisionNumber: 1,
+                advancedSnapshot: {
+                    evidenceMarkdown: '### Evidence\nReady for phase expansion.',
+                    observationsMarkdown: '- The roadmap is approved.',
+                    rootCauseMarkdown: 'The plan has settled on a stable approach.',
+                    phases: [
+                        {
+                            id: 'phase_1',
+                            sequence: 1,
+                            title: 'Frame the plan',
+                            goalMarkdown: 'Set the direction.',
+                            exitCriteriaMarkdown: 'The plan is ready to detail.',
+                        },
+                        {
+                            id: 'phase_2',
+                            sequence: 2,
+                            title: 'Detail the work',
+                            goalMarkdown: 'Expand the next phase.',
+                            exitCriteriaMarkdown: 'The next phase is ready for execution.',
+                        },
+                    ],
+                },
+                phases: [
+                    {
+                        id: 'phase_record_1',
+                        planId: 'plan_1',
+                        planRevisionId: 'prev_1',
+                        variantId: 'pvar_main',
+                        phaseOutlineId: 'phase_1',
+                        phaseSequence: 1,
+                        title: 'Frame the plan',
+                        goalMarkdown: 'Set the direction.',
+                        exitCriteriaMarkdown: 'The plan is ready to detail.',
+                        status: 'implemented',
+                        currentRevisionId: 'phase_rev_1',
+                        currentRevisionNumber: 1,
+                        implementedRevisionId: 'phase_rev_1',
+                        implementedRevisionNumber: 1,
+                        verificationStatus: 'passed',
+                        canStartVerification: false,
+                        canStartReplan: false,
+                        latestVerification: {
+                            id: 'phase_verification_1',
+                            planPhaseId: 'phase_record_1',
+                            planPhaseRevisionId: 'phase_rev_1',
+                            outcome: 'passed',
+                            summaryMarkdown: 'The implementation matched the approved exit criteria.',
+                            discrepancies: [],
+                            createdAt: '2026-04-03T10:02:00.000Z',
+                        },
+                        verifications: [
+                            {
+                                id: 'phase_verification_1',
+                                planPhaseId: 'phase_record_1',
+                                planPhaseRevisionId: 'phase_rev_1',
+                                outcome: 'passed',
+                                summaryMarkdown: 'The implementation matched the approved exit criteria.',
+                                discrepancies: [],
+                                createdAt: '2026-04-03T10:02:00.000Z',
+                            },
+                        ],
+                        summaryMarkdown: 'Detailed phase summary',
+                        items: [
+                            {
+                                id: 'phase_item_1',
+                                sequence: 1,
+                                description: 'Detailed phase item',
+                                status: 'completed',
+                            },
+                        ],
+                        createdAt: '2026-04-02T10:00:00.000Z',
+                        updatedAt: '2026-04-03T10:05:00.000Z',
+                        implementedAt: '2026-04-03T10:00:00.000Z',
+                    },
+                ],
+            } as never,
+        });
+
+        expect(passedPhaseState).toEqual(
+            expect.objectContaining({
+                canExpandNextPhase: true,
+                nextExpandablePhaseOutlineId: 'phase_2',
+                currentPhase: expect.objectContaining({
+                    verificationStatus: 'passed',
+                }),
+            })
+        );
+    });
+
     it('renders orchestrator strategy and delegated worker lane status', () => {
         const html = renderToStaticMarkup(
             createElement(ModeExecutionPanel, {
@@ -552,6 +767,125 @@ describe('resolveModeExecutionDraftState', () => {
         expect(html).toContain('Cancel');
     });
 
+    it('renders verification history and replan affordances for implemented advanced phases', () => {
+        const html = renderToStaticMarkup(
+            createElement(ModeExecutionPanel, {
+                topLevelTab: 'agent',
+                showPlanSurface: true,
+                showOrchestratorSurface: false,
+                planningDepthSelection: 'advanced',
+                isLoadingPlan: false,
+                actionController: createActionController(),
+                selectedExecutionStrategy: 'delegate',
+                canConfigureExecutionStrategy: false,
+                onPlanningDepthSelectionChange: vi.fn(),
+                onExecutionStrategyChange: vi.fn(),
+                activePlan: {
+                    id: 'plan_1',
+                    status: 'approved',
+                    planningDepth: 'advanced',
+                    summaryMarkdown: 'Approved summary',
+                    sourcePrompt: 'Ship the verification lane.',
+                    advancedSnapshot: {
+                        evidenceMarkdown: '### Evidence\nReady for verification.',
+                        observationsMarkdown: '- Verification is manual.',
+                        rootCauseMarkdown: 'The final check still needs to happen.',
+                        phases: [
+                            {
+                                id: 'phase_1',
+                                sequence: 1,
+                                title: 'Frame the plan',
+                                goalMarkdown: 'Set the direction.',
+                                exitCriteriaMarkdown: 'The plan is ready to detail.',
+                            },
+                        ],
+                    },
+                    currentRevisionId: 'prev_2',
+                    currentRevisionNumber: 2,
+                    approvedRevisionId: 'prev_1',
+                    approvedRevisionNumber: 1,
+                    questions: [],
+                    items: [],
+                    phases: [
+                        {
+                            id: 'phase_record_1',
+                            planId: 'plan_1',
+                            planRevisionId: 'prev_1',
+                            variantId: 'pvar_main',
+                            phaseOutlineId: 'phase_1',
+                            phaseSequence: 1,
+                            title: 'Frame the plan',
+                            goalMarkdown: 'Set the direction.',
+                            exitCriteriaMarkdown: 'The plan is ready to detail.',
+                            status: 'implemented',
+                            currentRevisionId: 'phase_rev_1',
+                            currentRevisionNumber: 1,
+                            implementedRevisionId: 'phase_rev_1',
+                            implementedRevisionNumber: 1,
+                            verificationStatus: 'failed',
+                            canStartVerification: false,
+                            canStartReplan: true,
+                            latestVerification: {
+                                id: 'phase_verification_1',
+                                planPhaseId: 'phase_record_1',
+                                planPhaseRevisionId: 'phase_rev_1',
+                                outcome: 'failed',
+                                summaryMarkdown: 'The implementation missed the exit criteria.',
+                                discrepancies: [
+                                    {
+                                        id: 'phase_verification_discrepancy_1',
+                                        sequence: 1,
+                                        title: 'Scope mismatch',
+                                        detailsMarkdown: 'The detail lane did not match the approved roadmap.',
+                                        createdAt: '2026-04-03T10:02:00.000Z',
+                                    },
+                                ],
+                                createdAt: '2026-04-03T10:02:00.000Z',
+                            },
+                            verifications: [
+                                {
+                                    id: 'phase_verification_1',
+                                    planPhaseId: 'phase_record_1',
+                                    planPhaseRevisionId: 'phase_rev_1',
+                                    outcome: 'failed',
+                                    summaryMarkdown: 'The implementation missed the exit criteria.',
+                                    discrepancies: [
+                                        {
+                                            id: 'phase_verification_discrepancy_1',
+                                            sequence: 1,
+                                            title: 'Scope mismatch',
+                                            detailsMarkdown: 'The detail lane did not match the approved roadmap.',
+                                            createdAt: '2026-04-03T10:02:00.000Z',
+                                        },
+                                    ],
+                                    createdAt: '2026-04-03T10:02:00.000Z',
+                                },
+                            ],
+                            summaryMarkdown: 'Detailed phase summary',
+                            items: [
+                                {
+                                    id: 'phase_item_1',
+                                    sequence: 1,
+                                    description: 'Detailed phase item',
+                                    status: 'completed',
+                                },
+                            ],
+                            createdAt: '2026-04-02T10:00:00.000Z',
+                            updatedAt: '2026-04-03T10:05:00.000Z',
+                            implementedAt: '2026-04-03T10:00:00.000Z',
+                        },
+                    ],
+                } as never,
+            })
+        );
+
+        expect(html).toContain('Verification');
+        expect(html).toContain('Verification failed');
+        expect(html).toContain('Start Phase Replan');
+        expect(html).toContain('Verification history');
+        expect(html).toContain('Scope mismatch');
+    });
+
     it('offers an expand-next-phase affordance when the advanced roadmap has no open phase detail yet', () => {
         const html = renderToStaticMarkup(
             createElement(ModeExecutionPanel, {
@@ -658,6 +992,7 @@ describe('resolveModeExecutionDraftState', () => {
                     summaryDraft: 'Draft phase summary',
                     itemsDraft: 'Draft step 1\nDraft step 2',
                 },
+                phaseVerificationDraftState: undefined,
                 phasePanelMode: 'edit',
                 isPlanMutating: false,
                 onEnterPhaseEditMode: vi.fn(),

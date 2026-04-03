@@ -18,6 +18,7 @@ import type {
     ModeExecutionPlanArtifactState,
     ModeExecutionPhaseDraftState,
     ModeExecutionPhasePanelMode,
+    ModeExecutionPhaseVerificationDraftState,
     ModeExecutionPlanPhaseState,
     ModeExecutionPlanResearchArtifactState,
     ModeExecutionPlanView,
@@ -524,6 +525,7 @@ interface PlanArtifactViewProps {
     advancedSnapshot?: ModeExecutionAdvancedPlanningSnapshotDraft;
     phaseState: ModeExecutionPlanPhaseState | undefined;
     phaseDraftState: ModeExecutionPhaseDraftState | undefined;
+    phaseVerificationDraftState: ModeExecutionPhaseVerificationDraftState | undefined;
     phasePanelMode: ModeExecutionPhasePanelMode | undefined;
     isPlanMutating: boolean;
     canConfigureExecutionStrategy: boolean;
@@ -542,13 +544,23 @@ interface PlanArtifactViewProps {
     onInsertEvidenceAttachmentToDraft: (attachmentId: EntityId<'pea'>) => void;
     onExpandNextPhase?: () => void;
     onEnterPhaseEditMode?: () => void;
+    onEnterPhaseVerificationMode?: () => void;
     onPhaseSummaryDraftChange?: (next: string) => void;
     onPhaseItemsDraftChange?: (next: string) => void;
     onSavePhaseDraft?: () => void;
     onDiscardPhaseEdits?: () => void;
+    onVerificationOutcomeChange?: (next: ModeExecutionPhaseVerificationDraftState['outcome']) => void;
+    onVerificationSummaryDraftChange?: (next: string) => void;
+    onVerificationDiscrepancyTitleChange?: (discrepancyId: string, next: string) => void;
+    onVerificationDiscrepancyDetailsChange?: (discrepancyId: string, next: string) => void;
+    onAddVerificationDiscrepancy?: () => void;
+    onRemoveVerificationDiscrepancy?: (discrepancyId: string) => void;
+    onSavePhaseVerification?: () => void;
+    onDiscardPhaseVerificationEdits?: () => void;
     onApprovePhase?: () => void;
     onImplementPhase?: () => void;
     onCancelPhase?: () => void;
+    onStartPhaseReplan?: () => void;
     onGenerateDraft: () => void;
     onEnterEditMode: () => void;
     onCancelPlan: () => void;
@@ -570,6 +582,7 @@ export function PlanArtifactView({
     advancedSnapshot,
     phaseState,
     phaseDraftState,
+    phaseVerificationDraftState,
     phasePanelMode,
     isPlanMutating,
     canConfigureExecutionStrategy,
@@ -588,13 +601,23 @@ export function PlanArtifactView({
     onInsertEvidenceAttachmentToDraft,
     onExpandNextPhase,
     onEnterPhaseEditMode,
+    onEnterPhaseVerificationMode,
     onPhaseSummaryDraftChange,
     onPhaseItemsDraftChange,
     onSavePhaseDraft,
     onDiscardPhaseEdits,
+    onVerificationOutcomeChange,
+    onVerificationSummaryDraftChange,
+    onVerificationDiscrepancyTitleChange,
+    onVerificationDiscrepancyDetailsChange,
+    onAddVerificationDiscrepancy,
+    onRemoveVerificationDiscrepancy,
+    onSavePhaseVerification,
+    onDiscardPhaseVerificationEdits,
     onApprovePhase,
     onImplementPhase,
     onCancelPhase,
+    onStartPhaseReplan,
     onGenerateDraft,
     onEnterEditMode,
     onCancelPlan,
@@ -643,17 +666,28 @@ export function PlanArtifactView({
                     <PlanPhaseDetailSection
                         phaseState={phaseState}
                         phaseDraftState={phaseDraftState}
+                        phaseVerificationDraftState={phaseVerificationDraftState}
                         phasePanelMode={phasePanelMode}
                         isPlanMutating={isPlanMutating}
                         {...(onExpandNextPhase ? { onExpandNextPhase } : {})}
                         {...(onEnterPhaseEditMode ? { onEnterPhaseEditMode } : {})}
+                        {...(onEnterPhaseVerificationMode ? { onEnterPhaseVerificationMode } : {})}
                         {...(onPhaseSummaryDraftChange ? { onPhaseSummaryDraftChange } : {})}
                         {...(onPhaseItemsDraftChange ? { onPhaseItemsDraftChange } : {})}
                         {...(onSavePhaseDraft ? { onSavePhaseDraft } : {})}
                         {...(onDiscardPhaseEdits ? { onDiscardPhaseEdits } : {})}
+                        {...(onVerificationOutcomeChange ? { onVerificationOutcomeChange } : {})}
+                        {...(onVerificationSummaryDraftChange ? { onVerificationSummaryDraftChange } : {})}
+                        {...(onVerificationDiscrepancyTitleChange ? { onVerificationDiscrepancyTitleChange } : {})}
+                        {...(onVerificationDiscrepancyDetailsChange ? { onVerificationDiscrepancyDetailsChange } : {})}
+                        {...(onAddVerificationDiscrepancy ? { onAddVerificationDiscrepancy } : {})}
+                        {...(onRemoveVerificationDiscrepancy ? { onRemoveVerificationDiscrepancy } : {})}
+                        {...(onSavePhaseVerification ? { onSavePhaseVerification } : {})}
+                        {...(onDiscardPhaseVerificationEdits ? { onDiscardPhaseVerificationEdits } : {})}
                         {...(onApprovePhase ? { onApprovePhase } : {})}
                         {...(onImplementPhase ? { onImplementPhase } : {})}
                         {...(onCancelPhase ? { onCancelPhase } : {})}
+                        {...(onStartPhaseReplan ? { onStartPhaseReplan } : {})}
                     />
                     {researchState ? (
                         <>

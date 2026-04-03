@@ -1,6 +1,7 @@
 import { orchestratorExecutionStrategies, topLevelTabs } from '@/app/backend/runtime/contracts/enums';
 import {
     createParser,
+    readBoolean,
     parseRuntimeRunOptions,
     readArray,
     readEntityId,
@@ -32,14 +33,19 @@ import type {
     PlanPhaseRecordView,
     PlanPhaseRevisionItemView,
     PlanPhaseRevisionView,
+    PlanPhaseVerificationDiscrepancyInput,
+    PlanPhaseVerificationDiscrepancyView,
+    PlanPhaseVerificationView,
     PlanRaiseFollowUpInput,
     PlanReviseInput,
     PlanRevisePhaseInput,
     PlanResolveFollowUpInput,
     PlanResumeFromRevisionInput,
+    PlanStartPhaseReplanInput,
     PlanEnterAdvancedPlanningInput,
     PlanStartInput,
     PlanStartResearchBatchInput,
+    PlanVerifyPhaseInput,
 } from '@/app/backend/runtime/contracts/types';
 
 function readPositiveInteger(value: unknown, field: string): number {
@@ -136,6 +142,47 @@ function parsePlanPhaseDraftItemInput(input: unknown, field: string): PlanPhaseD
     };
 }
 
+function parsePlanPhaseVerificationDiscrepancyInput(
+    input: unknown,
+    field: string
+): PlanPhaseVerificationDiscrepancyInput {
+    const source = readObject(input, field);
+    return {
+        title: readString(source.title, `${field}.title`),
+        detailsMarkdown: readString(source.detailsMarkdown, `${field}.detailsMarkdown`),
+    };
+}
+
+function parsePlanPhaseVerificationDiscrepancyView(
+    input: unknown,
+    field: string
+): PlanPhaseVerificationDiscrepancyView {
+    const source = readObject(input, field);
+    return {
+        id: readString(source.id, `${field}.id`),
+        sequence: readPositiveInteger(source.sequence, `${field}.sequence`),
+        title: readString(source.title, `${field}.title`),
+        detailsMarkdown: readString(source.detailsMarkdown, `${field}.detailsMarkdown`),
+        createdAt: readString(source.createdAt, `${field}.createdAt`),
+    };
+}
+
+function parsePlanPhaseVerificationView(input: unknown, field: string): PlanPhaseVerificationView {
+    const source = readObject(input, field);
+    const discrepancies = readArray(source.discrepancies, `${field}.discrepancies`);
+    return {
+        id: readString(source.id, `${field}.id`),
+        planPhaseId: readString(source.planPhaseId, `${field}.planPhaseId`),
+        planPhaseRevisionId: readString(source.planPhaseRevisionId, `${field}.planPhaseRevisionId`),
+        outcome: readEnumValue(source.outcome, `${field}.outcome`, ['passed', 'failed'] as const),
+        summaryMarkdown: readString(source.summaryMarkdown, `${field}.summaryMarkdown`),
+        discrepancies: discrepancies.map((entry, index) =>
+            parsePlanPhaseVerificationDiscrepancyView(entry, `${field}.discrepancies[${String(index)}]`)
+        ),
+        createdAt: readString(source.createdAt, `${field}.createdAt`),
+    };
+}
+
 function parsePlanPhaseRevisionItemView(input: unknown, field: string): PlanPhaseRevisionItemView {
     const source = readObject(input, field);
     return {
@@ -150,8 +197,9 @@ function parsePlanPhaseRevisionItemView(input: unknown, field: string): PlanPhas
 function parsePlanPhaseRevisionView(input: unknown, field = 'input'): PlanPhaseRevisionView {
     const source = readObject(input, field);
     const items = readArray(source.items, `${field}.items`);
-    const createdByKind = readEnumValue(source.createdByKind, `${field}.createdByKind`, ['expand', 'revise'] as const);
+    const createdByKind = readEnumValue(source.createdByKind, `${field}.createdByKind`, ['expand', 'revise', 'replan'] as const);
     const previousRevisionId = readOptionalString(source.previousRevisionId, `${field}.previousRevisionId`);
+    const sourceVerificationId = readOptionalString(source.sourceVerificationId, `${field}.sourceVerificationId`);
     const supersededAt = readOptionalString(source.supersededAt, `${field}.supersededAt`);
 
     return {
@@ -163,6 +211,7 @@ function parsePlanPhaseRevisionView(input: unknown, field = 'input'): PlanPhaseR
         createdByKind,
         createdAt: readString(source.createdAt, `${field}.createdAt`),
         ...(previousRevisionId ? { previousRevisionId } : {}),
+        ...(sourceVerificationId ? { sourceVerificationId } : {}),
         ...(supersededAt ? { supersededAt } : {}),
     };
 }
@@ -172,8 +221,14 @@ function parsePlanPhaseRecordView(input: unknown): PlanPhaseRecordView {
     const status = readEnumValue(source.status, 'status', ['not_started', 'draft', 'approved', 'implementing', 'implemented', 'cancelled'] as const);
     const approvedRevisionId = readOptionalString(source.approvedRevisionId, 'approvedRevisionId');
     const approvedRevisionNumber = readOptionalNumber(source.approvedRevisionNumber, 'approvedRevisionNumber');
+    const implementedRevisionId = readOptionalString(source.implementedRevisionId, 'implementedRevisionId');
+    const implementedRevisionNumber = readOptionalNumber(source.implementedRevisionNumber, 'implementedRevisionNumber');
     const implementationRunId = readOptionalString(source.implementationRunId, 'implementationRunId');
     const orchestratorRunId = readOptionalString(source.orchestratorRunId, 'orchestratorRunId');
+    const latestVerification = source.latestVerification
+        ? parsePlanPhaseVerificationView(source.latestVerification, 'latestVerification')
+        : undefined;
+    const verifications = readArray(source.verifications, 'verifications');
 
     return {
         id: readString(source.id, 'id'),
@@ -190,10 +245,19 @@ function parsePlanPhaseRecordView(input: unknown): PlanPhaseRecordView {
         currentRevisionNumber: readPositiveInteger(source.currentRevisionNumber, 'currentRevisionNumber'),
         ...(approvedRevisionId ? { approvedRevisionId } : {}),
         ...(approvedRevisionNumber !== undefined ? { approvedRevisionNumber } : {}),
+        ...(implementedRevisionId ? { implementedRevisionId } : {}),
+        ...(implementedRevisionNumber !== undefined ? { implementedRevisionNumber } : {}),
         summaryMarkdown: readString(source.summaryMarkdown, 'summaryMarkdown'),
         items: readArray(source.items, 'items').map((item, index) =>
             parsePlanPhaseRevisionItemView(item, `items[${String(index)}]`)
         ),
+        verificationStatus: readEnumValue(source.verificationStatus, 'verificationStatus', ['not_applicable', 'pending', 'passed', 'failed'] as const),
+        ...(latestVerification ? { latestVerification } : {}),
+        verifications: verifications.map((entry, index) =>
+            parsePlanPhaseVerificationView(entry, `verifications[${String(index)}]`)
+        ),
+        canStartVerification: readBoolean(source.canStartVerification, 'canStartVerification'),
+        canStartReplan: readBoolean(source.canStartReplan, 'canStartReplan'),
         createdAt: readString(source.createdAt, 'createdAt'),
         updatedAt: readString(source.updatedAt, 'updatedAt'),
         ...(source.approvedAt !== undefined ? { approvedAt: readString(source.approvedAt, 'approvedAt') } : {}),
@@ -321,6 +385,32 @@ export function parsePlanCancelPhaseInput(input: unknown): PlanCancelPhaseInput 
         profileId: readProfileId(source),
         planId: readEntityId(source.planId, 'planId', 'plan'),
         phaseId: readString(source.phaseId, 'phaseId'),
+    };
+}
+
+export function parsePlanVerifyPhaseInput(input: unknown): PlanVerifyPhaseInput {
+    const source = readObject(input, 'input');
+    const discrepancies = readArray(source.discrepancies, 'discrepancies');
+    return {
+        profileId: readProfileId(source),
+        planId: readEntityId(source.planId, 'planId', 'plan'),
+        phaseId: readString(source.phaseId, 'phaseId'),
+        phaseRevisionId: readString(source.phaseRevisionId, 'phaseRevisionId'),
+        outcome: readEnumValue(source.outcome, 'outcome', ['passed', 'failed'] as const),
+        summaryMarkdown: readString(source.summaryMarkdown, 'summaryMarkdown'),
+        discrepancies: discrepancies.map((entry, index) =>
+            parsePlanPhaseVerificationDiscrepancyInput(entry, `discrepancies[${String(index)}]`)
+        ),
+    };
+}
+
+export function parsePlanStartPhaseReplanInput(input: unknown): PlanStartPhaseReplanInput {
+    const source = readObject(input, 'input');
+    return {
+        profileId: readProfileId(source),
+        planId: readEntityId(source.planId, 'planId', 'plan'),
+        phaseId: readString(source.phaseId, 'phaseId'),
+        verificationId: readString(source.verificationId, 'verificationId'),
     };
 }
 
@@ -458,6 +548,8 @@ export const planRevisePhaseInputSchema = createParser(parsePlanRevisePhaseInput
 export const planApprovePhaseInputSchema = createParser(parsePlanApprovePhaseInput);
 export const planImplementPhaseInputSchema = createParser(parsePlanImplementPhaseInput);
 export const planCancelPhaseInputSchema = createParser(parsePlanCancelPhaseInput);
+export const planVerifyPhaseInputSchema = createParser(parsePlanVerifyPhaseInput);
+export const planStartPhaseReplanInputSchema = createParser(parsePlanStartPhaseReplanInput);
 export const planEnterAdvancedPlanningInputSchema = createParser(parsePlanEnterAdvancedPlanningInput);
 export const planCreateVariantInputSchema = createParser(parsePlanCreateVariantInput);
 export const planActivateVariantInputSchema = createParser(parsePlanActivateVariantInput);

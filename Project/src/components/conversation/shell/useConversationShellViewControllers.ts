@@ -202,6 +202,8 @@ export function useConversationShellViewControllers(input: UseConversationShellV
         planApprovePhaseMutation: mutations.planApprovePhaseMutation,
         planImplementPhaseMutation: mutations.planImplementPhaseMutation,
         planCancelPhaseMutation: mutations.planCancelPhaseMutation,
+        planVerifyPhaseMutation: mutations.planVerifyPhaseMutation,
+        planStartPhaseReplanMutation: mutations.planStartPhaseReplanMutation,
         planEnterAdvancedPlanningMutation: mutations.planEnterAdvancedPlanningMutation,
         planCreateVariantMutation: mutations.planCreateVariantMutation,
         planActivateVariantMutation: mutations.planActivateVariantMutation,

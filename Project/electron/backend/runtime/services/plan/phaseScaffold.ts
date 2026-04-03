@@ -1,9 +1,14 @@
 import type {
     PlanEvidenceAttachmentRecord,
     PlanItemRecord,
+    PlanPhaseRecord,
     PlanRecord,
 } from '@/app/backend/persistence/types';
-import type { PlanAdvancedSnapshotView, PlanPhaseOutlineInput } from '@/app/backend/runtime/contracts';
+import type {
+    PlanAdvancedSnapshotView,
+    PlanPhaseOutlineInput,
+    PlanPhaseVerificationView,
+} from '@/app/backend/runtime/contracts';
 
 export interface PlanPhaseScaffold {
     summaryMarkdown: string;
@@ -68,5 +73,42 @@ export function buildPhaseExpansionScaffold(input: {
             `- Evidence attachments carried into this phase: ${String(input.evidenceAttachments.length)}`,
         ].join('\n'),
         itemDescriptions,
+    };
+}
+
+export function buildPhaseReplanScaffold(input: {
+    phase: PlanPhaseRecord;
+    verification: PlanPhaseVerificationView;
+    evidenceAttachments: PlanEvidenceAttachmentRecord[];
+}): PlanPhaseScaffold {
+    const discrepancyItems = input.verification.discrepancies.map(
+        (discrepancy) => `Address discrepancy: ${discrepancy.title}`
+    );
+    const priorItems = input.phase.items.map((item) => item.description);
+
+    return {
+        summaryMarkdown: [
+            `## ${input.phase.title} Replan`,
+            '',
+            'This replan draft preserves the previously implemented phase history while reopening the detailed work.',
+            '',
+            '### Prior Verification Summary',
+            input.verification.summaryMarkdown,
+            '',
+            '### Discrepancies',
+            ...(input.verification.discrepancies.length > 0
+                ? input.verification.discrepancies.map(
+                      (discrepancy, index) => `${String(index + 1)}. ${discrepancy.title}\n\n${discrepancy.detailsMarkdown}`
+                  )
+                : ['- No discrepancy details were recorded.']),
+            '',
+            '### Prior Implemented Summary',
+            input.phase.summaryMarkdown,
+            '',
+            '### Carry-Forward Context',
+            `- Existing detailed items: ${String(input.phase.items.length)}`,
+            `- Evidence attachments on this revision: ${String(input.evidenceAttachments.length)}`,
+        ].join('\n'),
+        itemDescriptions: [...discrepancyItems, ...priorItems].slice(0, 6),
     };
 }

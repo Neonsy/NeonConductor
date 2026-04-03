@@ -70,7 +70,9 @@ export interface ModeExecutionPlanHistoryEntryView {
         | 'phase_implementation_started'
         | 'phase_implementation_completed'
         | 'phase_implementation_failed'
-        | 'phase_cancelled';
+        | 'phase_cancelled'
+        | 'phase_verification_recorded'
+        | 'phase_replan_started';
     title: string;
     description: string;
     timestamp?: string;
@@ -87,6 +89,26 @@ export interface ModeExecutionPlanRecoveryBannerView {
 }
 
 export type ModeExecutionPlanView = PlanRecordView;
+
+export type ModeExecutionPlanPhaseVerificationOutcome = 'passed' | 'failed';
+
+export interface ModeExecutionPlanPhaseVerificationDiscrepancyView {
+    id: string;
+    sequence: number;
+    title: string;
+    detailsMarkdown: string;
+    createdAt: string;
+}
+
+export interface ModeExecutionPlanPhaseVerificationView {
+    id: string;
+    planPhaseId: string;
+    planPhaseRevisionId: string;
+    outcome: ModeExecutionPlanPhaseVerificationOutcome;
+    summaryMarkdown: string;
+    discrepancies: ModeExecutionPlanPhaseVerificationDiscrepancyView[];
+    createdAt: string;
+}
 
 export interface ModeExecutionDraftState {
     planId: EntityId<'plan'>;
@@ -294,7 +316,7 @@ export interface ModeExecutionPlanResearchArtifactState {
     canAbortActiveResearchBatch: boolean;
 }
 
-export type ModeExecutionPhasePanelMode = 'artifact' | 'edit';
+export type ModeExecutionPhasePanelMode = 'artifact' | 'edit' | 'verification';
 
 export type ModeExecutionPlanPhaseStatus = 'not_started' | 'draft' | 'approved' | 'implementing' | 'implemented' | 'cancelled';
 
@@ -314,7 +336,7 @@ export interface ModeExecutionPlanPhaseRevisionView {
     revisionNumber: number;
     summaryMarkdown: string;
     items: ModeExecutionPlanPhaseItemView[];
-    createdByKind: 'expand' | 'revise';
+    createdByKind: 'expand' | 'revise' | 'replan';
     createdAt: string;
     previousRevisionId?: string;
     supersededAt?: string;
@@ -343,6 +365,13 @@ export interface ModeExecutionPlanPhaseRecordView {
     implementedAt?: string;
     implementationRunId?: string;
     orchestratorRunId?: string;
+    implementedRevisionId?: string;
+    implementedRevisionNumber?: number;
+    verificationStatus?: 'not_applicable' | 'pending' | 'passed' | 'failed';
+    latestVerification?: ModeExecutionPlanPhaseVerificationView;
+    verifications?: ModeExecutionPlanPhaseVerificationView[];
+    canStartVerification?: boolean;
+    canStartReplan?: boolean;
     revisions?: ModeExecutionPlanPhaseRevisionView[];
 }
 
@@ -360,6 +389,21 @@ export interface ModeExecutionPhaseDraftState {
     phaseRevisionId: string;
     summaryDraft: string;
     itemsDraft: string;
+}
+
+export interface ModeExecutionPhaseVerificationDiscrepancyDraftState {
+    id: string;
+    title: string;
+    detailsMarkdown: string;
+}
+
+export interface ModeExecutionPhaseVerificationDraftState {
+    planId: EntityId<'plan'>;
+    phaseId: string;
+    phaseRevisionId: string;
+    outcome: ModeExecutionPlanPhaseVerificationOutcome;
+    summaryDraft: string;
+    discrepanciesDraft: ModeExecutionPhaseVerificationDiscrepancyDraftState[];
 }
 
 export interface ModeExecutionPhasePanelModeState {
@@ -406,8 +450,64 @@ function mapPlanPhaseRecord(
                       })),
                   })),
               }
-            : {}),
+        : {}),
     };
+}
+
+function hasVerifiedRoadmapCompletion(phase: ModeExecutionPlanPhaseRecordView): boolean {
+    if (phase.status === 'cancelled') {
+        return false;
+    }
+
+    if (phase.status !== 'implemented') {
+        return true;
+    }
+
+    if (phase.verificationStatus === 'failed' || phase.verificationStatus === 'pending') {
+        return false;
+    }
+
+    return true;
+}
+
+function computeNextExpandablePhaseOutlineId(input: {
+    roadmapPhases: PlanPhaseOutlineInput[];
+    phaseRecords: ModeExecutionPlanPhaseRecordView[];
+}): string | undefined {
+    const roadmapPhases = [...input.roadmapPhases].sort((left, right) => left.sequence - right.sequence);
+    if (roadmapPhases.length === 0) {
+        return undefined;
+    }
+
+    const phaseByOutlineId = new Map(input.phaseRecords.map((phase) => [phase.phaseOutlineId, phase] as const));
+    for (const roadmapPhase of roadmapPhases) {
+        const phase = phaseByOutlineId.get(roadmapPhase.id);
+        if (!phase) {
+            const allPriorPhasesVerified = roadmapPhases
+                .filter((candidate) => candidate.sequence < roadmapPhase.sequence)
+                .every((candidate) => {
+                    const priorPhase = phaseByOutlineId.get(candidate.id);
+                    return priorPhase ? hasVerifiedRoadmapCompletion(priorPhase) : true;
+                });
+
+            return allPriorPhasesVerified ? roadmapPhase.id : undefined;
+        }
+
+        if (
+            phase.status === 'draft' ||
+            phase.status === 'approved' ||
+            phase.status === 'implementing' ||
+            phase.status === 'cancelled'
+        ) {
+            return undefined;
+        }
+
+        if (!hasVerifiedRoadmapCompletion(phase)) {
+            return undefined;
+        }
+    }
+
+    return undefined;
 }
 
 export function resolveModeExecutionPlanPhaseState(input: {
@@ -419,20 +519,19 @@ export function resolveModeExecutionPlanPhaseState(input: {
 
     const plan = input.activePlan as ModeExecutionPlanView & {
         phases?: ModeExecutionPlanPhaseRecordView[];
-        nextExpandablePhaseOutlineId?: string;
         hasOpenPhaseDetail?: boolean;
     };
     const roadmapPhases = Array.isArray(plan.advancedSnapshot?.phases) ? plan.advancedSnapshot.phases : [];
     const phaseRecords = Array.isArray(plan.phases) ? plan.phases : [];
-    const phaseByOutlineId = new Map(phaseRecords.map((phase) => [phase.phaseOutlineId, phase]));
     const sortedPhases = [...phaseRecords].sort((left, right) => left.phaseSequence - right.phaseSequence);
     const currentPhase =
         [...sortedPhases].reverse().find((phase) => phase.status !== 'not_started') ?? undefined;
-    const nextExpandablePhaseOutlineId =
-        plan.nextExpandablePhaseOutlineId ??
-        (!plan.hasOpenPhaseDetail
-            ? roadmapPhases.find((phase) => !phaseByOutlineId.has(phase.id))?.id
-            : undefined);
+    const nextExpandablePhaseOutlineId = !plan.hasOpenPhaseDetail
+        ? computeNextExpandablePhaseOutlineId({
+              roadmapPhases,
+              phaseRecords,
+          })
+        : undefined;
     const hasOpenPhaseDetail =
         plan.hasOpenPhaseDetail ??
         phaseRecords.some(
@@ -478,6 +577,39 @@ export function resolveModeExecutionPhaseDraftState(input: {
         phaseRevisionId: input.phaseState.currentPhase.currentRevisionId,
         summaryDraft: input.phaseState.currentPhase.summaryMarkdown,
         itemsDraft: input.phaseState.currentPhase.items.map((item) => item.description).join('\n'),
+    };
+}
+
+export function resolveModeExecutionPhaseVerificationDraftState(input: {
+    activePlan: ModeExecutionPlanView | undefined;
+    phaseState: ModeExecutionPlanPhaseState | undefined;
+    verificationDraftState: ModeExecutionPhaseVerificationDraftState | undefined;
+}): ModeExecutionPhaseVerificationDraftState | undefined {
+    if (!input.activePlan || !input.phaseState?.currentPhase) {
+        return undefined;
+    }
+
+    if (
+        input.verificationDraftState?.planId === input.activePlan.id &&
+        input.verificationDraftState.phaseId === input.phaseState.currentPhase.id &&
+        input.verificationDraftState.phaseRevisionId === input.phaseState.currentPhase.currentRevisionId
+    ) {
+        return input.verificationDraftState;
+    }
+
+    const latestVerification = input.phaseState.currentPhase.latestVerification;
+    return {
+        planId: input.activePlan.id,
+        phaseId: input.phaseState.currentPhase.id,
+        phaseRevisionId: input.phaseState.currentPhase.currentRevisionId,
+        outcome: latestVerification?.outcome ?? 'passed',
+        summaryDraft: latestVerification?.summaryMarkdown ?? input.phaseState.currentPhase.summaryMarkdown,
+        discrepanciesDraft:
+            latestVerification?.discrepancies.map((discrepancy) => ({
+                id: discrepancy.id,
+                title: discrepancy.title,
+                detailsMarkdown: discrepancy.detailsMarkdown,
+            })) ?? [],
     };
 }
 
@@ -666,7 +798,9 @@ function mapHistoryEntryView(
                       ? followUpStatus === 'dismissed'
                           ? 'follow_up_dismissed'
                           : 'follow_up_resolved'
-                      : entry.kind;
+                      : entry.kind === 'phase_verification_recorded' || entry.kind === 'phase_replan_started'
+                        ? 'phase_revision_created'
+                        : entry.kind;
     const revisionLabel =
         entry.revisionId && entry.revisionNumber !== undefined
             ? readRevisionLabel(entry.revisionNumber, entry.revisionId)

@@ -12,11 +12,13 @@ import {
     resolveModeExecutionPlanResearchArtifactState,
     resolveModeExecutionPhaseDraftState,
     resolveModeExecutionPhasePanelMode,
+    resolveModeExecutionPhaseVerificationDraftState,
     resolveModeExecutionResearchComposerState,
     type ModeExecutionDraftState,
     type ModeExecutionOrchestratorPanelState,
     type ModeExecutionPhaseDraftState,
     type ModeExecutionPhasePanelModeState,
+    type ModeExecutionPhaseVerificationDraftState,
     type ModeExecutionPlanPanelModeState,
     type ModeExecutionPlanResearchComposerState,
     type ModeExecutionPlanView,
@@ -164,6 +166,9 @@ export function ModeExecutionPanel({
     const [phasePanelModeState, setPhasePanelModeState] = useState<ModeExecutionPhasePanelModeState | undefined>(
         undefined
     );
+    const [phaseVerificationDraftState, setPhaseVerificationDraftState] = useState<
+        ModeExecutionPhaseVerificationDraftState | undefined
+    >(undefined);
     const [researchComposerState, setResearchComposerState] = useState<ModeExecutionPlanResearchComposerState | undefined>(
         undefined
     );
@@ -185,6 +190,11 @@ export function ModeExecutionPanel({
         activePlan,
         phaseState,
         draftState: phaseDraftState,
+    });
+    const resolvedPhaseVerificationDraftState = resolveModeExecutionPhaseVerificationDraftState({
+        activePlan,
+        phaseState,
+        verificationDraftState: phaseVerificationDraftState,
     });
     const resolvedPhasePanelMode = resolveModeExecutionPhasePanelMode({
         activePlan,
@@ -215,6 +225,8 @@ export function ModeExecutionPanel({
         onApprovePhase,
         onImplementPhase,
         onCancelPhase,
+        onSavePhaseVerification,
+        onStartPhaseReplan,
         onGenerateDraft,
         onCancelPlan,
         onApprovePlan,
@@ -264,6 +276,24 @@ export function ModeExecutionPanel({
                 current.phaseRevisionId === currentPhaseRevisionId
                     ? current
                     : resolvedPhaseDraftState;
+            return nextState ? updater(nextState) : nextState;
+        });
+    }
+
+    function updatePhaseVerificationDraftState(
+        plan: PlanView,
+        updater: (current: ModeExecutionPhaseVerificationDraftState) => ModeExecutionPhaseVerificationDraftState
+    ): void {
+        setPhaseVerificationDraftState((current) => {
+            const currentPhaseId = resolvedPhaseVerificationDraftState?.phaseId;
+            const currentPhaseRevisionId = resolvedPhaseVerificationDraftState?.phaseRevisionId;
+            const nextState =
+                current?.planId === plan.id &&
+                currentPhaseId !== undefined &&
+                current.phaseId === currentPhaseId &&
+                current.phaseRevisionId === currentPhaseRevisionId
+                    ? current
+                    : resolvedPhaseVerificationDraftState;
             return nextState ? updater(nextState) : nextState;
         });
     }
@@ -326,6 +356,7 @@ export function ModeExecutionPanel({
             return;
         }
 
+        setPhaseVerificationDraftState(undefined);
         setPhasePanelModeState({
             planId: activePlan.id,
             phaseId: resolvedPhaseDraftState.phaseId,
@@ -334,9 +365,59 @@ export function ModeExecutionPanel({
         });
     }
 
+    function enterPhaseVerificationMode(): void {
+        if (!activePlan || !resolvedPhaseVerificationDraftState || phaseState?.currentPhase?.status !== 'implemented') {
+            return;
+        }
+
+        setPhaseDraftState(undefined);
+        setPhaseVerificationDraftState(resolvedPhaseVerificationDraftState);
+        setPhasePanelModeState({
+            planId: activePlan.id,
+            phaseId: resolvedPhaseVerificationDraftState.phaseId,
+            phaseRevisionId: resolvedPhaseVerificationDraftState.phaseRevisionId,
+            mode: 'verification',
+        });
+    }
+
     function discardPhaseEdits(): void {
         setPhaseDraftState(undefined);
+        setPhaseVerificationDraftState(undefined);
         setPhasePanelModeState(undefined);
+    }
+
+    function discardPhaseVerificationEdits(): void {
+        setPhaseVerificationDraftState(undefined);
+        setPhasePanelModeState(undefined);
+    }
+
+    function addVerificationDiscrepancy(): void {
+        if (!activePlan || !resolvedPhaseVerificationDraftState) {
+            return;
+        }
+
+        updatePhaseVerificationDraftState(activePlan, (current) => ({
+            ...current,
+            discrepanciesDraft: [
+                ...current.discrepanciesDraft,
+                {
+                    id: `verification_discrepancy_${String(current.discrepanciesDraft.length + 1)}`,
+                    title: '',
+                    detailsMarkdown: '',
+                },
+            ],
+        }));
+    }
+
+    function removeVerificationDiscrepancy(discrepancyId: string): void {
+        if (!activePlan || !resolvedPhaseVerificationDraftState) {
+            return;
+        }
+
+        updatePhaseVerificationDraftState(activePlan, (current) => ({
+            ...current,
+            discrepanciesDraft: current.discrepanciesDraft.filter((discrepancy) => discrepancy.id !== discrepancyId),
+        }));
     }
 
     return (
@@ -402,6 +483,7 @@ export function ModeExecutionPanel({
                                 {...(advancedSnapshot ? { advancedSnapshot } : {})}
                                 phaseState={phaseState}
                                 phaseDraftState={resolvedPhaseDraftState}
+                                phaseVerificationDraftState={resolvedPhaseVerificationDraftState}
                                 phasePanelMode={resolvedPhasePanelMode}
                                 {...(researchArtifactState ? { researchState: researchArtifactState } : {})}
                                 researchRequestDraft={researchRequestDraft}
@@ -449,6 +531,7 @@ export function ModeExecutionPanel({
                                     onExpandNextPhase(activePlan.id);
                                 }}
                                 onEnterPhaseEditMode={enterPhaseEditMode}
+                                onEnterPhaseVerificationMode={enterPhaseVerificationMode}
                                 onPhaseSummaryDraftChange={(next) => {
                                     updatePhaseDraftState(activePlan, (current) => ({
                                         ...current,
@@ -462,6 +545,88 @@ export function ModeExecutionPanel({
                                     }));
                                 }}
                                 onDiscardPhaseEdits={discardPhaseEdits}
+                                onVerificationOutcomeChange={(next) => {
+                                    if (!resolvedPhaseVerificationDraftState) {
+                                        return;
+                                    }
+
+                                    updatePhaseVerificationDraftState(activePlan, (current) => ({
+                                        ...current,
+                                        outcome: next,
+                                        discrepanciesDraft:
+                                            next === 'passed'
+                                                ? []
+                                                : current.discrepanciesDraft.length > 0
+                                                  ? current.discrepanciesDraft
+                                                  : [
+                                                        {
+                                                            id: 'verification_discrepancy_1',
+                                                            title: '',
+                                                            detailsMarkdown: '',
+                                                        },
+                                                    ],
+                                    }));
+                                }}
+                                onVerificationSummaryDraftChange={(next) => {
+                                    if (!resolvedPhaseVerificationDraftState) {
+                                        return;
+                                    }
+
+                                    updatePhaseVerificationDraftState(activePlan, (current) => ({
+                                        ...current,
+                                        summaryDraft: next,
+                                    }));
+                                }}
+                                onVerificationDiscrepancyTitleChange={(discrepancyId, next) => {
+                                    if (!resolvedPhaseVerificationDraftState) {
+                                        return;
+                                    }
+
+                                    updatePhaseVerificationDraftState(activePlan, (current) => ({
+                                        ...current,
+                                        discrepanciesDraft: current.discrepanciesDraft.map((discrepancy) =>
+                                            discrepancy.id === discrepancyId
+                                                ? { ...discrepancy, title: next }
+                                                : discrepancy
+                                        ),
+                                    }));
+                                }}
+                                onVerificationDiscrepancyDetailsChange={(discrepancyId, next) => {
+                                    if (!resolvedPhaseVerificationDraftState) {
+                                        return;
+                                    }
+
+                                    updatePhaseVerificationDraftState(activePlan, (current) => ({
+                                        ...current,
+                                        discrepanciesDraft: current.discrepanciesDraft.map((discrepancy) =>
+                                            discrepancy.id === discrepancyId
+                                                ? { ...discrepancy, detailsMarkdown: next }
+                                                : discrepancy
+                                        ),
+                                    }));
+                                }}
+                                onAddVerificationDiscrepancy={() => {
+                                    addVerificationDiscrepancy();
+                                }}
+                                onRemoveVerificationDiscrepancy={(discrepancyId) => {
+                                    removeVerificationDiscrepancy(discrepancyId);
+                                }}
+                                onDiscardPhaseVerificationEdits={discardPhaseVerificationEdits}
+                                onSavePhaseVerification={() => {
+                                    if (!resolvedPhaseVerificationDraftState || !onSavePhaseVerification) {
+                                        return;
+                                    }
+
+                                    setPhasePanelModeState(undefined);
+                                    onSavePhaseVerification(
+                                        activePlan.id,
+                                        resolvedPhaseVerificationDraftState.phaseId,
+                                        resolvedPhaseVerificationDraftState.phaseRevisionId,
+                                        resolvedPhaseVerificationDraftState.outcome,
+                                        resolvedPhaseVerificationDraftState.summaryDraft.trim(),
+                                        resolvedPhaseVerificationDraftState.discrepanciesDraft
+                                    );
+                                }}
                                 onSavePhaseDraft={() => {
                                     if (!resolvedPhaseDraftState) {
                                         return;
@@ -510,6 +675,16 @@ export function ModeExecutionPanel({
 
                                     setPhasePanelModeState(undefined);
                                     onCancelPhase(activePlan.id, phaseState.currentPhase.id);
+                                }}
+                                onStartPhaseReplan={() => {
+                                    const latestVerification = phaseState?.currentPhase?.latestVerification;
+                                    if (!phaseState?.currentPhase || !latestVerification || !onStartPhaseReplan) {
+                                        return;
+                                    }
+
+                                    setPhaseVerificationDraftState(undefined);
+                                    setPhasePanelModeState(undefined);
+                                    onStartPhaseReplan(activePlan.id, phaseState.currentPhase.id, latestVerification.id);
                                 }}
                                 onStartResearchBatch={(promptMarkdown, workerCount) => {
                                     updateResearchComposerState(activePlan, (current) => ({

@@ -84,6 +84,8 @@ function createPhaseMutationMocks() {
         planApprovePhaseMutation: createPlanViewMutationMock(),
         planImplementPhaseMutation: createPlanViewMutationMock(),
         planCancelPhaseMutation: createPlanViewMutationMock(),
+        planVerifyPhaseMutation: createPlanViewMutationMock(),
+        planStartPhaseReplanMutation: createPlanViewMutationMock(),
     };
 }
 

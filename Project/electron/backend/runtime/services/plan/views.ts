@@ -1,20 +1,23 @@
 import type {
-    PlanEvidenceAttachmentView,
-    PlanAdvancedSnapshotView,
-    PlanPhaseRecordView,
-    PlanPhaseRevisionView,
-    PlanRecordView,
-    PlanResearchBatchView,
-} from '@/app/backend/runtime/contracts';
-import type {
     PlanEvidenceAttachmentRecord,
     PlanPhaseRecord,
     PlanPhaseRevisionItemRecord,
     PlanPhaseRevisionRecord,
+    PlanPhaseVerificationDiscrepancyRecord,
+    PlanPhaseVerificationRecord,
     PlanResearchBatchRecord,
     PlanResearchWorkerRecord,
     PlanViewProjection,
 } from '@/app/backend/persistence/types';
+import type {
+    PlanAdvancedSnapshotView,
+    PlanEvidenceAttachmentView,
+    PlanPhaseRecordView,
+    PlanPhaseRevisionView,
+    PlanPhaseVerificationView,
+    PlanRecordView,
+    PlanResearchBatchView,
+} from '@/app/backend/runtime/contracts';
 import { InvariantError } from '@/app/backend/runtime/services/common/fatalErrors';
 import { readPlannerResearchCapacity } from '@/app/backend/runtime/services/plan/capacity';
 import { buildPlanResearchRecommendation } from '@/app/backend/runtime/services/plan/recommendation';
@@ -89,6 +92,44 @@ function toPlanEvidenceAttachmentView(record: PlanEvidenceAttachmentRecord): Pla
     };
 }
 
+function buildDiscrepanciesByVerificationId(
+    discrepancies: PlanPhaseVerificationDiscrepancyRecord[]
+): Map<string, PlanPhaseVerificationDiscrepancyRecord[]> {
+    const discrepanciesByVerificationId = new Map<string, PlanPhaseVerificationDiscrepancyRecord[]>();
+    for (const discrepancy of discrepancies) {
+        const entries = discrepanciesByVerificationId.get(discrepancy.verificationId) ?? [];
+        entries.push(discrepancy);
+        discrepanciesByVerificationId.set(discrepancy.verificationId, entries);
+    }
+
+    for (const entries of discrepanciesByVerificationId.values()) {
+        entries.sort((left, right) => left.sequence - right.sequence);
+    }
+
+    return discrepanciesByVerificationId;
+}
+
+function toPlanPhaseVerificationView(input: {
+    verification: PlanPhaseVerificationRecord;
+    discrepancies: PlanPhaseVerificationDiscrepancyRecord[];
+}): PlanPhaseVerificationView {
+    return {
+        id: input.verification.id,
+        planPhaseId: input.verification.planPhaseId,
+        planPhaseRevisionId: input.verification.planPhaseRevisionId,
+        outcome: input.verification.outcome,
+        summaryMarkdown: input.verification.summaryMarkdown,
+        discrepancies: input.discrepancies.map((discrepancy) => ({
+            id: discrepancy.id,
+            sequence: discrepancy.sequence,
+            title: discrepancy.title,
+            detailsMarkdown: discrepancy.detailsMarkdown,
+            createdAt: discrepancy.createdAt,
+        })),
+        createdAt: input.verification.createdAt,
+    };
+}
+
 function toPlanPhaseRevisionView(input: {
     revision: PlanPhaseRevisionRecord;
     items: PlanPhaseRevisionItemRecord[];
@@ -108,6 +149,7 @@ function toPlanPhaseRevisionView(input: {
         createdByKind: input.revision.createdByKind,
         createdAt: input.revision.createdAt,
         ...(input.revision.previousRevisionId ? { previousRevisionId: input.revision.previousRevisionId } : {}),
+        ...(input.revision.sourceVerificationId ? { sourceVerificationId: input.revision.sourceVerificationId } : {}),
         ...(input.revision.supersededAt ? { supersededAt: input.revision.supersededAt } : {}),
     };
 }
@@ -116,6 +158,8 @@ function toPlanPhaseView(input: {
     phase: PlanPhaseRecord;
     revisions: PlanPhaseRevisionRecord[];
     revisionItems: PlanPhaseRevisionItemRecord[];
+    verifications: PlanPhaseVerificationRecord[];
+    verificationDiscrepancies: PlanPhaseVerificationDiscrepancyRecord[];
     advancedSnapshot: PlanAdvancedSnapshotView | undefined;
 }): PlanPhaseRecordView {
     const itemsByRevisionId = new Map<string, PlanPhaseRevisionItemRecord[]>();
@@ -124,8 +168,28 @@ function toPlanPhaseView(input: {
         items.push(item);
         itemsByRevisionId.set(item.planPhaseRevisionId, items);
     }
+    const discrepanciesByVerificationId = buildDiscrepanciesByVerificationId(input.verificationDiscrepancies);
 
     const outline = input.advancedSnapshot?.phases.find((phase) => phase.id === input.phase.phaseOutlineId);
+    const verificationViews = input.verifications
+        .slice()
+        .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
+        .map((verification) =>
+            toPlanPhaseVerificationView({
+                verification,
+                discrepancies: discrepanciesByVerificationId.get(verification.id) ?? [],
+            })
+        );
+    const latestVerification = verificationViews.at(-1);
+    const verificationStatus =
+        input.phase.status === 'implemented'
+            ? latestVerification?.outcome ?? 'pending'
+            : latestVerification?.outcome ?? 'not_applicable';
+    const canStartVerification =
+        input.phase.status === 'implemented' &&
+        Boolean(input.phase.implementedRevisionId) &&
+        !verificationViews.some((verification) => verification.planPhaseRevisionId === input.phase.implementedRevisionId);
+    const canStartReplan = input.phase.status === 'implemented' && latestVerification?.outcome === 'failed';
 
     return {
         id: input.phase.id,
@@ -144,8 +208,17 @@ function toPlanPhaseView(input: {
         ...(input.phase.approvedRevisionNumber !== undefined
             ? { approvedRevisionNumber: input.phase.approvedRevisionNumber }
             : {}),
+        ...(input.phase.implementedRevisionId ? { implementedRevisionId: input.phase.implementedRevisionId } : {}),
+        ...(input.phase.implementedRevisionNumber !== undefined
+            ? { implementedRevisionNumber: input.phase.implementedRevisionNumber }
+            : {}),
         summaryMarkdown: input.phase.summaryMarkdown,
         items: input.phase.items,
+        verificationStatus,
+        ...(latestVerification ? { latestVerification } : {}),
+        verifications: verificationViews,
+        canStartVerification,
+        canStartReplan,
         createdAt: input.phase.createdAt,
         updatedAt: input.phase.updatedAt,
         ...(input.phase.approvedAt ? { approvedAt: input.phase.approvedAt } : {}),
@@ -177,7 +250,13 @@ function resolveNextExpandablePhaseOutlineId(input: {
             return roadmapPhase.id;
         }
 
-        if (phase.status === 'cancelled' || phase.status === 'draft' || phase.status === 'approved' || phase.status === 'implementing') {
+        if (
+            phase.status === 'cancelled' ||
+            phase.status === 'draft' ||
+            phase.status === 'approved' ||
+            phase.status === 'implementing' ||
+            phase.verificationStatus !== 'passed'
+        ) {
             return undefined;
         }
     }
@@ -212,6 +291,12 @@ function toPlanViewFromProjection(projection: PlanViewProjection | null): PlanRe
         revisions.push(revision);
         phaseRevisionsByPhaseId.set(revision.planPhaseId, revisions);
     }
+    const phaseVerificationsByPhaseId = new Map<string, PlanPhaseVerificationRecord[]>();
+    for (const verification of projection.phaseVerifications) {
+        const verifications = phaseVerificationsByPhaseId.get(verification.planPhaseId) ?? [];
+        verifications.push(verification);
+        phaseVerificationsByPhaseId.set(verification.planPhaseId, verifications);
+    }
     const phaseItemRevisionIds = new Set(projection.phaseRevisions.map((revision) => revision.id));
     const phaseRevisionItems = projection.phaseRevisionItems.filter((item) => phaseItemRevisionIds.has(item.planPhaseRevisionId));
     const phaseViews = projection.phases
@@ -223,6 +308,12 @@ function toPlanViewFromProjection(projection: PlanViewProjection | null): PlanRe
                 revisions: phaseRevisionsByPhaseId.get(phase.id) ?? [],
                 revisionItems: phaseRevisionItems.filter((item) =>
                     (phaseRevisionsByPhaseId.get(phase.id) ?? []).some((revision) => revision.id === item.planPhaseRevisionId)
+                ),
+                verifications: phaseVerificationsByPhaseId.get(phase.id) ?? [],
+                verificationDiscrepancies: projection.phaseVerificationDiscrepancies.filter((discrepancy) =>
+                    (phaseVerificationsByPhaseId.get(phase.id) ?? []).some(
+                        (verification) => verification.id === discrepancy.verificationId
+                    )
                 ),
                 advancedSnapshot: plan.advancedSnapshot,
             })

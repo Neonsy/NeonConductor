@@ -129,6 +129,27 @@ export interface CreatePlanImplementationControllerInput {
         },
         ConversationActivePlanData
     >;
+    planVerifyPhaseMutation: MutationLike<
+        {
+            profileId: string;
+            planId: EntityId<'plan'>;
+            phaseId: string;
+            phaseRevisionId: string;
+            outcome: 'passed' | 'failed';
+            summaryMarkdown: string;
+            discrepancies: Array<{ title: string; detailsMarkdown: string }>;
+        },
+        ConversationActivePlanData
+    >;
+    planStartPhaseReplanMutation: MutationLike<
+        {
+            profileId: string;
+            planId: EntityId<'plan'>;
+            phaseId: string;
+            verificationId: string;
+        },
+        ConversationActivePlanData
+    >;
     planEnterAdvancedPlanningMutation: MutationLike<
         {
             profileId: string;
@@ -264,6 +285,50 @@ export interface ConversationPlanActionController {
         executionStrategy: OrchestratorExecutionStrategy
     ) => void;
     onCancelPhase: (planId: EntityId<'plan'>, phaseId: string) => void;
+    onEnterPhaseVerificationMode?: (planId: EntityId<'plan'>, phaseId: string, phaseRevisionId: string) => void;
+    onVerificationOutcomeChange?: (
+        planId: EntityId<'plan'>,
+        phaseId: string,
+        phaseRevisionId: string,
+        outcome: 'passed' | 'failed'
+    ) => void;
+    onVerificationSummaryDraftChange?: (
+        planId: EntityId<'plan'>,
+        phaseId: string,
+        phaseRevisionId: string,
+        next: string
+    ) => void;
+    onVerificationDiscrepancyTitleChange?: (
+        planId: EntityId<'plan'>,
+        phaseId: string,
+        phaseRevisionId: string,
+        discrepancyId: string,
+        next: string
+    ) => void;
+    onVerificationDiscrepancyDetailsChange?: (
+        planId: EntityId<'plan'>,
+        phaseId: string,
+        phaseRevisionId: string,
+        discrepancyId: string,
+        next: string
+    ) => void;
+    onAddVerificationDiscrepancy?: (planId: EntityId<'plan'>, phaseId: string, phaseRevisionId: string) => void;
+    onRemoveVerificationDiscrepancy?: (
+        planId: EntityId<'plan'>,
+        phaseId: string,
+        phaseRevisionId: string,
+        discrepancyId: string
+    ) => void;
+    onSavePhaseVerification?: (
+        planId: EntityId<'plan'>,
+        phaseId: string,
+        phaseRevisionId: string,
+        outcome: 'passed' | 'failed',
+        summaryMarkdown: string,
+        discrepancies: Array<{ id: string; title: string; detailsMarkdown: string }>
+    ) => void;
+    onDiscardPhaseVerificationEdits?: (planId: EntityId<'plan'>, phaseId: string, phaseRevisionId: string) => void;
+    onStartPhaseReplan?: (planId: EntityId<'plan'>, phaseId: string, verificationId: string) => void;
     onEnterAdvancedPlanning: (planId: EntityId<'plan'>) => void;
     onCreateVariant: (planId: EntityId<'plan'>, sourceRevisionId: EntityId<'prev'>) => void;
     onActivateVariant: (planId: EntityId<'plan'>, variantId: EntityId<'pvar'>) => void;
@@ -312,6 +377,8 @@ export function createPlanImplementationController(
             input.planApprovePhaseMutation.isPending ||
             input.planImplementPhaseMutation.isPending ||
             input.planCancelPhaseMutation.isPending ||
+            input.planVerifyPhaseMutation.isPending ||
+            input.planStartPhaseReplanMutation.isPending ||
             input.planEnterAdvancedPlanningMutation.isPending ||
             input.planCreateVariantMutation.isPending ||
             input.planActivateVariantMutation.isPending ||
@@ -500,6 +567,52 @@ export function createPlanImplementationController(
                     },
                     onError: input.onError,
                     errorPrefix: 'Phase cancel failed',
+                });
+            });
+        },
+        onSavePhaseVerification: (planId, phaseId, phaseRevisionId, outcome, summaryMarkdown, discrepancies) => {
+            launchBackgroundTask(async () => {
+                await runConversationPlanMutation({
+                    mutation: {
+                        mutateAsync: () =>
+                            input.planVerifyPhaseMutation.mutateAsync({
+                                profileId: input.profileId,
+                                planId,
+                                phaseId,
+                                phaseRevisionId,
+                                outcome,
+                                summaryMarkdown,
+                                discrepancies: discrepancies.map((discrepancy) => ({
+                                    title: discrepancy.title,
+                                    detailsMarkdown: discrepancy.detailsMarkdown,
+                                })),
+                            }),
+                    },
+                    applyResult: (result) => {
+                        input.applyPlanWorkspaceUpdate(result);
+                    },
+                    onError: input.onError,
+                    errorPrefix: 'Phase verification failed',
+                });
+            });
+        },
+        onStartPhaseReplan: (planId, phaseId, verificationId) => {
+            launchBackgroundTask(async () => {
+                await runConversationPlanMutation({
+                    mutation: {
+                        mutateAsync: () =>
+                            input.planStartPhaseReplanMutation.mutateAsync({
+                                profileId: input.profileId,
+                                planId,
+                                phaseId,
+                                verificationId,
+                            }),
+                    },
+                    applyResult: (result) => {
+                        input.applyPlanWorkspaceUpdate(result);
+                    },
+                    onError: input.onError,
+                    errorPrefix: 'Phase replan failed',
                 });
             });
         },
