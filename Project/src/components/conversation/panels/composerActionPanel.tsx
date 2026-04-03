@@ -1,11 +1,9 @@
-import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
-
+import { buildComposerControlsReadModel } from '@/web/components/conversation/panels/composerActionPanel/buildComposerControlsReadModel';
+import { buildComposerSubmissionPolicy } from '@/web/components/conversation/panels/composerActionPanel/buildComposerSubmissionPolicy';
 import { ComposerContextSummarySection } from '@/web/components/conversation/panels/composerActionPanel/ComposerContextSummarySection';
 import { ComposerPromptCard } from '@/web/components/conversation/panels/composerActionPanel/ComposerPromptCard';
 import { ComposerRunControlsBar } from '@/web/components/conversation/panels/composerActionPanel/ComposerRunControlsBar';
 import { ComposerStatusFooter } from '@/web/components/conversation/panels/composerActionPanel/ComposerStatusFooter';
-import { buildComposerControlsReadModel } from '@/web/components/conversation/panels/composerActionPanel/buildComposerControlsReadModel';
-import { buildComposerSubmissionPolicy } from '@/web/components/conversation/panels/composerActionPanel/buildComposerSubmissionPolicy';
 import { formatImageBytes, shouldSubmitComposerOnEnter } from '@/web/components/conversation/panels/composerActionPanel/helpers';
 import type { ComposerActionPanelProps } from '@/web/components/conversation/panels/composerActionPanel/types';
 import { useComposerAttachmentController } from '@/web/components/conversation/panels/composerActionPanel/useComposerAttachmentController';
@@ -14,6 +12,8 @@ import { useComposerDraftController } from '@/web/components/conversation/panels
 import { useComposerSlashCommandController } from '@/web/components/conversation/panels/composerActionPanel/useComposerSlashCommandController';
 import { shouldInterceptSlashSubmit } from '@/web/components/conversation/panels/composerSlashCommands';
 import { ImageLightboxModal } from '@/web/components/conversation/panels/imageLightboxModal';
+
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 
 export { shouldSubmitComposerOnEnter } from '@/web/components/conversation/panels/composerActionPanel/helpers';
 export { handleComposerSlashAcceptance } from '@/web/components/conversation/panels/composerActionPanel/useComposerSlashCommandController';
@@ -114,8 +114,12 @@ function ComposerActionPanelDraftBoundary({
         topLevelTab,
         activeModeKey,
         onSubmitPrompt,
-        onSetDraftPrompt: draftController.setDraftPrompt,
-        onFocusPrompt: draftController.focusPrompt,
+        onSetDraftPrompt: (nextDraftPrompt) => {
+            draftController.setDraftPrompt(nextDraftPrompt);
+        },
+        onFocusPrompt: () => {
+            draftController.focusPrompt();
+        },
         ...(selectedSessionId ? { selectedSessionId } : {}),
         ...(workspaceFingerprint ? { workspaceFingerprint } : {}),
         ...(sandboxId ? { sandboxId } : {}),
@@ -166,110 +170,128 @@ function ComposerActionPanelDraftBoundary({
     return (
         <>
             <form
-                className='space-y-3'
+                className='border-border/70 bg-background/92 rounded-[30px] border shadow-[0_18px_50px_rgba(15,23,42,0.08)] backdrop-blur-sm'
                 onSubmit={(event) => {
                     event.preventDefault();
                     void slashCommandController.handleSlashCommandAccept(true);
                 }}>
-                {contextState ? (
+                <div className='space-y-3 px-4 py-4'>
+                    {contextState ? (
                     <ComposerContextSummarySection
                         contextState={contextState}
                         contextFeedback={contextCardController.contextFeedback}
                         canCompactContext={canCompactContext}
                         isCompactingContext={isCompactingContext}
-                        onCompactContext={contextCardController.handleCompactContext}
+                        onCompactContext={() => {
+                            void contextCardController.handleCompactContext();
+                        }}
                     />
                 ) : null}
-                <ComposerPromptCard
-                    isDragActive={attachmentController.isDragActive}
-                    canAttachImages={canAttachImages}
-                    imageAttachmentBlockedReason={imageAttachmentBlockedReason}
-                    pendingImages={pendingImages}
-                    composerErrorMessage={submissionPolicy.composerErrorMessage}
-                    composerErrorTone={composerErrorTone}
-                    draftPrompt={draftController.draftPrompt}
-                    promptTextareaRef={draftController.promptTextareaRef}
-                    fileInputRef={attachmentController.fileInputRef}
-                    slashPopupState={slashCommandController.slashCommands.popupState}
-                    onPromptChange={draftController.setDraftPrompt}
-                    onPromptEdited={handlePromptEdited}
-                    onPromptPaste={attachmentController.handlePaste}
-                    onPromptKeyDown={(event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
-                        if (slashCommandController.slashCommands.hasVisiblePopup) {
-                            if (event.key === 'ArrowDown') {
-                                event.preventDefault();
-                                slashCommandController.slashCommands.moveHighlight('next');
-                                return;
+                    <ComposerPromptCard
+                        isDragActive={attachmentController.isDragActive}
+                        canAttachImages={canAttachImages}
+                        imageAttachmentBlockedReason={imageAttachmentBlockedReason}
+                        pendingImages={pendingImages}
+                        composerErrorMessage={submissionPolicy.composerErrorMessage}
+                        composerErrorTone={composerErrorTone}
+                        draftPrompt={draftController.draftPrompt}
+                        promptTextareaRef={draftController.promptTextareaRef}
+                        fileInputRef={attachmentController.fileInputRef}
+                        slashPopupState={slashCommandController.slashCommands.popupState}
+                        onPromptChange={draftController.setDraftPrompt}
+                        onPromptEdited={handlePromptEdited}
+                        onPromptPaste={(event) => {
+                            attachmentController.handlePaste(event);
+                        }}
+                        onPromptKeyDown={(event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+                            if (slashCommandController.slashCommands.hasVisiblePopup) {
+                                if (event.key === 'ArrowDown') {
+                                    event.preventDefault();
+                                    slashCommandController.slashCommands.moveHighlight('next');
+                                    return;
+                                }
+                                if (event.key === 'ArrowUp') {
+                                    event.preventDefault();
+                                    slashCommandController.slashCommands.moveHighlight('previous');
+                                    return;
+                                }
+                                if (event.key === 'Escape') {
+                                    event.preventDefault();
+                                    slashCommandController.slashCommands.dismiss();
+                                    return;
+                                }
                             }
-                            if (event.key === 'ArrowUp') {
-                                event.preventDefault();
-                                slashCommandController.slashCommands.moveHighlight('previous');
-                                return;
-                            }
-                            if (event.key === 'Escape') {
-                                event.preventDefault();
-                                slashCommandController.slashCommands.dismiss();
-                                return;
-                            }
-                        }
 
-                        if (!shouldSubmitComposerOnEnter(event)) {
-                            return;
-                        }
+                            if (!shouldSubmitComposerOnEnter(event)) {
+                                return;
+                            }
 
-                        if (shouldInterceptSlashSubmit({ popupState: slashCommandController.slashCommands.popupState })) {
+                            if (shouldInterceptSlashSubmit({ popupState: slashCommandController.slashCommands.popupState })) {
+                                event.preventDefault();
+                                void slashCommandController.handleSlashCommandAccept(false);
+                                return;
+                            }
+
+                            if (!submissionPolicy.canSubmit) {
+                                return;
+                            }
+
                             event.preventDefault();
-                            void slashCommandController.handleSlashCommandAccept(false);
-                            return;
-                        }
-
-                        if (!submissionPolicy.canSubmit) {
-                            return;
-                        }
-
-                        event.preventDefault();
-                        onSubmitPrompt(draftController.draftPrompt);
-                    }}
-                    onDragOver={attachmentController.handleDragOver}
-                    onDragLeave={attachmentController.handleDragLeave}
-                    onDrop={attachmentController.handleDrop}
-                    onFileInputChange={attachmentController.handleFileInputChange}
-                    onPreviewImage={attachmentController.previewImage}
-                    onRetryPendingImage={onRetryPendingImage}
-                    onRemovePendingImage={onRemovePendingImage}
-                    formatImageBytes={formatImageBytes}
-                />
-                <ComposerRunControlsBar
-                    composerControlsDisabled={controlsReadModel.composerControlsDisabled}
-                    composerSubmitDisabled={composerSubmitDisabled}
-                    isSubmitting={isSubmitting}
-                    profiles={profiles}
-                    selectedProfileId={selectedProfileId}
-                    selectedProviderId={selectedProviderId}
-                    selectedModelId={selectedModelId}
-                    shouldShowModePicker={controlsReadModel.shouldShowModePicker}
-                    activeModeKey={activeModeKey}
-                    modes={modes}
-                    selectedReasoningEffort={controlsReadModel.selectedReasoningEffort}
-                    availableReasoningEfforts={controlsReadModel.availableReasoningEfforts}
-                    reasoningControlDisabled={controlsReadModel.reasoningControlDisabled}
-                    canAttachImages={canAttachImages}
-                    routingBadge={routingBadge}
-                    compactConnectionLabel={controlsReadModel.compactConnectionLabel}
-                    modelOptions={modelOptions}
-                    submitButtonLabel={submissionPolicy.hasBlockingPendingImages ? 'Images preparing…' : 'Start Run'}
-                    onProfileChange={onProfileChange}
-                    onProviderChange={onProviderChange}
-                    onModelChange={onModelChange}
-                    onReasoningEffortChange={onReasoningEffortChange}
-                    onModeChange={onModeChange}
-                    onOpenFilePicker={attachmentController.openFilePicker}
-                />
-                <ComposerStatusFooter
-                    composerFooterMessage={submissionPolicy.composerFooterMessage}
-                    reasoningExplanationMessage={reasoningExplanationMessage}
-                    selectedModelCompatibilityState={selectedModelCompatibilityState}
-                />
+                            onSubmitPrompt(draftController.draftPrompt);
+                        }}
+                        onDragOver={(event) => {
+                            attachmentController.handleDragOver(event);
+                        }}
+                        onDragLeave={(event) => {
+                            attachmentController.handleDragLeave(event);
+                        }}
+                        onDrop={(event) => {
+                            attachmentController.handleDrop(event);
+                        }}
+                        onFileInputChange={(event) => {
+                            attachmentController.handleFileInputChange(event);
+                        }}
+                        onPreviewImage={(image) => {
+                            attachmentController.previewImage(image);
+                        }}
+                        onRetryPendingImage={onRetryPendingImage}
+                        onRemovePendingImage={onRemovePendingImage}
+                        formatImageBytes={formatImageBytes}
+                    />
+                    <ComposerRunControlsBar
+                        composerControlsDisabled={controlsReadModel.composerControlsDisabled}
+                        composerSubmitDisabled={composerSubmitDisabled}
+                        isSubmitting={isSubmitting}
+                        profiles={profiles}
+                        selectedProfileId={selectedProfileId}
+                        selectedProviderId={selectedProviderId}
+                        selectedModelId={selectedModelId}
+                        shouldShowModePicker={controlsReadModel.shouldShowModePicker}
+                        activeModeKey={activeModeKey}
+                        modes={modes}
+                        selectedReasoningEffort={controlsReadModel.selectedReasoningEffort}
+                        availableReasoningEfforts={controlsReadModel.availableReasoningEfforts}
+                        reasoningControlDisabled={controlsReadModel.reasoningControlDisabled}
+                        canAttachImages={canAttachImages}
+                        routingBadge={routingBadge}
+                        compactConnectionLabel={controlsReadModel.compactConnectionLabel}
+                        modelOptions={modelOptions}
+                        submitButtonLabel={submissionPolicy.hasBlockingPendingImages ? 'Images preparing…' : 'Start Run'}
+                        onProfileChange={onProfileChange}
+                        onProviderChange={onProviderChange}
+                        onModelChange={onModelChange}
+                        onReasoningEffortChange={onReasoningEffortChange}
+                        onModeChange={onModeChange}
+                        onOpenFilePicker={() => {
+                            attachmentController.openFilePicker();
+                        }}
+                    />
+                    <ComposerStatusFooter
+                        composerFooterMessage={submissionPolicy.composerFooterMessage}
+                        reasoningExplanationMessage={reasoningExplanationMessage}
+                        selectedModelCompatibilityState={selectedModelCompatibilityState}
+                    />
+                </div>
             </form>
             <ImageLightboxModal
                 open={attachmentController.lightboxImage !== undefined}
@@ -283,7 +305,9 @@ function ComposerActionPanelDraftBoundary({
                     ? { detail: attachmentController.lightboxImage.detail }
                     : {})}
                 previewState={attachmentController.lightboxImage ? 'ready' : 'idle'}
-                onClose={attachmentController.closeLightbox}
+                onClose={() => {
+                    attachmentController.closeLightbox();
+                }}
             />
         </>
     );

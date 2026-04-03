@@ -69,12 +69,17 @@ export function SidebarInlineThreadDraft({
         modelId && modelOptions.some((option) => option.id === modelId) ? modelId : (modelOptions[0]?.id ?? '');
 
     return (
-        <div className='border-border bg-card/65 space-y-3 rounded-3xl border p-3'>
-            <div className='space-y-1'>
-                <p className='text-sm font-semibold'>New thread in {workspaceLabel}</p>
-                <p className='text-muted-foreground text-xs'>
-                    Create a thread in this workspace. The composer owns the run controls after the thread opens.
-                </p>
+        <div className='border-border/70 bg-background/80 space-y-3 rounded-[28px] border p-3 shadow-sm'>
+            <div className='flex items-start justify-between gap-3'>
+                <div className='min-w-0 space-y-1'>
+                    <p className='text-[11px] font-semibold tracking-[0.18em] uppercase'>Inline thread draft</p>
+                    <p className='text-muted-foreground text-xs'>
+                        New thread in {workspaceLabel}. The composer takes over after creation.
+                    </p>
+                </div>
+                <span className='border-border/70 bg-card/70 text-muted-foreground rounded-full border px-2.5 py-1 text-[11px] font-medium'>
+                    {topLevelTabLabel(topLevelTab)}
+                </span>
             </div>
 
             <label className='block space-y-1.5'>
@@ -93,7 +98,7 @@ export function SidebarInlineThreadDraft({
                 />
             </label>
 
-            <div className='grid gap-2'>
+            <div className='grid gap-2 md:grid-cols-2'>
                 <label className='space-y-1.5'>
                     <span className='text-muted-foreground text-[11px] font-semibold tracking-[0.12em] uppercase'>
                         Mode
@@ -132,7 +137,7 @@ export function SidebarInlineThreadDraft({
                     </select>
                 </label>
 
-                <label className='space-y-1.5'>
+                <label className='space-y-1.5 md:col-span-2'>
                     <span className='text-muted-foreground text-[11px] font-semibold tracking-[0.12em] uppercase'>
                         Model
                     </span>

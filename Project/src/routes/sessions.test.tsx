@@ -108,12 +108,14 @@ describe('sessions route', () => {
         }
 
         await expect(
-            routeLoader({
-                context: {
-                    trpcClient: { profile: 'client' },
-                    trpcUtils: { runtime: 'utils' },
-                },
-            } as never)
+            Promise.resolve(
+                routeLoader({
+                    context: {
+                        trpcClient: { profile: 'client' },
+                        trpcUtils: { runtime: 'utils' },
+                    },
+                } as never)
+            )
         ).resolves.toBeUndefined();
     });
 

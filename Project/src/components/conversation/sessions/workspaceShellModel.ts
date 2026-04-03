@@ -1,8 +1,8 @@
-import type { ReactNode } from 'react';
-
 import type { RunRecord, SessionSummaryRecord } from '@/app/backend/persistence/types';
 
 import type { EntityId, OrchestratorExecutionStrategy } from '@/shared/contracts';
+
+import type { ReactNode } from 'react';
 
 export interface WorkspaceStripChip {
     id: string;
@@ -28,8 +28,6 @@ export interface WorkspaceHeaderModel {
     compactConnectionLabel?: string;
     routingBadge?: string;
     pendingPermissionCount: number;
-    canCreateSession: boolean;
-    isCreatingSession: boolean;
 }
 
 export interface WorkspaceInspectorModel {

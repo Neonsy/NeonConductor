@@ -1,16 +1,12 @@
 import { ImagePlus } from 'lucide-react';
 
+import { readRuntimeProviderId } from '@/web/components/conversation/panels/composerActionPanel/composerProviderId';
 import type { ConversationModeOption } from '@/web/components/conversation/shell/workspace/helpers';
 import type { ModelPickerOption } from '@/web/components/modelSelection/modelCapabilities';
 import { ModelPicker } from '@/web/components/modelSelection/modelPicker';
 import { Button } from '@/web/components/ui/button';
-import { isOneOf } from '@/web/lib/typeGuards/isOneOf';
 
-import { providerIds, type RuntimeProviderId, type RuntimeReasoningEffort } from '@/shared/contracts';
-
-export function readRuntimeProviderId(value: string | undefined): RuntimeProviderId | undefined {
-    return isOneOf(value, providerIds) ? value : undefined;
-}
+import type { RuntimeReasoningEffort } from '@/shared/contracts';
 
 interface ComposerRunControlsBarProps {
     composerControlsDisabled: boolean;
@@ -66,7 +62,7 @@ export function ComposerRunControlsBar({
     onOpenFilePicker,
 }: ComposerRunControlsBarProps) {
     return (
-        <div className='border-border space-y-3 border-t px-4 py-3'>
+        <div className='border-border/60 space-y-3 border-t px-4 pt-3 pb-4'>
             <div className='flex flex-wrap items-center gap-2'>
                 <div className='min-w-[220px] flex-[1.35]'>
                     <ModelPicker
@@ -148,36 +144,40 @@ export function ComposerRunControlsBar({
                         ))}
                     </select>
                 </label>
-                <Button
-                    type='button'
-                    size='sm'
-                    variant='outline'
-                    className='rounded-full'
-                    disabled={composerControlsDisabled || !canAttachImages}
-                    onClick={onOpenFilePicker}>
-                    <ImagePlus className='h-4 w-4' />
-                    Attach
-                </Button>
-                <div className='ml-auto flex items-center gap-2'>
-                    {compactConnectionLabel ? (
-                        <span className='border-border bg-background/70 text-muted-foreground rounded-full border px-3 py-1 text-[11px]'>
-                            {compactConnectionLabel}
-                        </span>
-                    ) : null}
-                    {routingBadge ? (
-                        <span className='border-border bg-background/70 text-muted-foreground rounded-full border px-3 py-1 text-[11px]'>
-                            {routingBadge}
-                        </span>
-                    ) : null}
+                        <Button
+                            type='button'
+                            size='sm'
+                            variant='outline'
+                            className='min-h-10 rounded-full'
+                            disabled={composerControlsDisabled || !canAttachImages}
+                            onClick={onOpenFilePicker}>
+                            <ImagePlus className='h-4 w-4' />
+                            Attach
+                        </Button>
+                <div className='ml-auto'>
                     <Button
                         type='submit'
                         size='sm'
-                        className='rounded-full'
+                        className='min-h-10 rounded-full'
                         disabled={composerSubmitDisabled || isSubmitting}>
                         {submitButtonLabel}
                     </Button>
                 </div>
             </div>
+            {compactConnectionLabel || routingBadge ? (
+                <div className='text-muted-foreground flex flex-wrap items-center gap-2 text-[11px]'>
+                    {compactConnectionLabel ? (
+                        <span className='border-border bg-background/70 rounded-full border px-3 py-1 tabular-nums'>
+                            {compactConnectionLabel}
+                        </span>
+                    ) : null}
+                    {routingBadge ? (
+                        <span className='border-border bg-background/70 rounded-full border px-3 py-1'>
+                            {routingBadge}
+                        </span>
+                    ) : null}
+                </div>
+            ) : null}
         </div>
     );
 }

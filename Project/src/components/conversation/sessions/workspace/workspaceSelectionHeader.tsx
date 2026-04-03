@@ -10,10 +10,7 @@ interface WorkspaceSelectionHeaderProps {
     compactConnectionLabel?: string;
     routingBadge?: string;
     pendingPermissionCount: number;
-    canCreateSession: boolean;
-    isCreatingSession: boolean;
     isInspectorOpen: boolean;
-    onCreateSession: () => void;
     onSelectSession: (sessionId: string) => void;
     onSelectRun: (runId: string) => void;
     onToggleInspector: () => void;
@@ -23,13 +20,25 @@ function formatRunStatus(run: RunRecord | undefined): string | undefined {
     return run ? run.status.replaceAll('_', ' ') : undefined;
 }
 
+function formatSessionLabel(session: SessionSummaryRecord): string {
+    return `${String(session.turnCount)} turns · ${session.runStatus.replaceAll('_', ' ')}`;
+}
+
+function formatRunLabel(run: RunRecord): string {
+    return run.status.replaceAll('_', ' ');
+}
+
 export function WorkspaceSelectionHeader({
+    sessions,
+    runs,
     selectedSession,
     selectedRun,
     compactConnectionLabel,
     routingBadge,
     pendingPermissionCount,
     isInspectorOpen,
+    onSelectSession,
+    onSelectRun,
     onToggleInspector,
 }: WorkspaceSelectionHeaderProps) {
     const runStatus = selectedRun ? formatRunStatus(selectedRun) : undefined;
@@ -38,33 +47,96 @@ export function WorkspaceSelectionHeader({
         : 'Choose or create a thread to start working.';
 
     return (
-        <div className='border-border/70 bg-card/20 border-b px-4 py-3'>
-            <div className='flex flex-wrap items-start justify-between gap-3'>
-                <div className='min-w-0'>
-                    <p className='text-sm font-semibold'>{selectedSession ? 'Active thread' : 'Workspace overview'}</p>
-                    <p className='text-muted-foreground mt-1 text-xs'>{activeSummary}</p>
+        <div className='border-border/70 bg-card/30 rounded-[28px] border px-4 py-3 shadow-sm'>
+            <div className='flex flex-wrap items-start justify-between gap-4'>
+                <div className='min-w-0 flex-1 space-y-2'>
+                    <div className='flex flex-wrap items-center gap-2'>
+                        <p className='text-[11px] font-semibold tracking-[0.16em] uppercase text-muted-foreground'>
+                            Workspace selection
+                        </p>
+                        {compactConnectionLabel ? (
+                            <span className='border-border bg-background/70 text-muted-foreground rounded-full border px-3 py-1 text-xs tabular-nums'>
+                                {compactConnectionLabel}
+                            </span>
+                        ) : null}
+                        {routingBadge ? (
+                            <span className='border-border bg-background/70 text-muted-foreground rounded-full border px-3 py-1 text-xs'>
+                                {routingBadge}
+                            </span>
+                        ) : null}
+                        {pendingPermissionCount > 0 ? (
+                            <span className='rounded-full border border-amber-500/40 bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-200 tabular-nums'>
+                                {String(pendingPermissionCount)} approvals waiting
+                            </span>
+                        ) : null}
+                    </div>
+
+                    <div className='space-y-1'>
+                        <p className='text-sm font-semibold'>{selectedSession ? 'Selected thread' : 'Workspace overview'}</p>
+                        <p className='text-muted-foreground text-xs'>{activeSummary}</p>
+                    </div>
+
+                    <div className='grid gap-3 md:grid-cols-[minmax(0,1.25fr)_minmax(0,0.85fr)]'>
+                        <label className='space-y-1.5'>
+                            <span className='text-muted-foreground text-[11px] font-semibold tracking-[0.12em] uppercase'>
+                                Thread
+                            </span>
+                            <select
+                            aria-label='Select thread'
+                            className='border-border bg-background/80 h-11 w-full rounded-2xl border px-3 text-sm tabular-nums'
+                            value={selectedSession?.id ?? ''}
+                            disabled={sessions.length === 0}
+                                onChange={(event) => {
+                                    const nextSessionId = event.target.value;
+                                    if (!nextSessionId) {
+                                        return;
+                                    }
+
+                                    onSelectSession(nextSessionId);
+                                }}>
+                                <option value=''>Choose thread</option>
+                                {sessions.map((session) => (
+                                    <option key={session.id} value={session.id}>
+                                        {formatSessionLabel(session)}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+
+                        <label className='space-y-1.5'>
+                            <span className='text-muted-foreground text-[11px] font-semibold tracking-[0.12em] uppercase'>
+                                Run
+                            </span>
+                            <select
+                            aria-label='Select run'
+                            className='border-border bg-background/80 h-11 w-full rounded-2xl border px-3 text-sm'
+                            value={selectedRun?.id ?? ''}
+                            disabled={runs.length === 0}
+                                onChange={(event) => {
+                                    const nextRunId = event.target.value;
+                                    if (!nextRunId) {
+                                        return;
+                                    }
+
+                                    onSelectRun(nextRunId);
+                                }}>
+                                <option value=''>Latest run</option>
+                                {runs.map((run) => (
+                                    <option key={run.id} value={run.id}>
+                                        {formatRunLabel(run)}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                    </div>
                 </div>
 
-                <div className='flex flex-wrap items-center gap-2'>
-                    {compactConnectionLabel ? (
-                        <span className='border-border bg-background/70 text-muted-foreground rounded-full border px-3 py-1 text-xs'>
-                            {compactConnectionLabel}
-                        </span>
-                    ) : null}
-                    {routingBadge ? (
-                        <span className='border-border bg-background/70 text-muted-foreground rounded-full border px-3 py-1 text-xs'>
-                            {routingBadge}
-                        </span>
-                    ) : null}
-                    {pendingPermissionCount > 0 ? (
-                        <span className='rounded-full border border-amber-500/40 bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-200'>
-                            {String(pendingPermissionCount)} approvals waiting
-                        </span>
-                    ) : null}
+                <div className='flex shrink-0 items-start'>
                     <Button
                         type='button'
                         size='sm'
                         variant={isInspectorOpen ? 'secondary' : 'outline'}
+                        className='min-h-11 rounded-full'
                         onClick={onToggleInspector}>
                         {isInspectorOpen ? 'Hide Inspector' : 'Show Inspector'}
                     </Button>

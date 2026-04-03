@@ -25,8 +25,8 @@ describe('workspace surface header', () => {
         expect(html).toContain('Local Default');
         expect(html).toContain('Search');
         expect(html).toContain('Open settings');
+        expect(html).toContain('Sessions, threads, and runs in one shell');
         expect(html).not.toContain('Return to sessions');
-        expect(html).not.toContain('Sessions');
         expect(html).not.toContain('All workspaces');
         expect(html).not.toContain('Workspaces');
         expect(html).not.toContain('App');

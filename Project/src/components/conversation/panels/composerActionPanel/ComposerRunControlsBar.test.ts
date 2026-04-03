@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { readRuntimeProviderId } from '@/web/components/conversation/panels/composerActionPanel/ComposerRunControlsBar';
+import { readRuntimeProviderId } from '@/web/components/conversation/panels/composerActionPanel/composerProviderId';
 
 describe('readRuntimeProviderId', () => {
     it('returns the provider id when the input is a known runtime provider', () => {

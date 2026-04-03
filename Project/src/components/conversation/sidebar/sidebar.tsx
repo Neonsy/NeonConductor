@@ -170,6 +170,12 @@ export function ConversationSidebar({
 }: ConversationSidebarProps) {
     const [feedbackMessage, setFeedbackMessage] = useState<string | undefined>(undefined);
     const desktopBridge = typeof window !== 'undefined' ? window.neonDesktop : undefined;
+    const selectedWorkspaceLabel = preferredWorkspaceFingerprint
+        ? workspaceRoots.find((workspace) => workspace.fingerprint === preferredWorkspaceFingerprint)?.label
+        : undefined;
+    const selectedThreadTitle = selectedThreadId
+        ? threads.find((thread) => thread.id === selectedThreadId)?.title
+        : undefined;
     const threadDraftController = useThreadEntryDraftState({
         preferredWorkspaceFingerprint,
         workspacePreferences,
@@ -292,6 +298,11 @@ export function ConversationSidebar({
                 }`}>
                 <SidebarRailHeader
                     compact={isCollapsed}
+                    workspaceCount={workspaceRoots.length}
+                    threadCount={threads.length}
+                    sessionCount={sessions.length}
+                    {...(selectedWorkspaceLabel ? { selectedWorkspaceLabel } : {})}
+                    {...(selectedThreadTitle ? { selectedThreadTitle } : {})}
                     {...(feedbackMessage ? { feedbackMessage } : {})}
                     {...(statusMessage ? { statusMessage, statusTone } : {})}
                     onToggleCollapsed={onToggleCollapsed}
@@ -338,92 +349,94 @@ export function ConversationSidebar({
                         </Button>
                     </div>
                 ) : (
-                    <SidebarThreadBrowser
-                        buckets={buckets}
-                        threads={threads}
-                        sessions={sessions}
-                        tags={tags}
-                        workspaceRoots={workspaceRoots}
-                        threadTagIdsByThread={threadTagIdsByThread}
-                        {...(selectedThreadId ? { selectedThreadId } : {})}
-                        {...(preferredWorkspaceFingerprint
-                            ? { selectedWorkspaceFingerprint: preferredWorkspaceFingerprint }
-                            : {})}
-                        selectedTagIds={selectedTagIds}
-                        scopeFilter={scopeFilter}
-                        {...(workspaceFilter ? { workspaceFilter } : {})}
-                        sort={sort}
-                        showAllModes={showAllModes}
-                        groupView={groupView}
-                        isAddingTag={isAddingTag}
-                        {...(statusMessage ? { statusMessage, statusTone } : {})}
-                        providers={providers}
-                        providerModels={providerModels}
-                        isCreatingThread={isCreatingThread || workspaceCreateController.busy}
-                        {...(threadDraftController.inlineThreadDraft
-                            ? { inlineThreadDraft: threadDraftController.inlineThreadDraft }
-                            : {})}
-                        onSelectThread={onSelectThread}
-                        {...(onPreviewThread ? { onPreviewThread } : {})}
-                        onToggleTagFilter={onToggleTagFilter}
-                        onToggleThreadFavorite={async (threadId, nextFavorite) => {
-                            setFeedbackMessage(undefined);
-                            const result = await mutationController.toggleThreadFavorite(threadId, nextFavorite);
-                            if (!result.ok) {
-                                setFeedbackMessage(result.message);
-                            }
-                            return result;
-                        }}
-                        onRequestWorkspaceDelete={(workspaceFingerprint, workspaceLabel) => {
-                            workspaceDeleteController.requestWorkspaceDelete(workspaceFingerprint, workspaceLabel);
-                        }}
-                        onRequestNewThread={(workspaceFingerprint) => {
-                            const requestedWorkspaceFingerprint =
-                                threadDraftController.getRequestWorkspaceFingerprint(workspaceFingerprint);
-                            if (!requestedWorkspaceFingerprint) {
-                                setFeedbackMessage('Choose a workspace before creating a workspace thread.');
-                                return;
-                            }
+                    <div className='flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden'>
+                        <SidebarThreadBrowser
+                            buckets={buckets}
+                            threads={threads}
+                            sessions={sessions}
+                            tags={tags}
+                            workspaceRoots={workspaceRoots}
+                            threadTagIdsByThread={threadTagIdsByThread}
+                            {...(selectedThreadId ? { selectedThreadId } : {})}
+                            {...(preferredWorkspaceFingerprint
+                                ? { selectedWorkspaceFingerprint: preferredWorkspaceFingerprint }
+                                : {})}
+                            selectedTagIds={selectedTagIds}
+                            scopeFilter={scopeFilter}
+                            {...(workspaceFilter ? { workspaceFilter } : {})}
+                            sort={sort}
+                            showAllModes={showAllModes}
+                            groupView={groupView}
+                            isAddingTag={isAddingTag}
+                            {...(statusMessage ? { statusMessage, statusTone } : {})}
+                            providers={providers}
+                            providerModels={providerModels}
+                            isCreatingThread={isCreatingThread || workspaceCreateController.busy}
+                            {...(threadDraftController.inlineThreadDraft
+                                ? { inlineThreadDraft: threadDraftController.inlineThreadDraft }
+                                : {})}
+                            onSelectThread={onSelectThread}
+                            {...(onPreviewThread ? { onPreviewThread } : {})}
+                            onToggleTagFilter={onToggleTagFilter}
+                            onToggleThreadFavorite={async (threadId, nextFavorite) => {
+                                setFeedbackMessage(undefined);
+                                const result = await mutationController.toggleThreadFavorite(threadId, nextFavorite);
+                                if (!result.ok) {
+                                    setFeedbackMessage(result.message);
+                                }
+                                return result;
+                            }}
+                            onRequestWorkspaceDelete={(workspaceFingerprint, workspaceLabel) => {
+                                workspaceDeleteController.requestWorkspaceDelete(workspaceFingerprint, workspaceLabel);
+                            }}
+                            onRequestNewThread={(workspaceFingerprint) => {
+                                const requestedWorkspaceFingerprint =
+                                    threadDraftController.getRequestWorkspaceFingerprint(workspaceFingerprint);
+                                if (!requestedWorkspaceFingerprint) {
+                                    setFeedbackMessage('Choose a workspace before creating a workspace thread.');
+                                    return;
+                                }
 
-                            setFeedbackMessage(undefined);
-                            onSelectWorkspaceFingerprint(requestedWorkspaceFingerprint);
-                            threadDraftController.startInlineThreadDraft(requestedWorkspaceFingerprint);
-                        }}
-                        onInlineThreadTitleChange={(title) => {
-                            threadDraftController.setInlineThreadTitle(title);
-                        }}
-                        onInlineThreadTopLevelTabChange={(topLevelTab) => {
-                            threadDraftController.setInlineThreadTopLevelTab(topLevelTab);
-                        }}
-                        onInlineThreadProviderChange={(providerId) => {
-                            const nextModelId =
-                                providerModels.find((model) => model.providerId === providerId)?.id ?? '';
-                            threadDraftController.setInlineThreadProvider(providerId, nextModelId);
-                        }}
-                        onInlineThreadModelChange={(modelId) => {
-                            threadDraftController.setInlineThreadModel(modelId);
-                        }}
-                        onCancelInlineThread={() => {
-                            threadDraftController.cancelInlineThread();
-                        }}
-                        onSubmitInlineThread={() => {
-                            void handleInlineThreadSubmit();
-                        }}
-                        onSelectWorkspaceFingerprint={onSelectWorkspaceFingerprint}
-                        onScopeFilterChange={onScopeFilterChange}
-                        onWorkspaceFilterChange={onWorkspaceFilterChange}
-                        onSortChange={onSortChange}
-                        onShowAllModesChange={onShowAllModesChange}
-                        onGroupViewChange={onGroupViewChange}
-                        onAddTagToThread={async (threadId, label) => {
-                            setFeedbackMessage(undefined);
-                            const result = await mutationController.addTagToThread(threadId, label);
-                            if (!result.ok) {
-                                setFeedbackMessage(result.message);
-                            }
-                            return result;
-                        }}
-                    />
+                                setFeedbackMessage(undefined);
+                                onSelectWorkspaceFingerprint(requestedWorkspaceFingerprint);
+                                threadDraftController.startInlineThreadDraft(requestedWorkspaceFingerprint);
+                            }}
+                            onInlineThreadTitleChange={(title) => {
+                                threadDraftController.setInlineThreadTitle(title);
+                            }}
+                            onInlineThreadTopLevelTabChange={(topLevelTab) => {
+                                threadDraftController.setInlineThreadTopLevelTab(topLevelTab);
+                            }}
+                            onInlineThreadProviderChange={(providerId) => {
+                                const nextModelId =
+                                    providerModels.find((model) => model.providerId === providerId)?.id ?? '';
+                                threadDraftController.setInlineThreadProvider(providerId, nextModelId);
+                            }}
+                            onInlineThreadModelChange={(modelId) => {
+                                threadDraftController.setInlineThreadModel(modelId);
+                            }}
+                            onCancelInlineThread={() => {
+                                threadDraftController.cancelInlineThread();
+                            }}
+                            onSubmitInlineThread={() => {
+                                void handleInlineThreadSubmit();
+                            }}
+                            onSelectWorkspaceFingerprint={onSelectWorkspaceFingerprint}
+                            onScopeFilterChange={onScopeFilterChange}
+                            onWorkspaceFilterChange={onWorkspaceFilterChange}
+                            onSortChange={onSortChange}
+                            onShowAllModesChange={onShowAllModesChange}
+                            onGroupViewChange={onGroupViewChange}
+                            onAddTagToThread={async (threadId, label) => {
+                                setFeedbackMessage(undefined);
+                                const result = await mutationController.addTagToThread(threadId, label);
+                                if (!result.ok) {
+                                    setFeedbackMessage(result.message);
+                                }
+                                return result;
+                            }}
+                        />
+                    </div>
                 )}
             </aside>
 

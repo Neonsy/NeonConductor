@@ -58,7 +58,6 @@ export function SessionWorkspacePanel(input: SessionWorkspacePanelProps) {
         onModelChange,
         onReasoningEffortChange,
         onModeChange,
-        onCreateSession,
         onPromptEdited,
         onAddImageFiles,
         onRemovePendingImage,
@@ -75,8 +74,6 @@ export function SessionWorkspacePanel(input: SessionWorkspacePanelProps) {
             inspectorSections={workspaceShell.inspector.sections}
             renderHeader={({ isInspectorOpen, toggleInspector }) => (
                 <WorkspaceSelectionHeader
-                    sessions={workspaceShell.header.sessions}
-                    runs={workspaceShell.header.runs}
                     selectedSession={workspaceShell.header.selectedSession}
                     selectedRun={workspaceShell.header.selectedRun}
                     {...(workspaceShell.header.compactConnectionLabel
@@ -84,10 +81,9 @@ export function SessionWorkspacePanel(input: SessionWorkspacePanelProps) {
                         : {})}
                     {...(workspaceShell.header.routingBadge ? { routingBadge: workspaceShell.header.routingBadge } : {})}
                     pendingPermissionCount={workspaceShell.header.pendingPermissionCount}
-                    canCreateSession={workspaceShell.header.canCreateSession}
-                    isCreatingSession={workspaceShell.header.isCreatingSession}
                     isInspectorOpen={isInspectorOpen}
-                    onCreateSession={onCreateSession}
+                    sessions={workspaceShell.header.sessions}
+                    runs={workspaceShell.header.runs}
                     onSelectSession={onSelectSession}
                     onSelectRun={onSelectRun}
                     onToggleInspector={toggleInspector}
@@ -96,14 +92,9 @@ export function SessionWorkspacePanel(input: SessionWorkspacePanelProps) {
             <WorkspacePrimaryColumn
                 profileId={profileId}
                 profiles={profiles}
-                selectedProfileId={selectedProfileId}
-                selectedSessionId={selectedSessionId}
-                selectedWorkspaceFingerprint={selectedWorkspaceFingerprint}
-                selectedSandboxId={selectedSandboxId}
                 messages={messages}
                 partsByMessageId={partsByMessageId}
                 runs={runs}
-                optimisticUserMessage={optimisticUserMessage}
                 pendingImages={pendingImages}
                 isStartingRun={isStartingRun}
                 selectedProviderId={selectedProviderId}
@@ -113,27 +104,32 @@ export function SessionWorkspacePanel(input: SessionWorkspacePanelProps) {
                 modes={modes}
                 reasoningEffort={reasoningEffort}
                 selectedModelSupportsReasoning={selectedModelSupportsReasoning}
-                supportedReasoningEfforts={supportedReasoningEfforts}
                 maxImageAttachmentsPerMessage={maxImageAttachmentsPerMessage}
                 canAttachImages={canAttachImages}
-                imageAttachmentBlockedReason={imageAttachmentBlockedReason}
-                routingBadge={routingBadge}
-                selectedModelCompatibilityState={selectedModelCompatibilityState}
-                selectedModelCompatibilityReason={selectedModelCompatibilityReason}
-                selectedProviderStatus={selectedProviderStatus}
                 modelOptions={modelOptions}
                 runErrorMessage={runErrorMessage}
-                contextState={contextState}
                 attachedRules={attachedRules}
                 missingAttachedRuleKeys={missingAttachedRuleKeys}
                 attachedSkills={attachedSkills}
                 missingAttachedSkillKeys={missingAttachedSkillKeys}
-                canCompactContext={canCompactContext}
-                isCompactingContext={isCompactingContext}
-                promptResetKey={promptResetKey}
-                focusComposerRequestKey={focusComposerRequestKey}
-                controlsDisabled={controlsDisabled}
-                submitDisabled={submitDisabled}
+                {...(selectedProfileId ? { selectedProfileId } : {})}
+                {...(selectedSessionId ? { selectedSessionId } : {})}
+                {...(selectedWorkspaceFingerprint ? { selectedWorkspaceFingerprint } : {})}
+                {...(selectedSandboxId ? { selectedSandboxId } : {})}
+                {...(optimisticUserMessage ? { optimisticUserMessage } : {})}
+                {...(supportedReasoningEfforts ? { supportedReasoningEfforts } : {})}
+                {...(imageAttachmentBlockedReason ? { imageAttachmentBlockedReason } : {})}
+                {...(routingBadge !== undefined ? { routingBadge } : {})}
+                {...(selectedModelCompatibilityState ? { selectedModelCompatibilityState } : {})}
+                {...(selectedModelCompatibilityReason ? { selectedModelCompatibilityReason } : {})}
+                {...(selectedProviderStatus ? { selectedProviderStatus } : {})}
+                {...(contextState ? { contextState } : {})}
+                {...(canCompactContext !== undefined ? { canCompactContext } : {})}
+                {...(isCompactingContext !== undefined ? { isCompactingContext } : {})}
+                {...(promptResetKey !== undefined ? { promptResetKey } : {})}
+                {...(focusComposerRequestKey !== undefined ? { focusComposerRequestKey } : {})}
+                {...(controlsDisabled !== undefined ? { controlsDisabled } : {})}
+                {...(submitDisabled !== undefined ? { submitDisabled } : {})}
                 onProfileChange={onProfileChange}
                 onProviderChange={onProviderChange}
                 onModelChange={onModelChange}
@@ -144,10 +140,10 @@ export function SessionWorkspacePanel(input: SessionWorkspacePanelProps) {
                 onRemovePendingImage={onRemovePendingImage}
                 onRetryPendingImage={onRetryPendingImage}
                 onSubmitPrompt={onSubmitPrompt}
-                onCompactContext={onCompactContext}
-                onEditMessage={onEditMessage}
-                onBranchFromMessage={onBranchFromMessage}
-                onOpenToolArtifact={onOpenToolArtifact}
+                {...(onCompactContext ? { onCompactContext } : {})}
+                {...(onEditMessage ? { onEditMessage } : {})}
+                {...(onBranchFromMessage ? { onBranchFromMessage } : {})}
+                {...(onOpenToolArtifact ? { onOpenToolArtifact } : {})}
             />
         </WorkspaceShell>
     );

@@ -1,7 +1,18 @@
+import { createElement } from 'react';
+
 import type { MessageFlowMessage } from '@/web/components/conversation/messages/messageFlowModel';
 import type { OptimisticConversationUserMessage } from '@/web/components/conversation/messages/optimisticUserMessage';
-import type { ExecutionTargetExplanationModel } from '@/web/components/conversation/shell/workspace/runTargetSelection';
+import { PendingPermissionsPanel } from '@/web/components/conversation/panels/pendingPermissionsPanel';
+import { RunChangeSummaryPanel } from '@/web/components/conversation/panels/runChangeSummaryPanel';
+import { WorkspaceStatusPanel } from '@/web/components/conversation/panels/workspaceStatusPanel';
+import type {
+    WorkspaceHeaderModel,
+    WorkspaceInspectorModel,
+    WorkspaceInspectorSection,
+    WorkspaceShellProjection,
+} from '@/web/components/conversation/sessions/workspaceShellModel';
 import type { ConversationModeOption } from '@/web/components/conversation/shell/workspace/helpers';
+import type { ExecutionTargetExplanationModel } from '@/web/components/conversation/shell/workspace/runTargetSelection';
 import type { ModelCompatibilityState, ModelPickerOption } from '@/web/components/modelSelection/modelCapabilities';
 
 import type {
@@ -23,18 +34,7 @@ import type {
     TopLevelTab,
 } from '@/shared/contracts';
 
-import { createElement } from 'react';
 import type { ReactNode } from 'react';
-
-import { PendingPermissionsPanel } from '@/web/components/conversation/panels/pendingPermissionsPanel';
-import { RunChangeSummaryPanel } from '@/web/components/conversation/panels/runChangeSummaryPanel';
-import { WorkspaceStatusPanel } from '@/web/components/conversation/panels/workspaceStatusPanel';
-import type {
-    WorkspaceHeaderModel,
-    WorkspaceInspectorModel,
-    WorkspaceInspectorSection,
-    WorkspaceShellProjection,
-} from '@/web/components/conversation/sessions/workspaceShellModel';
 
 export interface PendingImageView {
     clientId: string;
@@ -201,8 +201,6 @@ export function buildWorkspaceHeaderModel(input: SessionWorkspacePanelProps): Wo
         ...(compactConnectionLabel ? { compactConnectionLabel } : {}),
         ...(input.routingBadge ? { routingBadge: input.routingBadge } : {}),
         pendingPermissionCount: input.pendingPermissions.length,
-        canCreateSession: input.canCreateSession,
-        isCreatingSession: input.isCreatingSession,
     };
 }
 

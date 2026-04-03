@@ -66,11 +66,11 @@ export function ConversationWorkspaceHeader({
     });
 
     return (
-        <header className='border-border flex items-center justify-between gap-4 border-b px-4 py-3'>
+        <header className='border-border/70 bg-background/75 flex items-center justify-between gap-4 border-b px-4 py-3 backdrop-blur-sm'>
             <div className='flex min-w-0 items-start gap-3'>
                 <button
                     type='button'
-                    className='border-border bg-card hover:bg-accent inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border transition-colors'
+                    className='border-border bg-card hover:bg-accent inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border transition-colors'
                     aria-label={isSidebarCollapsed ? 'Expand threads sidebar' : 'Collapse threads sidebar'}
                     title={isSidebarCollapsed ? 'Expand threads sidebar' : 'Collapse threads sidebar'}
                     onClick={onToggleSidebar}>
@@ -81,7 +81,7 @@ export function ConversationWorkspaceHeader({
                     )}
                 </button>
 
-                <div className='min-w-0'>
+                <div className='min-w-0 space-y-1'>
                     <p className='truncate text-sm font-semibold'>{threadTitle ?? 'No conversation selected'}</p>
                     <p
                         className={`text-xs ${streamState === 'error' ? 'text-amber-300' : 'text-muted-foreground'}`}
@@ -97,7 +97,7 @@ export function ConversationWorkspaceHeader({
                     <button
                         key={mode.id}
                         type='button'
-                        className={`rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${
+                        className={`min-h-11 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${
                             mode.id === topLevelTab
                                 ? 'border-primary bg-primary/10 text-primary shadow-sm'
                                 : 'border-border bg-card hover:bg-accent'

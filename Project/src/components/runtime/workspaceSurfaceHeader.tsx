@@ -28,11 +28,13 @@ export function WorkspaceSurfaceHeader({
     const isSettingsOpen = appSection === 'settings';
 
     return (
-        <header className='border-border/80 bg-background/88 flex items-center justify-between gap-3 border-b px-4 py-3 backdrop-blur-sm'>
+        <header className='border-border/80 bg-background/90 flex items-center justify-between gap-3 border-b px-4 py-3 backdrop-blur-sm'>
             <div className='flex min-w-0 items-center gap-3'>
-                <div className='min-w-0'>
+                <div className='min-w-0 space-y-1'>
                     <p className='text-[11px] font-semibold tracking-[0.14em] uppercase'>NeonConductor</p>
-                    <p className='text-muted-foreground text-xs'>Command surface</p>
+                    <p className='text-muted-foreground text-xs'>
+                        {isSettingsOpen ? 'Settings inside the main shell' : 'Sessions, threads, and runs in one shell'}
+                    </p>
                 </div>
             </div>
 
@@ -40,7 +42,7 @@ export function WorkspaceSurfaceHeader({
                 <label className='text-muted-foreground text-[11px] font-semibold tracking-[0.12em] uppercase'>
                     <span className='sr-only'>Profile</span>
                     <select
-                        className='border-border bg-card h-9 min-w-[200px] rounded-full border px-3 text-sm'
+                        className='border-border bg-card h-11 min-w-[200px] rounded-full border px-3 text-sm'
                         value={resolvedProfileId ?? ''}
                         disabled={!resolvedProfileId || isSwitchingProfile}
                         onChange={(event) => {
@@ -56,7 +58,7 @@ export function WorkspaceSurfaceHeader({
 
                 <button
                     type='button'
-                    className='border-border bg-card hover:bg-accent rounded-full border px-3 py-1.5 text-sm font-medium'
+                    className='border-border bg-card hover:bg-accent min-h-11 rounded-full border px-3 py-1.5 text-sm font-medium'
                     onClick={onOpenCommandPalette}>
                     Search · Cmd/Ctrl+K
                 </button>
@@ -65,7 +67,7 @@ export function WorkspaceSurfaceHeader({
                     type='button'
                     aria-label='Open settings'
                     title='Open settings'
-                    className={`border-border inline-flex h-9 w-9 items-center justify-center rounded-full border transition-colors ${
+                    className={`border-border inline-flex h-11 w-11 items-center justify-center rounded-full border transition-colors ${
                         isSettingsOpen
                             ? 'border-primary bg-primary/10 text-primary'
                             : 'bg-card hover:bg-accent text-foreground'

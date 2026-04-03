@@ -119,8 +119,11 @@ describe('session workspace panel layout', () => {
     it('uses compact selectors and keeps the inspector closed by default', () => {
         const html = renderToStaticMarkup(createElement(SessionWorkspacePanel, sessionWorkspacePanelProps));
 
+        expect(html).toContain('Workspace selection');
         expect(html).toContain('Show Inspector');
-        expect(html).toContain('Active thread');
+        expect(html).toContain('Selected thread');
+        expect(html).toContain('Thread');
+        expect(html).toContain('Run');
         expect(html).toContain('2 turns · completed');
         expect(html).not.toContain('inspector');
     });

@@ -228,11 +228,14 @@ describe('conversation sidebar layout', () => {
         );
 
         expect(html).toContain('Sessions');
+        expect(html).toContain('Workspace tree, thread rail, and run state in one place.');
+        expect(html).toContain('1 workspace');
+        expect(html).toContain('1 thread');
         expect(html).toContain('Search threads, workspaces, or tabs');
-        expect(html).toContain('Filters');
+        expect(html).toContain('Find threads');
+        expect(html).toContain('Filters and grouping');
         expect(html).toContain('Add workspace');
         expect(html).toContain('New thread');
-        expect(html).not.toContain('Optional thread title');
     });
 });
 

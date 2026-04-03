@@ -144,69 +144,83 @@ export function SidebarThreadBrowser({
 
     return (
         <>
-            <div className='space-y-2 p-4 pt-0'>
-                <input
-                    aria-label='Search threads'
-                    name='threadSearch'
-                    value={searchValue}
-                    onChange={(event) => {
-                        setSearchValue(event.target.value);
-                    }}
-                    className='border-border bg-background h-10 w-full rounded-2xl border px-3 text-sm'
-                    autoComplete='off'
-                    placeholder='Search threads, workspaces, or tabs…'
-                />
-
-                <div className='space-y-2'>
-                    <div className='flex flex-wrap gap-2'>
-                        <Button
-                            type='button'
-                            size='sm'
-                            className='rounded-xl whitespace-nowrap'
-                            variant={scopeFilter === 'all' ? 'secondary' : 'outline'}
-                            onClick={() => {
-                                onScopeFilterChange('all');
-                            }}>
-                            All
-                        </Button>
-                        <Button
-                            type='button'
-                            size='sm'
-                            className='rounded-xl whitespace-nowrap'
-                            variant={scopeFilter === 'workspace' ? 'secondary' : 'outline'}
-                            onClick={() => {
-                                onScopeFilterChange('workspace');
-                            }}>
-                            Workspace
-                        </Button>
-                        <Button
-                            type='button'
-                            size='sm'
-                            className='rounded-xl whitespace-nowrap'
-                            variant={scopeFilter === 'detached' ? 'secondary' : 'outline'}
-                            onClick={() => {
-                                onScopeFilterChange('detached');
-                            }}>
-                            Playground
-                        </Button>
+            <div className='space-y-3 p-4 pt-0'>
+                <div className='border-border/70 bg-background/80 space-y-3 rounded-[28px] border p-3 shadow-sm'>
+                    <div className='flex items-start justify-between gap-3'>
+                        <div className='min-w-0 space-y-1'>
+                            <p className='text-[11px] font-semibold tracking-[0.18em] uppercase'>Find threads</p>
+                            <p className='text-muted-foreground text-xs leading-5'>
+                                Search by thread title, workspace, sandbox, or tab.
+                            </p>
+                        </div>
+                        <span className='border-border/70 bg-card/70 text-muted-foreground rounded-full border px-2.5 py-1 text-[11px] font-medium'>
+                            {resultsLabel}
+                        </span>
                     </div>
 
-                    <select
-                        aria-label='Sort threads'
-                        className='border-border bg-background h-8 w-full rounded-xl border px-3 text-sm'
-                        value={sort}
+                    <input
+                        aria-label='Search threads'
+                        name='threadSearch'
+                        value={searchValue}
                         onChange={(event) => {
-                            onSortChange(event.target.value === 'alphabetical' ? 'alphabetical' : 'latest');
-                        }}>
-                        <option value='latest'>Latest</option>
-                        <option value='alphabetical'>A-Z</option>
-                    </select>
+                            setSearchValue(event.target.value);
+                        }}
+                        className='border-border bg-background h-10 w-full rounded-2xl border px-3 text-sm'
+                        autoComplete='off'
+                        placeholder='Search threads, workspaces, or tabs…'
+                    />
+
+                    <div className='grid gap-2 md:grid-cols-[1fr_136px]'>
+                        <div className='flex flex-wrap gap-2'>
+                            <Button
+                                type='button'
+                                size='sm'
+                                className='rounded-full whitespace-nowrap'
+                                variant={scopeFilter === 'all' ? 'secondary' : 'outline'}
+                                onClick={() => {
+                                    onScopeFilterChange('all');
+                                }}>
+                                All
+                            </Button>
+                            <Button
+                                type='button'
+                                size='sm'
+                                className='rounded-full whitespace-nowrap'
+                                variant={scopeFilter === 'workspace' ? 'secondary' : 'outline'}
+                                onClick={() => {
+                                    onScopeFilterChange('workspace');
+                                }}>
+                                Workspace
+                            </Button>
+                            <Button
+                                type='button'
+                                size='sm'
+                                className='rounded-full whitespace-nowrap'
+                                variant={scopeFilter === 'detached' ? 'secondary' : 'outline'}
+                                onClick={() => {
+                                    onScopeFilterChange('detached');
+                                }}>
+                                Playground
+                            </Button>
+                        </div>
+
+                        <select
+                            aria-label='Sort threads'
+                            className='border-border bg-background h-9 w-full rounded-2xl border px-3 text-sm'
+                            value={sort}
+                            onChange={(event) => {
+                                onSortChange(event.target.value === 'alphabetical' ? 'alphabetical' : 'latest');
+                            }}>
+                            <option value='latest'>Latest</option>
+                            <option value='alphabetical'>A-Z</option>
+                        </select>
+                    </div>
                 </div>
 
-                <details className='border-border/70 bg-background/50 rounded-2xl border px-3 py-2'>
+                <details className='border-border/70 bg-background/55 rounded-[26px] border px-3 py-2.5'>
                     <summary className='flex cursor-pointer list-none items-center justify-between gap-3 py-1'>
                         <div>
-                            <p className='text-sm font-medium'>Filters</p>
+                            <p className='text-sm font-medium'>Filters and grouping</p>
                             <p className='text-muted-foreground text-xs'>
                                 {resultsLabel} · tags and grouping stay optional.
                             </p>
@@ -221,6 +235,7 @@ export function SidebarThreadBrowser({
                             <Button
                                 type='button'
                                 size='sm'
+                                className='rounded-full'
                                 variant={showAllModes ? 'secondary' : 'outline'}
                                 onClick={() => {
                                     onShowAllModesChange(!showAllModes);
@@ -281,7 +296,7 @@ export function SidebarThreadBrowser({
                         ) : null}
 
                         {selectedThread ? (
-                            <div className='space-y-2'>
+                            <div className='border-border/70 bg-card/55 space-y-2 rounded-2xl border p-3'>
                                 <p className='text-muted-foreground text-[11px] font-semibold tracking-wide uppercase'>
                                     Add Tag To Selected Thread
                                 </p>
@@ -301,6 +316,7 @@ export function SidebarThreadBrowser({
                                         type='button'
                                         size='sm'
                                         variant='outline'
+                                        className='rounded-full'
                                         disabled={isAddingTag}
                                         onClick={() => {
                                             launchBackgroundTask(async () => {

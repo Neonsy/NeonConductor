@@ -1,8 +1,8 @@
-import type { KeyboardEvent as ReactKeyboardEvent, RefObject } from 'react';
-
-import type { ComposerSlashPopupState } from '@/web/components/conversation/panels/composerSlashCommands';
-import { ComposerSlashCommandPopup } from '@/web/components/conversation/panels/composerSlashCommandPopup';
 import { PendingImagesGrid, type PendingImageCardView } from '@/web/components/conversation/panels/composerActionPanel/pendingImagesGrid';
+import { ComposerSlashCommandPopup } from '@/web/components/conversation/panels/composerSlashCommandPopup';
+import type { ComposerSlashPopupState } from '@/web/components/conversation/panels/composerSlashCommands';
+
+import type { KeyboardEvent as ReactKeyboardEvent, RefObject } from 'react';
 
 interface ComposerPromptCardProps {
     isDragActive: boolean;
@@ -55,18 +55,18 @@ export function ComposerPromptCard({
 }: ComposerPromptCardProps) {
     return (
         <div
-            className='space-y-3'
+            className='space-y-2'
             onDragOver={onDragOver}
             onDragLeave={onDragLeave}
             onDrop={onDrop}>
-                <input
-                    ref={fileInputRef}
-                    type='file'
-                    accept='image/jpeg,image/png,image/webp'
-                    multiple
-                    className='hidden'
-                    onChange={onFileInputChange}
-                />
+            <input
+                ref={fileInputRef}
+                type='file'
+                accept='image/jpeg,image/png,image/webp'
+                multiple
+                className='hidden'
+                onChange={onFileInputChange}
+            />
             {composerErrorMessage ? (
                 <p
                     aria-live='polite'
@@ -75,12 +75,12 @@ export function ComposerPromptCard({
                 </p>
             ) : null}
             <div
-                className={`border-border bg-card/30 relative overflow-hidden rounded-2xl border transition ${
+                className={`border-border/70 bg-card/35 relative overflow-hidden rounded-[24px] border transition ${
                     isDragActive ? 'border-primary bg-primary/10 shadow-[0_0_0_1px_hsl(var(--primary)/0.25)]' : ''
                 }`}>
                 <ComposerSlashCommandPopup state={slashPopupState} />
                 {imageAttachmentBlockedReason && !canAttachImages ? (
-                    <p className='text-muted-foreground border-border border-b px-4 py-3 text-xs'>
+                    <p className='text-muted-foreground border-border/60 border-b px-4 py-3 text-xs'>
                         {imageAttachmentBlockedReason}
                     </p>
                 ) : null}
@@ -105,7 +105,7 @@ export function ComposerPromptCard({
                     onPaste={onPromptPaste}
                     onKeyDown={onPromptKeyDown}
                     rows={4}
-                    className='border-border bg-background/70 focus-visible:ring-ring focus-visible:border-ring min-h-[160px] w-full resize-y border-t px-4 py-4 text-sm leading-6 focus-visible:ring-2 focus-visible:outline-none'
+                    className='border-border/60 bg-background/75 focus-visible:ring-ring focus-visible:border-ring min-h-[176px] w-full resize-y border-t px-4 py-4 text-sm leading-6 focus-visible:ring-2 focus-visible:outline-none'
                     autoComplete='off'
                     spellCheck
                     placeholder='Type your message here…'
