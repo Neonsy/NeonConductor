@@ -6,8 +6,15 @@ import type {
     ProviderListItem,
 } from '@/app/backend/providers/service/types';
 
-import type { RuntimeProviderId } from '@/shared/contracts';
-import type { ProviderSpecialistDefaultRecord } from '@/shared/contracts/types/provider';
+import {
+    findWorkflowRoutingPreference,
+    type RuntimeProviderId,
+    type WorkflowRoutingTargetKey,
+} from '@/shared/contracts';
+import type {
+    ProviderSpecialistDefaultRecord,
+    WorkflowRoutingPreferenceRecord,
+} from '@/shared/contracts/types/provider';
 
 
 export function listProviderControlEntries(snapshot: ProviderControlSnapshot | undefined): ProviderControlEntry[] {
@@ -43,6 +50,19 @@ export function getProviderControlSpecialistDefaults(
     snapshot: ProviderControlSnapshot | undefined
 ): ProviderSpecialistDefaultRecord[] {
     return snapshot?.specialistDefaults ?? [];
+}
+
+export function getProviderControlWorkflowRoutingPreferences(
+    snapshot: ProviderControlSnapshot | undefined
+): WorkflowRoutingPreferenceRecord[] {
+    return snapshot?.workflowRoutingPreferences ?? [];
+}
+
+export function findProviderControlWorkflowRoutingPreference(
+    snapshot: ProviderControlSnapshot | undefined,
+    targetKey: WorkflowRoutingTargetKey
+): WorkflowRoutingPreferenceRecord | undefined {
+    return findWorkflowRoutingPreference(getProviderControlWorkflowRoutingPreferences(snapshot), targetKey);
 }
 
 export function getProviderControlCatalogState(

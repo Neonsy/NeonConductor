@@ -11,8 +11,12 @@ import type { ProviderModelRecord, ProviderRecord } from '@/app/backend/persiste
 import {
     getProviderSpecialistDefaultKey,
     isSupportedProviderSpecialistDefaultTarget,
+    isSupportedWorkflowRoutingTargetKey,
+    workflowRoutingTargetKeys,
     type ProviderSpecialistDefaultModeKey,
     type ProviderSpecialistDefaultTopLevelTab,
+    type WorkflowRoutingPreferenceRecord,
+    type WorkflowRoutingTargetKey,
     providerIds,
 } from '@/app/backend/runtime/contracts';
 import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
@@ -21,6 +25,11 @@ import type { ProviderSpecialistDefaultRecord } from '@/app/backend/runtime/cont
 import { canonicalizeProviderModelId } from '@/shared/kiloModels';
 
 const SPECIALIST_DEFAULTS_KEY = 'specialist_defaults';
+const WORKFLOW_ROUTING_PREFERENCES_KEY = 'workflow_routing_preferences';
+
+const workflowRoutingTargetKeyOrder = new Map<WorkflowRoutingTargetKey, number>(
+    workflowRoutingTargetKeys.map((targetKey, index) => [targetKey, index])
+);
 
 function isPersistedSpecialistDefaultRecord(value: unknown): value is ProviderSpecialistDefaultRecord {
     if (!isJsonRecord(value)) {
@@ -57,6 +66,56 @@ function canonicalizeSpecialistDefaultRecord(value: ProviderSpecialistDefaultRec
         ...value,
         modelId: canonicalizeProviderModelId(value.providerId, value.modelId),
     };
+}
+
+function isPersistedWorkflowRoutingPreferenceRecord(value: unknown): value is WorkflowRoutingPreferenceRecord {
+    if (!isJsonRecord(value)) {
+        return false;
+    }
+
+    if (!isJsonString(value.targetKey) || !isJsonString(value.providerId) || !isJsonString(value.modelId)) {
+        return false;
+    }
+
+    if (!providerIds.includes(value.providerId as RuntimeProviderId)) {
+        return false;
+    }
+
+    return isSupportedWorkflowRoutingTargetKey(value.targetKey);
+}
+
+function isPersistedWorkflowRoutingPreferenceRecordArray(
+    value: unknown
+): value is WorkflowRoutingPreferenceRecord[] {
+    return isJsonUnknownArray(value) && value.every(isPersistedWorkflowRoutingPreferenceRecord);
+}
+
+function canonicalizeWorkflowRoutingPreferenceRecord(
+    value: WorkflowRoutingPreferenceRecord
+): WorkflowRoutingPreferenceRecord {
+    return {
+        ...value,
+        modelId: canonicalizeProviderModelId(value.providerId, value.modelId),
+    };
+}
+
+function compareWorkflowRoutingPreferenceRecords(
+    left: WorkflowRoutingPreferenceRecord,
+    right: WorkflowRoutingPreferenceRecord
+): number {
+    return (
+        (workflowRoutingTargetKeyOrder.get(left.targetKey) ?? Number.POSITIVE_INFINITY) -
+        (workflowRoutingTargetKeyOrder.get(right.targetKey) ?? Number.POSITIVE_INFINITY)
+    );
+}
+
+function canonicalizeWorkflowRoutingPreferenceRecords(
+    values: WorkflowRoutingPreferenceRecord[]
+): WorkflowRoutingPreferenceRecord[] {
+    return values
+        .map(canonicalizeWorkflowRoutingPreferenceRecord)
+        .toSorted(compareWorkflowRoutingPreferenceRecords)
+        .filter((value, index, records) => records.findIndex((candidate) => candidate.targetKey === value.targetKey) === index);
 }
 
 export class ProviderStore {
@@ -114,6 +173,17 @@ export class ProviderStore {
         return persisted.map(canonicalizeSpecialistDefaultRecord);
     }
 
+    async getWorkflowRoutingPreferences(profileId: string): Promise<WorkflowRoutingPreferenceRecord[]> {
+        const persisted =
+            (await settingsStore.getJsonOptional(
+                profileId,
+                WORKFLOW_ROUTING_PREFERENCES_KEY,
+                isPersistedWorkflowRoutingPreferenceRecordArray
+            )) ?? [];
+
+        return canonicalizeWorkflowRoutingPreferenceRecords(persisted);
+    }
+
     async setSpecialistDefault(
         profileId: string,
         input: {
@@ -137,6 +207,32 @@ export class ProviderStore {
             ),
         ];
         await settingsStore.setJson(profileId, SPECIALIST_DEFAULTS_KEY, nextRecords);
+        return nextRecords;
+    }
+
+    async setWorkflowRoutingPreference(
+        profileId: string,
+        input: WorkflowRoutingPreferenceRecord
+    ): Promise<WorkflowRoutingPreferenceRecord[]> {
+        const nextRecord = canonicalizeWorkflowRoutingPreferenceRecord(input);
+        const current = await this.getWorkflowRoutingPreferences(profileId);
+        const nextRecords = canonicalizeWorkflowRoutingPreferenceRecords([
+            nextRecord,
+            ...current.filter((value) => value.targetKey !== nextRecord.targetKey),
+        ]);
+        await settingsStore.setJson(profileId, WORKFLOW_ROUTING_PREFERENCES_KEY, nextRecords);
+        return nextRecords;
+    }
+
+    async clearWorkflowRoutingPreference(
+        profileId: string,
+        targetKey: WorkflowRoutingTargetKey
+    ): Promise<WorkflowRoutingPreferenceRecord[]> {
+        const current = await this.getWorkflowRoutingPreferences(profileId);
+        const nextRecords = canonicalizeWorkflowRoutingPreferenceRecords(
+            current.filter((value) => value.targetKey !== targetKey)
+        );
+        await settingsStore.setJson(profileId, WORKFLOW_ROUTING_PREFERENCES_KEY, nextRecords);
         return nextRecords;
     }
 

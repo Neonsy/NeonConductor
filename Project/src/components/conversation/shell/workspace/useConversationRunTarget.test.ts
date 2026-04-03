@@ -2,12 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import { useConversationRunTarget } from '@/web/components/conversation/shell/workspace/useConversationRunTarget';
 
-
 import type { ProviderModelRecord, RunRecord } from '@/app/backend/persistence/types';
 import type { ProviderListItem } from '@/app/backend/providers/service/types';
 
 import { kiloFrontierModelId } from '@/shared/kiloModels';
 import type { ModeRoutingIntent } from '@/shared/modeRouting';
+import type { WorkflowRoutingPreferenceRecord } from '@/shared/contracts/types/provider';
 
 function createRoutingIntent(input?: {
     requiresNativeTools?: boolean;
@@ -359,5 +359,158 @@ describe('useConversationRunTarget', () => {
         expect(state.resolvedExecutionTarget?.source).toBe('session_override');
         expect(state.resolvedExecutionTarget?.explanation.selectedSourceLabel).toBe('Session override');
         expect(state.resolvedExecutionTarget?.explanation.compatibilityMode).toBe('override');
+    });
+
+    it('prefers a saved planning workflow routing target before workspace and shared defaults', () => {
+        const workflowRoutingPreferences: WorkflowRoutingPreferenceRecord[] = [
+            {
+                targetKey: 'planning',
+                providerId: 'moonshot',
+                modelId: 'moonshot/kimi-k2.5',
+            },
+        ];
+
+        const state = useConversationRunTarget({
+            providers: [
+                createProvider({ id: 'openai', label: 'OpenAI', authMethod: 'api_key', authState: 'configured' }),
+                createProvider({ id: 'moonshot', label: 'Moonshot', authMethod: 'api_key', authState: 'configured' }),
+            ],
+            providerModels: [
+                createModel({
+                    id: 'openai/gpt-5',
+                    providerId: 'openai',
+                    label: 'GPT-5',
+                    supportsTools: true,
+                }),
+                createModel({
+                    id: 'moonshot/kimi-k2.5',
+                    providerId: 'moonshot',
+                    label: 'Kimi K2.5',
+                    supportsTools: true,
+                }),
+            ],
+            defaults: {
+                providerId: 'openai',
+                modelId: 'openai/gpt-5',
+            },
+            workspacePreference: {
+                profileId: 'profile_test',
+                workspaceFingerprint: 'workspace_test',
+                defaultTopLevelTab: 'agent',
+                defaultProviderId: 'openai',
+                defaultModelId: 'openai/gpt-5',
+                updatedAt: '2026-03-12T12:00:00.000Z',
+            },
+            runs: [],
+            workflowRoutingTarget: 'planning',
+            workflowRoutingPreferences,
+        });
+
+        expect(state.resolvedRunTarget).toEqual({
+            providerId: 'moonshot',
+            modelId: 'moonshot/kimi-k2.5',
+        });
+        expect(state.resolvedExecutionTarget?.source).toBe('workflow_routing');
+        expect(state.resolvedExecutionTarget?.explanation.selectedSourceLabel).toBe('Workflow routing');
+        expect(state.resolvedExecutionTarget?.explanation.selectionReason).toContain('planning preferences');
+    });
+
+    it('falls back from advanced planning to the planning routing target when no advanced override exists', () => {
+        const workflowRoutingPreferences: WorkflowRoutingPreferenceRecord[] = [
+            {
+                targetKey: 'planning',
+                providerId: 'moonshot',
+                modelId: 'moonshot/kimi-k2.5',
+            },
+        ];
+
+        const state = useConversationRunTarget({
+            providers: [
+                createProvider({ id: 'openai', label: 'OpenAI', authMethod: 'api_key', authState: 'configured' }),
+                createProvider({ id: 'moonshot', label: 'Moonshot', authMethod: 'api_key', authState: 'configured' }),
+            ],
+            providerModels: [
+                createModel({
+                    id: 'openai/gpt-5',
+                    providerId: 'openai',
+                    label: 'GPT-5',
+                    supportsTools: true,
+                }),
+                createModel({
+                    id: 'moonshot/kimi-k2.5',
+                    providerId: 'moonshot',
+                    label: 'Kimi K2.5',
+                    supportsTools: true,
+                }),
+            ],
+            defaults: {
+                providerId: 'openai',
+                modelId: 'openai/gpt-5',
+            },
+            workspacePreference: {
+                profileId: 'profile_test',
+                workspaceFingerprint: 'workspace_test',
+                defaultTopLevelTab: 'agent',
+                defaultProviderId: 'openai',
+                defaultModelId: 'openai/gpt-5',
+                updatedAt: '2026-03-12T12:00:00.000Z',
+            },
+            runs: [],
+            workflowRoutingTarget: 'planning_advanced',
+            workflowRoutingPreferences,
+        });
+
+        expect(state.resolvedRunTarget).toEqual({
+            providerId: 'moonshot',
+            modelId: 'moonshot/kimi-k2.5',
+        });
+        expect(state.resolvedExecutionTarget?.source).toBe('workflow_routing');
+        expect(state.resolvedExecutionTarget?.explanation.selectionReason).toContain(
+            'Advanced planning fell back to the planning workflow routing'
+        );
+    });
+
+    it('keeps the latest compatible prior run ahead of workflow routing preferences', () => {
+        const workflowRoutingPreferences: WorkflowRoutingPreferenceRecord[] = [
+            {
+                targetKey: 'planning',
+                providerId: 'moonshot',
+                modelId: 'moonshot/kimi-k2.5',
+            },
+        ];
+
+        const state = useConversationRunTarget({
+            providers: [
+                createProvider({ id: 'openai', label: 'OpenAI', authMethod: 'api_key', authState: 'configured' }),
+                createProvider({ id: 'moonshot', label: 'Moonshot', authMethod: 'api_key', authState: 'configured' }),
+            ],
+            providerModels: [
+                createModel({
+                    id: 'openai/gpt-5',
+                    providerId: 'openai',
+                    label: 'GPT-5',
+                    supportsTools: true,
+                }),
+                createModel({
+                    id: 'moonshot/kimi-k2.5',
+                    providerId: 'moonshot',
+                    label: 'Kimi K2.5',
+                    supportsTools: true,
+                }),
+            ],
+            defaults: {
+                providerId: 'moonshot',
+                modelId: 'moonshot/kimi-k2.5',
+            },
+            runs: [createRun({ providerId: 'openai', modelId: 'openai/gpt-5' })],
+            workflowRoutingTarget: 'planning',
+            workflowRoutingPreferences,
+        });
+
+        expect(state.resolvedRunTarget).toEqual({
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
+        });
+        expect(state.resolvedExecutionTarget?.source).toBe('latest_compatible_run');
     });
 });

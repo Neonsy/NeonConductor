@@ -74,6 +74,42 @@ describe('runtime contracts: provider selection defaults', () => {
         });
     });
 
+    it('persists planning-first workflow routing preferences independently from specialist defaults', async () => {
+        const caller = createCaller();
+
+        const changed = await caller.provider.setWorkflowRoutingPreference({
+            profileId,
+            targetKey: 'planning',
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
+        });
+        expect(changed.success).toBe(true);
+        if (!changed.success) {
+            throw new Error('Expected workflow routing preference update to succeed.');
+        }
+
+        const defaults = await caller.provider.getDefaults({ profileId });
+        expect(defaults.workflowRoutingPreferences).toContainEqual({
+            targetKey: 'planning',
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
+        });
+
+        const shellBootstrap = await caller.runtime.getShellBootstrap({ profileId });
+        expect(shellBootstrap.providerControl.workflowRoutingPreferences).toContainEqual({
+            targetKey: 'planning',
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
+        });
+
+        const cleared = await caller.provider.clearWorkflowRoutingPreference({
+            profileId,
+            targetKey: 'planning',
+        });
+        expect(cleared.success).toBe(true);
+        expect(cleared.workflowRoutingPreferences).toEqual([]);
+    });
+
     it('normalizes only legacy OpenAI OAuth and Codex state into openai_codex', async () => {
         const caller = createCaller();
         const { sqlite } = getPersistence();

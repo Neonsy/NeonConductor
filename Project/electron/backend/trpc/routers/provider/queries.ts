@@ -47,6 +47,9 @@ export const providerQueryProcedures = {
         return {
             defaults: await providerManagementService.getDefaults(input.profileId),
             specialistDefaults: await providerManagementService.getSpecialistDefaults(input.profileId),
+            workflowRoutingPreferences: await providerManagementService.getWorkflowRoutingPreferences(
+                input.profileId
+            ),
         };
     }),
     getUsageSummary: publicProcedure.input(providerListProvidersInputSchema).query(async ({ input }) => {

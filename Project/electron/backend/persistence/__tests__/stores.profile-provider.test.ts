@@ -40,6 +40,68 @@ describe('persistence stores: profile and provider domain', () => {
         expect(defaults.providerId).toBe('openai');
     });
 
+    it('persists profile-level workflow routing preferences independently from specialist defaults', async () => {
+        const profileId = getDefaultProfileId();
+
+        const updated = await providerStore.setWorkflowRoutingPreference(profileId, {
+            targetKey: 'planning',
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
+        });
+        expect(updated).toEqual([
+            {
+                targetKey: 'planning',
+                providerId: 'openai',
+                modelId: 'openai/gpt-5',
+            },
+        ]);
+
+        const advancedUpdated = await providerStore.setWorkflowRoutingPreference(profileId, {
+            targetKey: 'planning_advanced',
+            providerId: 'openai',
+            modelId: 'openai/gpt-5.1',
+        });
+        expect(advancedUpdated).toEqual([
+            {
+                targetKey: 'planning',
+                providerId: 'openai',
+                modelId: 'openai/gpt-5',
+            },
+            {
+                targetKey: 'planning_advanced',
+                providerId: 'openai',
+                modelId: 'openai/gpt-5.1',
+            },
+        ]);
+
+        const readBack = await providerStore.getWorkflowRoutingPreferences(profileId);
+        expect(readBack).toEqual(advancedUpdated);
+
+        const cleared = await providerStore.clearWorkflowRoutingPreference(profileId, 'planning');
+        expect(cleared).toEqual([
+            {
+                targetKey: 'planning_advanced',
+                providerId: 'openai',
+                modelId: 'openai/gpt-5.1',
+            },
+        ]);
+    });
+
+    it('fails closed when workflow routing preference settings contain invalid JSON data', async () => {
+        const profileId = getDefaultProfileId();
+        const { sqlite } = getPersistence();
+        const now = new Date().toISOString();
+
+        sqlite
+            .prepare(
+                `INSERT OR REPLACE INTO settings (id, profile_id, key, value_json, updated_at) VALUES (?, ?, ?, ?, ?)`
+            )
+            .run('setting_workflow_routing_preferences', profileId, 'workflow_routing_preferences', '{"bad":true}', now);
+
+        const readBack = await providerStore.getWorkflowRoutingPreferences(profileId);
+        expect(readBack).toEqual([]);
+    });
+
     it('persists and rehydrates kilo balance snapshots across updates', async () => {
         const profileId = getDefaultProfileId();
 

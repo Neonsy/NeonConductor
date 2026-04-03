@@ -11,6 +11,8 @@ import {
     providerSetExecutionPreferenceInputSchema,
     providerSetModelRoutingPreferenceInputSchema,
     providerSetSpecialistDefaultInputSchema,
+    providerSetWorkflowRoutingPreferenceInputSchema,
+    providerClearWorkflowRoutingPreferenceInputSchema,
     providerSetOrganizationInputSchema,
     providerStartAuthInputSchema,
     providerSyncCatalogInputSchema,
@@ -285,6 +287,9 @@ export const providerMutationProcedures = {
             providerId: input.providerId,
             includeAuthState: true,
         });
+        if (!readback.authState) {
+            throw new Error('Expected provider auth state to be available after organization update.');
+        }
 
         await emitProviderUpsertEvent({
             providerId: input.providerId,
@@ -294,7 +299,7 @@ export const providerMutationProcedures = {
                 providerId: input.providerId,
                 organizationId: input.organizationId ?? null,
                 accountContext: result.value,
-                authState: readback.authState!,
+                authState: readback.authState,
                 defaults: readback.defaults,
                 models: readback.models,
                 ...(readback.provider ? { provider: readback.provider } : {}),
@@ -303,7 +308,7 @@ export const providerMutationProcedures = {
 
         return buildProviderOrganizationMutationReadback({
             accountContext: result.value,
-            authState: readback.authState!,
+            authState: readback.authState,
             defaults: readback.defaults,
             models: readback.models,
             ...(readback.provider ? { provider: readback.provider } : {}),
@@ -324,23 +329,23 @@ export const providerMutationProcedures = {
                 throwWithCode(providers.error.code, providers.error.message);
             }
 
-        await emitProviderUpsertEvent({
-            providerId: input.providerId,
-            eventType: 'provider.kilo-routing.set',
-            payload: buildProviderKiloRoutingSetEventPayload({
-                profileId: input.profileId,
+            await emitProviderUpsertEvent({
                 providerId: input.providerId,
-                modelId: input.modelId,
+                eventType: 'provider.kilo-routing.set',
+                payload: buildProviderKiloRoutingSetEventPayload({
+                    profileId: input.profileId,
+                    providerId: input.providerId,
+                    modelId: input.modelId,
+                    preference,
+                    providers: providers.value,
+                }),
+            });
+
+            return buildProviderModelRoutingPreferenceMutationReadback({
                 preference,
                 providers: providers.value,
-            }),
-        });
-
-        return buildProviderModelRoutingPreferenceMutationReadback({
-            preference,
-            providers: providers.value,
-        });
-    }),
+            });
+        }),
     setApiKey: publicProcedure.input(providerSetApiKeyInputSchema).mutation(async ({ input, ctx }) => {
         const stateResult = await providerManagementService.setApiKey(input.profileId, input.providerId, input.apiKey, {
             requestId: ctx.requestId,
@@ -491,4 +496,14 @@ export const providerMutationProcedures = {
 
         return result;
     }),
+    setWorkflowRoutingPreference: publicProcedure
+        .input(providerSetWorkflowRoutingPreferenceInputSchema)
+        .mutation(async ({ input }) => {
+            return providerManagementService.setWorkflowRoutingPreference(input);
+        }),
+    clearWorkflowRoutingPreference: publicProcedure
+        .input(providerClearWorkflowRoutingPreferenceInputSchema)
+        .mutation(async ({ input }) => {
+            return providerManagementService.clearWorkflowRoutingPreference(input);
+        }),
 };

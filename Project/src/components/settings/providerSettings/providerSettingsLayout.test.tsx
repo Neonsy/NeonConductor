@@ -143,6 +143,10 @@ vi.mock('@/web/components/settings/providerSettings/specialistDefaultsSection', 
     ProviderSpecialistDefaultsSection: () => <section>specialist defaults</section>,
 }));
 
+vi.mock('@/web/components/settings/providerSettings/workflowRoutingSection', () => ({
+    ProviderWorkflowRoutingSection: () => <section>workflow routing</section>,
+}));
+
 vi.mock('@/web/components/settings/shared/settingsFeedbackBanner', () => ({
     SettingsFeedbackBanner: () => null,
 }));
@@ -164,6 +168,7 @@ describe('provider settings layout', () => {
         expect(html).toContain('grid h-full min-h-0 min-w-0 overflow-hidden xl:grid-cols-[264px_minmax(0,1fr)]');
         expect(html).toContain('min-h-0 min-w-0 overflow-y-auto p-4 md:p-5');
         expect(html).toContain('Providers &amp; Models');
+        expect(html).toContain('workflow routing');
         expect(html).toContain('Connect direct providers and adjust their settings here.');
     });
 

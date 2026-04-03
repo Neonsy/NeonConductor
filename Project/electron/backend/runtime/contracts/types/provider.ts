@@ -10,6 +10,7 @@ import type {
     ProviderSpecialistDefaultModeKey,
     ProviderSpecialistDefaultTopLevelTab,
 } from '@/app/backend/runtime/contracts/specialistDefaults';
+import type { WorkflowRoutingTargetKey } from '@/app/backend/runtime/contracts/workflowRouting';
 import type { ProfileInput } from '@/app/backend/runtime/contracts/types/common';
 
 export interface MarketplacePackage {
@@ -68,6 +69,22 @@ export interface ProviderSetSpecialistDefaultInput extends ProfileInput {
     modeKey: ProviderSpecialistDefaultModeKey;
     providerId: RuntimeProviderId;
     modelId: string;
+}
+
+export interface WorkflowRoutingPreferenceRecord {
+    targetKey: WorkflowRoutingTargetKey;
+    providerId: RuntimeProviderId;
+    modelId: string;
+}
+
+export interface ProviderSetWorkflowRoutingPreferenceInput extends ProfileInput {
+    targetKey: WorkflowRoutingTargetKey;
+    providerId: RuntimeProviderId;
+    modelId: string;
+}
+
+export interface ProviderClearWorkflowRoutingPreferenceInput extends ProfileInput {
+    targetKey: WorkflowRoutingTargetKey;
 }
 
 export type ProviderListProvidersInput = ProfileInput;

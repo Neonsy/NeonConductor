@@ -9,9 +9,16 @@ import {
 import type { ProviderModelRecord, RunRecord } from '@/app/backend/persistence/types';
 import type { ProviderListItem } from '@/app/backend/providers/service/types';
 
-import { findProviderSpecialistDefault } from '@/shared/contracts';
+import {
+    findProviderSpecialistDefault,
+    resolveWorkflowRoutingPreference,
+    type WorkflowRoutingTargetKey,
+} from '@/shared/contracts';
 import type { RuntimeProviderId } from '@/shared/contracts';
-import type { ProviderSpecialistDefaultRecord } from '@/shared/contracts/types/provider';
+import type {
+    ProviderSpecialistDefaultRecord,
+    WorkflowRoutingPreferenceRecord,
+} from '@/shared/contracts/types/provider';
 import type { WorkspacePreferenceRecord } from '@/shared/contracts/types/runtime';
 import { canonicalizeProviderModelId } from '@/shared/kiloModels';
 import type { ModeRoutingIntent } from '@/shared/modeRouting';
@@ -20,6 +27,7 @@ export type ExecutionTargetResolutionSource =
     | 'session_override'
     | 'main_view_draft'
     | 'latest_compatible_run'
+    | 'workflow_routing'
     | 'specialist_default'
     | 'workspace_preference'
     | 'shared_defaults'
@@ -66,6 +74,8 @@ export interface ConversationRunTargetInput {
     runs: RunRecord[];
     routingIntent?: ModeRoutingIntent;
     modeKey?: string;
+    workflowRoutingTarget?: WorkflowRoutingTargetKey;
+    workflowRoutingPreferences?: WorkflowRoutingPreferenceRecord[];
     hasPendingImageAttachments?: boolean;
     imageAttachmentsAllowed?: boolean;
 }
@@ -82,11 +92,14 @@ export interface ConversationRunTargetModel extends ExecutionTargetCompatibility
 function buildExplanation(input: {
     source: ExecutionTargetResolutionSource;
     hasCompatibleOptions: boolean;
+    workflowRoutingTarget?: WorkflowRoutingTargetKey;
+    workflowRoutingResolvedFromPlanningFallback?: boolean;
 }): ExecutionTargetExplanationModel {
     const selectedSourceLabel: Record<ExecutionTargetResolutionSource, string> = {
         session_override: 'Session override',
         main_view_draft: 'Main-view draft',
         latest_compatible_run: 'Latest compatible run',
+        workflow_routing: 'Workflow routing',
         specialist_default: 'Specialist default',
         workspace_preference: 'Workspace preference',
         shared_defaults: 'Shared defaults',
@@ -100,9 +113,13 @@ function buildExplanation(input: {
                 ? 'An explicit session override won because session-owned target state is authoritative.'
                 : input.source === 'main_view_draft'
                   ? 'The unsaved main-view draft won because it is the most recent interactive selection.'
-                  : input.source === 'latest_compatible_run'
+                : input.source === 'latest_compatible_run'
                     ? 'The latest compatible prior run won because reuse is preferred when it still matches the current constraints.'
-                    : input.source === 'specialist_default'
+                    : input.source === 'workflow_routing'
+                      ? input.workflowRoutingResolvedFromPlanningFallback
+                          ? 'Advanced planning fell back to the planning workflow routing because no dedicated advanced override was saved.'
+                          : 'The saved workflow routing won because planning preferences outrank generic workspace and shared defaults.'
+                      : input.source === 'specialist_default'
                       ? 'The matching specialist default won because it is the active mode-specific default.'
                       : input.source === 'workspace_preference'
                         ? 'The workspace preference won because it overrides shared defaults for this workspace.'
@@ -217,12 +234,17 @@ export function resolveExecutionTarget(input: {
     runs: RunRecord[];
     routingIntent?: ModeRoutingIntent;
     modeKey?: string;
+    workflowRoutingTarget?: WorkflowRoutingTargetKey;
+    workflowRoutingPreferences?: WorkflowRoutingPreferenceRecord[];
 }): {
     resolvedRunTarget: RunTargetSelection | undefined;
     resolvedExecutionTarget: ResolvedExecutionTarget | undefined;
 } {
     const matchingSpecialistDefault = input.routingIntent?.specialistAlias
         ? findProviderSpecialistDefault(input.specialistDefaults ?? [], input.routingIntent.specialistAlias)
+        : undefined;
+    const resolvedWorkflowRouting = input.workflowRoutingTarget
+        ? resolveWorkflowRoutingPreference(input.workflowRoutingPreferences ?? [], input.workflowRoutingTarget)
         : undefined;
 
     function resolveFromOption(source: ExecutionTargetResolutionSource, providerId: RuntimeProviderId, modelId: string) {
@@ -245,6 +267,54 @@ export function resolveExecutionTarget(input: {
                 explanation: buildExplanation({
                     source,
                     hasCompatibleOptions: input.compatibilityModel.hasCompatibleOptions,
+                    ...(input.workflowRoutingTarget
+                        ? { workflowRoutingTarget: input.workflowRoutingTarget }
+                        : {}),
+                }),
+            },
+        };
+    }
+
+    function resolveWorkflowRoutingCandidate(
+        targetKey: WorkflowRoutingTargetKey,
+        source: ExecutionTargetResolutionSource = 'workflow_routing'
+    ) {
+        if (
+            !resolvedWorkflowRouting ||
+            !input.compatibilityModel.canAutoResolve(
+                input.compatibilityModel.getOption(
+                    resolvedWorkflowRouting.preference.providerId,
+                    resolvedWorkflowRouting.preference.modelId
+                )
+            )
+        ) {
+            return undefined;
+        }
+
+        const canonicalModelId = canonicalizeProviderModelId(
+            resolvedWorkflowRouting.preference.providerId,
+            resolvedWorkflowRouting.preference.modelId
+        );
+        return {
+            resolvedRunTarget: {
+                providerId: resolvedWorkflowRouting.preference.providerId,
+                modelId: canonicalModelId,
+            },
+            resolvedExecutionTarget: {
+                providerId: resolvedWorkflowRouting.preference.providerId,
+                modelId: canonicalModelId,
+                source,
+                compatibilityState: input.compatibilityModel
+                    .getOption(
+                        resolvedWorkflowRouting.preference.providerId,
+                        resolvedWorkflowRouting.preference.modelId
+                    )
+                    ?.compatibilityState ?? 'compatible',
+                explanation: buildExplanation({
+                    source,
+                    hasCompatibleOptions: input.compatibilityModel.hasCompatibleOptions,
+                    workflowRoutingTarget: targetKey,
+                    workflowRoutingResolvedFromPlanningFallback: resolvedWorkflowRouting.fellBackToPlanning,
                 }),
             },
         };
@@ -274,6 +344,9 @@ export function resolveExecutionTarget(input: {
                 explanation: buildExplanation({
                     source,
                     hasCompatibleOptions: input.compatibilityModel.hasCompatibleOptions,
+                    ...(input.workflowRoutingTarget
+                        ? { workflowRoutingTarget: input.workflowRoutingTarget }
+                        : {}),
                 }),
             },
         };
@@ -304,6 +377,13 @@ export function resolveExecutionTarget(input: {
         const candidate = resolveCompatibleFromOption('latest_compatible_run', run.providerId, modelId);
         if (candidate) {
             return candidate;
+        }
+    }
+
+    if (input.workflowRoutingTarget) {
+        const workflowRoutingCandidate = resolveWorkflowRoutingCandidate(input.workflowRoutingTarget);
+        if (workflowRoutingCandidate) {
+            return workflowRoutingCandidate;
         }
     }
 
@@ -400,6 +480,8 @@ export function buildConversationRunTargetModel(input: ConversationRunTargetInpu
         runs: input.runs,
         ...(input.routingIntent ? { routingIntent: input.routingIntent } : {}),
         ...(input.modeKey !== undefined ? { modeKey: input.modeKey } : {}),
+        ...(input.workflowRoutingTarget ? { workflowRoutingTarget: input.workflowRoutingTarget } : {}),
+        ...(input.workflowRoutingPreferences ? { workflowRoutingPreferences: input.workflowRoutingPreferences } : {}),
     });
 
     const selectedProviderIdForComposer =

@@ -13,6 +13,7 @@ import {
 import { buildDeterministicDraft, hasUnansweredRequiredQuestions } from '@/app/backend/runtime/services/plan/intake';
 import { ensureNoRunningResearchBatch } from '@/app/backend/runtime/services/plan/researchLifecycle';
 import { requirePlanView } from '@/app/backend/runtime/services/plan/views';
+import { resolvePlanningWorkflowRoutingRunTarget } from '@/app/backend/runtime/services/plan/workflowRoutingTarget';
 import { appLog } from '@/app/main/logging';
 
 import type { Result } from 'neverthrow';
@@ -198,7 +199,20 @@ export async function generatePlanDraft(
 
     const priorRevisionId = plan.currentRevisionId;
     const priorRevisionNumber = plan.currentRevisionNumber;
-    const attemptedModelGeneration = Boolean(input.providerId && input.modelId);
+    const resolvedPlanningRunTarget =
+        input.providerId && input.modelId
+            ? {
+                  providerId: input.providerId,
+                  modelId: input.modelId,
+              }
+            : await resolvePlanningWorkflowRoutingRunTarget({
+                  profileId: input.profileId,
+                  planningDepth: plan.planningDepth ?? 'simple',
+                  ...(input.workspaceFingerprint ?? plan.workspaceFingerprint
+                      ? { workspaceFingerprint: input.workspaceFingerprint ?? plan.workspaceFingerprint }
+                      : {}),
+              });
+    const attemptedModelGeneration = Boolean(resolvedPlanningRunTarget);
     await appendPlanDraftGenerationStartedEvent({
         profileId: input.profileId,
         planId: input.planId,
@@ -209,12 +223,12 @@ export async function generatePlanDraft(
     });
 
     const generatedDraft =
-        input.providerId && input.modelId
+        resolvedPlanningRunTarget
             ? await generateModelDraft({
                   profileId: input.profileId,
                   plan,
-                  providerId: input.providerId,
-                  modelId: input.modelId,
+                  providerId: resolvedPlanningRunTarget.providerId,
+                  modelId: resolvedPlanningRunTarget.modelId,
               })
             : null;
 

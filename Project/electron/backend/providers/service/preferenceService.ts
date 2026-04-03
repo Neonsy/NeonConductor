@@ -3,11 +3,17 @@ import { ensureSupportedProvider } from '@/app/backend/providers/service/helpers
 import type {
     ProviderSpecialistDefaultModeKey,
     ProviderSpecialistDefaultTopLevelTab,
+    WorkflowRoutingTargetKey,
     RuntimeProviderId,
 } from '@/app/backend/runtime/contracts';
-import type { ProviderSpecialistDefaultRecord } from '@/app/backend/runtime/contracts/types/provider';
+import type {
+    ProviderSpecialistDefaultRecord,
+    WorkflowRoutingPreferenceRecord,
+} from '@/app/backend/runtime/contracts/types/provider';
 import { isSupportedModeSpecialistAlias } from '@/app/backend/runtime/services/mode/routing';
 import { appLog } from '@/app/main/logging';
+
+import { resolveWorkflowRoutingCompatibilityRequirements } from '@/shared/workflowRouting';
 
 export async function getDefaults(profileId: string): Promise<{ providerId: string; modelId: string }> {
     return providerStore.getDefaults(profileId);
@@ -15,6 +21,10 @@ export async function getDefaults(profileId: string): Promise<{ providerId: stri
 
 export async function getSpecialistDefaults(profileId: string): Promise<ProviderSpecialistDefaultRecord[]> {
     return providerStore.getSpecialistDefaults(profileId);
+}
+
+export async function getWorkflowRoutingPreferences(profileId: string): Promise<WorkflowRoutingPreferenceRecord[]> {
+    return providerStore.getWorkflowRoutingPreferences(profileId);
 }
 
 export async function setDefault(
@@ -139,5 +149,102 @@ export async function setSpecialistDefault(input: {
         reason: null,
         specialistDefaults,
         ...(specialistDefault ? { specialistDefault } : {}),
+    };
+}
+
+export async function setWorkflowRoutingPreference(input: {
+    profileId: string;
+    targetKey: WorkflowRoutingTargetKey;
+    providerId: RuntimeProviderId;
+    modelId: string;
+}): Promise<{
+    success: boolean;
+    reason: 'provider_not_found' | 'model_not_found' | 'model_not_compatible' | null;
+    workflowRoutingPreferences: WorkflowRoutingPreferenceRecord[];
+    workflowRoutingPreference?: WorkflowRoutingPreferenceRecord;
+}> {
+    const ensuredProviderResult = await ensureSupportedProvider(input.providerId);
+    if (ensuredProviderResult.isErr()) {
+        appLog.warn({
+            tag: 'provider.preference-service',
+            message: 'Rejected workflow routing preference update due to unsupported or unregistered provider. ' +
+                `targetKey="${input.targetKey}"`,
+            profileId: input.profileId,
+            providerId: input.providerId,
+            targetKey: input.targetKey,
+            error: ensuredProviderResult.error.message,
+        });
+        return {
+            success: false,
+            reason: 'provider_not_found',
+            workflowRoutingPreferences: await providerStore.getWorkflowRoutingPreferences(input.profileId),
+        };
+    }
+
+    const modelCapabilities = await providerStore.getModelCapabilities(
+        input.profileId,
+        input.providerId,
+        input.modelId
+    );
+    if (!modelCapabilities) {
+        return {
+            success: false,
+            reason: 'model_not_found',
+            workflowRoutingPreferences: await providerStore.getWorkflowRoutingPreferences(input.profileId),
+        };
+    }
+
+    const compatibilityRequirements = resolveWorkflowRoutingCompatibilityRequirements(input.targetKey);
+    if (
+        (compatibilityRequirements.requiresNativeTools && !modelCapabilities.features.supportsTools) ||
+        (compatibilityRequirements.requiresReasoning && !modelCapabilities.features.supportsReasoning)
+    ) {
+        appLog.warn({
+            tag: 'provider.preference-service',
+            message: 'Rejected workflow routing preference update because the selected model does not satisfy the workflow routing requirements.',
+            profileId: input.profileId,
+            providerId: input.providerId,
+            modelId: input.modelId,
+            targetKey: input.targetKey,
+        });
+        return {
+            success: false,
+            reason: 'model_not_compatible',
+            workflowRoutingPreferences: await providerStore.getWorkflowRoutingPreferences(input.profileId),
+        };
+    }
+
+    const workflowRoutingPreferences = await providerStore.setWorkflowRoutingPreference(input.profileId, {
+        targetKey: input.targetKey,
+        providerId: input.providerId,
+        modelId: input.modelId,
+    });
+    const workflowRoutingPreference = workflowRoutingPreferences.find(
+        (value) => value.targetKey === input.targetKey
+    );
+    return {
+        success: true,
+        reason: null,
+        workflowRoutingPreferences,
+        ...(workflowRoutingPreference ? { workflowRoutingPreference } : {}),
+    };
+}
+
+export async function clearWorkflowRoutingPreference(input: {
+    profileId: string;
+    targetKey: WorkflowRoutingTargetKey;
+}): Promise<{
+    success: boolean;
+    reason: null;
+    workflowRoutingPreferences: WorkflowRoutingPreferenceRecord[];
+}> {
+    const workflowRoutingPreferences = await providerStore.clearWorkflowRoutingPreference(
+        input.profileId,
+        input.targetKey
+    );
+    return {
+        success: true,
+        reason: null,
+        workflowRoutingPreferences,
     };
 }

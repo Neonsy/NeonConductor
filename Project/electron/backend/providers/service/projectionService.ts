@@ -1,6 +1,10 @@
 import { readProviderCatalog } from '@/app/backend/providers/service/catalogReadService';
 import { okProviderService, type ProviderServiceResult } from '@/app/backend/providers/service/errors';
-import { getDefaults, getSpecialistDefaults } from '@/app/backend/providers/service/preferenceService';
+import {
+    getDefaults,
+    getSpecialistDefaults,
+    getWorkflowRoutingPreferences,
+} from '@/app/backend/providers/service/preferenceService';
 import { listProviders } from '@/app/backend/providers/service/readService';
 import type {
     ProviderControlEntry,
@@ -23,10 +27,11 @@ function compareProviderEntries(left: ProviderListItem, right: ProviderListItem)
 export async function getProviderControlSnapshot(
     profileId: string
 ): Promise<ProviderServiceResult<ProviderControlSnapshot>> {
-    const [providers, defaults, specialistDefaults] = await Promise.all([
+    const [providers, defaults, specialistDefaults, workflowRoutingPreferences] = await Promise.all([
         listProviders(profileId),
         getDefaults(profileId),
         getSpecialistDefaults(profileId),
+        getWorkflowRoutingPreferences(profileId),
     ]);
     const orderedProviders = providers.toSorted(compareProviderEntries);
 
@@ -57,5 +62,6 @@ export async function getProviderControlSnapshot(
         entries,
         defaults,
         specialistDefaults,
+        workflowRoutingPreferences,
     });
 }

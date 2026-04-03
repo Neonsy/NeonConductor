@@ -1,3 +1,4 @@
+import type { PlanningDepth } from '@/web/components/conversation/shell/planningDepth';
 import type {
     ConversationSessionActions,
     ConversationShellMainViewDraftTarget,
@@ -10,6 +11,7 @@ import { useConversationRunTarget } from '@/web/components/conversation/shell/wo
 import {
     getProviderControlDefaults,
     getProviderControlSpecialistDefaults,
+    getProviderControlWorkflowRoutingPreferences,
     listProviderControlModels,
     listProviderControlProviders,
 } from '@/web/lib/providerControl/selectors';
@@ -17,6 +19,7 @@ import {
 import type { RunRecord } from '@/app/backend/persistence/types';
 
 import type { RuntimeShellBootstrap } from '@/shared/contracts';
+import { resolvePlanningWorkflowRoutingTarget } from '@/shared/workflowRouting';
 
 interface UseConversationComposerTargetStateInput {
     shellBootstrapData: RuntimeShellBootstrap | undefined;
@@ -27,6 +30,9 @@ interface UseConversationComposerTargetStateInput {
     runs: RunRecord[];
     activeMode?: ConversationModeOption;
     modeKey: string;
+    isPlanningComposerMode: boolean;
+    planningDepth: PlanningDepth;
+    activePlanPlanningDepth?: PlanningDepth;
     imageAttachmentsAllowed: boolean;
 }
 
@@ -36,17 +42,23 @@ export function useConversationComposerTargetState(input: UseConversationCompose
         workspacePreferences: input.shellBootstrapData?.workspacePreferences,
         preferredWorkspaceFingerprint: input.selectedThreadWorkspaceFingerprint ?? input.selectedWorkspaceFingerprint,
     });
+    const planningDepth = input.activePlanPlanningDepth ?? input.planningDepth;
+    const workflowRoutingTarget = input.isPlanningComposerMode
+        ? resolvePlanningWorkflowRoutingTarget(planningDepth)
+        : undefined;
 
     return useConversationRunTarget({
         providers: listProviderControlProviders(providerControl),
         providerModels: listProviderControlModels(providerControl),
         defaults: getProviderControlDefaults(providerControl),
         specialistDefaults: getProviderControlSpecialistDefaults(providerControl),
+        workflowRoutingPreferences: getProviderControlWorkflowRoutingPreferences(providerControl),
         ...(preferredWorkspacePreference ? { workspacePreference: preferredWorkspacePreference } : {}),
         ...(input.mainViewDraftTarget ? { mainViewDraft: input.mainViewDraftTarget } : {}),
         runs: input.runs,
         ...(input.activeMode ? { routingIntent: resolveModeRoutingIntent(input.activeMode) } : {}),
         modeKey: input.modeKey,
+        ...(workflowRoutingTarget ? { workflowRoutingTarget } : {}),
         imageAttachmentsAllowed: input.imageAttachmentsAllowed,
         ...(input.sessionOverride ? { sessionOverride: input.sessionOverride } : {}),
     });

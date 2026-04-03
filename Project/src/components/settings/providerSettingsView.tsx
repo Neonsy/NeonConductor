@@ -4,6 +4,7 @@ import { useDirectProviderSettingsController } from '@/web/components/settings/p
 import { ProviderSidebar } from '@/web/components/settings/providerSettings/providerSidebar';
 import { ProviderStatusSection } from '@/web/components/settings/providerSettings/providerStatusSection';
 import { ProviderSpecialistDefaultsSection } from '@/web/components/settings/providerSettings/specialistDefaultsSection';
+import { ProviderWorkflowRoutingSection } from '@/web/components/settings/providerSettings/workflowRoutingSection';
 import { SettingsFeedbackBanner } from '@/web/components/settings/shared/settingsFeedbackBanner';
 
 import type { RuntimeProviderId } from '@/shared/contracts';
@@ -200,6 +201,9 @@ function ProviderSettingsViewBody({
             />
 
             <div className='min-h-0 min-w-0 overflow-y-auto p-4 md:p-5'>
+                <div className='mb-4'>
+                    <ProviderWorkflowRoutingSection profileId={profileId} />
+                </div>
                 {controller.isKiloSelected ? (
                     <KiloSettingsHandoff onOpenKiloSettings={onOpenKiloSettings} />
                 ) : selectedProvider ? (

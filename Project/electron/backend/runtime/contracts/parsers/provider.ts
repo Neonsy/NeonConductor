@@ -33,12 +33,15 @@ import type {
     ProviderSetModelRoutingPreferenceInput,
     ProviderSetApiKeyInput,
     ProviderSetDefaultInput,
+    ProviderSetWorkflowRoutingPreferenceInput,
+    ProviderClearWorkflowRoutingPreferenceInput,
     ProviderSetSpecialistDefaultInput,
     ProviderSetOrganizationInput,
     ProviderStartAuthInput,
     ProviderSyncCatalogInput,
     ProviderFlowInput,
 } from '@/app/backend/runtime/contracts/types';
+import { workflowRoutingTargetKeys } from '@/app/backend/runtime/contracts/workflowRouting';
 
 export function parseProviderSetDefaultInput(input: unknown): ProviderSetDefaultInput {
     const source = readObject(input, 'input');
@@ -98,6 +101,32 @@ export function parseProviderSetSpecialistDefaultInput(input: unknown): Provider
         modeKey: target.modeKey,
         providerId: readProviderId(source.providerId, 'providerId'),
         modelId: readString(source.modelId, 'modelId'),
+    };
+}
+
+export function parseProviderSetWorkflowRoutingPreferenceInput(
+    input: unknown
+): ProviderSetWorkflowRoutingPreferenceInput {
+    const source = readObject(input, 'input');
+    const targetKey = readEnumValue(source.targetKey, 'targetKey', workflowRoutingTargetKeys);
+
+    return {
+        profileId: readProfileId(source),
+        targetKey,
+        providerId: readProviderId(source.providerId, 'providerId'),
+        modelId: readString(source.modelId, 'modelId'),
+    };
+}
+
+export function parseProviderClearWorkflowRoutingPreferenceInput(
+    input: unknown
+): ProviderClearWorkflowRoutingPreferenceInput {
+    const source = readObject(input, 'input');
+    const targetKey = readEnumValue(source.targetKey, 'targetKey', workflowRoutingTargetKeys);
+
+    return {
+        profileId: readProfileId(source),
+        targetKey,
     };
 }
 
@@ -297,6 +326,12 @@ export function parseProviderListModelProvidersInput(input: unknown): ProviderLi
 
 export const providerSetDefaultInputSchema = createParser(parseProviderSetDefaultInput);
 export const providerSetSpecialistDefaultInputSchema = createParser(parseProviderSetSpecialistDefaultInput);
+export const providerSetWorkflowRoutingPreferenceInputSchema = createParser(
+    parseProviderSetWorkflowRoutingPreferenceInput
+);
+export const providerClearWorkflowRoutingPreferenceInputSchema = createParser(
+    parseProviderClearWorkflowRoutingPreferenceInput
+);
 export const providerListProvidersInputSchema = createParser(parseProviderListProvidersInput);
 export const providerListModelsInputSchema = createParser(parseProviderListModelsInput);
 export const providerByIdInputSchema = createParser(parseProviderByIdInput);

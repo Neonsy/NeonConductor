@@ -26,6 +26,7 @@ import {
 } from '@/app/backend/runtime/services/plan/prompt';
 import { buildPlanResearchRecommendation } from '@/app/backend/runtime/services/plan/recommendation';
 import { requirePlanView } from '@/app/backend/runtime/services/plan/views';
+import { resolvePlanningWorkflowRoutingRunTarget } from '@/app/backend/runtime/services/plan/workflowRoutingTarget';
 import { appLog } from '@/app/main/logging';
 
 import type { Result } from 'neverthrow';
@@ -360,6 +361,20 @@ export async function startPlanResearchBatch(
         return errPlan(runningBatchCheck.error.code, runningBatchCheck.error.message);
     }
 
+    const resolvedPlanningRunTarget =
+        input.providerId && input.modelId
+            ? {
+                  providerId: input.providerId,
+                  modelId: input.modelId,
+              }
+            : await resolvePlanningWorkflowRoutingRunTarget({
+                  profileId: input.profileId,
+                  planningDepth: plan.planningDepth,
+                  ...(input.workspaceFingerprint ?? plan.workspaceFingerprint
+                      ? { workspaceFingerprint: input.workspaceFingerprint ?? plan.workspaceFingerprint }
+                      : {}),
+              });
+
     const currentItems = await planStore.listItems(plan.id);
     const projectionBeforeStart = await planStore.getProjectionById(input.profileId, input.planId);
     const recommendation = buildPlanResearchRecommendation({
@@ -407,8 +422,8 @@ export async function startPlanResearchBatch(
         plan,
         researchBatch,
         runtimeOptions: input.runtimeOptions,
-        ...(input.providerId ? { providerId: input.providerId } : {}),
-        ...(input.modelId ? { modelId: input.modelId } : {}),
+        ...(resolvedPlanningRunTarget ? { providerId: resolvedPlanningRunTarget.providerId } : {}),
+        ...(resolvedPlanningRunTarget ? { modelId: resolvedPlanningRunTarget.modelId } : {}),
         ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
     }).catch((error: unknown) => {
         const message = error instanceof Error ? error.message : String(error);

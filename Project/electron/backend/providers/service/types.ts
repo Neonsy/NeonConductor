@@ -57,6 +57,7 @@ export interface ProviderControlSnapshot {
         modelId: string;
     };
     specialistDefaults: import('@/app/backend/runtime/contracts/types/provider').ProviderSpecialistDefaultRecord[];
+    workflowRoutingPreferences?: import('@/app/backend/runtime/contracts/types/provider').WorkflowRoutingPreferenceRecord[];
 }
 
 export interface ProviderEmbeddingControlEntry {

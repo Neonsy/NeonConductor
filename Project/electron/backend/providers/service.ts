@@ -1,6 +1,7 @@
 import type { ProviderAuthStateRecord, ProviderModelRecord } from '@/app/backend/persistence/types';
 import type { AuthExecutionResult } from '@/app/backend/providers/auth/errors';
 import type { ProviderAccountContextResult, PollAuthResult, StartAuthResult } from '@/app/backend/providers/auth/types';
+import { providerEmbeddingCatalogService } from '@/app/backend/providers/embeddingCatalog/service';
 import { providerAuthExecutionService } from '@/app/backend/providers/providerAuthExecutionService';
 import { getConnectionProfileState } from '@/app/backend/providers/service/endpointProfiles';
 import {
@@ -19,10 +20,14 @@ import {
 } from '@/app/backend/providers/service/kiloRoutingService';
 import {
     getDefaults,
+    getWorkflowRoutingPreferences,
     getSpecialistDefaults,
+    setWorkflowRoutingPreference,
     setDefault,
+    clearWorkflowRoutingPreference,
     setSpecialistDefault,
 } from '@/app/backend/providers/service/preferenceService';
+import { getProviderControlSnapshot } from '@/app/backend/providers/service/projectionService';
 import {
     cancelProviderAuth,
     clearProviderAuth,
@@ -34,11 +39,9 @@ import {
     setProviderApiKey,
 } from '@/app/backend/providers/service/providerAuthMutationLifecycle';
 import { syncProviderCatalog } from '@/app/backend/providers/service/providerCatalogSyncMutationLifecycle';
-import { providerEmbeddingCatalogService } from '@/app/backend/providers/embeddingCatalog/service';
 import { setProviderConnectionProfile } from '@/app/backend/providers/service/providerConnectionProfileMutationLifecycle';
 import { setProviderOrganization } from '@/app/backend/providers/service/providerOrganizationMutationLifecycle';
 import { providerProfileNormalizationGate } from '@/app/backend/providers/service/providerProfileNormalizationGate';
-import { getProviderControlSnapshot } from '@/app/backend/providers/service/projectionService';
 import {
     getCredentialSummary,
     getCredentialValue,
@@ -67,8 +70,11 @@ import type {
     ProviderGetModelRoutingPreferenceInput,
     ProviderListModelProvidersInput,
     ProviderSetModelRoutingPreferenceInput,
+    ProviderSetWorkflowRoutingPreferenceInput,
+    ProviderClearWorkflowRoutingPreferenceInput,
     RuntimeProviderId,
 } from '@/app/backend/runtime/contracts';
+import type { WorkflowRoutingPreferenceRecord } from '@/app/backend/runtime/contracts/types/provider';
 
 class ProviderManagementService {
     private async ensureNormalizedProviderProfileState(profileId: string): Promise<void> {
@@ -96,6 +102,11 @@ class ProviderManagementService {
     async getDefaults(profileId: string): Promise<{ providerId: string; modelId: string }> {
         await this.ensureNormalizedProviderProfileState(profileId);
         return getDefaults(profileId);
+    }
+
+    async getWorkflowRoutingPreferences(profileId: string): Promise<WorkflowRoutingPreferenceRecord[]> {
+        await this.ensureNormalizedProviderProfileState(profileId);
+        return getWorkflowRoutingPreferences(profileId);
     }
 
     async getControlPlane(profileId: string): Promise<ProviderServiceResult<ProviderControlSnapshot>> {
@@ -128,6 +139,16 @@ class ProviderManagementService {
     }) {
         await this.ensureNormalizedProviderProfileState(input.profileId);
         return setSpecialistDefault(input);
+    }
+
+    async setWorkflowRoutingPreference(input: ProviderSetWorkflowRoutingPreferenceInput) {
+        await this.ensureNormalizedProviderProfileState(input.profileId);
+        return setWorkflowRoutingPreference(input);
+    }
+
+    async clearWorkflowRoutingPreference(input: ProviderClearWorkflowRoutingPreferenceInput) {
+        await this.ensureNormalizedProviderProfileState(input.profileId);
+        return clearWorkflowRoutingPreference(input);
     }
 
     async getAuthState(profileId: string, providerId: RuntimeProviderId): Promise<ProviderAuthStateRecord> {

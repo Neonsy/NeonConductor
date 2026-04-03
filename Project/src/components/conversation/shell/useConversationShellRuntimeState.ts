@@ -179,6 +179,11 @@ export function useConversationShellRuntimeState(
         sessionOverride: sessionActions.sessionOverride,
         runs: selectionState.sessionRunSelection.runs,
         modeKey,
+        isPlanningComposerMode,
+        planningDepth: planningDepthSelection,
+        ...(queries.activePlanQuery.data?.found && queries.activePlanQuery.data.plan.planningDepth
+            ? { activePlanPlanningDepth: queries.activePlanQuery.data.plan.planningDepth }
+            : {}),
         ...(activeMode ? { activeMode } : {}),
         imageAttachmentsAllowed,
     });

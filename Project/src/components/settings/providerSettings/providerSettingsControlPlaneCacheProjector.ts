@@ -1,11 +1,3 @@
-import type { ProviderAuthStateRecord, ProviderModelRecord } from '@/app/backend/persistence/types';
-import type {
-    ProviderConnectionProfileResult,
-    ProviderControlEntry,
-    ProviderControlSnapshot,
-    ProviderListItem,
-} from '@/app/backend/providers/service/types';
-
 import type {
     EmptyCatalogStateReason,
     ProviderControlData,
@@ -16,8 +8,21 @@ import type {
     ShellBootstrapData,
 } from '@/web/components/settings/providerSettings/providerSettingsCache.types';
 
+import type { ProviderAuthStateRecord, ProviderModelRecord } from '@/app/backend/persistence/types';
+import type {
+    ProviderConnectionProfileResult,
+    ProviderControlEntry,
+    ProviderControlSnapshot,
+    ProviderListItem,
+} from '@/app/backend/providers/service/types';
+
+import type { WorkflowRoutingPreferenceRecord } from '@/shared/contracts/types/provider';
+
 type ProviderControlPlanePatchInput = Parameters<typeof patchProviderControlSnapshot>[1];
 type ProviderSettingsCacheContext = Pick<ProviderSettingsCacheProjectionInput, 'utils' | 'profileId' | 'providerId'>;
+type ProviderDefaultsDataWithWorkflowRoutingPreferences = ProviderDefaultsData & {
+    workflowRoutingPreferences?: WorkflowRoutingPreferenceRecord[];
+};
 
 function replaceProvider(current: ProviderListData | undefined, provider: ProviderListItem): ProviderListData | undefined {
     if (!current) {
@@ -111,6 +116,7 @@ function patchProviderControlSnapshot(
         provider?: ProviderListItem;
         defaults?: { providerId: string; modelId: string };
         specialistDefaults?: ProviderSettingsCacheProjectionInput['specialistDefaults'];
+        workflowRoutingPreferences?: WorkflowRoutingPreferenceRecord[];
         models?: ProviderModelRecord[];
         catalogStateReason?: EmptyCatalogStateReason;
         catalogStateDetail?: string;
@@ -139,6 +145,12 @@ function patchProviderControlSnapshot(
         entries: nextEntries,
         defaults: nextDefaults,
         specialistDefaults: input.specialistDefaults ?? current.specialistDefaults,
+        ...((input.workflowRoutingPreferences ?? current.workflowRoutingPreferences) !== undefined
+            ? {
+                  workflowRoutingPreferences:
+                      input.workflowRoutingPreferences ?? current.workflowRoutingPreferences,
+              }
+            : {}),
     };
 }
 
@@ -147,6 +159,7 @@ function shouldPatchControlPlane(input: ProviderSettingsCacheProjectionInput): b
         input.provider !== undefined ||
         input.defaults !== undefined ||
         input.specialistDefaults !== undefined ||
+        input.workflowRoutingPreferences !== undefined ||
         input.models !== undefined ||
         input.authState !== undefined ||
         input.connectionProfile !== undefined ||
@@ -162,6 +175,7 @@ function buildProviderControlPlanePatchInput(
         ...(input.provider ? { provider: input.provider } : {}),
         ...(input.defaults ? { defaults: input.defaults } : {}),
         ...(input.specialistDefaults ? { specialistDefaults: input.specialistDefaults } : {}),
+        ...(input.workflowRoutingPreferences ? { workflowRoutingPreferences: input.workflowRoutingPreferences } : {}),
         ...(input.models !== undefined ? { models: input.models } : {}),
         ...(input.catalogStateReason !== undefined ? { catalogStateReason: input.catalogStateReason } : {}),
         ...(input.catalogStateDetail !== undefined ? { catalogStateDetail: input.catalogStateDetail } : {}),
@@ -234,10 +248,17 @@ export function projectProviderSettingsControlPlaneCache(input: ProviderSettings
         const nextDefaults = input.defaults;
         writeProviderDefaultsData(
             input,
-            (current: ProviderDefaultsData | undefined) => ({
-                defaults: nextDefaults,
-                specialistDefaults: input.specialistDefaults ?? current?.specialistDefaults ?? [],
-            })
+            (current: ProviderDefaultsData | undefined) => {
+                const currentWorkflowRoutingPreferences =
+                    (current as ProviderDefaultsDataWithWorkflowRoutingPreferences | undefined)?.workflowRoutingPreferences ??
+                    [];
+
+                return {
+                    defaults: nextDefaults,
+                    specialistDefaults: input.specialistDefaults ?? current?.specialistDefaults ?? [],
+                    workflowRoutingPreferences: input.workflowRoutingPreferences ?? currentWorkflowRoutingPreferences,
+                } as ProviderDefaultsDataWithWorkflowRoutingPreferences;
+            }
         );
     }
 

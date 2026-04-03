@@ -111,6 +111,16 @@ test('AppRouter exposes prompt and provider procedure contracts to clients', () 
         providerId: string;
         modelId: string;
     }>();
+    expectTypeOf<AppRouterInputs['provider']['setWorkflowRoutingPreference']>().toExtend<{
+        profileId: string;
+        targetKey: 'planning' | 'planning_advanced';
+        providerId: string;
+        modelId: string;
+    }>();
+    expectTypeOf<AppRouterInputs['provider']['clearWorkflowRoutingPreference']>().toExtend<{
+        profileId: string;
+        targetKey: 'planning' | 'planning_advanced';
+    }>();
     expectTypeOf<AppRouterInputs['provider']['listModels']>().toExtend<{
         profileId: string;
         providerId: string;
@@ -240,6 +250,11 @@ test('AppRouter exposes prompt and provider procedure contracts to clients', () 
         specialistDefaults: Array<{
             topLevelTab: 'agent' | 'orchestrator';
             modeKey: 'ask' | 'code' | 'debug' | 'orchestrate';
+            providerId: string;
+            modelId: string;
+        }>;
+        workflowRoutingPreferences: Array<{
+            targetKey: 'planning' | 'planning_advanced';
             providerId: string;
             modelId: string;
         }>;

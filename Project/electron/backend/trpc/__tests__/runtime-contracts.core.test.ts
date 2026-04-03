@@ -60,7 +60,9 @@ describe('runtime contracts: core flows', () => {
         expect(shellBootstrap.providerControl.entries.length).toBeGreaterThan(0);
         expect(shellBootstrap.providerControl.entries.flatMap((entry) => entry.models).length).toBeGreaterThan(0);
         expect(shellBootstrap.providerControl.specialistDefaults).toEqual([]);
+        expect(shellBootstrap.providerControl.workflowRoutingPreferences).toEqual([]);
         expect(defaults.defaults.providerId).toBe('kilo');
+        expect(defaults.workflowRoutingPreferences).toEqual([]);
         expect(promptLayers.settings.topLevelInstructions.chat).toBe('');
         expect(promptLayers.settings.builtInModes.chat[0]?.modeKey).toBe('chat');
         expect(providers.providers.length).toBeGreaterThan(0);

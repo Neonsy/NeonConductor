@@ -4,7 +4,9 @@ import { projectProviderSettingsControlPlaneCache } from '@/web/components/setti
 
 import type { ProviderModelRecord } from '@/app/backend/persistence/types';
 import type { ProviderControlSnapshot, ProviderListItem } from '@/app/backend/providers/service/types';
+
 import type { RuntimeProviderId } from '@/shared/contracts';
+import type { WorkflowRoutingPreferenceRecord } from '@/shared/contracts/types/provider';
 
 function createSetDataSpy<T>() {
     let current: T | undefined;
@@ -89,15 +91,22 @@ describe('projectProviderSettingsControlPlaneCache', () => {
                 providerId: string;
                 modelId: string;
             }>;
+            workflowRoutingPreferences: WorkflowRoutingPreferenceRecord[];
         }>();
-        const controlPlaneStore = createSetDataSpy<{ providerControl: ProviderControlSnapshot }>();
+        const controlPlaneStore = createSetDataSpy<{
+            providerControl: ProviderControlSnapshot & {
+                workflowRoutingPreferences?: WorkflowRoutingPreferenceRecord[];
+            };
+        }>();
         const listModelsStore = createSetDataSpy<{
             models: ProviderModelRecord[];
             reason: 'provider_not_found' | 'catalog_sync_failed' | 'catalog_empty_after_normalization' | null;
             detail?: string;
         }>();
         const shellBootstrapStore = createSetDataSpy<{
-            providerControl: ProviderControlSnapshot;
+            providerControl: ProviderControlSnapshot & {
+                workflowRoutingPreferences?: WorkflowRoutingPreferenceRecord[];
+            };
         }>();
 
         const utils = {
@@ -112,7 +121,9 @@ describe('projectProviderSettingsControlPlaneCache', () => {
             },
         } as unknown as Parameters<typeof projectProviderSettingsControlPlaneCache>[0]['utils'];
 
-        const controlPlane: ProviderControlSnapshot = {
+        const controlPlane: ProviderControlSnapshot & {
+            workflowRoutingPreferences?: WorkflowRoutingPreferenceRecord[];
+        } = {
             entries: [
                 {
                     provider: createProvider('openai'),
@@ -127,6 +138,13 @@ describe('projectProviderSettingsControlPlaneCache', () => {
             ],
             defaults: { providerId: 'openai', modelId: 'openai/gpt-4o-mini' },
             specialistDefaults: [],
+            workflowRoutingPreferences: [
+                {
+                    targetKey: 'planning',
+                    providerId: 'kilo',
+                    modelId: 'kilo/frontier',
+                },
+            ],
         };
         controlPlaneStore.setData({ profileId: 'profile_default' }, { providerControl: controlPlane });
         shellBootstrapStore.setData({ profileId: 'profile_default' }, { providerControl: controlPlane });
@@ -138,6 +156,13 @@ describe('projectProviderSettingsControlPlaneCache', () => {
             {
                 defaults: { providerId: 'openai', modelId: 'openai/gpt-4o-mini' },
                 specialistDefaults: [],
+                workflowRoutingPreferences: [
+                    {
+                        targetKey: 'planning',
+                        providerId: 'kilo',
+                        modelId: 'kilo/frontier',
+                    },
+                ],
             }
         );
 
@@ -190,6 +215,13 @@ describe('projectProviderSettingsControlPlaneCache', () => {
                     modelId: 'openai/gpt-5',
                 },
             ],
+            workflowRoutingPreferences: [
+                {
+                    targetKey: 'planning',
+                    providerId: 'kilo',
+                    modelId: 'kilo/frontier',
+                },
+            ],
         });
         expect(controlPlaneStore.read()).toEqual({
             providerControl: {
@@ -227,6 +259,13 @@ describe('projectProviderSettingsControlPlaneCache', () => {
                         modelId: 'openai/gpt-5',
                     },
                 ],
+                workflowRoutingPreferences: [
+                    {
+                        targetKey: 'planning',
+                        providerId: 'kilo',
+                        modelId: 'kilo/frontier',
+                    },
+                ],
             },
         });
         expect(listModelsStore.read()).toEqual({
@@ -256,6 +295,13 @@ describe('projectProviderSettingsControlPlaneCache', () => {
                         modeKey: 'ask',
                         providerId: 'openai',
                         modelId: 'openai/gpt-5',
+                    },
+                ],
+                workflowRoutingPreferences: [
+                    {
+                        targetKey: 'planning',
+                        providerId: 'kilo',
+                        modelId: 'kilo/frontier',
                     },
                 ],
             },
