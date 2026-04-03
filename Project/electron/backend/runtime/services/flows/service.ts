@@ -1,5 +1,6 @@
 import { flowStore } from '@/app/backend/persistence/stores';
 import type {
+    FlowExecutionContext,
     FlowDefinitionCreateInput,
     FlowDefinitionDeleteInput,
     FlowDefinitionRecord,
@@ -185,11 +186,17 @@ export class FlowService {
     async createPersistedInstance(input: {
         profileId: string;
         flowDefinition: FlowDefinitionView;
+        executionContext?: FlowExecutionContext;
+        retrySourceFlowInstanceId?: string;
     }): Promise<FlowInstanceView> {
         const persistedInstance = await flowStore.createFlowInstance({
             profileId: input.profileId,
             flowDefinitionId: input.flowDefinition.definition.id,
             definitionSnapshot: input.flowDefinition.definition,
+            ...(input.executionContext ? { executionContext: input.executionContext } : {}),
+            ...(input.retrySourceFlowInstanceId
+                ? { retrySourceFlowInstanceId: input.retrySourceFlowInstanceId }
+                : {}),
         });
         if (!persistedInstance) {
             throw new Error(`Persisted flow definition "${input.flowDefinition.definition.id}" was not found.`);
@@ -199,6 +206,17 @@ export class FlowService {
             instance: persistedInstance.instance,
             definitionSnapshot: persistedInstance.definitionSnapshot,
             lifecycleEvents: [],
+            ...(persistedInstance.instance.executionContext
+                ? { executionContext: persistedInstance.instance.executionContext }
+                : {}),
+            availableActions: {
+                canResume: false,
+                canCancel: true,
+                canRetry: false,
+            },
+            ...(persistedInstance.instance.retrySourceFlowInstanceId
+                ? { retrySourceFlowInstanceId: persistedInstance.instance.retrySourceFlowInstanceId }
+                : {}),
             originKind: persistedInstance.originKind,
             ...(persistedInstance.workspaceFingerprint
                 ? { workspaceFingerprint: persistedInstance.workspaceFingerprint }

@@ -1,6 +1,6 @@
-import type { Generated } from 'kysely';
-
 import type { FlowDefinitionOriginKind } from '@/app/backend/runtime/contracts/enums';
+
+import type { Generated } from 'kysely';
 
 export interface ProfilesTable {
     id: string;
@@ -304,6 +304,9 @@ export interface PermissionsTable {
     command_text: string | null;
     approval_candidates_json: string;
     selected_approval_resource: string | null;
+    flow_instance_id: string | null;
+    flow_step_index: number | null;
+    flow_step_id: string | null;
     decision: string;
     resolved_scope: string | null;
     consumed_at: string | null;
@@ -1038,6 +1041,13 @@ export interface FlowInstancesTable {
     status: string;
     current_step_index: number;
     definition_snapshot_json: string;
+    execution_context_json: string | null;
+    awaiting_approval_kind: string | null;
+    awaiting_approval_step_index: number | null;
+    awaiting_approval_step_id: string | null;
+    awaiting_permission_request_id: string | null;
+    last_error_message: string | null;
+    retry_source_flow_instance_id: string | null;
     started_at: string | null;
     finished_at: string | null;
     created_at: string;

@@ -1,21 +1,7 @@
-import { permissionStore, toolStore } from '@/app/backend/persistence/stores';
 import type { EntityId, FlowDefinitionRecord } from '@/app/backend/runtime/contracts';
-import {
-    markBranchWorkflowFlowApprovalRequired,
-    markBranchWorkflowFlowFailure,
-    markBranchWorkflowFlowSuccess,
-    startBranchWorkflowFlowExecution,
-    startBranchWorkflowFlowStep,
-    type BranchWorkflowFlowExecutionContext,
-} from '@/app/backend/runtime/services/flows/branchWorkflowFlowBridge';
+import { flowExecutionService } from '@/app/backend/runtime/services/flows/executionService';
 import { normalizeFlowDefinition } from '@/app/backend/runtime/services/flows/lifecycle';
-import { resolveOverrideAndPresetPermissionPolicy } from '@/app/backend/runtime/services/permissions/policyResolver';
-import { getExecutionPreset } from '@/app/backend/runtime/services/profile/executionPreset';
-import { runtimeStatusEvent } from '@/app/backend/runtime/services/runtimeEventEnvelope';
-import { runtimeEventLogService } from '@/app/backend/runtime/services/runtimeEventLog';
-import { invokeToolHandler } from '@/app/backend/runtime/services/toolExecution/handlers';
-import { buildShellApprovalContext } from '@/app/backend/runtime/services/toolExecution/shellApproval';
-import { workspaceContextService } from '@/app/backend/runtime/services/workspaceContext/service';
+import { flowService } from '@/app/backend/runtime/services/flows/service';
 
 export type BranchWorkflowExecutionResult =
     | {
@@ -50,176 +36,61 @@ export class BranchWorkflowExecutionService {
         sandboxId?: EntityId<'sb'>;
         flowDefinition: FlowDefinitionRecord;
     }): Promise<BranchWorkflowExecutionResult> {
-        const normalizedFlowDefinition = normalizeFlowDefinition(input.flowDefinition);
-        let flowContext: BranchWorkflowFlowExecutionContext = await startBranchWorkflowFlowExecution({
+        const persistedDefinition = await flowService.upsertBranchWorkflowAdapterDefinition({
             profileId: input.profileId,
             workspaceFingerprint: input.workspaceFingerprint,
-            branchWorkflowId: input.sourceBranchWorkflowId,
-            flowDefinition: normalizedFlowDefinition,
+            sourceBranchWorkflowId: input.sourceBranchWorkflowId,
+            flowDefinition: normalizeFlowDefinition(input.flowDefinition),
         });
 
-        const markFailure = async (message: string): Promise<BranchWorkflowExecutionResult> => {
-            flowContext = await markBranchWorkflowFlowFailure({
-                profileId: input.profileId,
-                flowDefinition: flowContext.flowDefinition,
-                flowInstance: flowContext.flowInstance,
-                message,
-                stepIndex: 0,
-            });
-
-            return {
-                status: 'failed',
-                message,
-                flowDefinitionId: flowContext.flowDefinitionId,
-                flowInstanceId: flowContext.flowInstanceId,
-            };
-        };
-
-        const markApprovalRequired = async (
-            requestId: EntityId<'perm'>,
-            message: string
-        ): Promise<BranchWorkflowExecutionResult> => {
-            flowContext = await markBranchWorkflowFlowApprovalRequired({
-                profileId: input.profileId,
-                flowDefinition: flowContext.flowDefinition,
-                flowInstance: flowContext.flowInstance,
-                stepIndex: 0,
-                reason: message,
-            });
-
-            return {
-                status: 'approval_required',
-                requestId,
-                message,
-                flowDefinitionId: flowContext.flowDefinitionId,
-                flowInstanceId: flowContext.flowInstanceId,
-            };
-        };
-
-        const markSucceeded = async (): Promise<BranchWorkflowExecutionResult> => {
-            flowContext = await markBranchWorkflowFlowSuccess({
-                profileId: input.profileId,
-                flowDefinition: flowContext.flowDefinition,
-                flowInstance: flowContext.flowInstance,
-                stepIndex: 0,
-            });
-
-            return {
-                status: 'succeeded',
-                flowDefinitionId: flowContext.flowDefinitionId,
-                flowInstanceId: flowContext.flowInstanceId,
-            };
-        };
-
-        const firstStep = normalizedFlowDefinition.steps[0];
-        if (!firstStep || firstStep.kind !== 'legacy_command') {
-            return markFailure(
-                `Branch workflow flow "${normalizedFlowDefinition.id}" must begin with a legacy command step in this slice.`
-            );
-        }
-
-        const startedStepContext = await startBranchWorkflowFlowStep({
+        const flowExecution = await flowExecutionService.startPersistedDefinition({
             profileId: input.profileId,
-            flowDefinition: flowContext.flowDefinition,
-            flowInstance: flowContext.flowInstance,
-            stepIndex: 0,
-        });
-        flowContext = startedStepContext;
-
-        const shellApprovalContext = buildShellApprovalContext(firstStep.command);
-        const runCommandTool = (await toolStore.list()).find((tool) => tool.id === 'run_command');
-        if (!runCommandTool) {
-            throw new Error('Shell tool catalog entry "run_command" is missing.');
-        }
-
-        const resolvedWorkspace = await workspaceContextService.resolveExplicit({
-            profileId: input.profileId,
-            workspaceFingerprint: input.workspaceFingerprint,
-            ...(input.sandboxId ? { sandboxId: input.sandboxId } : {}),
-        });
-        if (resolvedWorkspace.kind === 'detached') {
-            return markFailure('Branch workflow execution requires a workspace-bound branch target.');
-        }
-
-        const resolvedPolicy = await resolveOverrideAndPresetPermissionPolicy({
-            profileId: input.profileId,
-            resource: shellApprovalContext.commandResource,
-            resourceCandidates: shellApprovalContext.overrideResources,
-            executionPreset: await getExecutionPreset(input.profileId),
-            capabilities: runCommandTool.capabilities,
-            workspaceFingerprint: input.workspaceFingerprint,
-            toolDefaultPolicy: runCommandTool.permissionPolicy,
-        });
-
-        if (resolvedPolicy.policy === 'deny') {
-            return markFailure(
-                `Branch workflow command "${shellApprovalContext.commandText}" is denied by the current shell safety policy.`
-            );
-        }
-
-        if (resolvedPolicy.policy === 'ask') {
-            const onceApproval = await permissionStore.consumeGrantedOnce({
-                profileId: input.profileId,
-                resource: shellApprovalContext.commandResource,
+            flowDefinition: persistedDefinition,
+            executionContext: {
                 workspaceFingerprint: input.workspaceFingerprint,
-            });
-            if (!onceApproval) {
-                const request = await permissionStore.create({
-                    profileId: input.profileId,
-                    policy: 'ask',
-                    resource: shellApprovalContext.commandResource,
-                    toolId: runCommandTool.id,
-                    workspaceFingerprint: input.workspaceFingerprint,
-                    scopeKind: 'tool',
-                    summary: {
-                        title: 'Branch Workflow Shell Approval',
-                        detail: `Branch workflow wants to run "${shellApprovalContext.commandText}" in ${resolvedWorkspace.absolutePath}.`,
-                    },
-                    commandText: shellApprovalContext.commandText,
-                    approvalCandidates: shellApprovalContext.approvalCandidates,
-                });
-                await runtimeEventLogService.append(
-                    runtimeStatusEvent({
-                        entityType: 'permission',
-                        domain: 'permission',
-                        entityId: request.id,
-                        eventType: 'permission.requested',
-                        payload: {
-                            request,
-                        },
-                    })
-                );
-
-                return markApprovalRequired(
-                    request.id,
-                    `Branch workflow command "${shellApprovalContext.commandText}" needs shell approval before it can run.`
-                );
-            }
-        }
-
-        const execution = await invokeToolHandler(
-            runCommandTool,
-            {
-                command: shellApprovalContext.commandText,
+                ...(input.sandboxId ? { sandboxId: input.sandboxId } : {}),
             },
-            {
-                cwd: resolvedWorkspace.absolutePath,
+        });
+
+        return flowExecution.match(
+            (flowInstance) => {
+                if (flowInstance.instance.status === 'completed') {
+                    return {
+                        status: 'succeeded' as const,
+                        flowDefinitionId: persistedDefinition.definition.id,
+                        flowInstanceId: flowInstance.instance.id,
+                    };
+                }
+
+                if (
+                    flowInstance.instance.status === 'approval_required' &&
+                    flowInstance.awaitingApproval?.kind === 'tool_permission' &&
+                    flowInstance.awaitingApproval.permissionRequestId
+                ) {
+                    return {
+                        status: 'approval_required' as const,
+                        requestId: flowInstance.awaitingApproval.permissionRequestId,
+                        message: flowInstance.awaitingApproval.reason,
+                        flowDefinitionId: persistedDefinition.definition.id,
+                        flowInstanceId: flowInstance.instance.id,
+                    };
+                }
+
+                return {
+                    status: 'failed' as const,
+                    message:
+                        flowInstance.lastErrorMessage ??
+                        'Branch workflow execution did not complete successfully in this slice.',
+                    flowDefinitionId: persistedDefinition.definition.id,
+                    flowInstanceId: flowInstance.instance.id,
+                };
+            },
+            (error) => {
+                throw new Error(
+                    `Branch workflow flow "${persistedDefinition.definition.id}" failed to start: ${error.message}`
+                );
             }
         );
-        if (execution.isErr()) {
-            return markFailure(execution.error.message);
-        }
-        if (execution.value.timedOut) {
-            return markFailure(`Branch workflow command "${shellApprovalContext.commandText}" timed out.`);
-        }
-        if (typeof execution.value.exitCode === 'number' && execution.value.exitCode !== 0) {
-            const stderr = typeof execution.value.stderr === 'string' ? execution.value.stderr.trim() : '';
-            const stdout = typeof execution.value.stdout === 'string' ? execution.value.stdout.trim() : '';
-            const detail = stderr || stdout || `Exit code ${String(execution.value.exitCode)}`;
-            return markFailure(detail);
-        }
-
-        return markSucceeded();
     }
 }
 

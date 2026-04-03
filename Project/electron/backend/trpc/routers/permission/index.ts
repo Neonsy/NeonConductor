@@ -6,6 +6,7 @@ import {
     permissionSetProfileOverrideInputSchema,
     permissionSetWorkspaceOverrideInputSchema,
 } from '@/app/backend/runtime/contracts';
+import { flowExecutionService } from '@/app/backend/runtime/services/flows/executionService';
 import { resolveEffectivePermissionPolicy } from '@/app/backend/runtime/services/permissions/policyResolver';
 import { getExecutionPreset } from '@/app/backend/runtime/services/profile/executionPreset';
 import { runtimeStatusEvent, runtimeUpsertEvent } from '@/app/backend/runtime/services/runtimeEventEnvelope';
@@ -208,6 +209,11 @@ export const permissionRouter = router({
                 },
             })
         );
+
+        await flowExecutionService.handlePermissionResolution({
+            profileId: input.profileId,
+            request: updatedRecord,
+        });
 
         return { updated: true as const, reason: null, request: updatedRecord };
     }),

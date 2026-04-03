@@ -18,6 +18,28 @@ import { createEntityId } from '@/app/backend/runtime/identity/entityIds';
 
 const permissionDecisions = ['pending', 'granted', 'denied'] as const;
 const permissionResolvedScopes = ['once', 'profile', 'workspace'] as const;
+const permissionRowColumns = [
+    'id',
+    'profile_id',
+    'policy',
+    'resource',
+    'tool_id',
+    'workspace_fingerprint',
+    'scope_kind',
+    'summary_json',
+    'command_text',
+    'approval_candidates_json',
+    'selected_approval_resource',
+    'flow_instance_id',
+    'flow_step_index',
+    'flow_step_id',
+    'decision',
+    'resolved_scope',
+    'consumed_at',
+    'rationale',
+    'created_at',
+    'updated_at',
+] as const;
 
 function mapApprovalCandidates(value: string): PermissionRecord['approvalCandidates'] {
     const parsed = parseJsonValue(value, [], isJsonUnknownArray);
@@ -68,6 +90,9 @@ function mapPermissionRecord(row: {
     command_text: string | null;
     approval_candidates_json: string;
     selected_approval_resource: string | null;
+    flow_instance_id: string | null;
+    flow_step_index: number | null;
+    flow_step_id: string | null;
     decision: string;
     resolved_scope: string | null;
     consumed_at: string | null;
@@ -89,6 +114,9 @@ function mapPermissionRecord(row: {
         ...(row.command_text ? { commandText: row.command_text } : {}),
         ...(approvalCandidates ? { approvalCandidates } : {}),
         ...(row.selected_approval_resource ? { selectedApprovalResource: row.selected_approval_resource } : {}),
+        ...(row.flow_instance_id ? { flowInstanceId: row.flow_instance_id } : {}),
+        ...(row.flow_step_index !== null ? { flowStepIndex: row.flow_step_index } : {}),
+        ...(row.flow_step_id ? { flowStepId: row.flow_step_id } : {}),
         decision: parseEnumValue(row.decision, 'permissions.decision', permissionDecisions),
         ...(row.resolved_scope
             ? {
@@ -117,6 +145,9 @@ export class PermissionStore {
         workspaceFingerprint?: string;
         commandText?: string;
         approvalCandidates?: NonNullable<PermissionRecord['approvalCandidates']>;
+        flowInstanceId?: string;
+        flowStepIndex?: number;
+        flowStepId?: string;
         rationale?: string;
     }): Promise<PermissionRecord> {
         const { db } = getPersistence();
@@ -136,6 +167,9 @@ export class PermissionStore {
                 command_text: input.commandText ?? null,
                 approval_candidates_json: JSON.stringify(input.approvalCandidates ?? []),
                 selected_approval_resource: null,
+                flow_instance_id: input.flowInstanceId ?? null,
+                flow_step_index: input.flowStepIndex ?? null,
+                flow_step_id: input.flowStepId ?? null,
                 decision: 'pending',
                 resolved_scope: null,
                 consumed_at: null,
@@ -143,25 +177,7 @@ export class PermissionStore {
                 created_at: now,
                 updated_at: now,
             })
-            .returning([
-                'id',
-                'profile_id',
-                'policy',
-                'resource',
-                'tool_id',
-                'workspace_fingerprint',
-                'scope_kind',
-                'summary_json',
-                'command_text',
-                'approval_candidates_json',
-                'selected_approval_resource',
-                'decision',
-                'resolved_scope',
-                'consumed_at',
-                'rationale',
-                'created_at',
-                'updated_at',
-            ])
+            .returning(permissionRowColumns)
             .executeTakeFirstOrThrow();
 
         return mapPermissionRecord(inserted);
@@ -172,25 +188,7 @@ export class PermissionStore {
 
         const rows = await db
             .selectFrom('permissions')
-            .select([
-                'id',
-                'profile_id',
-                'policy',
-                'resource',
-                'tool_id',
-                'workspace_fingerprint',
-                'scope_kind',
-                'summary_json',
-                'command_text',
-                'approval_candidates_json',
-                'selected_approval_resource',
-                'decision',
-                'resolved_scope',
-                'consumed_at',
-                'rationale',
-                'created_at',
-                'updated_at',
-            ])
+            .select(permissionRowColumns)
             .where('decision', '=', 'pending')
             .orderBy('created_at', 'asc')
             .execute();
@@ -203,25 +201,7 @@ export class PermissionStore {
 
         const row = await db
             .selectFrom('permissions')
-            .select([
-                'id',
-                'profile_id',
-                'policy',
-                'resource',
-                'tool_id',
-                'workspace_fingerprint',
-                'scope_kind',
-                'summary_json',
-                'command_text',
-                'approval_candidates_json',
-                'selected_approval_resource',
-                'decision',
-                'resolved_scope',
-                'consumed_at',
-                'rationale',
-                'created_at',
-                'updated_at',
-            ])
+            .select(permissionRowColumns)
             .where('id', '=', id)
             .executeTakeFirst();
 
@@ -254,25 +234,7 @@ export class PermissionStore {
                 updated_at: now,
             })
             .where('id', '=', id)
-            .returning([
-                'id',
-                'profile_id',
-                'policy',
-                'resource',
-                'tool_id',
-                'workspace_fingerprint',
-                'scope_kind',
-                'summary_json',
-                'command_text',
-                'approval_candidates_json',
-                'selected_approval_resource',
-                'decision',
-                'resolved_scope',
-                'consumed_at',
-                'rationale',
-                'created_at',
-                'updated_at',
-            ])
+            .returning(permissionRowColumns)
             .executeTakeFirst();
 
         return row ? mapPermissionRecord(row) : null;
@@ -288,25 +250,7 @@ export class PermissionStore {
 
         const request = await db
             .selectFrom('permissions')
-            .select([
-                'id',
-                'profile_id',
-                'policy',
-                'resource',
-                'tool_id',
-                'workspace_fingerprint',
-                'scope_kind',
-                'summary_json',
-                'command_text',
-                'approval_candidates_json',
-                'selected_approval_resource',
-                'decision',
-                'resolved_scope',
-                'consumed_at',
-                'rationale',
-                'created_at',
-                'updated_at',
-            ])
+            .select(permissionRowColumns)
             .where('profile_id', '=', input.profileId)
             .where('resource', '=', input.resource)
             .where('decision', '=', 'granted')
@@ -330,25 +274,7 @@ export class PermissionStore {
                 updated_at: now,
             })
             .where('id', '=', request.id)
-            .returning([
-                'id',
-                'profile_id',
-                'policy',
-                'resource',
-                'tool_id',
-                'workspace_fingerprint',
-                'scope_kind',
-                'summary_json',
-                'command_text',
-                'approval_candidates_json',
-                'selected_approval_resource',
-                'decision',
-                'resolved_scope',
-                'consumed_at',
-                'rationale',
-                'created_at',
-                'updated_at',
-            ])
+            .returning(permissionRowColumns)
             .executeTakeFirst();
 
         return consumed ? mapPermissionRecord(consumed) : null;
@@ -359,25 +285,7 @@ export class PermissionStore {
 
         const rows = await db
             .selectFrom('permissions')
-            .select([
-                'id',
-                'profile_id',
-                'policy',
-                'resource',
-                'tool_id',
-                'workspace_fingerprint',
-                'scope_kind',
-                'summary_json',
-                'command_text',
-                'approval_candidates_json',
-                'selected_approval_resource',
-                'decision',
-                'resolved_scope',
-                'consumed_at',
-                'rationale',
-                'created_at',
-                'updated_at',
-            ])
+            .select(permissionRowColumns)
             .orderBy('created_at', 'asc')
             .execute();
 

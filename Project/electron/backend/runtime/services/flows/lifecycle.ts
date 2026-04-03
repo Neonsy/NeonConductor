@@ -164,6 +164,7 @@ export function buildFlowLifecycleEvents(input: {
                   stepId: firstStep.id,
                   stepKind: firstStep.kind,
                   reason: 'Flow requires explicit approval before continuing.',
+                  approvalKind: 'flow_gate',
               })
             : undefined;
 

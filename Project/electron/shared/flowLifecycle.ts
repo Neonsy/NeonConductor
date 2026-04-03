@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import type { FlowInstanceStatus, FlowStepKind, FlowTriggerKind } from '@/shared/contracts';
+import type { FlowApprovalKind, FlowInstanceStatus, FlowStepKind, FlowTriggerKind } from '@/shared/contracts';
 
 export const flowLifecycleEventKinds = [
     'flow.started',
@@ -27,6 +27,7 @@ export interface FlowStartedLifecycleEventPayload {
     triggerKind: FlowTriggerKind;
     stepCount: number;
     status: Extract<FlowInstanceStatus, 'queued'>;
+    retrySourceFlowInstanceId?: string;
 }
 
 export interface FlowStepStartedLifecycleEventPayload {
@@ -48,6 +49,8 @@ export interface FlowApprovalRequiredLifecycleEventPayload {
     stepId: string;
     stepKind: FlowStepKind;
     reason: string;
+    approvalKind: FlowApprovalKind;
+    permissionRequestId?: string;
     status: Extract<FlowInstanceStatus, 'approval_required'>;
 }
 
@@ -105,6 +108,7 @@ export function createFlowStartedLifecycleEvent(input: {
     flowInstanceId: string;
     triggerKind: FlowTriggerKind;
     stepCount: number;
+    retrySourceFlowInstanceId?: string;
     at?: string;
     id?: string;
 }): FlowLifecycleEventBase<'flow.started', FlowStartedLifecycleEventPayload> {
@@ -118,6 +122,9 @@ export function createFlowStartedLifecycleEvent(input: {
             triggerKind: input.triggerKind,
             stepCount: input.stepCount,
             status: 'queued',
+            ...(input.retrySourceFlowInstanceId
+                ? { retrySourceFlowInstanceId: input.retrySourceFlowInstanceId }
+                : {}),
         },
     });
 }
@@ -177,6 +184,8 @@ export function createFlowApprovalRequiredLifecycleEvent(input: {
     stepId: string;
     stepKind: FlowStepKind;
     reason: string;
+    approvalKind: FlowApprovalKind;
+    permissionRequestId?: string;
     at?: string;
     id?: string;
 }): FlowLifecycleEventBase<'flow.approval_required', FlowApprovalRequiredLifecycleEventPayload> {
@@ -191,6 +200,8 @@ export function createFlowApprovalRequiredLifecycleEvent(input: {
             stepId: input.stepId,
             stepKind: input.stepKind,
             reason: input.reason,
+            approvalKind: input.approvalKind,
+            ...(input.permissionRequestId ? { permissionRequestId: input.permissionRequestId } : {}),
             status: 'approval_required',
         },
     });

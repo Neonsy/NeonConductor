@@ -62,6 +62,7 @@ export async function runCommandToolHandler(
     args: Record<string, unknown>,
     context: {
         cwd: string;
+        signal?: AbortSignal;
     }
 ): Promise<Result<ToolExecutionOutput, ToolExecutionFailure>> {
     const command = readStringArg(args, 'command');
@@ -95,6 +96,14 @@ export async function runCommandToolHandler(
             child.kill();
         }, timeoutMs);
 
+        const abortHandler = () => {
+            if (settled) {
+                return;
+            }
+            child.kill();
+        };
+        context.signal?.addEventListener('abort', abortHandler, { once: true });
+
         child.stdout.on('data', (chunk: Buffer | string) => {
             stdoutChunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : Buffer.from(chunk));
         });
@@ -109,6 +118,7 @@ export async function runCommandToolHandler(
             }
             settled = true;
             clearTimeout(timeout);
+            context.signal?.removeEventListener('abort', abortHandler);
             resolve(
                 errResult({
                     code: 'execution_failed',
@@ -123,6 +133,7 @@ export async function runCommandToolHandler(
             }
             settled = true;
             clearTimeout(timeout);
+            context.signal?.removeEventListener('abort', abortHandler);
 
             const stdout = decodeCommandOutput(Buffer.concat(stdoutChunks), process.platform);
             const stderr = decodeCommandOutput(Buffer.concat(stderrChunks), process.platform);

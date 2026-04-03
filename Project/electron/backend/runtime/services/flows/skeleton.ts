@@ -139,6 +139,7 @@ export function requireFlowApproval(input: {
             stepId: step.id,
             stepKind: step.kind,
             reason: 'Flow requires explicit approval before continuing.',
+            approvalKind: 'flow_gate',
             at,
         }),
     };

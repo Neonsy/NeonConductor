@@ -251,6 +251,11 @@ describe('flow parsers', () => {
                         },
                     },
                 ],
+                availableActions: {
+                    canResume: false,
+                    canCancel: false,
+                    canRetry: true,
+                },
                 originKind: 'canonical',
             })
         ).toMatchObject({

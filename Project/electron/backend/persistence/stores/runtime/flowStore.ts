@@ -6,8 +6,10 @@ import { parseEnumValue } from '@/app/backend/persistence/stores/shared/rowParse
 import { nowIso } from '@/app/backend/persistence/stores/shared/utils';
 import type { FlowDefinitionPersistenceRecord, FlowInstancePersistenceRecord } from '@/app/backend/persistence/types';
 import {
+    type FlowExecutionContext,
     flowDefinitionOriginKinds,
     flowInstanceStatuses,
+    type FlowApprovalKind,
     flowTriggerKinds,
     type FlowDefinitionView,
     type FlowDefinitionCreateInput,
@@ -18,7 +20,12 @@ import {
     type FlowInstanceRecord,
     type FlowLifecycleEvent,
 } from '@/app/backend/runtime/contracts';
-import { parseFlowDefinitionRecord, parseFlowInstanceRecord, parseFlowLifecycleEvent } from '@/app/backend/runtime/contracts';
+import {
+    parseFlowDefinitionRecord,
+    parseFlowInstanceRecord,
+    parseFlowLifecycleEvent,
+    flowApprovalKinds,
+} from '@/app/backend/runtime/contracts';
 import { DataCorruptionError } from '@/app/backend/runtime/services/common/fatalErrors';
 import { normalizeFlowDefinition } from '@/app/backend/runtime/services/flows/lifecycle';
 
@@ -44,6 +51,13 @@ type FlowInstanceRow = {
     status: string;
     current_step_index: number;
     definition_snapshot_json: string;
+    execution_context_json: string | null;
+    awaiting_approval_kind: string | null;
+    awaiting_approval_step_index: number | null;
+    awaiting_approval_step_id: string | null;
+    awaiting_permission_request_id: string | null;
+    last_error_message: string | null;
+    retry_source_flow_instance_id: string | null;
     started_at: string | null;
     finished_at: string | null;
     created_at: string;
@@ -54,6 +68,29 @@ type FlowInstanceJoinedRow = FlowInstanceRow & Pick<
     FlowDefinitionRow,
     'origin_kind' | 'workspace_fingerprint' | 'source_branch_workflow_id'
 >;
+
+const flowInstanceSelectColumns = [
+    'flow_instances.id',
+    'flow_instances.profile_id',
+    'flow_instances.flow_definition_id',
+    'flow_instances.status',
+    'flow_instances.current_step_index',
+    'flow_instances.definition_snapshot_json',
+    'flow_instances.execution_context_json',
+    'flow_instances.awaiting_approval_kind',
+    'flow_instances.awaiting_approval_step_index',
+    'flow_instances.awaiting_approval_step_id',
+    'flow_instances.awaiting_permission_request_id',
+    'flow_instances.last_error_message',
+    'flow_instances.retry_source_flow_instance_id',
+    'flow_instances.started_at',
+    'flow_instances.finished_at',
+    'flow_instances.created_at',
+    'flow_instances.updated_at',
+    'flow_definitions.origin_kind',
+    'flow_definitions.workspace_fingerprint',
+    'flow_definitions.source_branch_workflow_id',
+] as const;
 
 function parseJsonValue(input: { value: string; label: string }): unknown {
     try {
@@ -90,12 +127,40 @@ function hydrateFlowDefinitionRecord(row: FlowDefinitionRow): FlowDefinitionReco
 }
 
 function hydrateFlowInstanceRecord(row: FlowInstanceRow): FlowInstanceRecord {
+    const executionContext = row.execution_context_json
+        ? parseJsonValue({
+              value: row.execution_context_json,
+              label: 'flow_instances.execution_context_json',
+          })
+        : undefined;
+
     try {
         return parseFlowInstanceRecord({
             id: row.id,
             flowDefinitionId: row.flow_definition_id,
             status: parseEnumValue(row.status, 'flow_instances.status', flowInstanceStatuses),
             currentStepIndex: row.current_step_index,
+            ...(executionContext ? { executionContext } : {}),
+            ...(row.awaiting_approval_kind
+                ? {
+                      awaitingApprovalKind: parseEnumValue(
+                          row.awaiting_approval_kind,
+                          'flow_instances.awaiting_approval_kind',
+                          flowApprovalKinds
+                      ),
+                  }
+                : {}),
+            ...(row.awaiting_approval_step_index !== null
+                ? { awaitingApprovalStepIndex: row.awaiting_approval_step_index }
+                : {}),
+            ...(row.awaiting_approval_step_id ? { awaitingApprovalStepId: row.awaiting_approval_step_id } : {}),
+            ...(row.awaiting_permission_request_id
+                ? { awaitingPermissionRequestId: row.awaiting_permission_request_id }
+                : {}),
+            ...(row.last_error_message ? { lastErrorMessage: row.last_error_message } : {}),
+            ...(row.retry_source_flow_instance_id
+                ? { retrySourceFlowInstanceId: row.retry_source_flow_instance_id }
+                : {}),
             ...(row.started_at ? { startedAt: row.started_at } : {}),
             ...(row.finished_at ? { finishedAt: row.finished_at } : {}),
         });
@@ -164,10 +229,52 @@ function toFlowInstanceView(input: {
     record: FlowInstancePersistenceRecord;
     lifecycleEvents: FlowLifecycleEvent[];
 }): FlowInstanceView {
+    const currentStepDefinition = input.record.definitionSnapshot.steps[input.record.instance.currentStepIndex];
+    const currentStep = currentStepDefinition
+        ? {
+              stepIndex: input.record.instance.currentStepIndex,
+              step: currentStepDefinition,
+          }
+        : undefined;
+    const lastApprovalRequiredEvent = [...input.lifecycleEvents]
+        .reverse()
+        .find((event) => event.kind === 'flow.approval_required');
+
     return {
         instance: input.record.instance,
         definitionSnapshot: input.record.definitionSnapshot,
         lifecycleEvents: input.lifecycleEvents,
+        ...(input.record.instance.executionContext
+            ? { executionContext: input.record.instance.executionContext }
+            : {}),
+        ...(currentStep ? { currentStep } : {}),
+        ...(input.record.instance.awaitingApprovalKind &&
+        input.record.instance.awaitingApprovalStepIndex !== undefined &&
+        input.record.instance.awaitingApprovalStepId &&
+        lastApprovalRequiredEvent?.kind === 'flow.approval_required'
+            ? {
+                  awaitingApproval: {
+                      kind: input.record.instance.awaitingApprovalKind,
+                      stepIndex: input.record.instance.awaitingApprovalStepIndex,
+                      stepId: input.record.instance.awaitingApprovalStepId,
+                      reason: lastApprovalRequiredEvent.payload.reason,
+                      ...(input.record.instance.awaitingPermissionRequestId
+                          ? { permissionRequestId: input.record.instance.awaitingPermissionRequestId }
+                          : {}),
+                  },
+              }
+            : {}),
+        availableActions: {
+            canResume: input.record.instance.awaitingApprovalKind === 'flow_gate',
+            canCancel: ['queued', 'running', 'approval_required'].includes(input.record.instance.status),
+            canRetry: ['failed', 'cancelled'].includes(input.record.instance.status),
+        },
+        ...(input.record.instance.lastErrorMessage
+            ? { lastErrorMessage: input.record.instance.lastErrorMessage }
+            : {}),
+        ...(input.record.instance.retrySourceFlowInstanceId
+            ? { retrySourceFlowInstanceId: input.record.instance.retrySourceFlowInstanceId }
+            : {}),
         originKind: input.record.originKind,
         ...(input.record.workspaceFingerprint ? { workspaceFingerprint: input.record.workspaceFingerprint } : {}),
         ...(input.record.sourceBranchWorkflowId ? { sourceBranchWorkflowId: input.record.sourceBranchWorkflowId } : {}),
@@ -199,6 +306,10 @@ function deriveCurrentStepIndexFromEvent(input: {
         default:
             return currentStepIndex;
     }
+}
+
+function serializeExecutionContext(executionContext?: FlowExecutionContext): string | null {
+    return executionContext ? JSON.stringify(executionContext) : null;
 }
 
 function deriveStatusFromEvent(event: FlowLifecycleEvent): FlowInstanceRecord['status'] {
@@ -436,6 +547,8 @@ export class FlowStore {
         profileId: string;
         flowDefinitionId: string;
         definitionSnapshot: FlowDefinitionRecord;
+        executionContext?: FlowExecutionContext;
+        retrySourceFlowInstanceId?: string;
     }): Promise<FlowInstancePersistenceRecord | null> {
         const definitionRow = await this.getFlowDefinitionRowById(input.profileId, input.flowDefinitionId);
         if (!definitionRow) {
@@ -450,6 +563,13 @@ export class FlowStore {
             status: 'queued',
             current_step_index: 0,
             definition_snapshot_json: JSON.stringify(input.definitionSnapshot),
+            execution_context_json: serializeExecutionContext(input.executionContext),
+            awaiting_approval_kind: null,
+            awaiting_approval_step_index: null,
+            awaiting_approval_step_id: null,
+            awaiting_permission_request_id: null,
+            last_error_message: null,
+            retry_source_flow_instance_id: input.retrySourceFlowInstanceId ?? null,
             started_at: null,
             finished_at: null,
             created_at: now,
@@ -471,6 +591,13 @@ export class FlowStore {
         flowInstanceId: string;
         status: FlowInstanceRecord['status'];
         currentStepIndex: number;
+        executionContext?: FlowExecutionContext;
+        awaitingApprovalKind?: FlowApprovalKind | null;
+        awaitingApprovalStepIndex?: number | null;
+        awaitingApprovalStepId?: string | null;
+        awaitingPermissionRequestId?: string | null;
+        lastErrorMessage?: string | null;
+        retrySourceFlowInstanceId?: string | null;
         startedAt?: string;
         finishedAt?: string;
     }): Promise<FlowInstancePersistenceRecord | null> {
@@ -489,6 +616,25 @@ export class FlowStore {
             .set({
                 status: input.status,
                 current_step_index: input.currentStepIndex,
+                ...(input.executionContext !== undefined
+                    ? { execution_context_json: serializeExecutionContext(input.executionContext) }
+                    : {}),
+                ...(input.awaitingApprovalKind !== undefined
+                    ? { awaiting_approval_kind: input.awaitingApprovalKind }
+                    : {}),
+                ...(input.awaitingApprovalStepIndex !== undefined
+                    ? { awaiting_approval_step_index: input.awaitingApprovalStepIndex }
+                    : {}),
+                ...(input.awaitingApprovalStepId !== undefined
+                    ? { awaiting_approval_step_id: input.awaitingApprovalStepId }
+                    : {}),
+                ...(input.awaitingPermissionRequestId !== undefined
+                    ? { awaiting_permission_request_id: input.awaitingPermissionRequestId }
+                    : {}),
+                ...(input.lastErrorMessage !== undefined ? { last_error_message: input.lastErrorMessage } : {}),
+                ...(input.retrySourceFlowInstanceId !== undefined
+                    ? { retry_source_flow_instance_id: input.retrySourceFlowInstanceId }
+                    : {}),
                 started_at: input.startedAt ?? existingRow.started_at,
                 finished_at: input.finishedAt ?? existingRow.finished_at,
                 updated_at: nowIso(),
@@ -598,6 +744,30 @@ export class FlowStore {
             flowInstanceId: input.flowInstanceId,
             status,
             currentStepIndex,
+            ...(input.event.kind === 'flow.approval_required'
+                ? {
+                      awaitingApprovalKind: input.event.payload.approvalKind,
+                      awaitingApprovalStepIndex: input.event.payload.stepIndex,
+                      awaitingApprovalStepId: input.event.payload.stepId,
+                      awaitingPermissionRequestId: input.event.payload.permissionRequestId ?? null,
+                  }
+                : {}),
+            ...(['flow.failed', 'flow.cancelled', 'flow.completed'].includes(input.event.kind)
+                ? {
+                      awaitingApprovalKind: null,
+                      awaitingApprovalStepIndex: null,
+                      awaitingApprovalStepId: null,
+                      awaitingPermissionRequestId: null,
+                  }
+                : {}),
+            ...(input.event.kind === 'flow.failed'
+                ? { lastErrorMessage: input.event.payload.errorMessage }
+                : {}),
+            ...(input.event.kind === 'flow.started'
+                ? {
+                      retrySourceFlowInstanceId: input.event.payload.retrySourceFlowInstanceId ?? null,
+                  }
+                : {}),
             ...(status === 'running' || status === 'approval_required'
                 ? { startedAt: input.event.at }
                 : {}),
@@ -617,21 +787,7 @@ export class FlowStore {
         const rows = await getPersistence().db
             .selectFrom('flow_instances')
             .innerJoin('flow_definitions', 'flow_definitions.id', 'flow_instances.flow_definition_id')
-            .select([
-                'flow_instances.id',
-                'flow_instances.profile_id',
-                'flow_instances.flow_definition_id',
-                'flow_instances.status',
-                'flow_instances.current_step_index',
-                'flow_instances.definition_snapshot_json',
-                'flow_instances.started_at',
-                'flow_instances.finished_at',
-                'flow_instances.created_at',
-                'flow_instances.updated_at',
-                'flow_definitions.origin_kind',
-                'flow_definitions.workspace_fingerprint',
-                'flow_definitions.source_branch_workflow_id',
-            ])
+            .select(flowInstanceSelectColumns)
             .where('flow_instances.profile_id', '=', profileId)
             .orderBy('flow_instances.created_at', 'desc')
             .execute();
@@ -643,21 +799,7 @@ export class FlowStore {
         const row = await getPersistence().db
             .selectFrom('flow_instances')
             .innerJoin('flow_definitions', 'flow_definitions.id', 'flow_instances.flow_definition_id')
-            .select([
-                'flow_instances.id',
-                'flow_instances.profile_id',
-                'flow_instances.flow_definition_id',
-                'flow_instances.status',
-                'flow_instances.current_step_index',
-                'flow_instances.definition_snapshot_json',
-                'flow_instances.started_at',
-                'flow_instances.finished_at',
-                'flow_instances.created_at',
-                'flow_instances.updated_at',
-                'flow_definitions.origin_kind',
-                'flow_definitions.workspace_fingerprint',
-                'flow_definitions.source_branch_workflow_id',
-            ])
+            .select(flowInstanceSelectColumns)
             .where('flow_instances.profile_id', '=', profileId)
             .where('flow_instances.id', '=', flowInstanceId)
             .executeTakeFirst();

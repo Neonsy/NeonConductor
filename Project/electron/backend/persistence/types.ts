@@ -171,6 +171,9 @@ export interface PermissionRecord {
     commandText?: string;
     approvalCandidates?: PermissionApprovalCandidate[];
     selectedApprovalResource?: string;
+    flowInstanceId?: string;
+    flowStepIndex?: number;
+    flowStepId?: string;
     decision: 'pending' | 'granted' | 'denied';
     resolvedScope?: 'once' | 'profile' | 'workspace';
     createdAt: string;

@@ -1,4 +1,5 @@
 import {
+    flowCancelInputSchema,
     flowDefinitionCreateInputSchema,
     flowDefinitionDeleteInputSchema,
     flowDefinitionGetInputSchema,
@@ -6,7 +7,11 @@ import {
     flowDefinitionUpdateInputSchema,
     flowInstanceGetInputSchema,
     flowInstanceListInputSchema,
+    flowResumeInputSchema,
+    flowRetryInputSchema,
+    flowStartInputSchema,
 } from '@/app/backend/runtime/contracts';
+import { flowExecutionService } from '@/app/backend/runtime/services/flows/executionService';
 import { flowService } from '@/app/backend/runtime/services/flows/service';
 import { publicProcedure, router } from '@/app/backend/trpc/init';
 import { raiseMappedTrpcError, toTrpcError } from '@/app/backend/trpc/trpcErrorMap';
@@ -59,6 +64,66 @@ export const flowRouter = router({
                 (error) => raiseMappedTrpcError(error, toTrpcError)
             ),
         };
+    }),
+    startInstance: publicProcedure.input(flowStartInputSchema).mutation(async ({ input }) => {
+        const result = await flowExecutionService.startInstance(input);
+        return result.match(
+            (value) =>
+                value.found
+                    ? {
+                          found: true as const,
+                          flowInstance: value.flowInstance,
+                      }
+                    : {
+                          found: false as const,
+                      },
+            (error) => raiseMappedTrpcError(error, toTrpcError)
+        );
+    }),
+    resumeInstance: publicProcedure.input(flowResumeInputSchema).mutation(async ({ input }) => {
+        const result = await flowExecutionService.resumeInstance(input);
+        return result.match(
+            (value) =>
+                value.found
+                    ? {
+                          found: true as const,
+                          flowInstance: value.flowInstance,
+                      }
+                    : {
+                          found: false as const,
+                      },
+            (error) => raiseMappedTrpcError(error, toTrpcError)
+        );
+    }),
+    cancelInstance: publicProcedure.input(flowCancelInputSchema).mutation(async ({ input }) => {
+        const result = await flowExecutionService.cancelInstance(input);
+        return result.match(
+            (value) =>
+                value.found
+                    ? {
+                          found: true as const,
+                          flowInstance: value.flowInstance,
+                      }
+                    : {
+                          found: false as const,
+                      },
+            (error) => raiseMappedTrpcError(error, toTrpcError)
+        );
+    }),
+    retryInstance: publicProcedure.input(flowRetryInputSchema).mutation(async ({ input }) => {
+        const result = await flowExecutionService.retryInstance(input);
+        return result.match(
+            (value) =>
+                value.found
+                    ? {
+                          found: true as const,
+                          flowInstance: value.flowInstance,
+                      }
+                    : {
+                          found: false as const,
+                      },
+            (error) => raiseMappedTrpcError(error, toTrpcError)
+        );
     }),
     listInstances: publicProcedure.input(flowInstanceListInputSchema).query(async ({ input }) => {
         return {

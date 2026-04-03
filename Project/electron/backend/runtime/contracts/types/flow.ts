@@ -1,4 +1,5 @@
 import type {
+    FlowApprovalKind,
     FlowDefinitionOriginKind,
     FlowInstanceStatus,
     FlowTriggerKind,
@@ -6,6 +7,7 @@ import type {
     WorkflowCapability,
 } from '@/app/backend/runtime/contracts/enums';
 import type { ProfileInput } from '@/app/backend/runtime/contracts/types/common';
+import type { EntityId } from '@/shared/contracts';
 import type { FlowLifecycleEvent as SharedFlowLifecycleEvent } from '@/shared/flowLifecycle';
 
 export interface FlowLegacyCommandStepDefinition {
@@ -58,11 +60,42 @@ export interface FlowInstanceRecord {
     flowDefinitionId: string;
     status: FlowInstanceStatus;
     currentStepIndex: number;
+    executionContext?: FlowExecutionContext;
+    awaitingApprovalKind?: FlowApprovalKind;
+    awaitingApprovalStepIndex?: number;
+    awaitingApprovalStepId?: string;
+    awaitingPermissionRequestId?: EntityId<'perm'>;
+    lastErrorMessage?: string;
+    retrySourceFlowInstanceId?: string;
     startedAt?: string;
     finishedAt?: string;
 }
 
 export type FlowLifecycleEvent = SharedFlowLifecycleEvent;
+
+export interface FlowExecutionContext {
+    workspaceFingerprint?: string;
+    sandboxId?: EntityId<'sb'>;
+}
+
+export interface FlowCurrentStepView {
+    stepIndex: number;
+    step: FlowStepDefinition;
+}
+
+export interface FlowAwaitingApprovalView {
+    kind: FlowApprovalKind;
+    stepIndex: number;
+    stepId: string;
+    reason: string;
+    permissionRequestId?: EntityId<'perm'>;
+}
+
+export interface FlowInstanceAvailableActions {
+    canResume: boolean;
+    canCancel: boolean;
+    canRetry: boolean;
+}
 
 export interface FlowDefinitionView {
     definition: FlowDefinitionRecord;
@@ -75,6 +108,12 @@ export interface FlowInstanceView {
     instance: FlowInstanceRecord;
     definitionSnapshot: FlowDefinitionRecord;
     lifecycleEvents: FlowLifecycleEvent[];
+    executionContext?: FlowExecutionContext;
+    currentStep?: FlowCurrentStepView;
+    awaitingApproval?: FlowAwaitingApprovalView;
+    availableActions: FlowInstanceAvailableActions;
+    lastErrorMessage?: string;
+    retrySourceFlowInstanceId?: string;
     originKind: FlowDefinitionOriginKind;
     workspaceFingerprint?: string;
     sourceBranchWorkflowId?: string;
@@ -111,5 +150,24 @@ export interface FlowDefinitionDeleteInput extends ProfileInput {
 export type FlowInstanceListInput = ProfileInput;
 
 export interface FlowInstanceGetInput extends ProfileInput {
+    flowInstanceId: string;
+}
+
+export interface FlowStartInput extends ProfileInput {
+    flowDefinitionId: string;
+    executionContext?: FlowExecutionContext;
+}
+
+export interface FlowResumeInput extends ProfileInput {
+    flowInstanceId: string;
+    expectedStepIndex: number;
+    expectedStepId: string;
+}
+
+export interface FlowCancelInput extends ProfileInput {
+    flowInstanceId: string;
+}
+
+export interface FlowRetryInput extends ProfileInput {
     flowInstanceId: string;
 }

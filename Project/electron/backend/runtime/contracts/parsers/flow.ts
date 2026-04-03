@@ -1,4 +1,5 @@
 import {
+    flowApprovalKinds,
     flowDefinitionOriginKinds,
     flowInstanceStatuses,
     flowStepKinds,
@@ -10,6 +11,7 @@ import {
     createParser,
     readArray,
     readBoolean,
+    readEntityId,
     readProfileId,
     readEnumValue,
     readObject,
@@ -17,6 +19,7 @@ import {
     readString,
 } from '@/app/backend/runtime/contracts/parsers/helpers';
 import type {
+    FlowCancelInput,
     FlowDefinitionCreateInput,
     FlowDefinitionDeleteInput,
     FlowDefinitionGetInput,
@@ -24,9 +27,13 @@ import type {
     FlowDefinitionRecord,
     FlowDefinitionUpdateInput,
     FlowDefinitionView,
+    FlowExecutionContext,
     FlowInstanceGetInput,
     FlowInstanceRecord,
     FlowInstanceListInput,
+    FlowResumeInput,
+    FlowRetryInput,
+    FlowStartInput,
     FlowInstanceView,
     FlowStepDefinition,
 } from '@/app/backend/runtime/contracts/types/flow';
@@ -94,6 +101,20 @@ function parseFlowStepDefinition(input: unknown, field: string): FlowStepDefinit
     };
 }
 
+function parseFlowExecutionContext(input: unknown, field: string): FlowExecutionContext {
+    const source = readObject(input, field);
+    const workspaceFingerprint = readOptionalString(source.workspaceFingerprint, `${field}.workspaceFingerprint`);
+    const sandboxId =
+        source.sandboxId !== undefined ? readEntityId(source.sandboxId, `${field}.sandboxId`, 'sb') : undefined;
+
+    return {
+        ...(workspaceFingerprint ? { workspaceFingerprint } : {}),
+        ...(sandboxId ? { sandboxId } : {}),
+    };
+}
+
+const awaitingApprovalPermissionRequestIdField = 'awaitingApproval.' + 'permissionRequestId';
+
 export function parseFlowDefinitionRecord(input: unknown): FlowDefinitionRecord {
     const source = readObject(input, 'input');
     const description = readOptionalString(source.description, 'description');
@@ -116,12 +137,43 @@ export function parseFlowInstanceRecord(input: unknown): FlowInstanceRecord {
     const source = readObject(input, 'input');
     const startedAt = readOptionalString(source.startedAt, 'startedAt');
     const finishedAt = readOptionalString(source.finishedAt, 'finishedAt');
+    const awaitingApprovalStepId = readOptionalString(source.awaitingApprovalStepId, 'awaitingApprovalStepId');
+    const awaitingPermissionRequestId =
+        source.awaitingPermissionRequestId !== undefined
+            ? readEntityId(source.awaitingPermissionRequestId, 'awaitingPermissionRequestId', 'perm')
+            : undefined;
+    const lastErrorMessage = readOptionalString(source.lastErrorMessage, 'lastErrorMessage');
+    const retrySourceFlowInstanceId = readOptionalString(source.retrySourceFlowInstanceId, 'retrySourceFlowInstanceId');
 
     return {
         id: readString(source.id, 'id'),
         flowDefinitionId: readString(source.flowDefinitionId, 'flowDefinitionId'),
         status: readEnumValue(source.status, 'status', flowInstanceStatuses),
         currentStepIndex: readNonNegativeInteger(source.currentStepIndex, 'currentStepIndex'),
+        ...(source.executionContext
+            ? { executionContext: parseFlowExecutionContext(source.executionContext, 'executionContext') }
+            : {}),
+        ...(source.awaitingApprovalKind
+            ? {
+                  awaitingApprovalKind: readEnumValue(
+                      source.awaitingApprovalKind,
+                      'awaitingApprovalKind',
+                      flowApprovalKinds
+                  ),
+              }
+            : {}),
+        ...(source.awaitingApprovalStepIndex !== undefined
+            ? {
+                  awaitingApprovalStepIndex: readNonNegativeInteger(
+                      source.awaitingApprovalStepIndex,
+                      'awaitingApprovalStepIndex'
+                  ),
+              }
+            : {}),
+        ...(awaitingApprovalStepId ? { awaitingApprovalStepId } : {}),
+        ...(awaitingPermissionRequestId ? { awaitingPermissionRequestId } : {}),
+        ...(lastErrorMessage ? { lastErrorMessage } : {}),
+        ...(retrySourceFlowInstanceId ? { retrySourceFlowInstanceId } : {}),
         ...(startedAt ? { startedAt } : {}),
         ...(finishedAt ? { finishedAt } : {}),
     };
@@ -199,6 +251,43 @@ export function parseFlowInstanceGetInput(input: unknown): FlowInstanceGetInput 
     };
 }
 
+export function parseFlowStartInput(input: unknown): FlowStartInput {
+    const source = readObject(input, 'input');
+    return {
+        profileId: readProfileId(source),
+        flowDefinitionId: readString(source.flowDefinitionId, 'flowDefinitionId'),
+        ...(source.executionContext
+            ? { executionContext: parseFlowExecutionContext(source.executionContext, 'executionContext') }
+            : {}),
+    };
+}
+
+export function parseFlowResumeInput(input: unknown): FlowResumeInput {
+    const source = readObject(input, 'input');
+    return {
+        profileId: readProfileId(source),
+        flowInstanceId: readString(source.flowInstanceId, 'flowInstanceId'),
+        expectedStepIndex: readNonNegativeInteger(source.expectedStepIndex, 'expectedStepIndex'),
+        expectedStepId: readString(source.expectedStepId, 'expectedStepId'),
+    };
+}
+
+export function parseFlowCancelInput(input: unknown): FlowCancelInput {
+    const source = readObject(input, 'input');
+    return {
+        profileId: readProfileId(source),
+        flowInstanceId: readString(source.flowInstanceId, 'flowInstanceId'),
+    };
+}
+
+export function parseFlowRetryInput(input: unknown): FlowRetryInput {
+    const source = readObject(input, 'input');
+    return {
+        profileId: readProfileId(source),
+        flowInstanceId: readString(source.flowInstanceId, 'flowInstanceId'),
+    };
+}
+
 export function parseFlowDefinitionView(input: unknown): FlowDefinitionView {
     const source = readObject(input, 'input');
     const workspaceFingerprint = readOptionalString(source.workspaceFingerprint, 'workspaceFingerprint');
@@ -216,6 +305,17 @@ export function parseFlowInstanceView(input: unknown): FlowInstanceView {
     const source = readObject(input, 'input');
     const workspaceFingerprint = readOptionalString(source.workspaceFingerprint, 'workspaceFingerprint');
     const sourceBranchWorkflowId = readOptionalString(source.sourceBranchWorkflowId, 'sourceBranchWorkflowId');
+    const lastErrorMessage = readOptionalString(source.lastErrorMessage, 'lastErrorMessage');
+    const retrySourceFlowInstanceId = readOptionalString(source.retrySourceFlowInstanceId, 'retrySourceFlowInstanceId');
+    const currentStepSource = source.currentStep ? readObject(source.currentStep, 'currentStep') : undefined;
+    const awaitingApprovalSource = source.awaitingApproval
+        ? readObject(source.awaitingApproval, 'awaitingApproval')
+        : undefined;
+    const availableActionsSource = readObject(source.availableActions, 'availableActions');
+    const awaitingApprovalPermissionRequestId =
+        awaitingApprovalSource?.permissionRequestId !== undefined
+            ? readEntityId(awaitingApprovalSource.permissionRequestId, awaitingApprovalPermissionRequestIdField, 'perm')
+            : undefined;
 
     return {
         instance: parseFlowInstanceRecord(source.instance),
@@ -223,6 +323,40 @@ export function parseFlowInstanceView(input: unknown): FlowInstanceView {
         lifecycleEvents: readArray(source.lifecycleEvents, 'lifecycleEvents').map((event, index) =>
             parseFlowLifecycleEvent(event, `lifecycleEvents[${String(index)}]`)
         ),
+        ...(source.executionContext
+            ? { executionContext: parseFlowExecutionContext(source.executionContext, 'executionContext') }
+            : {}),
+        ...(currentStepSource
+            ? {
+                  currentStep: {
+                      stepIndex: readNonNegativeInteger(currentStepSource.stepIndex, 'currentStep.stepIndex'),
+                      step: parseFlowStepDefinition(currentStepSource.step, 'currentStep.step'),
+                  },
+              }
+            : {}),
+        ...(awaitingApprovalSource
+            ? {
+                  awaitingApproval: {
+                      kind: readEnumValue(awaitingApprovalSource.kind, 'awaitingApproval.kind', flowApprovalKinds),
+                      stepIndex: readNonNegativeInteger(
+                          awaitingApprovalSource.stepIndex,
+                          'awaitingApproval.stepIndex'
+                      ),
+                      stepId: readString(awaitingApprovalSource.stepId, 'awaitingApproval.stepId'),
+                      reason: readString(awaitingApprovalSource.reason, 'awaitingApproval.reason'),
+                      ...(awaitingApprovalPermissionRequestId
+                          ? { permissionRequestId: awaitingApprovalPermissionRequestId }
+                          : {}),
+                  },
+              }
+            : {}),
+        availableActions: {
+            canResume: readBoolean(availableActionsSource.canResume, 'availableActions.canResume'),
+            canCancel: readBoolean(availableActionsSource.canCancel, 'availableActions.canCancel'),
+            canRetry: readBoolean(availableActionsSource.canRetry, 'availableActions.canRetry'),
+        },
+        ...(lastErrorMessage ? { lastErrorMessage } : {}),
+        ...(retrySourceFlowInstanceId ? { retrySourceFlowInstanceId } : {}),
         originKind: readEnumValue(source.originKind, 'originKind', flowDefinitionOriginKinds),
         ...(workspaceFingerprint ? { workspaceFingerprint } : {}),
         ...(sourceBranchWorkflowId ? { sourceBranchWorkflowId } : {}),
@@ -249,6 +383,14 @@ export function parseFlowLifecycleEvent(input: unknown, field = 'input'): FlowLi
                 triggerKind: readEnumValue(payload.triggerKind, 'payload.triggerKind', flowTriggerKinds),
                 stepCount: readNonNegativeInteger(payload.stepCount, 'payload.stepCount'),
                 status: 'queued',
+                ...(payload.retrySourceFlowInstanceId
+                    ? {
+                          retrySourceFlowInstanceId: readString(
+                              payload.retrySourceFlowInstanceId,
+                              'payload.retrySourceFlowInstanceId'
+                          ),
+                      }
+                    : {}),
             } satisfies FlowStartedLifecycleEventPayload,
         };
     }
@@ -297,6 +439,16 @@ export function parseFlowLifecycleEvent(input: unknown, field = 'input'): FlowLi
                 stepId: readString(payload.stepId, 'payload.stepId'),
                 stepKind: readEnumValue(payload.stepKind, 'payload.stepKind', flowStepKinds),
                 reason: readString(payload.reason, 'payload.reason'),
+                approvalKind: readEnumValue(payload.approvalKind, 'payload.approvalKind', flowApprovalKinds),
+                ...(payload.permissionRequestId
+                    ? {
+                          permissionRequestId: readEntityId(
+                              payload.permissionRequestId,
+                              'payload.permissionRequestId',
+                              'perm'
+                          ),
+                      }
+                    : {}),
                 status: 'approval_required',
             } satisfies FlowApprovalRequiredLifecycleEventPayload,
         };
@@ -363,5 +515,9 @@ export const flowDefinitionUpdateInputSchema = createParser(parseFlowDefinitionU
 export const flowDefinitionDeleteInputSchema = createParser(parseFlowDefinitionDeleteInput);
 export const flowInstanceListInputSchema = createParser(parseFlowInstanceListInput);
 export const flowInstanceGetInputSchema = createParser(parseFlowInstanceGetInput);
+export const flowStartInputSchema = createParser(parseFlowStartInput);
+export const flowResumeInputSchema = createParser(parseFlowResumeInput);
+export const flowCancelInputSchema = createParser(parseFlowCancelInput);
+export const flowRetryInputSchema = createParser(parseFlowRetryInput);
 export const flowDefinitionViewSchema = createParser(parseFlowDefinitionView);
 export const flowInstanceViewSchema = createParser(parseFlowInstanceView);

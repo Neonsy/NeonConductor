@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { permissionStore, threadStore } from '@/app/backend/persistence/stores';
+import { threadStore } from '@/app/backend/persistence/stores';
 import { buildShellApprovalContext } from '@/app/backend/runtime/services/toolExecution/shellApproval';
 import {
     getPersistence,
@@ -13,6 +13,26 @@ import {
 } from '@/app/backend/trpc/__tests__/runtime-contracts.shared';
 
 registerRuntimeContractHooks();
+
+async function waitForFlowInstanceStatus(
+    flowInstanceId: string,
+    expectedStatus: 'approval_required' | 'failed' | 'completed' | 'cancelled' | 'running'
+): Promise<void> {
+    for (let attempt = 0; attempt < 80; attempt += 1) {
+        const flowInstance = await getPersistence().db
+            .selectFrom('flow_instances')
+            .selectAll()
+            .where('id', '=', flowInstanceId)
+            .executeTakeFirst();
+        if (flowInstance && flowInstance.status === expectedStatus) {
+            return;
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+
+    throw new Error(`Timed out waiting for flow instance "${flowInstanceId}" to reach status "${expectedStatus}".`);
+}
 
 describe('runtime contracts: conversation and runs', () => {
     const profileId = runtimeContractProfileId;
@@ -172,7 +192,7 @@ describe('runtime contracts: conversation and runs', () => {
             profileId,
             workspaceFingerprint,
             label: 'Install deps',
-            command: 'pnpm install',
+            command: 'node -e "process.exit(0)"',
             enabled: true,
         });
         const messages = await caller.session.listMessages({
@@ -206,8 +226,12 @@ describe('runtime contracts: conversation and runs', () => {
             throw new Error('Expected persisted flow provenance for approval-required branch workflow.');
         }
         const permissionRequestId = branched.branchWorkflowExecution.requestId;
-        const pendingPermissions = await caller.permission.listPending();
-        expect(pendingPermissions.requests.some((request) => request.id === permissionRequestId)).toBe(true);
+        const resolvedPermission = await caller.permission.resolve({
+            profileId,
+            requestId: permissionRequestId,
+            resolution: 'allow_once',
+        });
+        expect(resolvedPermission.updated).toBe(true);
 
         const flowDefinition = await getPersistence().db
             .selectFrom('flow_definitions')
@@ -221,9 +245,9 @@ describe('runtime contracts: conversation and runs', () => {
         expect(JSON.parse(flowDefinition.steps_json)).toEqual([
             {
                 kind: 'legacy_command',
-                id: `${flowDefinition.id}:legacy_command`,
+                id: `${branchWorkflow.branchWorkflow.id}:legacy_command`,
                 label: 'Install deps',
-                command: 'pnpm install',
+                command: 'node -e "process.exit(0)"',
             },
         ]);
 
@@ -232,23 +256,32 @@ describe('runtime contracts: conversation and runs', () => {
             .selectAll()
             .where('id', '=', branched.branchWorkflowExecution.flowInstanceId)
             .executeTakeFirstOrThrow();
-        expect(flowInstance.flow_definition_id).toBe(flowDefinition.id);
-        expect(flowInstance.status).toBe('approval_required');
-        expect(flowInstance.current_step_index).toBe(0);
-        expect(flowInstance.started_at).toBeDefined();
-        expect(flowInstance.finished_at).toBeNull();
+        await waitForFlowInstanceStatus(flowInstance.id, 'completed');
+
+        const completedFlowInstance = await getPersistence().db
+            .selectFrom('flow_instances')
+            .selectAll()
+            .where('id', '=', branched.branchWorkflowExecution.flowInstanceId)
+            .executeTakeFirstOrThrow();
+        expect(completedFlowInstance.flow_definition_id).toBe(flowDefinition.id);
+        expect(completedFlowInstance.status).toBe('completed');
+        expect(completedFlowInstance.current_step_index).toBe(1);
+        expect(completedFlowInstance.started_at).toBeDefined();
+        expect(completedFlowInstance.finished_at).toBeDefined();
 
         const flowEvents = await getPersistence().db
             .selectFrom('runtime_events')
             .selectAll()
             .where('entity_type', '=', 'flow')
-            .where('entity_id', '=', flowInstance.id)
+            .where('entity_id', '=', completedFlowInstance.id)
             .orderBy('sequence', 'asc')
             .execute();
         expect(flowEvents.map((event) => event.event_type)).toEqual([
             'flow.started',
             'flow.step_started',
             'flow.approval_required',
+            'flow.step_completed',
+            'flow.completed',
         ]);
 
         const branchStatus = await caller.session.status({
@@ -416,6 +449,5 @@ describe('runtime contracts: conversation and runs', () => {
             sessionId: branched.sessionId,
         });
         expect(branchStatus.found).toBe(true);
-        expect((await permissionStore.listPending()).length).toBe(0);
     });
 });

@@ -13,6 +13,7 @@ export function invokeToolHandler(
     args: Record<string, unknown>,
     context?: {
         cwd?: string;
+        signal?: AbortSignal;
     }
 ): Promise<Result<ToolExecutionOutput, ToolExecutionFailure>> {
     if (tool.id === 'list_files') {
@@ -41,7 +42,10 @@ export function invokeToolHandler(
             );
         }
 
-        return runCommandToolHandler(args, { cwd: context.cwd });
+        return runCommandToolHandler(args, {
+            cwd: context.cwd,
+            ...(context.signal ? { signal: context.signal } : {}),
+        });
     }
 
     return Promise.resolve(
