@@ -5,6 +5,7 @@ import {
     WorkspaceEnvironmentPreviewCard,
     WorkspaceEnvironmentSection,
 } from '@/web/components/workspaces/workspaceEnvironmentSection';
+import { VENDORED_NODE_VERSION } from '@/shared/tooling/vendoredNode';
 
 const inspectWorkspaceEnvironmentUseQueryMock = vi.fn();
 const setWorkspacePreferenceMutateAsyncMock = vi.fn();
@@ -89,6 +90,18 @@ const snapshot = {
     overrides: {
         preferredVcs: 'jj' as const,
         preferredPackageManager: 'auto' as const,
+    },
+    vendoredNode: {
+        version: VENDORED_NODE_VERSION,
+        available: true,
+        targetKey: 'win32-x64' as const,
+        executablePath: 'C:\\vendor\\node.exe',
+    },
+    projectNodeExpectation: {
+        source: 'package_json_engines' as const,
+        rawValue: '^24',
+        detectedMajor: 24,
+        satisfiesVendoredNode: true,
     },
     notes: ['This workspace prefers pnpm.', 'The pinned VCS preference "jj" is not available on this machine.'],
 };

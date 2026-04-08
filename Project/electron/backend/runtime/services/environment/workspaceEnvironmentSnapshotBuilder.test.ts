@@ -6,6 +6,7 @@ import type {
     WorkspaceEnvironmentOverrides,
 } from '@/app/backend/runtime/contracts/types/runtime';
 import { resolveWorkspaceEnvironmentInspection } from '@/app/backend/runtime/services/environment/workspaceEnvironmentSnapshotBuilder';
+import { VENDORED_NODE_VERSION } from '@/shared/tooling/vendoredNode';
 
 function buildMarkers(input: Partial<WorkspaceEnvironmentMarkers>): WorkspaceEnvironmentMarkers {
     return {
@@ -62,6 +63,12 @@ describe('workspaceEnvironmentSnapshotBuilder', () => {
                 pnpm: { available: true, executablePath: 'C:\\Tools\\pnpm.cmd' },
                 tsx: { available: true, executablePath: 'C:\\Tools\\tsx.cmd' },
             }),
+            vendoredNode: {
+                version: VENDORED_NODE_VERSION,
+                available: true,
+                targetKey: 'win32-x64',
+                executablePath: 'C:\\vendor\\node.exe',
+            },
             overrides,
         });
 
@@ -94,6 +101,11 @@ describe('workspaceEnvironmentSnapshotBuilder', () => {
                 hasPackageLock: true,
             }),
             availableCommands: buildCommands({}),
+            vendoredNode: {
+                version: VENDORED_NODE_VERSION,
+                available: false,
+                reason: 'missing_asset',
+            },
             overrides: {
                 preferredVcs: 'jj',
                 preferredPackageManager: 'pnpm',
@@ -129,6 +141,12 @@ describe('workspaceEnvironmentSnapshotBuilder', () => {
             workspaceRootPath: 'C:\\workspaces\\fallback',
             markers: buildMarkers({}),
             availableCommands: buildCommands({}),
+            vendoredNode: {
+                version: VENDORED_NODE_VERSION,
+                available: true,
+                targetKey: 'win32-x64',
+                executablePath: 'C:\\vendor\\node.exe',
+            },
             overrides: {
                 preferredVcs: 'auto',
                 preferredPackageManager: 'auto',

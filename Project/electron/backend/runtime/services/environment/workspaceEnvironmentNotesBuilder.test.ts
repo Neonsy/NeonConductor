@@ -4,8 +4,10 @@ import type {
     WorkspaceEnvironmentCommandAvailability,
     WorkspaceEnvironmentEffectivePreferences,
     WorkspaceEnvironmentMarkers,
+    WorkspaceProjectNodeExpectation,
 } from '@/app/backend/runtime/contracts/types/runtime';
 import { buildWorkspaceEnvironmentNotes } from '@/app/backend/runtime/services/environment/workspaceEnvironmentNotesBuilder';
+import { VENDORED_NODE_VERSION } from '@/shared/tooling/vendoredNode';
 
 function buildMarkers(input: Partial<WorkspaceEnvironmentMarkers>): WorkspaceEnvironmentMarkers {
     return {
@@ -49,8 +51,28 @@ function buildEffectivePreferences(input: {
     };
 }
 
+function buildProjectNodeExpectation(
+    input?: Partial<WorkspaceProjectNodeExpectation>
+): WorkspaceProjectNodeExpectation | undefined {
+    if (!input) {
+        return undefined;
+    }
+
+    return {
+        source: input.source ?? 'node_workspace_heuristic',
+        ...(input.rawValue ? { rawValue: input.rawValue } : {}),
+        ...(input.detectedMajor !== undefined ? { detectedMajor: input.detectedMajor } : {}),
+        ...(input.satisfiesVendoredNode !== undefined
+            ? { satisfiesVendoredNode: input.satisfiesVendoredNode }
+            : {}),
+    };
+}
+
 describe('workspaceEnvironmentNotesBuilder', () => {
     it('describes shell, repo, runtime, and pinned override mismatches', () => {
+        const heuristicExpectation = buildProjectNodeExpectation({
+            source: 'node_workspace_heuristic',
+        });
         const notes = buildWorkspaceEnvironmentNotes({
             platform: 'win32',
             shellFamily: 'powershell',
@@ -83,6 +105,13 @@ describe('workspaceEnvironmentNotesBuilder', () => {
                     mismatch: false,
                 },
             }),
+            vendoredNode: {
+                version: VENDORED_NODE_VERSION,
+                available: true,
+                targetKey: 'win32-x64',
+                executablePath: 'C:\\vendor\\node.exe',
+            },
+            ...(heuristicExpectation ? { projectNodeExpectation: heuristicExpectation } : {}),
         });
 
         expect(notes).toEqual([
@@ -93,6 +122,8 @@ describe('workspaceEnvironmentNotesBuilder', () => {
             'This workspace looks Node/TypeScript-oriented.',
             'tsx is available for TypeScript repo scripts and utilities.',
             'The pinned VCS preference "jj" is not available on this machine.',
+            `Vendored Node v${VENDORED_NODE_VERSION} is available for Neon's code runtime.`,
+            `This workspace looks Node/TypeScript-oriented, but no explicit root Node version expectation was found. Vendored Node v${VENDORED_NODE_VERSION} is the only trusted known runtime.`,
         ]);
     });
 
@@ -127,6 +158,11 @@ describe('workspaceEnvironmentNotesBuilder', () => {
                     mismatch: false,
                 },
             }),
+            vendoredNode: {
+                version: VENDORED_NODE_VERSION,
+                available: false,
+                reason: 'missing_asset',
+            },
         });
 
         expect(notes).toEqual([
@@ -134,6 +170,7 @@ describe('workspaceEnvironmentNotesBuilder', () => {
             'This workspace has a .git marker, but git is not available on this machine.',
             'This workspace signals npm via package-lock.json, but npm is not available on this machine.',
             'Do not assume Python is available for repo-local scripts.',
+            `Vendored Node v${VENDORED_NODE_VERSION} should be available for this platform, but the packaged/runtime asset is missing.`,
         ]);
     });
 
@@ -160,10 +197,64 @@ describe('workspaceEnvironmentNotesBuilder', () => {
                     mismatch: false,
                 },
             }),
+            vendoredNode: {
+                version: VENDORED_NODE_VERSION,
+                available: false,
+                reason: 'unsupported_target',
+            },
         });
 
         expect(notes).toContain(
             'Command execution uses Windows Command Prompt via cmd.exe fallback. Do not assume PowerShell or POSIX shell syntax.'
+        );
+        expect(notes).toContain(
+            `Vendored Node v${VENDORED_NODE_VERSION} is not available for this platform or architecture.`
+        );
+    });
+
+    it('describes explicit project-runtime mismatch advisory notes', () => {
+        const packageJsonExpectation = buildProjectNodeExpectation({
+            source: 'package_json_engines',
+            rawValue: '^22',
+            detectedMajor: 22,
+            satisfiesVendoredNode: false,
+        });
+        const notes = buildWorkspaceEnvironmentNotes({
+            platform: 'linux',
+            shellFamily: 'posix_sh',
+            markers: buildMarkers({
+                hasPackageJson: true,
+            }),
+            availableCommands: buildCommands({
+                node: { available: true, executablePath: '/usr/bin/node' },
+            }),
+            effectivePreferences: buildEffectivePreferences({
+                vcs: {
+                    family: 'unknown',
+                    source: 'detected',
+                    requestedOverride: 'auto',
+                    available: false,
+                    mismatch: false,
+                },
+                packageManager: {
+                    family: 'unknown',
+                    source: 'detected',
+                    requestedOverride: 'auto',
+                    available: false,
+                    mismatch: false,
+                },
+            }),
+            vendoredNode: {
+                version: VENDORED_NODE_VERSION,
+                available: true,
+                targetKey: 'linux-x64',
+                executablePath: '/vendor/node',
+            },
+            ...(packageJsonExpectation ? { projectNodeExpectation: packageJsonExpectation } : {}),
+        });
+
+        expect(notes).toContain(
+            `This workspace declares a root Node expectation of "^22", which does not match vendored Node v${VENDORED_NODE_VERSION}.`
         );
     });
 });

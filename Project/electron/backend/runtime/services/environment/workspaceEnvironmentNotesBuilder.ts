@@ -2,6 +2,7 @@ import type {
     WorkspaceEnvironmentCommandAvailability,
     WorkspaceEnvironmentMarkers,
     WorkspaceEnvironmentEffectivePreferences,
+    WorkspaceProjectNodeExpectation,
     WorkspaceEnvironmentSnapshot,
 } from '@/app/backend/runtime/contracts/types/runtime';
 
@@ -20,6 +21,8 @@ export function buildWorkspaceEnvironmentNotes(input: {
     markers: WorkspaceEnvironmentMarkers;
     availableCommands: WorkspaceEnvironmentCommandAvailability;
     effectivePreferences: WorkspaceEnvironmentEffectivePreferences;
+    vendoredNode: WorkspaceEnvironmentSnapshot['vendoredNode'];
+    projectNodeExpectation?: WorkspaceProjectNodeExpectation;
 }): string[] {
     const notes: string[] = [];
 
@@ -95,6 +98,34 @@ export function buildWorkspaceEnvironmentNotes(input: {
     if (input.effectivePreferences.packageManager.mismatch) {
         notes.push(
             `The pinned package manager preference "${input.effectivePreferences.packageManager.family}" is not available on this machine.`
+        );
+    }
+
+    if (input.vendoredNode.available) {
+        notes.push(`Vendored Node v${input.vendoredNode.version} is available for Neon's code runtime.`);
+    } else if (input.vendoredNode.reason === 'unsupported_target') {
+        notes.push(`Vendored Node v${input.vendoredNode.version} is not available for this platform or architecture.`);
+    } else {
+        notes.push(
+            `Vendored Node v${input.vendoredNode.version} should be available for this platform, but the packaged/runtime asset is missing.`
+        );
+    }
+
+    if (
+        input.projectNodeExpectation &&
+        input.projectNodeExpectation.source !== 'node_workspace_heuristic' &&
+        input.projectNodeExpectation.satisfiesVendoredNode === false
+    ) {
+        notes.push(
+            `This workspace declares a root Node expectation of "${input.projectNodeExpectation.rawValue}", which does not match vendored Node v${input.vendoredNode.version}.`
+        );
+    } else if (
+        input.projectNodeExpectation?.source === 'node_workspace_heuristic' &&
+        isNodeWorkspace(input.markers) &&
+        input.vendoredNode.available
+    ) {
+        notes.push(
+            `This workspace looks Node/TypeScript-oriented, but no explicit root Node version expectation was found. Vendored Node v${input.vendoredNode.version} is the only trusted known runtime.`
         );
     }
 

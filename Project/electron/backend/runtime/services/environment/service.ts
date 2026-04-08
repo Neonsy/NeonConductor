@@ -10,10 +10,13 @@ import {
     workspaceCommandAvailabilityService,
 } from '@/app/backend/runtime/services/environment/workspaceCommandAvailabilityService';
 import { buildWorkspaceEnvironmentGuidance } from '@/app/backend/runtime/services/environment/workspaceEnvironmentGuidanceBuilder';
+import { projectNodeExpectationResolver } from '@/app/backend/runtime/services/environment/projectNodeExpectationResolver';
 import { buildWorkspaceEnvironmentInspection } from '@/app/backend/runtime/services/environment/workspaceEnvironmentSnapshotBuilder';
+import { vendoredNodeResolver } from '@/app/backend/runtime/services/environment/vendoredNodeResolver';
 import { normalizeWorkspacePath } from '@/app/backend/runtime/services/environment/workspaceEnvironmentPathUtils';
 import { workspaceShellResolver } from '@/app/backend/runtime/services/environment/workspaceShellResolver';
 import { workspaceMarkerScanner } from '@/app/backend/runtime/services/environment/workspaceMarkerScanner';
+import { VENDORED_NODE_VERSION } from '@/shared/tooling/vendoredNode';
 
 export class WorkspaceEnvironmentService {
     async inspectWorkspaceEnvironment(input: {
@@ -39,11 +42,20 @@ export class WorkspaceEnvironmentService {
             ? normalizeWorkspacePath(input.baseWorkspaceRootPath)
             : undefined;
         const platform = resolveSupportedPlatform();
-        const [resolvedShell, markers, availableCommands] = await Promise.all([
+        const [resolvedShell, markers, availableCommands, vendoredNodeResolution] = await Promise.all([
             workspaceShellResolver.resolve(platform),
             workspaceMarkerScanner.scanWorkspaceMarkers(workspaceRootPath),
             workspaceCommandAvailabilityService.getAvailableCommands(platform),
+            vendoredNodeResolver.resolve({
+                platform,
+                arch: process.arch,
+            }),
         ]);
+        const projectNodeExpectation = await projectNodeExpectationResolver.resolve({
+            workspaceRootPath,
+            markers,
+            vendoredNodeVersion: VENDORED_NODE_VERSION,
+        });
 
         return okOp(
             buildWorkspaceEnvironmentInspection({
@@ -54,6 +66,16 @@ export class WorkspaceEnvironmentService {
                 ...(baseWorkspaceRootPath ? { baseWorkspaceRootPath } : {}),
                 markers,
                 availableCommands,
+                vendoredNode: {
+                    version: VENDORED_NODE_VERSION,
+                    available: vendoredNodeResolution.available,
+                    ...(vendoredNodeResolution.targetKey ? { targetKey: vendoredNodeResolution.targetKey } : {}),
+                    ...(vendoredNodeResolution.executablePath
+                        ? { executablePath: vendoredNodeResolution.executablePath }
+                        : {}),
+                    ...(vendoredNodeResolution.reason ? { reason: vendoredNodeResolution.reason } : {}),
+                },
+                ...(projectNodeExpectation ? { projectNodeExpectation } : {}),
                 overrides: {
                     preferredVcs: input.overrides?.preferredVcs ?? 'auto',
                     preferredPackageManager: input.overrides?.preferredPackageManager ?? 'auto',

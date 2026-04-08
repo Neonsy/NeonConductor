@@ -1,6 +1,7 @@
 import type {
     WorkspaceEnvironmentCommandAvailability,
     WorkspaceEnvironmentOverrides,
+    WorkspaceProjectNodeExpectation,
     WorkspaceEnvironmentSnapshot,
 } from '@/app/backend/runtime/contracts/types/runtime';
 import {
@@ -18,6 +19,8 @@ export function resolveWorkspaceEnvironmentInspection(input: {
     availableCommands: WorkspaceEnvironmentCommandAvailability;
     markers: WorkspaceEnvironmentSnapshot['markers'];
     overrides: WorkspaceEnvironmentOverrides;
+    vendoredNode: WorkspaceEnvironmentSnapshot['vendoredNode'];
+    projectNodeExpectation?: WorkspaceProjectNodeExpectation;
 }): WorkspaceEnvironmentSnapshot {
     const detectedPreferences = resolveWorkspaceEnvironmentDetectedPreferences({
         markers: input.markers,
@@ -35,6 +38,8 @@ export function resolveWorkspaceEnvironmentInspection(input: {
         markers: input.markers,
         availableCommands: input.availableCommands,
         effectivePreferences,
+        vendoredNode: input.vendoredNode,
+        ...(input.projectNodeExpectation ? { projectNodeExpectation: input.projectNodeExpectation } : {}),
     });
 
     return {
@@ -48,6 +53,8 @@ export function resolveWorkspaceEnvironmentInspection(input: {
         detectedPreferences,
         effectivePreferences,
         overrides: input.overrides,
+        vendoredNode: input.vendoredNode,
+        ...(input.projectNodeExpectation ? { projectNodeExpectation: input.projectNodeExpectation } : {}),
         notes,
     };
 }

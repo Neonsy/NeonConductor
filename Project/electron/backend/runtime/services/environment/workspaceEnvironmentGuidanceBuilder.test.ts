@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { WorkspaceEnvironmentSnapshot } from '@/app/backend/runtime/contracts/types/runtime';
 import { buildWorkspaceEnvironmentGuidance } from '@/app/backend/runtime/services/environment/workspaceEnvironmentGuidanceBuilder';
+import { VENDORED_NODE_VERSION } from '@/shared/tooling/vendoredNode';
 
 function buildSnapshot(overrides: Partial<WorkspaceEnvironmentSnapshot>): WorkspaceEnvironmentSnapshot {
     return {
@@ -60,6 +61,12 @@ function buildSnapshot(overrides: Partial<WorkspaceEnvironmentSnapshot>): Worksp
         overrides: {
             preferredVcs: 'auto',
             preferredPackageManager: 'auto',
+        },
+        vendoredNode: {
+            version: VENDORED_NODE_VERSION,
+            available: true,
+            targetKey: 'win32-x64',
+            executablePath: 'C:\\Repo\\vendor\\node\\win32-x64\\node.exe',
         },
         notes: [],
         ...overrides,

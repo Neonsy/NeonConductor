@@ -5,6 +5,7 @@ import {
     ENVIRONMENT_SAVE_ERROR_MESSAGE,
     ENVIRONMENT_SAVE_SUCCESS_MESSAGE,
 } from '@/web/components/workspaces/useWorkspaceEnvironmentPreferencesController';
+import { VENDORED_NODE_VERSION } from '@/shared/tooling/vendoredNode';
 
 const environmentTestState = vi.hoisted(() => ({
     shellBootstrapSetDataMock: vi.fn(),
@@ -132,6 +133,18 @@ describe('useWorkspaceEnvironmentPreferencesController', () => {
                     overrides: {
                         preferredVcs: 'auto',
                         preferredPackageManager: 'auto',
+                    },
+                    vendoredNode: {
+                        version: VENDORED_NODE_VERSION,
+                        available: true,
+                        targetKey: 'win32-x64',
+                        executablePath: 'C:/vendor/node.exe',
+                    },
+                    projectNodeExpectation: {
+                        source: 'package_json_engines',
+                        rawValue: '^24',
+                        detectedMajor: 24,
+                        satisfiesVendoredNode: true,
                     },
                     notes: [],
                 },

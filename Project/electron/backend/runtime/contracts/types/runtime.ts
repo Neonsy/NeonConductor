@@ -11,6 +11,7 @@ import type {
 import type { EntityId } from '@/app/backend/runtime/contracts/ids';
 import type { ProfileInput } from '@/app/backend/runtime/contracts/types/common';
 import type { SandboxRecord } from '@/app/backend/runtime/contracts/types/sandbox';
+import type { VendoredNodeTargetKey } from '@/shared/tooling/vendoredNode';
 
 import type { RuntimeProviderId, TopLevelTab } from '@/shared/contracts';
 
@@ -247,6 +248,21 @@ export interface WorkspaceEnvironmentOverrides {
     preferredPackageManager: WorkspacePreferredPackageManager;
 }
 
+export interface WorkspaceEnvironmentVendoredNode {
+    version: string;
+    available: boolean;
+    targetKey?: VendoredNodeTargetKey;
+    executablePath?: string;
+    reason?: 'unsupported_target' | 'missing_asset';
+}
+
+export interface WorkspaceProjectNodeExpectation {
+    source: 'package_json_engines' | 'nvmrc' | 'node_version_file' | 'node_workspace_heuristic';
+    rawValue?: string;
+    detectedMajor?: number;
+    satisfiesVendoredNode?: boolean;
+}
+
 export interface WorkspaceEnvironmentSnapshot {
     platform: 'win32' | 'darwin' | 'linux';
     shellFamily: 'powershell' | 'cmd' | 'posix_sh';
@@ -258,6 +274,8 @@ export interface WorkspaceEnvironmentSnapshot {
     detectedPreferences: WorkspaceEnvironmentDetectedPreferences;
     effectivePreferences: WorkspaceEnvironmentEffectivePreferences;
     overrides: WorkspaceEnvironmentOverrides;
+    vendoredNode: WorkspaceEnvironmentVendoredNode;
+    projectNodeExpectation?: WorkspaceProjectNodeExpectation;
     notes: string[];
 }
 

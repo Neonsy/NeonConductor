@@ -5,15 +5,30 @@ import path from 'node:path';
 import { PassThrough } from 'node:stream';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { spawnMock } = vi.hoisted(() => ({
+const { spawnMock, vendoredNodeResolveMock, projectNodeExpectationResolveMock } = vi.hoisted(() => ({
     spawnMock: vi.fn(),
+    vendoredNodeResolveMock: vi.fn(),
+    projectNodeExpectationResolveMock: vi.fn(),
 }));
 
 vi.mock('node:child_process', () => ({
     spawn: spawnMock,
 }));
 
+vi.mock('@/app/backend/runtime/services/environment/vendoredNodeResolver', () => ({
+    vendoredNodeResolver: {
+        resolve: vendoredNodeResolveMock,
+    },
+}));
+
+vi.mock('@/app/backend/runtime/services/environment/projectNodeExpectationResolver', () => ({
+    projectNodeExpectationResolver: {
+        resolve: projectNodeExpectationResolveMock,
+    },
+}));
+
 import { workspaceEnvironmentService } from '@/app/backend/runtime/services/environment/service';
+import { VENDORED_NODE_VERSION } from '@/shared/tooling/vendoredNode';
 
 function queueSpawnResponses(responses: Partial<Record<string, string>>) {
     spawnMock.mockImplementation((_file: string, args: string[]) => {
@@ -47,6 +62,15 @@ describe('workspaceEnvironmentService', () => {
 
     beforeEach(() => {
         spawnMock.mockReset();
+        vendoredNodeResolveMock.mockReset();
+        vendoredNodeResolveMock.mockResolvedValue({
+            available: true,
+            targetKey: 'win32-x64',
+            executableName: 'node.exe',
+            executablePath: 'C:\\vendor\\node.exe',
+        });
+        projectNodeExpectationResolveMock.mockReset();
+        projectNodeExpectationResolveMock.mockResolvedValue(undefined);
     });
 
     afterAll(() => {
@@ -94,10 +118,13 @@ describe('workspaceEnvironmentService', () => {
         expect(result.value.detectedPreferences.packageManager).toBe('pnpm');
         expect(result.value.effectivePreferences.packageManager.family).toBe('pnpm');
         expect(result.value.effectivePreferences.scriptRunner).toBe('tsx');
+        expect(result.value.vendoredNode.version).toBe(VENDORED_NODE_VERSION);
+        expect(result.value.vendoredNode.available).toBe(true);
         expect(result.value.notes).toContain(
             'This workspace appears to be jj-managed. Prefer jj for repo inspection and history operations.'
         );
         expect(result.value.notes).toContain('This workspace prefers pnpm.');
+        expect(result.value.notes).toContain(`Vendored Node v${VENDORED_NODE_VERSION} is available for Neon's code runtime.`);
     });
 
     it('surfaces override mismatches without fabricating command availability', async () => {
@@ -140,6 +167,55 @@ describe('workspaceEnvironmentService', () => {
         expect(result.value.notes).toContain('The pinned VCS preference "jj" is not available on this machine.');
         expect(result.value.notes).toContain(
             'The pinned package manager preference "pnpm" is not available on this machine.'
+        );
+        expect(result.value.vendoredNode.version).toBe(VENDORED_NODE_VERSION);
+    });
+
+    it('surfaces explicit project-runtime mismatch notes without blocking inspection', async () => {
+        Object.defineProperty(process, 'platform', {
+            value: 'linux',
+            configurable: true,
+        });
+        queueSpawnResponses({
+            git: '/usr/bin/git',
+            node: '/usr/bin/node',
+            npm: '/usr/bin/npm',
+        });
+        vendoredNodeResolveMock.mockResolvedValue({
+            available: true,
+            targetKey: 'linux-x64',
+            executableName: 'node',
+            executablePath: '/vendor/node',
+        });
+        projectNodeExpectationResolveMock.mockResolvedValue({
+            source: 'package_json_engines',
+            rawValue: '^22',
+            detectedMajor: 22,
+            satisfiesVendoredNode: false,
+        });
+
+        const workspacePath = mkdtempSync(path.join(os.tmpdir(), 'nc-env-linux-mismatch-'));
+        mkdirSync(path.join(workspacePath, '.git'));
+        writeFileSync(path.join(workspacePath, 'package.json'), '{"engines":{"node":"^22"}}', 'utf8');
+        writeFileSync(path.join(workspacePath, 'package-lock.json'), '{}', 'utf8');
+
+        const result = await workspaceEnvironmentService.inspectWorkspaceEnvironment({
+            workspaceRootPath: workspacePath,
+        });
+
+        expect(result.isOk()).toBe(true);
+        if (result.isErr()) {
+            throw new Error(result.error.message);
+        }
+
+        expect(result.value.projectNodeExpectation).toEqual({
+            source: 'package_json_engines',
+            rawValue: '^22',
+            detectedMajor: 22,
+            satisfiesVendoredNode: false,
+        });
+        expect(result.value.notes).toContain(
+            `This workspace declares a root Node expectation of "^22", which does not match vendored Node v${VENDORED_NODE_VERSION}.`
         );
     });
 });
