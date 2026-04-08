@@ -30,6 +30,10 @@
         artifactName: 'NeonConductor-Mac-${arch}-${version}-Installer.${ext}',
         extraResources: [
             {
+                from: 'vendor/node/darwin-${arch}/node',
+                to: 'vendor/node/darwin-${arch}/node',
+            },
+            {
                 from: 'vendor/rg/darwin-${arch}/rg',
                 to: 'vendor/rg/darwin-${arch}/rg',
             },
@@ -41,6 +45,10 @@
         executableName: 'NeonConductor',
         signAndEditExecutable: true,
         extraResources: [
+            {
+                from: 'vendor/node/win32-${arch}/node.exe',
+                to: 'vendor/node/win32-${arch}/node.exe',
+            },
             {
                 from: 'vendor/rg/win32-${arch}/rg.exe',
                 to: 'vendor/rg/win32-${arch}/rg.exe',
@@ -63,6 +71,10 @@
         ],
         artifactName: 'NeonConductor-Linux-${arch}-${version}.${ext}',
         extraResources: [
+            {
+                from: 'vendor/node/linux-${arch}/node',
+                to: 'vendor/node/linux-${arch}/node',
+            },
             {
                 from: 'vendor/rg/linux-${arch}/rg',
                 to: 'vendor/rg/linux-${arch}/rg',

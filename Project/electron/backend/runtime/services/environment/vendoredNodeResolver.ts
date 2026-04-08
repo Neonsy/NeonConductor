@@ -1,0 +1,89 @@
+import { constants } from 'node:fs';
+import { access } from 'node:fs/promises';
+
+import { app } from 'electron';
+
+import { resolveRuntimeAssetPath } from '@/app/main/runtime/assets';
+
+import {
+    resolveVendoredNodeTargetKey,
+    vendoredNodeTargets,
+    type VendoredNodeTargetKey,
+} from '@/shared/tooling/vendoredNode';
+
+export interface VendoredNodeRuntimeContext {
+    platform: NodeJS.Platform;
+    arch: string;
+    isPackaged: boolean;
+    appPath: string;
+    resourcesPath?: string;
+}
+
+export interface ResolvedVendoredNode {
+    available: boolean;
+    targetKey?: VendoredNodeTargetKey;
+    executableName?: 'node' | 'node.exe';
+    executablePath?: string;
+    reason?: 'unsupported_target' | 'missing_asset';
+}
+
+function readDefaultRuntimeContext(): VendoredNodeRuntimeContext {
+    const electronApp = typeof app === 'object' && app !== null ? app : undefined;
+    const appPath = typeof electronApp?.getAppPath === 'function' ? electronApp.getAppPath() : process.cwd();
+    return {
+        platform: process.platform,
+        arch: process.arch,
+        isPackaged: electronApp?.isPackaged ?? false,
+        appPath,
+        resourcesPath: process.resourcesPath,
+    };
+}
+
+export class VendoredNodeResolver {
+    async resolve(runtimeContextOverrides: Partial<VendoredNodeRuntimeContext> = {}): Promise<ResolvedVendoredNode> {
+        const runtimeContext = {
+            ...readDefaultRuntimeContext(),
+            ...runtimeContextOverrides,
+        } satisfies VendoredNodeRuntimeContext;
+
+        const targetKey = resolveVendoredNodeTargetKey({
+            platform: runtimeContext.platform,
+            arch: runtimeContext.arch,
+        });
+        if (!targetKey) {
+            return {
+                available: false,
+                reason: 'unsupported_target',
+            };
+        }
+
+        const target = vendoredNodeTargets[targetKey];
+        const executablePath = resolveRuntimeAssetPath({
+            isPackaged: runtimeContext.isPackaged,
+            appPath: runtimeContext.appPath,
+            relativePath: target.resourceRelativePath,
+            ...(runtimeContext.resourcesPath ? { resourcesPath: runtimeContext.resourcesPath } : {}),
+        });
+
+        try {
+            await access(executablePath, constants.F_OK);
+        } catch {
+            return {
+                available: false,
+                targetKey,
+                executableName: target.executableName,
+                executablePath,
+                reason: 'missing_asset',
+            };
+        }
+
+        return {
+            available: true,
+            targetKey,
+            executableName: target.executableName,
+            executablePath,
+        };
+    }
+}
+
+export const vendoredNodeResolver = new VendoredNodeResolver();
