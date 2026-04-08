@@ -2,10 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
     resolveUtilityModelTargetMock,
+    shouldUseUtilityModelMock,
     resolvePolicyMock,
     estimatePreparedContextMessagesMock,
 } = vi.hoisted(() => ({
     resolveUtilityModelTargetMock: vi.fn(),
+    shouldUseUtilityModelMock: vi.fn(),
     resolvePolicyMock: vi.fn(),
     estimatePreparedContextMessagesMock: vi.fn(),
 }));
@@ -13,6 +15,12 @@ const {
 vi.mock('@/app/backend/runtime/services/profile/utilityModel', () => ({
     utilityModelService: {
         resolveUtilityModelTarget: resolveUtilityModelTargetMock,
+    },
+}));
+
+vi.mock('@/app/backend/runtime/services/profile/utilityModelConsumerPreferences', () => ({
+    utilityModelConsumerPreferencesService: {
+        shouldUseUtilityModel: shouldUseUtilityModelMock,
     },
 }));
 
@@ -31,8 +39,10 @@ import { resolveCompactionSummarizerTarget } from '@/app/backend/runtime/service
 describe('contextCompactionShared', () => {
     beforeEach(() => {
         resolveUtilityModelTargetMock.mockReset();
+        shouldUseUtilityModelMock.mockReset();
         resolvePolicyMock.mockReset();
         estimatePreparedContextMessagesMock.mockReset();
+        shouldUseUtilityModelMock.mockResolvedValue(true);
     });
 
     it('falls back to the active model when the utility target cannot fit the compaction request', async () => {
@@ -85,6 +95,29 @@ describe('contextCompactionShared', () => {
             ],
         });
 
+        expect(target).toEqual({
+            providerId: 'zai',
+            modelId: 'zai/glm-4.5-air',
+            source: 'fallback',
+        });
+    });
+
+    it('uses the active model directly when Context Compaction is set to skip Utility AI', async () => {
+        shouldUseUtilityModelMock.mockResolvedValue(false);
+
+        const target = await resolveCompactionSummarizerTarget({
+            profileId: 'profile_test',
+            fallbackProviderId: 'zai',
+            fallbackModelId: 'zai/glm-4.5-air',
+            summaryMessages: [
+                {
+                    role: 'user',
+                    parts: [{ type: 'text', text: 'Compaction prompt' }],
+                },
+            ],
+        });
+
+        expect(resolveUtilityModelTargetMock).not.toHaveBeenCalled();
         expect(target).toEqual({
             providerId: 'zai',
             modelId: 'zai/glm-4.5-air',

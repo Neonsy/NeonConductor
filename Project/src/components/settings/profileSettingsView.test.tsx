@@ -46,6 +46,7 @@ vi.mock('@/web/components/settings/profileSettings/useProfileSettingsController'
             setEditPreferenceMutation: { isPending: false },
             setThreadTitlePreferenceMutation: { isPending: false },
             setUtilityModelMutation: { isPending: false },
+            setUtilityModelConsumerPreferenceMutation: { isPending: false },
             setMemoryRetrievalModelMutation: { isPending: false },
             utilityProviderItems: [{ id: 'openai', label: 'OpenAI' }],
             selectedUtilityProviderId: 'openai',
@@ -55,6 +56,10 @@ vi.mock('@/web/components/settings/profileSettings/useProfileSettingsController'
             utilityModelSelection: {
                 providerId: 'openai',
                 modelId: 'openai/gpt-5-mini',
+            },
+            utilityModelConsumers: {
+                conversationNaming: true,
+                contextCompaction: true,
             },
             memoryRetrievalProviderItems: [{ id: 'openai', label: 'OpenAI' }],
             selectedMemoryRetrievalProviderId: 'openai',
@@ -68,6 +73,7 @@ vi.mock('@/web/components/settings/profileSettings/useProfileSettingsController'
             updateExecutionPreset: vi.fn(),
             updateEditPreference: vi.fn(),
             updateThreadTitleMode: vi.fn(),
+            updateUtilityModelConsumerPreference: vi.fn(),
             setUtilityProviderId: vi.fn(),
             setUtilityModelId: vi.fn(),
             saveUtilityModel: vi.fn(),
@@ -114,6 +120,9 @@ describe('ProfileSettingsView', () => {
         expect(html).toContain('Utility AI');
         expect(html).toContain('Selected Profile');
         expect(html).toContain('Save Utility AI');
+        expect(html).toContain('Use Utility AI For');
+        expect(html).toContain('Conversation Naming');
+        expect(html).toContain('Context Compaction');
         expect(html).not.toContain('Interim AI model override');
         expect(html).not.toContain('threadTitleAiModel');
     });
@@ -138,7 +147,7 @@ describe('ProfileSettingsView', () => {
         );
 
         expect(html).toContain('Conversation Naming');
-        expect(html).toContain('Template + optional AI refine');
+        expect(html).toContain('Template + Utility AI refine');
         expect(html).not.toContain('Save AI Model');
         expect(html).not.toContain('Interim AI model override');
     });

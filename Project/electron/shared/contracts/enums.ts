@@ -22,8 +22,11 @@ export type ConversationThreadGroupView = (typeof conversationThreadGroupViews)[
 export const conversationEditResolutions = ['ask', 'truncate', 'branch'] as const;
 export type ConversationEditResolution = (typeof conversationEditResolutions)[number];
 
-export const threadTitleGenerationModes = ['template', 'ai_optional'] as const;
+export const threadTitleGenerationModes = ['template', 'utility_refine'] as const;
 export type ThreadTitleGenerationMode = (typeof threadTitleGenerationModes)[number];
+
+export const utilityModelConsumerIds = ['conversation_naming', 'context_compaction'] as const;
+export type UtilityModelConsumerId = (typeof utilityModelConsumerIds)[number];
 
 export const topLevelTabs = ['chat', 'agent', 'orchestrator'] as const;
 export type TopLevelTab = (typeof topLevelTabs)[number];

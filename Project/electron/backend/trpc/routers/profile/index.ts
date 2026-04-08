@@ -5,15 +5,18 @@ import {
     profileDuplicateInputSchema,
     profileGetExecutionPresetInputSchema,
     profileGetMemoryRetrievalModelInputSchema,
+    profileGetUtilityModelConsumerPreferencesInputSchema,
     profileGetUtilityModelInputSchema,
     profileRenameInputSchema,
     profileSetActiveInputSchema,
     profileSetExecutionPresetInputSchema,
     profileSetMemoryRetrievalModelInputSchema,
+    profileSetUtilityModelConsumerPreferenceInputSchema,
     profileSetUtilityModelInputSchema,
 } from '@/app/backend/runtime/contracts';
 import { getExecutionPreset, setExecutionPreset } from '@/app/backend/runtime/services/profile/executionPreset';
 import { memoryRetrievalModelService } from '@/app/backend/runtime/services/profile/memoryRetrievalModel';
+import { utilityModelConsumerPreferencesService } from '@/app/backend/runtime/services/profile/utilityModelConsumerPreferences';
 import { utilityModelService } from '@/app/backend/runtime/services/profile/utilityModel';
 import {
     runtimeRemoveEvent,
@@ -46,6 +49,11 @@ export const profileRouter = router({
     getUtilityModel: publicProcedure.input(profileGetUtilityModelInputSchema).query(async ({ input }) => {
         return utilityModelService.getUtilityModelPreference(input.profileId);
     }),
+    getUtilityModelConsumerPreferences: publicProcedure
+        .input(profileGetUtilityModelConsumerPreferencesInputSchema)
+        .query(async ({ input }) => {
+            return utilityModelConsumerPreferencesService.getPreferences(input.profileId);
+        }),
     getMemoryRetrievalModel: publicProcedure
         .input(profileGetMemoryRetrievalModelInputSchema)
         .query(async ({ input }) => {
@@ -89,6 +97,28 @@ export const profileRouter = router({
 
         return result.value;
     }),
+    setUtilityModelConsumerPreference: publicProcedure
+        .input(profileSetUtilityModelConsumerPreferenceInputSchema)
+        .mutation(async ({ input }) => {
+            const result = await utilityModelConsumerPreferencesService.setPreference(input);
+
+            await runtimeEventLogService.append(
+                runtimeStatusEvent({
+                    entityType: 'profile',
+                    domain: 'profile',
+                    entityId: input.profileId,
+                    eventType: 'profile.utility-model-consumer.updated',
+                    payload: {
+                        profileId: input.profileId,
+                        consumerId: input.consumerId,
+                        useUtilityModel: input.useUtilityModel,
+                        preferences: result.preferences,
+                    },
+                })
+            );
+
+            return result;
+        }),
     setMemoryRetrievalModel: publicProcedure
         .input(profileSetMemoryRetrievalModelInputSchema)
         .mutation(async ({ input }) => {

@@ -89,7 +89,7 @@ describe('profile settings actions', () => {
         expect(setStatusMessage).toHaveBeenCalledWith('Updated conversation edit behavior.');
     });
 
-    it('updates the thread title mode without a separate AI model field', async () => {
+    it('updates the conversation naming mode without a separate AI model field', async () => {
         const setStatusMessage = vi.fn();
         const setThreadTitlePreferenceMutation = {
             mutateAsync: vi.fn().mockResolvedValue(undefined),
@@ -103,12 +103,12 @@ describe('profile settings actions', () => {
             setStatusMessage,
         });
 
-        await actions.updateThreadTitleMode('ai_optional');
+        await actions.updateThreadTitleMode('utility_refine');
 
         expect(setThreadTitlePreferenceMutation.mutateAsync).toHaveBeenCalledWith({
             profileId: 'profile_default',
-            mode: 'ai_optional',
+            mode: 'utility_refine',
         });
-        expect(setStatusMessage).toHaveBeenCalledWith('Updated thread title generation settings.');
+        expect(setStatusMessage).toHaveBeenCalledWith('Updated conversation naming settings.');
     });
 });

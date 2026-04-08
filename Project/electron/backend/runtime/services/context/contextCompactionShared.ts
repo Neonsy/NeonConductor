@@ -7,6 +7,7 @@ import { errOp, okOp, type OperationalResult } from '@/app/backend/runtime/servi
 import { resolveSummaryGenerationTarget } from '@/app/backend/runtime/services/common/summaryGenerationTarget';
 import { buildPreparedContextMessages } from '@/app/backend/runtime/services/context/preparedContextMessageBuilder';
 import { estimatePreparedContextMessages } from '@/app/backend/runtime/services/context/sessionContextBudgetEvaluator';
+import { utilityModelConsumerPreferencesService } from '@/app/backend/runtime/services/profile/utilityModelConsumerPreferences';
 import { applyPersistedCompaction } from '@/app/backend/runtime/services/context/sessionReplayLoader';
 import { createTextMessage } from '@/app/backend/runtime/services/runExecution/contextParts';
 import type { ReplayMessage } from '@/app/backend/runtime/services/runExecution/contextReplay';
@@ -210,6 +211,18 @@ export async function resolveCompactionSummarizerTarget(input: {
     fallbackModelId: string;
     summaryMessages: RunContextMessage[];
 }): Promise<{ providerId: RuntimeProviderId; modelId: string; source: 'utility' | 'fallback' }> {
+    const compactionUsesUtilityModel = await utilityModelConsumerPreferencesService.shouldUseUtilityModel(
+        input.profileId,
+        'context_compaction'
+    );
+    if (!compactionUsesUtilityModel) {
+        return {
+            providerId: input.fallbackProviderId,
+            modelId: input.fallbackModelId,
+            source: 'fallback',
+        };
+    }
+
     const target = await resolveSummaryGenerationTarget({
         profileId: input.profileId,
         fallbackProviderId: input.fallbackProviderId,

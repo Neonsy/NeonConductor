@@ -118,7 +118,9 @@ function ProfileManagementScreen({
                         type='button'
                         size='sm'
                         variant='outline'
-                        disabled={controller.library.setActiveMutation.isPending || selectedProfile.id === activeProfileId}
+                        disabled={
+                            controller.library.setActiveMutation.isPending || selectedProfile.id === activeProfileId
+                        }
                         onClick={() => {
                             void controller.library.activateProfile();
                         }}>
@@ -129,7 +131,9 @@ function ProfileManagementScreen({
                         type='button'
                         size='sm'
                         variant='outline'
-                        disabled={controller.library.cannotDeleteLastProfile || controller.library.deleteMutation.isPending}
+                        disabled={
+                            controller.library.cannotDeleteLastProfile || controller.library.deleteMutation.isPending
+                        }
                         onClick={() => {
                             controller.library.setConfirmDeleteOpen(true);
                         }}>
@@ -223,8 +227,9 @@ function ProfileConversationNamingScreen({
             <div className='space-y-1'>
                 <p className='text-sm font-semibold'>Conversation naming mode</p>
                 <p className='text-muted-foreground text-xs leading-5'>
-                    Template naming is the baseline path. Optional AI refinement uses the shared Utility AI selection
-                    from the adjacent profile subsection.
+                    Template naming is the baseline path. Utility-backed refinement uses the shared Utility AI
+                    selection, unless Conversation Naming is set to use the active conversation model in the Utility AI
+                    subsection.
                 </p>
             </div>
             <select
@@ -234,31 +239,62 @@ function ProfileConversationNamingScreen({
                 disabled={controller.preferences.setThreadTitlePreferenceMutation.isPending}
                 onChange={(event) => {
                     const nextMode = event.target.value;
-                    if (nextMode !== 'template' && nextMode !== 'ai_optional') {
+                    if (nextMode !== 'template' && nextMode !== 'utility_refine') {
                         return;
                     }
 
                     void controller.preferences.updateThreadTitleMode(nextMode);
                 }}>
                 <option value='template'>Template only</option>
-                <option value='ai_optional'>Template + optional AI refine</option>
+                <option value='utility_refine'>Template + Utility AI refine</option>
             </select>
         </section>
     );
 }
 
-function ProfileUtilityAiScreen({
-    controller,
-}: {
-    controller: ReturnType<typeof useProfileSettingsController>;
-}) {
+function ProfileUtilityAiScreen({ controller }: { controller: ReturnType<typeof useProfileSettingsController> }) {
+    const utilityConsumerTogglePending = controller.preferences.setUtilityModelConsumerPreferenceMutation.isPending;
+
+    function renderConsumerToggle(input: {
+        label: string;
+        description: string;
+        checked: boolean;
+        ariaLabel: string;
+        onChange: (checked: boolean) => void;
+    }) {
+        return (
+            <label className='flex items-start justify-between gap-3 rounded-xl border border-transparent px-1 py-1 text-sm'>
+                <div className='space-y-1'>
+                    <span className='font-medium'>{input.label}</span>
+                    <p className='text-muted-foreground text-xs leading-5'>{input.description}</p>
+                </div>
+                <span className='relative inline-flex shrink-0 items-center'>
+                    <input
+                        type='checkbox'
+                        role='switch'
+                        aria-label={input.ariaLabel}
+                        className='peer sr-only'
+                        checked={input.checked}
+                        disabled={utilityConsumerTogglePending}
+                        onChange={(event) => {
+                            input.onChange(event.target.checked);
+                        }}
+                    />
+                    <span className='border-border peer-focus-visible:ring-ring peer-checked:bg-foreground peer-checked:border-foreground inline-flex h-6 w-11 rounded-full border bg-transparent transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-offset-2 peer-disabled:opacity-50'>
+                        <span className='bg-background mt-[1px] ml-[1px] h-5 w-5 rounded-full border transition-transform peer-checked:translate-x-5' />
+                    </span>
+                </span>
+            </label>
+        );
+    }
+
     return (
         <section className='border-border/70 bg-card/55 space-y-4 rounded-[24px] border p-5'>
             <div className='space-y-1'>
                 <p className='text-sm font-semibold'>Shared utility model</p>
                 <p className='text-muted-foreground text-xs leading-5'>
-                    Neon uses this model for context compaction, conversation naming, and similar low-stakes
-                    background work. If it is unset or unavailable, Neon falls back to the active conversation model.
+                    Neon uses this model for selected low-stakes background work. If the model is unset, unavailable, or
+                    a feature toggle below is off, Neon falls back to the active conversation model for that task.
                 </p>
             </div>
 
@@ -295,7 +331,10 @@ function ProfileUtilityAiScreen({
                         disabled={controller.preferences.setUtilityModelMutation.isPending}
                         onSelectModel={controller.preferences.setUtilityModelId}
                         onSelectOption={(option) => {
-                            if (option.providerId && option.providerId !== controller.preferences.selectedUtilityProviderId) {
+                            if (
+                                option.providerId &&
+                                option.providerId !== controller.preferences.selectedUtilityProviderId
+                            ) {
                                 controller.preferences.setUtilityProviderId(option.providerId);
                             }
                             controller.preferences.setUtilityModelId(option.id);
@@ -343,15 +382,45 @@ function ProfileUtilityAiScreen({
                         : 'No Utility AI saved. Neon currently falls back to the active conversation model.'}
                 </span>
             </div>
+
+            <div className='border-border/70 bg-background/60 space-y-3 rounded-2xl border px-4 py-4'>
+                <div className='space-y-1'>
+                    <p className='text-sm font-semibold'>Use Utility AI For</p>
+                    <p className='text-muted-foreground text-xs leading-5'>
+                        These switches are on by default. If a switch is off, that feature uses the active conversation
+                        model instead of the shared Utility AI model.
+                    </p>
+                </div>
+
+                {renderConsumerToggle({
+                    label: 'Conversation Naming',
+                    description: 'Applies when Conversation Naming mode is set to Utility AI refine.',
+                    checked: controller.preferences.utilityModelConsumers.conversationNaming,
+                    ariaLabel: 'Use Utility AI for Conversation Naming',
+                    onChange: (checked) => {
+                        void controller.preferences.updateUtilityModelConsumerPreference(
+                            'conversation_naming',
+                            checked
+                        );
+                    },
+                })}
+
+                {renderConsumerToggle({
+                    label: 'Context Compaction',
+                    description:
+                        'Controls whether compaction summaries prefer Utility AI before falling back to the active conversation model.',
+                    checked: controller.preferences.utilityModelConsumers.contextCompaction,
+                    ariaLabel: 'Use Utility AI for Context Compaction',
+                    onChange: (checked) => {
+                        void controller.preferences.updateUtilityModelConsumerPreference('context_compaction', checked);
+                    },
+                })}
+            </div>
         </section>
     );
 }
 
-function ProfileMemoryRetrievalScreen({
-    controller,
-}: {
-    controller: ReturnType<typeof useProfileSettingsController>;
-}) {
+function ProfileMemoryRetrievalScreen({ controller }: { controller: ReturnType<typeof useProfileSettingsController> }) {
     const hasModelOptions = controller.preferences.memoryRetrievalModelOptions.length > 0;
 
     return (
@@ -481,13 +550,13 @@ function getProfileSectionMetadata(subsection: ProfileSettingsSubsectionId): {
             return {
                 title: 'Conversation Naming',
                 description:
-                    'Control how new conversation names are generated. AI refinement uses the shared Utility AI model and falls back to the active conversation model when Utility AI is unset or unavailable.',
+                    'Control how new conversation names are generated. Utility-backed refinement uses the shared Utility AI model unless that feature is set to use the active conversation model.',
             };
         case 'utility':
             return {
                 title: 'Utility AI',
                 description:
-                    'Choose the shared small utility model used for conversation naming, context compaction, and future lightweight utility tasks.',
+                    'Choose the shared utility model and control which profile features use it before they fall back to the active conversation model.',
             };
         case 'memoryRetrieval':
             return {

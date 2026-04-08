@@ -1,6 +1,7 @@
 import { executionPresets } from '@/app/backend/runtime/contracts/enums';
 import {
     createParser,
+    readBoolean,
     readEnumValue,
     readObject,
     readOptionalString,
@@ -13,15 +14,17 @@ import type {
     ProfileDuplicateInput,
     ProfileGetExecutionPresetInput,
     ProfileGetMemoryRetrievalModelInput,
+    ProfileGetUtilityModelConsumerPreferencesInput,
     ProfileGetUtilityModelInput,
     ProfileInput,
     ProfileRenameInput,
     ProfileSetActiveInput,
+    ProfileSetUtilityModelConsumerPreferenceInput,
     ProfileSetExecutionPresetInput,
     ProfileSetMemoryRetrievalModelInput,
     ProfileSetUtilityModelInput,
 } from '@/app/backend/runtime/contracts/types';
-import { providerIds } from '@/shared/contracts';
+import { providerIds, utilityModelConsumerIds } from '@/shared/contracts';
 
 export function parseProfileInput(input: unknown): ProfileInput {
     const source = readObject(input, 'input');
@@ -83,6 +86,12 @@ export function parseProfileGetUtilityModelInput(input: unknown): ProfileGetUtil
     return parseProfileInput(input);
 }
 
+export function parseProfileGetUtilityModelConsumerPreferencesInput(
+    input: unknown
+): ProfileGetUtilityModelConsumerPreferencesInput {
+    return parseProfileInput(input);
+}
+
 export function parseProfileSetUtilityModelInput(input: unknown): ProfileSetUtilityModelInput {
     const source = readObject(input, 'input');
     const providerId =
@@ -97,6 +106,18 @@ export function parseProfileSetUtilityModelInput(input: unknown): ProfileSetUtil
         profileId: readProfileId(source),
         ...(providerId ? { providerId } : {}),
         ...(modelId ? { modelId } : {}),
+    };
+}
+
+export function parseProfileSetUtilityModelConsumerPreferenceInput(
+    input: unknown
+): ProfileSetUtilityModelConsumerPreferenceInput {
+    const source = readObject(input, 'input');
+
+    return {
+        profileId: readProfileId(source),
+        consumerId: readEnumValue(source.consumerId, 'consumerId', utilityModelConsumerIds),
+        useUtilityModel: readBoolean(source.useUtilityModel, 'useUtilityModel'),
     };
 }
 
@@ -132,6 +153,12 @@ export const profileSetActiveInputSchema = createParser(parseProfileSetActiveInp
 export const profileGetExecutionPresetInputSchema = createParser(parseProfileGetExecutionPresetInput);
 export const profileSetExecutionPresetInputSchema = createParser(parseProfileSetExecutionPresetInput);
 export const profileGetUtilityModelInputSchema = createParser(parseProfileGetUtilityModelInput);
+export const profileGetUtilityModelConsumerPreferencesInputSchema = createParser(
+    parseProfileGetUtilityModelConsumerPreferencesInput
+);
 export const profileSetUtilityModelInputSchema = createParser(parseProfileSetUtilityModelInput);
+export const profileSetUtilityModelConsumerPreferenceInputSchema = createParser(
+    parseProfileSetUtilityModelConsumerPreferenceInput
+);
 export const profileGetMemoryRetrievalModelInputSchema = createParser(parseProfileGetMemoryRetrievalModelInput);
 export const profileSetMemoryRetrievalModelInputSchema = createParser(parseProfileSetMemoryRetrievalModelInput);

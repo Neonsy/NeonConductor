@@ -38,7 +38,7 @@ test('AppRouter exposes conversation and session procedure contracts to clients'
     expectTypeOf<AppRouterInputs['conversation']['getThreadTitlePreference']>().toExtend<{ profileId: string }>();
     expectTypeOf<AppRouterInputs['conversation']['setThreadTitlePreference']>().toExtend<{
         profileId: string;
-        mode: 'template' | 'ai_optional';
+        mode: 'template' | 'utility_refine';
     }>();
     expectTypeOf<AppRouterInputs['conversation']['readToolArtifact']>().toExtend<{
         profileId: string;

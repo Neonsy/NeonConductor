@@ -1,12 +1,13 @@
 import { providerStore, runStore, settingsStore, threadStore } from '@/app/backend/persistence/stores';
 import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
 import { generatePlainTextFromMessages } from '@/app/backend/runtime/services/common/plainTextGeneration';
+import { utilityModelConsumerPreferencesService } from '@/app/backend/runtime/services/profile/utilityModelConsumerPreferences';
 import { utilityModelService } from '@/app/backend/runtime/services/profile/utilityModel';
 import { createTextMessage } from '@/app/backend/runtime/services/runExecution/contextParts';
 import { appLog } from '@/app/main/logging';
 
 const TITLE_GENERATION_MODE_KEY = 'thread_title_generation_mode';
-const TITLE_AI_MODE = 'ai_optional';
+const TITLE_AI_MODE = 'utility_refine';
 const DEFAULT_TITLE_MODE = 'template';
 
 function providerLabel(providerId: RuntimeProviderId): string {
@@ -143,15 +144,25 @@ class ThreadTitleService {
                 return;
             }
 
-            const mode = modeRaw === TITLE_AI_MODE ? TITLE_AI_MODE : DEFAULT_TITLE_MODE;
+            const mode = modeRaw === TITLE_AI_MODE || modeRaw === 'ai_optional' ? TITLE_AI_MODE : DEFAULT_TITLE_MODE;
             if (mode !== TITLE_AI_MODE) {
                 return;
             }
-            const titleTarget = await utilityModelService.resolveUtilityModelTarget({
-                profileId: input.profileId,
-                fallbackProviderId: input.providerId,
-                fallbackModelId: input.modelId,
-            });
+            const namingUsesUtilityModel = await utilityModelConsumerPreferencesService.shouldUseUtilityModel(
+                input.profileId,
+                'conversation_naming'
+            );
+            const titleTarget = namingUsesUtilityModel
+                ? await utilityModelService.resolveUtilityModelTarget({
+                      profileId: input.profileId,
+                      fallbackProviderId: input.providerId,
+                      fallbackModelId: input.modelId,
+                  })
+                : {
+                      providerId: input.providerId,
+                      modelId: input.modelId,
+                      source: 'fallback' as const,
+                  };
             const aiTitle = await generateAiTitle({
                 profileId: input.profileId,
                 providerId: titleTarget.providerId,

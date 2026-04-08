@@ -9,6 +9,7 @@ const {
     renameThreadMock,
     listRunsBySessionMock,
     getStringOptionalMock,
+    shouldUseUtilityModelMock,
     resolveUtilityModelTargetMock,
     generatePlainTextFromMessagesMock,
     warnMock,
@@ -19,6 +20,7 @@ const {
     renameThreadMock: vi.fn(),
     listRunsBySessionMock: vi.fn(),
     getStringOptionalMock: vi.fn(),
+    shouldUseUtilityModelMock: vi.fn(),
     resolveUtilityModelTargetMock: vi.fn(),
     generatePlainTextFromMessagesMock: vi.fn(),
     warnMock: vi.fn(),
@@ -47,6 +49,12 @@ vi.mock('@/app/backend/runtime/services/profile/utilityModel', () => ({
     },
 }));
 
+vi.mock('@/app/backend/runtime/services/profile/utilityModelConsumerPreferences', () => ({
+    utilityModelConsumerPreferencesService: {
+        shouldUseUtilityModel: shouldUseUtilityModelMock,
+    },
+}));
+
 vi.mock('@/app/backend/runtime/services/common/plainTextGeneration', () => ({
     generatePlainTextFromMessages: generatePlainTextFromMessagesMock,
 }));
@@ -67,6 +75,7 @@ describe('threadTitleService', () => {
         renameThreadMock.mockReset();
         listRunsBySessionMock.mockReset();
         getStringOptionalMock.mockReset();
+        shouldUseUtilityModelMock.mockReset();
         resolveUtilityModelTargetMock.mockReset();
         generatePlainTextFromMessagesMock.mockReset();
         warnMock.mockReset();
@@ -81,7 +90,8 @@ describe('threadTitleService', () => {
         });
         modelExistsMock.mockResolvedValue(true);
         listRunsBySessionMock.mockResolvedValue([{ id: 'run_1' }]);
-        getStringOptionalMock.mockResolvedValue('ai_optional');
+        getStringOptionalMock.mockResolvedValue('utility_refine');
+        shouldUseUtilityModelMock.mockResolvedValue(true);
         listModelsMock.mockResolvedValue([{ id: 'openai/gpt-5', label: 'GPT-5' }]);
         renameThreadMock.mockResolvedValue(ok(undefined));
         generatePlainTextFromMessagesMock.mockResolvedValue(ok('Utility Generated Title'));
@@ -115,12 +125,7 @@ describe('threadTitleService', () => {
                 modelId: 'zai/glm-4.5-air',
             })
         );
-        expect(renameThreadMock).toHaveBeenNthCalledWith(
-            2,
-            'profile_test',
-            'thr_test',
-            'Utility Generated Title'
-        );
+        expect(renameThreadMock).toHaveBeenNthCalledWith(2, 'profile_test', 'thr_test', 'Utility Generated Title');
     });
 
     it('falls back to the active run model when Utility AI is unavailable', async () => {
@@ -147,5 +152,27 @@ describe('threadTitleService', () => {
             })
         );
         expect(renameThreadMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('uses the active model directly when Conversation Naming is set to skip Utility AI', async () => {
+        arrangeCommonTitleMocks();
+        shouldUseUtilityModelMock.mockResolvedValue(false);
+
+        await threadTitleService.maybeApply({
+            profileId: 'profile_test',
+            sessionId: 'sess_test',
+            prompt: 'Investigate compaction behavior.',
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
+        });
+
+        expect(resolveUtilityModelTargetMock).not.toHaveBeenCalled();
+        expect(generatePlainTextFromMessagesMock).toHaveBeenCalledWith(
+            expect.objectContaining({
+                profileId: 'profile_test',
+                providerId: 'openai',
+                modelId: 'openai/gpt-5',
+            })
+        );
     });
 });

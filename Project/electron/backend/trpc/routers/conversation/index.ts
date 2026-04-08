@@ -376,8 +376,14 @@ export const conversationRouter = router({
     getThreadTitlePreference: publicProcedure
         .input(conversationGetThreadTitlePreferenceInputSchema)
         .query(async ({ input }) => {
-            const modeRaw = await settingsStore.getStringOptional(input.profileId, THREAD_TITLE_GENERATION_MODE_SETTING_KEY);
-            const mode = modeRaw === 'ai_optional' ? 'ai_optional' : DEFAULT_THREAD_TITLE_GENERATION_MODE;
+            const modeRaw = await settingsStore.getStringOptional(
+                input.profileId,
+                THREAD_TITLE_GENERATION_MODE_SETTING_KEY
+            );
+            const mode =
+                modeRaw === 'utility_refine' || modeRaw === 'ai_optional'
+                    ? 'utility_refine'
+                    : DEFAULT_THREAD_TITLE_GENERATION_MODE;
 
             return { mode };
         }),
@@ -398,7 +404,11 @@ export const conversationRouter = router({
             ...(input.lineCount !== undefined ? { lineCount: input.lineCount } : {}),
         });
 
-        if (!artifactWindow || artifactWindow.artifact.profileId !== input.profileId || artifactWindow.artifact.sessionId !== input.sessionId) {
+        if (
+            !artifactWindow ||
+            artifactWindow.artifact.profileId !== input.profileId ||
+            artifactWindow.artifact.sessionId !== input.sessionId
+        ) {
             return {
                 found: false as const,
             };
@@ -430,7 +440,11 @@ export const conversationRouter = router({
             ...(input.caseSensitive !== undefined ? { caseSensitive: input.caseSensitive } : {}),
         });
 
-        if (!artifactSearch || artifactSearch.artifact.profileId !== input.profileId || artifactSearch.artifact.sessionId !== input.sessionId) {
+        if (
+            !artifactSearch ||
+            artifactSearch.artifact.profileId !== input.profileId ||
+            artifactSearch.artifact.sessionId !== input.sessionId
+        ) {
             return {
                 found: false as const,
                 matches: [],

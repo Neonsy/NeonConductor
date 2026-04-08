@@ -41,6 +41,14 @@ test('AppRouter exposes mode and profile procedure contracts to clients', () => 
         providerId?: string;
         modelId?: string;
     }>();
+    expectTypeOf<AppRouterInputs['profile']['getUtilityModelConsumerPreferences']>().toExtend<{
+        profileId: string;
+    }>();
+    expectTypeOf<AppRouterInputs['profile']['setUtilityModelConsumerPreference']>().toExtend<{
+        profileId: string;
+        consumerId: 'conversation_naming' | 'context_compaction';
+        useUtilityModel: boolean;
+    }>();
     expectTypeOf<AppRouterInputs['profile']['getMemoryRetrievalModel']>().toExtend<{ profileId: string }>();
     expectTypeOf<AppRouterInputs['profile']['setMemoryRetrievalModel']>().toExtend<{
         profileId: string;

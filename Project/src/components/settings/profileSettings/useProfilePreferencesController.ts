@@ -73,6 +73,11 @@ interface ModelPreferenceDraftState {
     memoryRetrievalModelDraft: ModelPreferenceDraft | undefined;
 }
 
+interface UtilityModelConsumerPreferenceState {
+    conversationNaming: boolean;
+    contextCompaction: boolean;
+}
+
 export function useProfilePreferencesController(input: ProfilePreferencesControllerInput) {
     const utils = trpc.useUtils();
     const [modelPreferenceDrafts, setModelPreferenceDrafts] = useState<ModelPreferenceDraftState>({
@@ -298,6 +303,66 @@ export function useProfilePreferencesController(input: ProfilePreferencesControl
             }));
         },
     });
+    const utilityModelConsumerPreferencesQuery = trpc.profile.getUtilityModelConsumerPreferences.useQuery(
+        {
+            profileId: input.selection.selectedProfileIdForSettings,
+        },
+        {
+            enabled: Boolean(input.selection.selectedProfileIdForSettings),
+            ...PROGRESSIVE_QUERY_OPTIONS,
+        }
+    );
+    const setUtilityModelConsumerPreferenceMutation = trpc.profile.setUtilityModelConsumerPreference.useMutation({
+        onMutate: async (variables) => {
+            await utils.profile.getUtilityModelConsumerPreferences.cancel({
+                profileId: variables.profileId,
+            });
+            const previous = utils.profile.getUtilityModelConsumerPreferences.getData({
+                profileId: variables.profileId,
+            });
+            const nextPreferences = (
+                previous?.preferences ?? [
+                    { consumerId: 'conversation_naming' as const, useUtilityModel: true },
+                    { consumerId: 'context_compaction' as const, useUtilityModel: true },
+                ]
+            ).map((preference) =>
+                preference.consumerId === variables.consumerId
+                    ? { ...preference, useUtilityModel: variables.useUtilityModel }
+                    : preference
+            );
+
+            utils.profile.getUtilityModelConsumerPreferences.setData(
+                {
+                    profileId: variables.profileId,
+                },
+                {
+                    preferences: nextPreferences,
+                }
+            );
+            return {
+                previous,
+                profileId: variables.profileId,
+            };
+        },
+        onError: (_error, _variables, context) => {
+            if (context?.previous) {
+                utils.profile.getUtilityModelConsumerPreferences.setData(
+                    {
+                        profileId: context.profileId,
+                    },
+                    context.previous
+                );
+            }
+        },
+        onSuccess: (result, variables) => {
+            utils.profile.getUtilityModelConsumerPreferences.setData(
+                {
+                    profileId: variables.profileId,
+                },
+                result
+            );
+        },
+    });
     const memoryRetrievalModelQuery = trpc.profile.getMemoryRetrievalModel.useQuery(
         {
             profileId: input.selection.selectedProfileIdForSettings,
@@ -398,6 +463,18 @@ export function useProfilePreferencesController(input: ProfilePreferencesControl
     const utilityProviderItems = listProviderControlProviders(providerControl);
     const memoryRetrievalProviderItems = listProviderEmbeddingControlProviders(providerEmbeddingControl);
     const persistedUtilitySelection = utilityModelQuery.data?.selection ?? null;
+    const utilityModelConsumers = (utilityModelConsumerPreferencesQuery.data?.preferences ?? []).reduce<
+        Partial<UtilityModelConsumerPreferenceState>
+    >((state, preference) => {
+        if (preference.consumerId === 'conversation_naming') {
+            state.conversationNaming = preference.useUtilityModel;
+        }
+        if (preference.consumerId === 'context_compaction') {
+            state.contextCompaction = preference.useUtilityModel;
+        }
+
+        return state;
+    }, {});
     const persistedMemoryRetrievalSelection = memoryRetrievalModelQuery.data?.selection ?? null;
     const activeUtilityDraft =
         modelPreferenceDrafts.utilityModelDraft?.profileId === input.selection.selectedProfileIdForSettings
@@ -463,6 +540,8 @@ export function useProfilePreferencesController(input: ProfilePreferencesControl
         setExecutionPresetMutation,
         utilityModelQuery,
         setUtilityModelMutation,
+        utilityModelConsumerPreferencesQuery,
+        setUtilityModelConsumerPreferenceMutation,
         memoryRetrievalModelQuery,
         setMemoryRetrievalModelMutation,
         providerControlQuery,
@@ -474,6 +553,10 @@ export function useProfilePreferencesController(input: ProfilePreferencesControl
         selectedUtilityModelId,
         selectedUtilityModelOption,
         utilityModelSelection: persistedUtilitySelection,
+        utilityModelConsumers: {
+            conversationNaming: utilityModelConsumers.conversationNaming ?? true,
+            contextCompaction: utilityModelConsumers.contextCompaction ?? true,
+        },
         selectedMemoryRetrievalProviderId,
         memoryRetrievalModelOptions,
         selectedMemoryRetrievalModelId,
@@ -493,7 +576,7 @@ export function useProfilePreferencesController(input: ProfilePreferencesControl
                 : 'ask',
         threadTitleMode:
             threadTitlePreferenceQuery.data?.mode === 'template' ||
-            threadTitlePreferenceQuery.data?.mode === 'ai_optional'
+            threadTitlePreferenceQuery.data?.mode === 'utility_refine'
                 ? threadTitlePreferenceQuery.data.mode
                 : 'template',
         setUtilityProviderId: (providerId: RuntimeProviderId | undefined) => {
@@ -584,9 +667,7 @@ export function useProfilePreferencesController(input: ProfilePreferencesControl
             await setMemoryRetrievalModelMutation.mutateAsync({
                 profileId: input.selection.selectedProfile.id,
             });
-            input.setStatusMessage(
-                'Cleared Memory Retrieval model. Neon will leave semantic retrieval unconfigured.'
-            );
+            input.setStatusMessage('Cleared Memory Retrieval model. Neon will leave semantic retrieval unconfigured.');
         }),
         updateExecutionPreset: wrapFailClosedAction(async (preset: 'privacy' | 'standard' | 'yolo') => {
             if (!input.selection.selectedProfile) {
@@ -601,6 +682,24 @@ export function useProfilePreferencesController(input: ProfilePreferencesControl
         }),
         updateEditPreference: wrapFailClosedAction(actions.updateEditPreference),
         updateThreadTitleMode: wrapFailClosedAction(actions.updateThreadTitleMode),
+        updateUtilityModelConsumerPreference: wrapFailClosedAction(
+            async (consumerId: 'conversation_naming' | 'context_compaction', useUtilityModel: boolean) => {
+                if (!input.selection.selectedProfile) {
+                    return;
+                }
+
+                await setUtilityModelConsumerPreferenceMutation.mutateAsync({
+                    profileId: input.selection.selectedProfile.id,
+                    consumerId,
+                    useUtilityModel,
+                });
+                input.setStatusMessage(
+                    useUtilityModel
+                        ? `Updated ${consumerId === 'conversation_naming' ? 'Conversation Naming' : 'Context Compaction'} to use Utility AI first.`
+                        : `Updated ${consumerId === 'conversation_naming' ? 'Conversation Naming' : 'Context Compaction'} to use the active conversation model.`
+                );
+            }
+        ),
         saveUtilityModel: wrapFailClosedAction(async () => {
             if (!input.selection.selectedProfile || !selectedUtilityProviderId || selectedUtilityModelId.length === 0) {
                 return;

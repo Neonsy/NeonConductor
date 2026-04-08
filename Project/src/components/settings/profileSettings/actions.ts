@@ -13,10 +13,7 @@ type EditPreferenceMutation = {
 };
 
 type ThreadTitlePreferenceMutation = {
-    mutateAsync: (input: {
-        profileId: string;
-        mode: 'template' | 'ai_optional';
-    }) => Promise<void>;
+    mutateAsync: (input: { profileId: string; mode: 'template' | 'utility_refine' }) => Promise<void>;
 };
 
 export function createProfileLibraryActions(input: {
@@ -195,7 +192,7 @@ export function createProfilePreferencesActions(input: {
             });
             input.setStatusMessage('Updated conversation edit behavior.');
         },
-        updateThreadTitleMode: async (mode: 'template' | 'ai_optional') => {
+        updateThreadTitleMode: async (mode: 'template' | 'utility_refine') => {
             if (!input.selectedProfile) {
                 return;
             }
@@ -204,7 +201,7 @@ export function createProfilePreferencesActions(input: {
                 profileId: input.selectedProfile.id,
                 mode,
             });
-            input.setStatusMessage('Updated thread title generation settings.');
+            input.setStatusMessage('Updated conversation naming settings.');
         },
     };
 }

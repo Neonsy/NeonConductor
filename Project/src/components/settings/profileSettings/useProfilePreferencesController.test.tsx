@@ -29,7 +29,9 @@ vi.mock('react', async (importOriginal) => {
             (
                 value:
                     | typeof reactState.currentModelPreferenceDrafts
-                    | ((current: typeof reactState.currentModelPreferenceDrafts) => typeof reactState.currentModelPreferenceDrafts)
+                    | ((
+                          current: typeof reactState.currentModelPreferenceDrafts
+                      ) => typeof reactState.currentModelPreferenceDrafts)
             ) => {
                 reactState.currentModelPreferenceDrafts =
                     typeof value === 'function' ? value(reactState.currentModelPreferenceDrafts) : value;
@@ -73,6 +75,18 @@ const controllerTestState = vi.hoisted(() => {
             modelId: 'openai/gpt-5-mini',
         },
     };
+    const utilityConsumerPreferencesQueryData = {
+        preferences: [
+            {
+                consumerId: 'conversation_naming' as const,
+                useUtilityModel: true,
+            },
+            {
+                consumerId: 'context_compaction' as const,
+                useUtilityModel: true,
+            },
+        ],
+    };
     const memoryRetrievalQueryData = {
         selection: {
             providerId: 'openai',
@@ -83,6 +97,7 @@ const controllerTestState = vi.hoisted(() => {
     return {
         mutationConfigs,
         utilityQueryData,
+        utilityConsumerPreferencesQueryData,
         memoryRetrievalQueryData,
         utilsMock: {
             conversation: {
@@ -104,6 +119,11 @@ const controllerTestState = vi.hoisted(() => {
                     setData: createSetDataMock(),
                 },
                 getUtilityModel: {
+                    cancel: createCancelMock(),
+                    getData: createGetDataMock(),
+                    setData: createSetDataMock(),
+                },
+                getUtilityModelConsumerPreferences: {
                     cancel: createCancelMock(),
                     getData: createGetDataMock(),
                     setData: createSetDataMock(),
@@ -148,6 +168,12 @@ const controllerTestState = vi.hoisted(() => {
                     })),
                 },
                 setUtilityModel: createUseMutationMock('setUtilityModel'),
+                getUtilityModelConsumerPreferences: {
+                    useQuery: vi.fn(() => ({
+                        data: utilityConsumerPreferencesQueryData,
+                    })),
+                },
+                setUtilityModelConsumerPreference: createUseMutationMock('setUtilityModelConsumerPreference'),
                 getMemoryRetrievalModel: {
                     useQuery: vi.fn(() => ({
                         data: memoryRetrievalQueryData,
@@ -229,6 +255,9 @@ vi.mock('@/web/trpc/client', () => ({
             setExecutionPreset: controllerTestState.trpcMocks.profile.setExecutionPreset,
             getUtilityModel: controllerTestState.trpcMocks.profile.getUtilityModel,
             setUtilityModel: controllerTestState.trpcMocks.profile.setUtilityModel,
+            getUtilityModelConsumerPreferences:
+                controllerTestState.trpcMocks.profile.getUtilityModelConsumerPreferences,
+            setUtilityModelConsumerPreference: controllerTestState.trpcMocks.profile.setUtilityModelConsumerPreference,
             getMemoryRetrievalModel: controllerTestState.trpcMocks.profile.getMemoryRetrievalModel,
             setMemoryRetrievalModel: controllerTestState.trpcMocks.profile.setMemoryRetrievalModel,
         },
@@ -294,6 +323,16 @@ describe('useProfilePreferencesController', () => {
             providerId: 'openai',
             modelId: 'openai/gpt-5-mini',
         };
+        controllerTestState.utilityConsumerPreferencesQueryData.preferences = [
+            {
+                consumerId: 'conversation_naming',
+                useUtilityModel: true,
+            },
+            {
+                consumerId: 'context_compaction',
+                useUtilityModel: true,
+            },
+        ];
         controllerTestState.memoryRetrievalQueryData.selection = {
             providerId: 'openai',
             modelId: 'openai/text-embedding-3-small',
@@ -399,6 +438,73 @@ describe('useProfilePreferencesController', () => {
         );
     });
 
+    it('optimistically updates and rolls back Utility AI consumer preferences', async () => {
+        renderToStaticMarkup(<Harness />);
+
+        controllerTestState.utilsMock.profile.getUtilityModelConsumerPreferences.getData.mockReturnValue({
+            preferences: [
+                {
+                    consumerId: 'conversation_naming',
+                    useUtilityModel: true,
+                },
+                {
+                    consumerId: 'context_compaction',
+                    useUtilityModel: true,
+                },
+            ],
+        });
+
+        const context = await getMutationConfig('setUtilityModelConsumerPreference').onMutate?.({
+            profileId: 'profile_default',
+            consumerId: 'context_compaction',
+            useUtilityModel: false,
+        });
+
+        expect(controllerTestState.utilsMock.profile.getUtilityModelConsumerPreferences.setData).toHaveBeenCalledWith(
+            { profileId: 'profile_default' },
+            {
+                preferences: [
+                    {
+                        consumerId: 'conversation_naming',
+                        useUtilityModel: true,
+                    },
+                    {
+                        consumerId: 'context_compaction',
+                        useUtilityModel: false,
+                    },
+                ],
+            }
+        );
+
+        getMutationConfig('setUtilityModelConsumerPreference').onError?.(
+            new Error('fail'),
+            {
+                profileId: 'profile_default',
+                consumerId: 'context_compaction',
+                useUtilityModel: false,
+            },
+            context
+        );
+
+        expect(
+            controllerTestState.utilsMock.profile.getUtilityModelConsumerPreferences.setData
+        ).toHaveBeenLastCalledWith(
+            { profileId: 'profile_default' },
+            {
+                preferences: [
+                    {
+                        consumerId: 'conversation_naming',
+                        useUtilityModel: true,
+                    },
+                    {
+                        consumerId: 'context_compaction',
+                        useUtilityModel: true,
+                    },
+                ],
+            }
+        );
+    });
+
     it('optimistically updates and rolls back Memory Retrieval selection mutations', async () => {
         renderToStaticMarkup(<Harness />);
 
@@ -495,7 +601,9 @@ describe('useProfilePreferencesController', () => {
 
         await lastController?.clearMemoryRetrievalModel();
 
-        expect(controllerTestState.trpcMocks.profile.setMemoryRetrievalModel.result.mutateAsync).toHaveBeenLastCalledWith({
+        expect(
+            controllerTestState.trpcMocks.profile.setMemoryRetrievalModel.result.mutateAsync
+        ).toHaveBeenLastCalledWith({
             profileId: 'profile_default',
         });
         await getMutationConfig('setMemoryRetrievalModel').onMutate?.({

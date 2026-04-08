@@ -1,6 +1,6 @@
 import type { ExecutionPreset } from '@/app/backend/runtime/contracts/enums';
 import type { ProfileInput } from '@/app/backend/runtime/contracts/types/common';
-import type { RuntimeProviderId } from '@/shared/contracts';
+import type { RuntimeProviderId, UtilityModelConsumerId } from '@/shared/contracts';
 
 export interface ProfileCreateInput {
     name?: string;
@@ -29,6 +29,22 @@ export type ProfileGetUtilityModelInput = ProfileInput;
 export interface ProfileSetUtilityModelInput extends ProfileInput {
     providerId?: RuntimeProviderId;
     modelId?: string;
+}
+
+export type ProfileGetUtilityModelConsumerPreferencesInput = ProfileInput;
+
+export interface UtilityModelConsumerPreference {
+    consumerId: UtilityModelConsumerId;
+    useUtilityModel: boolean;
+}
+
+export interface UtilityModelConsumerPreferences {
+    preferences: UtilityModelConsumerPreference[];
+}
+
+export interface ProfileSetUtilityModelConsumerPreferenceInput extends ProfileInput {
+    consumerId: UtilityModelConsumerId;
+    useUtilityModel: boolean;
 }
 
 export type ProfileGetMemoryRetrievalModelInput = ProfileInput;
