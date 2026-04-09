@@ -70,9 +70,9 @@ describe('runtime contracts: core flows', () => {
         expect(activeMode.activeMode.modeKey).toBe('code');
         expect(pendingPermissions.requests).toEqual([]);
         expect(tools.tools.length).toBeGreaterThan(0);
-        expect(tools.tools.some((tool) => tool.id === 'execute_code')).toBe(false);
+        expect(tools.tools.some((tool) => tool.id === 'execute_code')).toBe(true);
         expect(builtInToolMetadata.tools.some((tool) => tool.toolId === 'write_file')).toBe(true);
-        expect(builtInToolMetadata.tools.some((tool) => tool.toolId === 'execute_code')).toBe(false);
+        expect(builtInToolMetadata.tools.some((tool) => tool.toolId === 'execute_code')).toBe(true);
         expect(mcpServers.servers).toEqual([]);
     });
 
@@ -93,7 +93,7 @@ describe('runtime contracts: core flows', () => {
             description: 'Create or replace a UTF-8 workspace file.',
             availability: 'available',
         });
-        expect(listedTools.tools.some((tool) => tool.id === 'execute_code')).toBe(false);
+        expect(listedTools.tools.some((tool) => tool.id === 'execute_code')).toBe(true);
 
         const reset = await caller.tool.resetBuiltInDescription({
             toolId: 'write_file',

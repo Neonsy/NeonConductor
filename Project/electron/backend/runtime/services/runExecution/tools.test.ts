@@ -90,6 +90,17 @@ describe('resolveRuntimeToolsForMode', () => {
                 allowsIgnoredPaths: false,
             },
             {
+                id: 'execute_code',
+                label: 'Execute Code',
+                description: 'Run approved JavaScript transform code.',
+                permissionPolicy: 'ask',
+                mutability: 'mutating',
+                capabilities: ['code_runtime'],
+                requiresWorkspace: true,
+                allowsExternalPaths: false,
+                allowsIgnoredPaths: false,
+            },
+            {
                 id: 'list_files',
                 label: 'List Files',
                 description: 'List files.',
@@ -137,6 +148,7 @@ describe('resolveRuntimeToolsForMode', () => {
             'search_files',
             'write_file',
             'run_command',
+            'execute_code',
         ]);
     });
 
@@ -145,7 +157,13 @@ describe('resolveRuntimeToolsForMode', () => {
             mode: buildMode({ toolCapabilities: ['filesystem_read', 'filesystem_write', 'code_runtime'] }),
         });
 
-        expect(tools.map((tool) => tool.id)).toEqual(['list_files', 'read_file', 'search_files', 'write_file']);
+        expect(tools.map((tool) => tool.id)).toEqual([
+            'list_files',
+            'read_file',
+            'search_files',
+            'write_file',
+            'execute_code',
+        ]);
     });
 
     it('keeps edited base descriptions while appending runtime guidance', async () => {
@@ -234,11 +252,15 @@ describe('resolveRuntimeToolsForMode', () => {
         expect(tools.map((tool) => tool.id)).toEqual(['list_files', 'read_file', 'search_files', 'mcp__read_only']);
     });
 
-    it('does not expose dormant execute_code even when a mode includes code_runtime', async () => {
+    it('exposes execute_code only to modes that include code_runtime', async () => {
         const tools = await resolveRuntimeToolsForMode({
             mode: buildMode({ toolCapabilities: ['filesystem_read', 'filesystem_write', 'shell', 'code_runtime'] }),
         });
+        const toolsWithoutCodeRuntime = await resolveRuntimeToolsForMode({
+            mode: buildMode({ toolCapabilities: ['filesystem_read', 'filesystem_write', 'shell'] }),
+        });
 
-        expect(tools.map((tool) => tool.id)).not.toContain('execute_code');
+        expect(tools.map((tool) => tool.id)).toContain('execute_code');
+        expect(toolsWithoutCodeRuntime.map((tool) => tool.id)).not.toContain('execute_code');
     });
 });

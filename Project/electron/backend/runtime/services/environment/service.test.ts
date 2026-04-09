@@ -28,6 +28,7 @@ vi.mock('@/app/backend/runtime/services/environment/projectNodeExpectationResolv
 }));
 
 import { workspaceEnvironmentService } from '@/app/backend/runtime/services/environment/service';
+
 import { VENDORED_NODE_VERSION } from '@/shared/tooling/vendoredNode';
 
 function queueSpawnResponses(responses: Partial<Record<string, string>>) {
@@ -120,11 +121,11 @@ describe('workspaceEnvironmentService', () => {
         expect(result.value.effectivePreferences.scriptRunner).toBe('tsx');
         expect(result.value.vendoredNode.version).toBe(VENDORED_NODE_VERSION);
         expect(result.value.vendoredNode.available).toBe(true);
+        expect(result.value.vendoredNode.targetKey).toBe('win32-x64');
         expect(result.value.notes).toContain(
             'This workspace appears to be jj-managed. Prefer jj for repo inspection and history operations.'
         );
         expect(result.value.notes).toContain('This workspace prefers pnpm.');
-        expect(result.value.notes).toContain(`Vendored Node v${VENDORED_NODE_VERSION} is available for Neon's code runtime.`);
     });
 
     it('surfaces override mismatches without fabricating command availability', async () => {
@@ -214,8 +215,10 @@ describe('workspaceEnvironmentService', () => {
             detectedMajor: 22,
             satisfiesVendoredNode: false,
         });
-        expect(result.value.notes).toContain(
-            `This workspace declares a root Node expectation of "^22", which does not match vendored Node v${VENDORED_NODE_VERSION}.`
-        );
+        expect(result.value.vendoredNode).toMatchObject({
+            version: VENDORED_NODE_VERSION,
+            available: true,
+            targetKey: 'linux-x64',
+        });
     });
 });

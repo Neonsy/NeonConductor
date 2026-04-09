@@ -1,5 +1,5 @@
 export interface BuiltInNativeToolDefinition {
-    id: 'list_files' | 'read_file' | 'search_files' | 'write_file' | 'run_command';
+    id: 'list_files' | 'read_file' | 'search_files' | 'write_file' | 'run_command' | 'execute_code';
     label: string;
     defaultDescription: string;
     permissionPolicy: 'ask' | 'allow' | 'deny';
@@ -39,6 +39,13 @@ export const builtInNativeToolDefinitions: BuiltInNativeToolDefinition[] = [
         id: 'run_command',
         label: 'Run Command',
         defaultDescription: 'Run a command in a sandboxed shell.',
+        permissionPolicy: 'ask',
+        mutability: 'mutating',
+    },
+    {
+        id: 'execute_code',
+        label: 'Execute Code',
+        defaultDescription: 'Run an approved JavaScript transform in the vendored Node runtime.',
         permissionPolicy: 'ask',
         mutability: 'mutating',
     },

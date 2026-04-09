@@ -1,6 +1,7 @@
 import { err, type Result } from 'neverthrow';
 
 import type { ToolRecord } from '@/app/backend/persistence/types';
+import { executeCodeToolHandler } from '@/app/backend/runtime/services/toolExecution/handlers/executeCode';
 import { listFilesToolHandler } from '@/app/backend/runtime/services/toolExecution/handlers/listFiles';
 import { readFileToolHandler } from '@/app/backend/runtime/services/toolExecution/handlers/readFile';
 import { runCommandToolHandler } from '@/app/backend/runtime/services/toolExecution/handlers/runCommand';
@@ -46,6 +47,10 @@ export function invokeToolHandler(
             cwd: context.cwd,
             ...(context.signal ? { signal: context.signal } : {}),
         });
+    }
+
+    if (tool.id === 'execute_code') {
+        return executeCodeToolHandler(args);
     }
 
     return Promise.resolve(

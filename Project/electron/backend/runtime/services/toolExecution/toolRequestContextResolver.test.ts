@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ResolvedWorkspaceContext } from '@/app/backend/runtime/contracts';
-import type { ResolvedToolDefinition } from '@/app/backend/runtime/services/toolExecution/types';
 import { resolveToolRequestContext } from '@/app/backend/runtime/services/toolExecution/toolRequestContextResolver';
+import type { ResolvedToolDefinition } from '@/app/backend/runtime/services/toolExecution/types';
 
 const { findToolByIdMock, resolveExplicitMock } = vi.hoisted(() => ({
     findToolByIdMock: vi.fn(),
@@ -72,6 +72,39 @@ describe('toolRequestContextResolver', () => {
         expect(outcome).toMatchObject({
             kind: 'failed',
             toolId: 'run_command',
+            error: 'invalid_args',
+        });
+    });
+
+    it('returns a failed outcome when execute_code is missing a code argument', async () => {
+        const definition: ResolvedToolDefinition = {
+            tool: {
+                id: 'execute_code',
+                label: 'Execute Code',
+                description: 'Run JavaScript transform code.',
+                capabilities: ['code_runtime'],
+                requiresWorkspace: true,
+                permissionPolicy: 'ask',
+                allowsExternalPaths: false,
+                allowsIgnoredPaths: false,
+                mutability: 'mutating',
+            },
+            resource: 'tool:execute_code',
+            source: 'native',
+        };
+        findToolByIdMock.mockResolvedValue(definition);
+
+        const outcome = await resolveToolRequestContext({
+            profileId: 'profile_default',
+            toolId: 'execute_code',
+            topLevelTab: 'agent',
+            modeKey: 'code',
+            args: { code: '   ' },
+        });
+
+        expect(outcome).toMatchObject({
+            kind: 'failed',
+            toolId: 'execute_code',
             error: 'invalid_args',
         });
     });
@@ -273,5 +306,55 @@ describe('toolRequestContextResolver', () => {
                 expect.objectContaining({ label: 'echo' }),
             ],
         });
+    });
+
+    it('attaches exact-code approval context for execute_code inputs', async () => {
+        const definition: ResolvedToolDefinition = {
+            tool: {
+                id: 'execute_code',
+                label: 'Execute Code',
+                description: 'Run JavaScript transform code.',
+                capabilities: ['code_runtime'],
+                requiresWorkspace: true,
+                permissionPolicy: 'ask',
+                allowsExternalPaths: false,
+                allowsIgnoredPaths: false,
+                mutability: 'mutating',
+            },
+            resource: 'tool:execute_code',
+            source: 'native',
+        };
+        const workspaceContext: ResolvedWorkspaceContext = {
+            kind: 'workspace',
+            workspaceFingerprint: 'ws_alpha',
+            label: 'Workspace Alpha',
+            absolutePath: 'C:/workspace-alpha',
+            executionEnvironmentMode: 'local',
+        };
+        findToolByIdMock.mockResolvedValue(definition);
+        resolveExplicitMock.mockResolvedValue(workspaceContext);
+
+        const outcome = await resolveToolRequestContext({
+            profileId: 'profile_default',
+            toolId: 'execute_code',
+            topLevelTab: 'agent',
+            modeKey: 'code',
+            workspaceFingerprint: 'ws_alpha',
+            args: {
+                code: 'console.log("approval");\nreturn 42;',
+            },
+        });
+
+        if ('kind' in outcome) {
+            throw new Error('Expected a resolved request context, not a failed outcome.');
+        }
+
+        expect(outcome.executeCodeApprovalContext).toMatchObject({
+            codeText: 'console.log("approval");\nreturn 42;',
+            codePreview: 'console.log("approval");\nreturn 42;',
+        });
+        expect(outcome.executeCodeApprovalContext?.codeResource).toMatch(/^tool:execute_code:code:[a-f0-9]{24}$/u);
+        expect(outcome.executeCodeApprovalContext?.codeDigest).toMatch(/^[a-f0-9]{24}$/u);
+        expect(outcome.shellApprovalContext).toBeNull();
     });
 });

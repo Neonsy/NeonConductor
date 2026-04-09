@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { resolveRuntimeToolsForMode } from '@/app/backend/runtime/services/runExecution/tools';
 import type { EntityId } from '@/app/backend/trpc/__tests__/runtime-contracts.shared';
@@ -11,8 +11,19 @@ import {
     mkdtempSync,
     os,
     path,
+    requireEntityId,
     writeFileSync,
 } from '@/app/backend/trpc/__tests__/runtime-contracts.shared';
+
+const { vendoredNodeResolveMock } = vi.hoisted(() => ({
+    vendoredNodeResolveMock: vi.fn(),
+}));
+
+vi.mock('@/app/backend/runtime/services/environment/vendoredNodeResolver', () => ({
+    vendoredNodeResolver: {
+        resolve: vendoredNodeResolveMock,
+    },
+}));
 
 registerRuntimeContractHooks();
 
@@ -78,6 +89,7 @@ describe('runtime contracts: permissions and tooling', () => {
             'search_files',
             'write_file',
             'run_command',
+            'execute_code',
         ]);
         expect((await resolveRuntimeToolsForMode({ mode: orchestrateMode })).map((tool) => tool.id)).toEqual([
             'list_files',
@@ -140,6 +152,87 @@ describe('runtime contracts: permissions and tooling', () => {
         expect(deniedAgain.reason).toBe('already_resolved');
     });
 
+    it('permission-gates execute_code with exact-code approval and fails closed when vendored Node is missing', async () => {
+        vendoredNodeResolveMock.mockResolvedValue({
+            available: false,
+            reason: 'missing_asset',
+        });
+
+        const caller = createCaller();
+        const tempDir = mkdtempSync(path.join(os.tmpdir(), 'neonconductor-execute-code-contract-'));
+        const workspaceFingerprint = 'ws_execute_code_contracts';
+        const now = new Date().toISOString();
+        const { sqlite } = getPersistence();
+        sqlite
+            .prepare(
+                `
+                    INSERT OR IGNORE INTO workspace_roots
+                        (fingerprint, profile_id, absolute_path, path_key, label, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                `
+            )
+            .run(
+                workspaceFingerprint,
+                profileId,
+                tempDir,
+                process.platform === 'win32' ? tempDir.toLowerCase() : tempDir,
+                path.basename(tempDir),
+                now,
+                now
+            );
+
+        const code = 'console.log("contract");\nreturn 4;';
+        const requested = await caller.tool.invoke({
+            profileId,
+            toolId: 'execute_code',
+            topLevelTab: 'agent',
+            modeKey: 'code',
+            workspaceFingerprint,
+            args: { code },
+        });
+        expect(requested.ok).toBe(false);
+        if (requested.ok) {
+            throw new Error('Expected execute_code to ask before first execution.');
+        }
+        expect(requested.error).toBe('permission_required');
+        const requestId = requireEntityId(requested.requestId, 'perm', 'Expected execute_code permission request id.');
+
+        const pendingRequest = (await caller.permission.listPending()).requests.find(
+            (request) => request.id === requestId
+        );
+        expect(pendingRequest?.toolId).toBe('execute_code');
+        expect(pendingRequest?.resource).toMatch(/^tool:execute_code:code:[a-f0-9]{24}$/u);
+        expect(pendingRequest?.summary.title).toBe('JavaScript Code Approval');
+        expect(pendingRequest?.summary.detail).toContain('return 4;');
+        expect(pendingRequest?.summary.detail).toContain(
+            pendingRequest?.resource.replace('tool:execute_code:code:', '')
+        );
+        expect(pendingRequest?.commandText).toBeUndefined();
+        expect(pendingRequest?.approvalCandidates ?? []).toEqual([]);
+
+        const allowed = await caller.permission.resolve({
+            profileId,
+            requestId,
+            resolution: 'allow_once',
+        });
+        expect(allowed.updated).toBe(true);
+
+        const missingRuntimeResult = await caller.tool.invoke({
+            profileId,
+            toolId: 'execute_code',
+            topLevelTab: 'agent',
+            modeKey: 'code',
+            workspaceFingerprint,
+            args: { code },
+        });
+        expect(missingRuntimeResult.ok).toBe(false);
+        if (missingRuntimeResult.ok) {
+            throw new Error('Expected execute_code to fail closed when vendored Node is not installed for tests.');
+        }
+        expect(missingRuntimeResult.error).toBe('execution_failed');
+        expect(missingRuntimeResult.message).toBe('Vendored Node runtime asset is missing.');
+    });
+
     it('executes read-only tools and enforces mode-sensitive tool policies', async () => {
         const caller = createCaller();
         const tempDir = mkdtempSync(path.join(os.tmpdir(), 'neonconductor-tool-test-'));
@@ -168,7 +261,7 @@ describe('runtime contracts: permissions and tooling', () => {
 
         const tools = await caller.tool.list();
         expect(tools.tools.map((item) => item.id)).toContain('read_file');
-        expect(tools.tools.map((item) => item.id)).not.toContain('execute_code');
+        expect(tools.tools.map((item) => item.id)).toContain('execute_code');
         const readTool = tools.tools.find((item) => item.id === 'read_file');
         expect(readTool?.requiresWorkspace).toBe(true);
         expect(readTool?.capabilities).toContain('filesystem_read');

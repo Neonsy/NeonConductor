@@ -39,11 +39,21 @@ const TOOL_SAFETY_METADATA: Record<
         allowsExternalPaths: false,
         allowsIgnoredPaths: false,
     },
+    execute_code: {
+        capabilities: ['code_runtime'],
+        mutability: 'mutating',
+        requiresWorkspace: true,
+        allowsExternalPaths: false,
+        allowsIgnoredPaths: false,
+    },
 };
 
 export function getToolSafetyMetadata(
     toolId: string
-): Pick<ToolRecord, 'capabilities' | 'requiresWorkspace' | 'allowsExternalPaths' | 'allowsIgnoredPaths' | 'mutability'> {
+): Pick<
+    ToolRecord,
+    'capabilities' | 'requiresWorkspace' | 'allowsExternalPaths' | 'allowsIgnoredPaths' | 'mutability'
+> {
     return (
         TOOL_SAFETY_METADATA[toolId] ?? {
             capabilities: [],

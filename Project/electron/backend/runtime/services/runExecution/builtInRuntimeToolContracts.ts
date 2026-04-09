@@ -85,7 +85,8 @@ export const builtInRuntimeToolContracts: BuiltInRuntimeToolContract[] = [
                 },
                 path: {
                     type: 'string',
-                    description: 'Absolute or workspace-relative file or directory path to search. Defaults to the workspace root.',
+                    description:
+                        'Absolute or workspace-relative file or directory path to search. Defaults to the workspace root.',
                 },
                 caseSensitive: {
                     type: 'boolean',
@@ -167,7 +168,7 @@ export const builtInRuntimeToolContracts: BuiltInRuntimeToolContract[] = [
         },
         exposureOrder: 5,
         descriptionKind: 'execute_code',
-        implemented: false,
+        implemented: true,
     },
 ] as const;
 

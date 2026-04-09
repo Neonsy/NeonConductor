@@ -1,12 +1,10 @@
+import type { ToolInvokeInput } from '@/app/backend/runtime/contracts';
+import { buildExecuteCodeApprovalContext } from '@/app/backend/runtime/services/toolExecution/executeCodeApproval';
 import { findToolById } from '@/app/backend/runtime/services/toolExecution/lookup';
 import { resolveWorkspaceToolPath } from '@/app/backend/runtime/services/toolExecution/safety';
 import { buildShellApprovalContext } from '@/app/backend/runtime/services/toolExecution/shellApproval';
 import type { ToolRequestContext } from '@/app/backend/runtime/services/toolExecution/toolExecutionLifecycle.types';
-import type {
-    ToolExecutionPolicy,
-    ToolInvocationOutcome,
-} from '@/app/backend/runtime/services/toolExecution/types';
-import type { ToolInvokeInput } from '@/app/backend/runtime/contracts';
+import type { ToolExecutionPolicy, ToolInvocationOutcome } from '@/app/backend/runtime/services/toolExecution/types';
 import { workspaceContextService } from '@/app/backend/runtime/services/workspaceContext/service';
 import { appLog } from '@/app/main/logging';
 
@@ -119,6 +117,13 @@ export async function resolveToolRequestContext(input: ToolInvokeInput): Promise
                   return commandArg.length > 0 ? buildShellApprovalContext(commandArg) : null;
               })()
             : null;
+    const executeCodeApprovalContext =
+        definition.tool.id === 'execute_code'
+            ? (() => {
+                  const codeArg = typeof args['code'] === 'string' ? args['code'] : '';
+                  return codeArg.trim().length > 0 ? buildExecuteCodeApprovalContext(codeArg) : null;
+              })()
+            : null;
 
     if (definition.tool.id === 'run_command' && !shellApprovalContext) {
         return createFailedToolOutcome({
@@ -130,12 +135,23 @@ export async function resolveToolRequestContext(input: ToolInvokeInput): Promise
         });
     }
 
+    if (definition.tool.id === 'execute_code' && !executeCodeApprovalContext) {
+        return createFailedToolOutcome({
+            toolId: definition.tool.id,
+            error: 'invalid_args',
+            message: 'Missing "code" argument.',
+            args,
+            at,
+        });
+    }
+
     return {
         at,
         args,
         executionArgs,
         definition,
         shellApprovalContext,
+        executeCodeApprovalContext,
         ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
         ...(workspaceLabel ? { workspaceLabel } : {}),
         ...(workspaceRootPath ? { workspaceRootPath } : {}),

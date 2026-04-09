@@ -3,9 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { composeRuntimeToolDescription } from '@/app/backend/runtime/services/runExecution/runtimeToolDescriptionBuilder';
 import type { RuntimeToolGuidanceContext } from '@/app/backend/runtime/services/runExecution/types';
 
-function buildGuidanceContext(
-    overrides: Partial<RuntimeToolGuidanceContext> = {}
-): RuntimeToolGuidanceContext {
+function buildGuidanceContext(overrides: Partial<RuntimeToolGuidanceContext> = {}): RuntimeToolGuidanceContext {
     return {
         platform: 'win32',
         shellFamily: 'powershell',
@@ -63,20 +61,23 @@ describe('runtimeToolDescriptionBuilder', () => {
             guidanceContext: buildGuidanceContext(),
         });
 
-        expect(description).toContain('Prefer this tool for ordinary whole-file creation or replacement inside the workspace.');
+        expect(description).toContain(
+            'Prefer this tool for ordinary whole-file creation or replacement inside the workspace.'
+        );
         expect(description).toContain('overwrite: true');
         expect(description).toContain('run_command only when shell behavior is specifically needed');
     });
 
-    it('formats future execute_code guidance without exposing the tool', () => {
+    it('formats transform-only execute_code guidance', () => {
         const description = composeRuntimeToolDescription({
             descriptionKind: 'execute_code',
             baseDescription: 'Execute code in the vendored runtime.',
             guidanceContext: buildGuidanceContext(),
         });
 
-        expect(description).toContain('preferred orchestration surface');
-        expect(description).toContain('typed host interaction');
-        expect(description).toContain('run_command only when shell-specific behavior or external tooling is the correct fit');
+        expect(description).toContain('JavaScript async function body');
+        expect(description).toContain('bounded transform logic');
+        expect(description).toContain('does not expose a filesystem');
+        expect(description).toContain('Use read_file, search_files, write_file, and run_command');
     });
 });

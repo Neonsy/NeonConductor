@@ -6,13 +6,13 @@ import {
 } from '@/app/backend/runtime/services/runExecution/builtInRuntimeToolContracts';
 
 describe('builtInRuntimeToolContracts', () => {
-    it('defines a dormant execute_code contract', () => {
+    it('defines the execute_code runtime contract', () => {
         const contract = getBuiltInRuntimeToolContract('execute_code');
 
         expect(contract).toMatchObject({
             id: 'execute_code',
             descriptionKind: 'execute_code',
-            implemented: false,
+            implemented: true,
         });
         expect(contract?.inputSchema).toMatchObject({
             type: 'object',
@@ -29,11 +29,9 @@ describe('builtInRuntimeToolContracts', () => {
         });
     });
 
-    it('keeps active built-in contracts implemented and ordered ahead of the dormant tool', () => {
+    it('keeps active built-in contracts implemented and deliberately ordered', () => {
         expect(
-            builtInRuntimeToolContracts
-                .filter((contract) => contract.implemented)
-                .map((contract) => contract.id)
-        ).toEqual(['list_files', 'read_file', 'search_files', 'write_file', 'run_command']);
+            builtInRuntimeToolContracts.filter((contract) => contract.implemented).map((contract) => contract.id)
+        ).toEqual(['list_files', 'read_file', 'search_files', 'write_file', 'run_command', 'execute_code']);
     });
 });

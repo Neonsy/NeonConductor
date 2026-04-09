@@ -1,13 +1,11 @@
-import type { RuntimeToolGuidanceContext } from '@/app/backend/runtime/services/runExecution/types';
 import type { BuiltInRuntimeToolDescriptionKind } from '@/app/backend/runtime/services/runExecution/builtInRuntimeToolContracts';
+import type { RuntimeToolGuidanceContext } from '@/app/backend/runtime/services/runExecution/types';
 
 function joinSections(sections: string[]): string {
     return sections.filter((section) => section.trim().length > 0).join('\n\n');
 }
 
-function buildRunCommandGuidance(input: {
-    guidanceContext: RuntimeToolGuidanceContext;
-}): string {
+function buildRunCommandGuidance(input: { guidanceContext: RuntimeToolGuidanceContext }): string {
     const shellLabel =
         input.guidanceContext.shellFamily === 'powershell'
             ? input.guidanceContext.shellExecutable === 'pwsh.exe'
@@ -45,7 +43,7 @@ function buildRunCommandGuidance(input: {
                 '`Get-ChildItem -Force`',
                 '`Get-ChildItem -Recurse -Filter *.ts`',
                 '`Get-Content path\\\\to\\\\file`',
-                '`Get-ChildItem -Recurse | Select-String -Pattern \'TODO\'`',
+                "`Get-ChildItem -Recurse | Select-String -Pattern 'TODO'`",
             ])
         );
     } else if (input.guidanceContext.shellFamily === 'cmd') {
@@ -90,8 +88,9 @@ function buildWriteFileGuidance(): string {
 
 function buildExecuteCodeGuidance(): string {
     return joinSections([
-        'This future tool is intended to be the preferred orchestration surface for branching, filtering, retries, transformations, and typed host interaction.',
-        'Use run_command only when shell-specific behavior or external tooling is the correct fit.',
+        'Runs an approved JavaScript async function body with captured console logs and a JSON-serializable return value.',
+        'Use it for bounded transform logic: branching, filtering, ranking, grouping, retries around in-memory values, and JSON/text shaping.',
+        'This pilot does not expose a filesystem, shell, MCP, network, process, require, import, or workspace bridge. Use read_file, search_files, write_file, and run_command when host interaction is required.',
     ]);
 }
 
@@ -108,7 +107,10 @@ export function composeRuntimeToolDescription(input: {
     const descriptionKind = input.descriptionKind ?? input.toolId ?? 'default';
 
     if (descriptionKind === 'run_command') {
-        return joinSections([input.baseDescription, buildRunCommandGuidance({ guidanceContext: input.guidanceContext })]);
+        return joinSections([
+            input.baseDescription,
+            buildRunCommandGuidance({ guidanceContext: input.guidanceContext }),
+        ]);
     }
 
     if (descriptionKind === 'search_files') {

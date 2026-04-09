@@ -40,6 +40,7 @@ function createContext(overrides: Partial<ToolRequestContext> = {}): ToolRequest
             source: 'native',
         },
         shellApprovalContext: null,
+        executeCodeApprovalContext: null,
         workspaceRequirement: 'not_required',
         ...overrides,
     };
@@ -210,6 +211,84 @@ describe('toolApprovalLifecycle', () => {
         expect(result).toMatchObject({
             kind: 'approval_required',
             requestId: 'perm_1',
+        });
+    });
+
+    it('passes exact execute_code resources without broad approval candidates', async () => {
+        resolveToolDecisionMock.mockResolvedValue({
+            kind: 'ask',
+            resource: 'tool:execute_code:code:abc123def456abc123def456',
+            scopeKind: 'tool',
+            summary: {
+                title: 'JavaScript Code Approval',
+                detail: 'Need JavaScript approval.',
+            },
+            message: 'Need approval',
+            policy: { effective: 'ask', source: 'profile' },
+        });
+        buildBlockedToolOutcomeMock.mockResolvedValue({
+            kind: 'approval_required',
+            toolId: 'execute_code',
+            message: 'Need approval',
+            args: { code: 'return 42;' },
+            at: '2026-03-30T10:00:00.000Z',
+            requestId: 'perm_code',
+            policy: { effective: 'ask', source: 'profile' },
+        });
+
+        const result = await resolveToolApprovalDecision({
+            request: {
+                profileId: 'profile_default',
+                toolId: 'execute_code',
+                topLevelTab: 'agent',
+                modeKey: 'code',
+                workspaceFingerprint: 'ws_alpha',
+                args: { code: 'return 42;' },
+            },
+            context: createContext({
+                args: { code: 'return 42;' },
+                definition: {
+                    tool: {
+                        id: 'execute_code',
+                        label: 'Execute Code',
+                        description: 'Run JavaScript transform code.',
+                        capabilities: ['code_runtime'],
+                        requiresWorkspace: true,
+                        permissionPolicy: 'ask',
+                        allowsExternalPaths: false,
+                        allowsIgnoredPaths: false,
+                        mutability: 'mutating',
+                    },
+                    resource: 'tool:execute_code',
+                    source: 'native',
+                },
+                executeCodeApprovalContext: {
+                    codeText: 'return 42;',
+                    codePreview: 'return 42;',
+                    codeResource: 'tool:execute_code:code:abc123def456abc123def456',
+                    codeDigest: 'abc123def456abc123def456',
+                },
+                workspaceRequirement: 'resolved',
+                workspaceRootPath: 'C:/workspace-alpha',
+                workspaceLabel: 'Workspace Alpha',
+            }),
+            executionPreset: 'standard',
+        });
+
+        const decisionInput = resolveToolDecisionMock.mock.calls[0]?.[0];
+        expect(decisionInput).toMatchObject({
+            resource: 'tool:execute_code:code:abc123def456abc123def456',
+            onceResource: 'tool:execute_code:code:abc123def456abc123def456',
+            summary: {
+                title: 'JavaScript Code Approval',
+                detail: expect.stringContaining('return 42;'),
+            },
+        });
+        expect(decisionInput).not.toHaveProperty('resourceCandidates');
+        expect(decisionInput).not.toHaveProperty('commandText');
+        expect(result).toMatchObject({
+            kind: 'approval_required',
+            requestId: 'perm_code',
         });
     });
 

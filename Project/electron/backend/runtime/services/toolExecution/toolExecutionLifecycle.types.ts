@@ -1,3 +1,4 @@
+import type { ExecuteCodeApprovalContext } from '@/app/backend/runtime/services/toolExecution/executeCodeApproval';
 import type { ShellApprovalContext } from '@/app/backend/runtime/services/toolExecution/shellApproval';
 import type {
     ResolvedToolDefinition,
@@ -17,6 +18,7 @@ export interface ToolRequestContext {
     executionArgs: Record<string, unknown>;
     definition: ResolvedToolDefinition;
     shellApprovalContext: ShellApprovalContext | null;
+    executeCodeApprovalContext?: ExecuteCodeApprovalContext | null;
     workspaceFingerprint?: string;
     workspaceLabel?: string;
     workspaceRootPath?: string;
