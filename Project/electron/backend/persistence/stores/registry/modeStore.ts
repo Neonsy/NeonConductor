@@ -9,6 +9,7 @@ import {
 import type { ModeDefinitionRecord } from '@/app/backend/persistence/types';
 import { normalizeModeMetadata, normalizeModePromptDefinition, registryScopes, registrySourceKinds, topLevelTabs } from '@/app/backend/runtime/contracts';
 import type { ModeExecutionPolicy, ToolCapability, RuntimeRequirementProfile, TopLevelTab } from '@/app/backend/runtime/contracts';
+import { normalizeModeExecutionMetadata } from '@/shared/modeRoleCatalog';
 
 import {
     behaviorFlags as knownBehaviorFlags,
@@ -44,8 +45,12 @@ function parseEnumArray<const T extends readonly string[]>(
     return capabilities.length > 0 ? Array.from(new Set(capabilities)) : undefined;
 }
 
-function parseExecutionPolicy(value: string): ModeExecutionPolicy {
-    const parsed = parseJsonValue(value, {}, isJsonRecord);
+function parseExecutionPolicy(input: {
+    topLevelTab: TopLevelTab;
+    modeKey: string;
+    value: string;
+}): ModeExecutionPolicy {
+    const parsed = parseJsonValue(input.value, {}, isJsonRecord);
     const planningOnly = parsed['planningOnly'];
     const readOnly = parsed['readOnly'];
     const toolCapabilities = parseToolCapabilities(parsed['toolCapabilities']);
@@ -56,15 +61,49 @@ function parseExecutionPolicy(value: string): ModeExecutionPolicy {
         knownRuntimeRequirementProfiles.includes(parsed['runtimeProfile'] as RuntimeRequirementProfile)
             ? (parsed['runtimeProfile'] as RuntimeRequirementProfile)
             : undefined;
+    const authoringRole = parseEnumArray([parsed['authoringRole']], ['chat', 'single_task_agent', 'orchestrator_primary', 'orchestrator_worker_agent'] as const)?.[0];
+    const roleTemplate = parseEnumArray(
+        [parsed['roleTemplate']],
+        [
+            'chat/default',
+            'single_task_agent/ask',
+            'single_task_agent/plan',
+            'single_task_agent/apply',
+            'single_task_agent/debug',
+            'single_task_agent/review',
+            'orchestrator_primary/plan',
+            'orchestrator_primary/orchestrate',
+            'orchestrator_primary/debug',
+            'orchestrator_worker_agent/apply',
+            'orchestrator_worker_agent/debug',
+        ] as const
+    )?.[0];
+    const internalModelRole = parseEnumArray(
+        [parsed['internalModelRole']],
+        ['chat', 'planner', 'apply', 'utility', 'memory_retrieval', 'embeddings', 'rerank'] as const
+    )?.[0];
+    const delegatedOnly = typeof parsed['delegatedOnly'] === 'boolean' ? parsed['delegatedOnly'] : undefined;
+    const sessionSelectable =
+        typeof parsed['sessionSelectable'] === 'boolean' ? parsed['sessionSelectable'] : undefined;
     const normalizedToolCapabilities = toolCapabilities ?? (readOnly === true ? ['filesystem_read'] : undefined);
 
-    return {
-        ...(typeof planningOnly === 'boolean' ? { planningOnly } : {}),
-        ...(normalizedToolCapabilities ? { toolCapabilities: normalizedToolCapabilities } : {}),
-        ...(workflowCapabilities ? { workflowCapabilities } : {}),
-        ...(behaviorFlags ? { behaviorFlags } : {}),
-        ...(runtimeProfile ? { runtimeProfile } : {}),
-    };
+    return normalizeModeExecutionMetadata({
+        topLevelTab: input.topLevelTab,
+        modeKey: input.modeKey,
+        policy: {
+            ...(authoringRole ? { authoringRole } : {}),
+            ...(roleTemplate ? { roleTemplate } : {}),
+            ...(internalModelRole ? { internalModelRole } : {}),
+            ...(delegatedOnly !== undefined ? { delegatedOnly } : {}),
+            ...(sessionSelectable !== undefined ? { sessionSelectable } : {}),
+            ...(typeof planningOnly === 'boolean' ? { planningOnly } : {}),
+            ...(typeof readOnly === 'boolean' ? { readOnly } : {}),
+            ...(normalizedToolCapabilities ? { toolCapabilities: normalizedToolCapabilities } : {}),
+            ...(workflowCapabilities ? { workflowCapabilities } : {}),
+            ...(behaviorFlags ? { behaviorFlags } : {}),
+            ...(runtimeProfile ? { runtimeProfile } : {}),
+        },
+    });
 }
 
 function parseTags(value: string): string[] | undefined {
@@ -108,6 +147,12 @@ function mapModeDefinition(row: {
     created_at: string;
     updated_at: string;
 }): ModeDefinitionRecord {
+    const topLevelTab = parseEnumValue(row.top_level_tab, 'mode_definitions.top_level_tab', topLevelTabs);
+    const executionPolicy = parseExecutionPolicy({
+        topLevelTab,
+        modeKey: row.mode_key,
+        value: row.execution_policy_json,
+    });
     const tags = mergeTags([parseTags(row.tags_json), parseLegacyGroupAlias(row.groups_json)]);
     const metadata = normalizeModeMetadata({
         whenToUse: row.when_to_use,
@@ -116,12 +161,17 @@ function mapModeDefinition(row: {
     return {
         id: row.id,
         profileId: row.profile_id,
-        topLevelTab: parseEnumValue(row.top_level_tab, 'mode_definitions.top_level_tab', topLevelTabs),
+        topLevelTab,
         modeKey: row.mode_key,
+        authoringRole: executionPolicy.authoringRole ?? 'single_task_agent',
+        roleTemplate: executionPolicy.roleTemplate ?? 'single_task_agent/apply',
+        internalModelRole: executionPolicy.internalModelRole ?? 'apply',
+        delegatedOnly: executionPolicy.delegatedOnly ?? false,
+        sessionSelectable: executionPolicy.sessionSelectable ?? true,
         label: row.label,
         assetKey: row.asset_key,
         prompt: normalizeModePromptDefinition(parseJsonValue(row.prompt_json, {}, isJsonRecord)),
-        executionPolicy: parseExecutionPolicy(row.execution_policy_json),
+        executionPolicy,
         source: row.source,
         sourceKind: parseEnumValue(row.source_kind, 'mode_definitions.source_kind', registrySourceKinds),
         scope: parseEnumValue(row.scope, 'mode_definitions.scope', registryScopes),

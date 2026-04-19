@@ -1,8 +1,14 @@
+import type { ReactNode } from 'react';
 
-import type { FileBackedModeItemsByTab } from '@/web/components/settings/modesSettings/modesInstructionsControllerShared';
+import type {
+    CustomModeEditorDraft,
+    FileBackedModeItemsByTab,
+} from '@/web/components/settings/modesSettings/modesInstructionsControllerShared';
 import {
     formatDelimitedLabel,
     formatRuntimeProfileLabel,
+    getModeRoleTemplateOptions,
+    resolveCustomModeEditorTopLevelTab,
 } from '@/web/components/settings/modesSettings/modesInstructionsControllerShared';
 import type {
     BuiltInToolMetadataCardModel,
@@ -12,26 +18,114 @@ import { Button } from '@/web/components/ui/button';
 import { isOneOf } from '@/web/lib/typeGuards/isOneOf';
 
 import {
-    behaviorFlags,
-    runtimeRequirementProfiles,
-    toolCapabilities,
+    modeAuthoringRoles,
     topLevelTabs,
-    workflowCapabilities,
-    type BehaviorFlag,
-    type RuntimeRequirementProfile,
-    type ToolCapability,
+    type FileBackedCustomModeSettingsItem,
+    type ModeAuthoringRole,
+    type ModeDraftRecord,
+    type ModeRoleTemplateKey,
     type TopLevelTab,
-    type WorkflowCapability,
 } from '@/shared/contracts';
-
-import type { ReactNode } from 'react';
-
-function isTopLevelTab(value: string): value is TopLevelTab {
-    return isOneOf(value, topLevelTabs);
-}
+import { getModeRoleTemplateDefinition } from '@/shared/modeRoleCatalog';
 
 function isCustomModeScope(value: string): value is 'global' | 'workspace' {
     return value === 'global' || value === 'workspace';
+}
+
+function isModeAuthoringRole(value: string): value is ModeAuthoringRole {
+    return isOneOf(value, modeAuthoringRoles);
+}
+
+function formatTopLevelLabel(topLevelTab: TopLevelTab): string {
+    return topLevelTab === 'chat' ? 'Chat' : topLevelTab === 'agent' ? 'Agent' : 'Orchestrator';
+}
+
+function formatAuthoringRoleLabel(authoringRole: ModeAuthoringRole): string {
+    switch (authoringRole) {
+        case 'chat':
+            return 'Chat';
+        case 'single_task_agent':
+            return 'Single-Task Agent';
+        case 'orchestrator_primary':
+            return 'Orchestrator Primary';
+        case 'orchestrator_worker_agent':
+            return 'Delegated Worker';
+        default:
+            return formatDelimitedLabel(authoringRole);
+    }
+}
+
+function formatRoleTemplateLabel(roleTemplate: ModeRoleTemplateKey): string {
+    return getModeRoleTemplateDefinition(roleTemplate).label;
+}
+
+function formatMetadataPill(label: string, value: string) {
+    return (
+        <span className='border-border/70 bg-background/80 rounded-full border px-3 py-1 text-[11px] font-medium'>
+            {label}: {value}
+        </span>
+    );
+}
+
+function MetadataSummary(input: {
+    item: Pick<
+        FileBackedCustomModeSettingsItem,
+        | 'authoringRole'
+        | 'roleTemplate'
+        | 'internalModelRole'
+        | 'toolCapabilities'
+        | 'workflowCapabilities'
+        | 'behaviorFlags'
+        | 'runtimeProfile'
+        | 'delegatedOnly'
+        | 'sessionSelectable'
+    >;
+}) {
+    return (
+        <div className='space-y-3'>
+            <div className='flex flex-wrap gap-2'>
+                {formatMetadataPill('Role', formatAuthoringRoleLabel(input.item.authoringRole))}
+                {formatMetadataPill('Template', formatRoleTemplateLabel(input.item.roleTemplate))}
+                {formatMetadataPill('Model Role', formatDelimitedLabel(input.item.internalModelRole))}
+                {formatMetadataPill('Runtime', formatRuntimeProfileLabel(input.item.runtimeProfile ?? 'general'))}
+                {input.item.delegatedOnly ? formatMetadataPill('Visibility', 'Delegated Only') : null}
+                {input.item.sessionSelectable ? formatMetadataPill('Selection', 'Session Selectable') : null}
+            </div>
+            {input.item.toolCapabilities && input.item.toolCapabilities.length > 0 ? (
+                <div className='flex flex-wrap gap-2'>
+                    {input.item.toolCapabilities.map((toolCapability) => (
+                        <span
+                            key={`tool:${toolCapability}`}
+                            className='border-border/70 bg-background/80 rounded-full border px-3 py-1 text-[11px] font-medium'>
+                            {formatDelimitedLabel(toolCapability)}
+                        </span>
+                    ))}
+                </div>
+            ) : null}
+            {input.item.workflowCapabilities && input.item.workflowCapabilities.length > 0 ? (
+                <div className='flex flex-wrap gap-2'>
+                    {input.item.workflowCapabilities.map((workflowCapability) => (
+                        <span
+                            key={`workflow:${workflowCapability}`}
+                            className='border-border/70 bg-background/80 rounded-full border px-3 py-1 text-[11px] font-medium'>
+                            {formatDelimitedLabel(workflowCapability)}
+                        </span>
+                    ))}
+                </div>
+            ) : null}
+            {input.item.behaviorFlags && input.item.behaviorFlags.length > 0 ? (
+                <div className='flex flex-wrap gap-2'>
+                    {input.item.behaviorFlags.map((behaviorFlag) => (
+                        <span
+                            key={`behavior:${behaviorFlag}`}
+                            className='border-border/70 bg-background/80 rounded-full border px-3 py-1 text-[11px] font-medium'>
+                            {formatDelimitedLabel(behaviorFlag)}
+                        </span>
+                    ))}
+                </div>
+            ) : null}
+        </div>
+    );
 }
 
 export function TopLevelPromptSection(input: {
@@ -61,13 +155,11 @@ export function PromptLayerCard(input: PromptLayerSectionModel & {
                 <h5 className='text-sm font-semibold'>{input.title}</h5>
                 <p className='text-muted-foreground text-sm leading-6'>{input.description}</p>
             </div>
-
             {input.warning ? (
                 <div className='rounded-2xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-900 dark:text-amber-100'>
                     {input.warning}
                 </div>
             ) : null}
-
             <label className='space-y-2'>
                 <span className='text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase'>
                     Instructions
@@ -81,25 +173,11 @@ export function PromptLayerCard(input: PromptLayerSectionModel & {
                     spellCheck={false}
                 />
             </label>
-
             <div className='flex flex-wrap gap-2'>
-                <Button
-                    type='button'
-                    size='sm'
-                    disabled={input.isSaving}
-                    onClick={() => {
-                        input.onSave();
-                    }}>
+                <Button type='button' size='sm' disabled={input.isSaving} onClick={input.onSave}>
                     {input.isSaving ? 'Saving…' : 'Save'}
                 </Button>
-                <Button
-                    type='button'
-                    size='sm'
-                    variant='outline'
-                    disabled={input.isSaving}
-                    onClick={() => {
-                        input.onReset();
-                    }}>
+                <Button type='button' size='sm' variant='outline' disabled={input.isSaving} onClick={input.onReset}>
                     Reset
                 </Button>
             </div>
@@ -131,11 +209,9 @@ export function BuiltInModePromptCard(input: {
                     {input.hasOverride ? 'Override active' : 'Using shipped defaults'}
                 </div>
             </div>
-
             <div className='rounded-2xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-900 dark:text-amber-100'>
                 {input.warning}
             </div>
-
             <label className='space-y-2'>
                 <span className='text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase'>
                     Role Definition
@@ -149,7 +225,6 @@ export function BuiltInModePromptCard(input: {
                     spellCheck={false}
                 />
             </label>
-
             <label className='space-y-2'>
                 <span className='text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase'>
                     Custom Instructions
@@ -163,25 +238,11 @@ export function BuiltInModePromptCard(input: {
                     spellCheck={false}
                 />
             </label>
-
             <div className='flex flex-wrap gap-2'>
-                <Button
-                    type='button'
-                    size='sm'
-                    disabled={input.isSaving}
-                    onClick={() => {
-                        input.onSave();
-                    }}>
+                <Button type='button' size='sm' disabled={input.isSaving} onClick={input.onSave}>
                     {input.isSaving ? 'Saving…' : 'Save'}
                 </Button>
-                <Button
-                    type='button'
-                    size='sm'
-                    variant='outline'
-                    disabled={input.isSaving}
-                    onClick={() => {
-                        input.onReset();
-                    }}>
+                <Button type='button' size='sm' variant='outline' disabled={input.isSaving} onClick={input.onReset}>
                     Reset
                 </Button>
             </div>
@@ -211,11 +272,9 @@ export function BuiltInToolMetadataCard(
                     {input.isModified ? 'Modified' : 'Default'}
                 </div>
             </div>
-
             <div className='border-border/70 bg-background/60 rounded-2xl border px-4 py-3 text-sm'>
                 Tool ID: <code>{input.toolId}</code>
             </div>
-
             <label className='space-y-2'>
                 <span className='text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase'>
                     Description
@@ -229,7 +288,6 @@ export function BuiltInToolMetadataCard(
                     spellCheck={false}
                 />
             </label>
-
             <div className='space-y-2'>
                 <span className='text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase'>
                     Shipped Default
@@ -238,25 +296,11 @@ export function BuiltInToolMetadataCard(
                     {input.defaultDescription}
                 </div>
             </div>
-
             <div className='flex flex-wrap gap-2'>
-                <Button
-                    type='button'
-                    size='sm'
-                    disabled={input.isSaving}
-                    onClick={() => {
-                        input.onSave();
-                    }}>
+                <Button type='button' size='sm' disabled={input.isSaving} onClick={input.onSave}>
                     {input.isSaving ? 'Saving…' : 'Save'}
                 </Button>
-                <Button
-                    type='button'
-                    size='sm'
-                    variant='outline'
-                    disabled={input.isSaving}
-                    onClick={() => {
-                        input.onReset();
-                    }}>
+                <Button type='button' size='sm' variant='outline' disabled={input.isSaving} onClick={input.onReset}>
                     Reset
                 </Button>
             </div>
@@ -264,56 +308,21 @@ export function BuiltInToolMetadataCard(
     );
 }
 
-export function formatTopLevelLabel(topLevelTab: TopLevelTab): string {
-    return topLevelTab === 'chat' ? 'Chat' : topLevelTab === 'agent' ? 'Agent' : 'Orchestrator';
-}
-
-export function formatBuiltInModeDescription(topLevelTab: TopLevelTab, label: string): string {
-    return `This shipped ${label.toLowerCase()} prompt runs inside ${formatTopLevelLabel(topLevelTab).toLowerCase()} after top-level instructions and before rules or attached skills.`;
-}
-
-export function formatToolCapabilityLabel(toolCapability: ToolCapability): string {
-    return formatDelimitedLabel(toolCapability);
-}
-
-function formatWorkflowCapabilityLabel(workflowCapability: WorkflowCapability): string {
-    return formatDelimitedLabel(workflowCapability);
-}
-
-function formatBehaviorFlagLabel(behaviorFlag: BehaviorFlag): string {
-    return formatDelimitedLabel(behaviorFlag);
-}
-
 export function CustomModeEditorSection(input: {
     editor: {
-        draft: {
-            kind: 'create' | 'edit';
-            scope: 'global' | 'workspace';
-            topLevelTab: TopLevelTab;
-            modeKey?: string;
-            slug: string;
-            name: string;
-            description: string;
-            roleDefinition: string;
-            customInstructions: string;
-            whenToUse: string;
-            tagsText: string;
-            selectedToolCapabilities: ToolCapability[];
-            selectedWorkflowCapabilities: WorkflowCapability[];
-            selectedBehaviorFlags: BehaviorFlag[];
-            selectedRuntimeProfile: RuntimeRequirementProfile;
-            deleteConfirmed: boolean;
-        } | undefined;
+        draft: CustomModeEditorDraft | undefined;
         isLoading: boolean;
         isSaving: boolean;
         hasWorkspaceScope: boolean;
         selectedWorkspaceLabel: string | undefined;
         openCreate: (scope: 'global' | 'workspace') => void;
         openEdit: (scope: 'global' | 'workspace', topLevelTab: TopLevelTab, modeKey: string) => Promise<void>;
+        openDraft: (draft: ModeDraftRecord) => void;
         openDelete: (scope: 'global' | 'workspace', topLevelTab: TopLevelTab, modeKey: string) => Promise<void>;
         close: () => void;
         setScope: (scope: 'global' | 'workspace') => void;
-        setTopLevelTab: (topLevelTab: TopLevelTab) => void;
+        setAuthoringRole: (authoringRole: ModeAuthoringRole) => void;
+        setRoleTemplate: (roleTemplate: ModeRoleTemplateKey) => void;
         setField: (
             field:
                 | 'slug'
@@ -322,22 +331,23 @@ export function CustomModeEditorSection(input: {
                 | 'roleDefinition'
                 | 'customInstructions'
                 | 'whenToUse'
-                | 'tagsText',
+                | 'tagsText'
+                | 'sourceText',
             value: string
         ) => void;
-        toggleToolCapability: (toolCapability: ToolCapability) => void;
-        toggleWorkflowCapability: (workflowCapability: WorkflowCapability) => void;
-        toggleBehaviorFlag: (behaviorFlag: BehaviorFlag) => void;
-        setRuntimeProfile: (runtimeProfile: RuntimeRequirementProfile) => void;
         setDeleteConfirmed: (value: boolean) => void;
         save: () => Promise<void>;
         deleteMode: () => Promise<void>;
+        validateDraft: () => Promise<void>;
+        applyDraft: () => Promise<void>;
+        draftOverwriteConfirmed: boolean;
+        setDraftOverwriteConfirmed: (value: boolean) => void;
     };
 }) {
     if (input.editor.isLoading && !input.editor.draft) {
         return (
             <section className='border-border/70 bg-card/50 rounded-[24px] border p-5'>
-                <p className='text-sm font-semibold'>Loading custom mode…</p>
+                <p className='text-sm font-semibold'>Loading mode editor…</p>
             </section>
         );
     }
@@ -347,63 +357,66 @@ export function CustomModeEditorSection(input: {
         return null;
     }
 
+    const topLevelTab = resolveCustomModeEditorTopLevelTab(draft);
+    const templateDefinition = getModeRoleTemplateDefinition(draft.roleTemplate);
+    const roleTemplateOptions = getModeRoleTemplateOptions(draft.authoringRole);
+
     return (
         <section className='border-border/70 bg-card/50 space-y-4 rounded-[24px] border p-5'>
             <div className='flex flex-wrap items-start justify-between gap-3'>
                 <div className='space-y-1'>
                     <h6 className='text-sm font-semibold'>
-                        {draft.kind === 'create' ? 'Create File-Backed Custom Mode' : 'Edit File-Backed Custom Mode'}
+                        {draft.kind === 'edit'
+                            ? 'Edit File-Backed Custom Mode'
+                            : draft.kind === 'draft'
+                              ? 'Review Mode Draft'
+                              : 'Create Mode Draft'}
                     </h6>
                     <p className='text-muted-foreground text-sm leading-6'>
-                        {draft.kind === 'create'
-                            ? 'Create a file-backed custom mode in the selected registry root.'
-                            : 'Edit the existing file-backed mode in place. Scope, tab, and slug stay immutable after creation.'}
+                        Author from scope to role to template, then fill in prompt metadata. Execution capabilities are
+                        derived below so the mode contract stays consistent.
                     </p>
                 </div>
-
                 <div className='flex flex-wrap gap-2'>
-                    <Button
-                        type='button'
-                        size='sm'
-                        variant='outline'
-                        disabled={input.editor.isSaving}
-                        onClick={input.editor.close}>
+                    <Button type='button' size='sm' variant='outline' disabled={input.editor.isSaving} onClick={input.editor.close}>
                         Cancel
                     </Button>
-                    <Button
-                        type='button'
-                        size='sm'
-                        disabled={
-                            input.editor.isSaving || (draft.scope === 'workspace' && !input.editor.hasWorkspaceScope)
-                        }
-                        onClick={() => {
-                            void input.editor.save();
-                        }}>
-                        {input.editor.isSaving
-                            ? draft.kind === 'create'
-                                ? 'Creating…'
-                                : 'Saving…'
-                            : draft.kind === 'create'
-                              ? 'Create Mode'
-                              : 'Save Mode'}
+                    <Button type='button' size='sm' disabled={input.editor.isSaving} onClick={() => void input.editor.save()}>
+                        {input.editor.isSaving ? 'Saving…' : draft.kind === 'edit' ? 'Save Mode' : 'Save Draft'}
                     </Button>
+                    {draft.kind === 'draft' ? (
+                        <>
+                            <Button
+                                type='button'
+                                size='sm'
+                                variant='outline'
+                                disabled={input.editor.isSaving}
+                                onClick={() => void input.editor.validateDraft()}>
+                                Validate
+                            </Button>
+                            <Button
+                                type='button'
+                                size='sm'
+                                disabled={input.editor.isSaving || draft.validationState === 'invalid'}
+                                onClick={() => void input.editor.applyDraft()}>
+                                Apply Draft
+                            </Button>
+                        </>
+                    ) : null}
                 </div>
             </div>
 
-            <div className='grid gap-4 md:grid-cols-2'>
+            <div className='grid gap-4 md:grid-cols-3'>
                 <label className='space-y-2'>
-                    <span className='text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase'>
-                        Scope
-                    </span>
+                    <span className='text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase'>Scope</span>
                     {draft.kind === 'create' ? (
                         <select
                             className='border-border bg-background h-11 w-full rounded-2xl border px-3 text-sm'
                             value={draft.scope}
                             onChange={(event) => {
-                                if (!isCustomModeScope(event.target.value)) {
-                                    return;
+                                if (isCustomModeScope(event.target.value)) {
+                                    input.editor.setScope(event.target.value);
                                 }
-                                input.editor.setScope(event.target.value);
                             }}>
                             <option value='global'>Global</option>
                             <option value='workspace' disabled={!input.editor.hasWorkspaceScope}>
@@ -418,42 +431,51 @@ export function CustomModeEditorSection(input: {
                         />
                     )}
                 </label>
-
                 <label className='space-y-2'>
-                    <span className='text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase'>
-                        Top-Level Tab
-                    </span>
-                    {draft.kind === 'create' ? (
-                        <select
-                            className='border-border bg-background h-11 w-full rounded-2xl border px-3 text-sm'
-                            value={draft.topLevelTab}
-                            onChange={(event) => {
-                                if (!isTopLevelTab(event.target.value)) {
-                                    return;
-                                }
-                                input.editor.setTopLevelTab(event.target.value);
-                            }}>
-                            {topLevelTabs.map((topLevelTab) => (
-                                <option key={topLevelTab} value={topLevelTab}>
-                                    {formatTopLevelLabel(topLevelTab)}
-                                </option>
-                            ))}
-                        </select>
-                    ) : (
-                        <input
-                            readOnly
-                            className='border-border bg-background h-11 w-full rounded-2xl border px-3 text-sm'
-                            value={formatTopLevelLabel(draft.topLevelTab)}
-                        />
-                    )}
+                    <span className='text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase'>Authoring Role</span>
+                    <select
+                        className='border-border bg-background h-11 w-full rounded-2xl border px-3 text-sm'
+                        value={draft.authoringRole}
+                        onChange={(event) => {
+                            if (isModeAuthoringRole(event.target.value)) {
+                                input.editor.setAuthoringRole(event.target.value);
+                            }
+                        }}>
+                        {modeAuthoringRoles.map((authoringRole) => (
+                            <option key={authoringRole} value={authoringRole}>
+                                {formatAuthoringRoleLabel(authoringRole)}
+                            </option>
+                        ))}
+                    </select>
+                </label>
+                <label className='space-y-2'>
+                    <span className='text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase'>Template</span>
+                    <select
+                        className='border-border bg-background h-11 w-full rounded-2xl border px-3 text-sm'
+                        value={draft.roleTemplate}
+                        onChange={(event) => {
+                            input.editor.setRoleTemplate(event.target.value as ModeRoleTemplateKey);
+                        }}>
+                        {roleTemplateOptions.map((option) => (
+                            <option key={option.roleTemplate} value={option.roleTemplate}>
+                                {option.label}
+                            </option>
+                        ))}
+                    </select>
                 </label>
             </div>
 
-            <div className='grid gap-4 md:grid-cols-2'>
+            <div className='grid gap-4 md:grid-cols-3'>
                 <label className='space-y-2'>
-                    <span className='text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase'>
-                        Slug
-                    </span>
+                    <span className='text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase'>Top-Level Tab</span>
+                    <input
+                        readOnly
+                        className='border-border bg-background h-11 w-full rounded-2xl border px-3 text-sm'
+                        value={formatTopLevelLabel(topLevelTab)}
+                    />
+                </label>
+                <label className='space-y-2'>
+                    <span className='text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase'>Slug</span>
                     <input
                         readOnly={draft.kind === 'edit'}
                         className='border-border bg-background h-11 w-full rounded-2xl border px-3 text-sm'
@@ -463,11 +485,8 @@ export function CustomModeEditorSection(input: {
                         }}
                     />
                 </label>
-
                 <label className='space-y-2'>
-                    <span className='text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase'>
-                        Name
-                    </span>
+                    <span className='text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase'>Name</span>
                     <input
                         className='border-border bg-background h-11 w-full rounded-2xl border px-3 text-sm'
                         value={draft.name}
@@ -478,41 +497,54 @@ export function CustomModeEditorSection(input: {
                 </label>
             </div>
 
-            <label className='space-y-2'>
-                <span className='text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase'>
-                    Description
-                </span>
-                <textarea
-                    value={draft.description}
-                    onChange={(event) => {
-                        input.editor.setField('description', event.target.value);
-                    }}
-                    className='border-border bg-background min-h-24 w-full rounded-2xl border px-4 py-3 text-sm leading-6'
-                    spellCheck={false}
-                />
-            </label>
+            <div className='rounded-2xl border border-dashed px-4 py-4'>
+                <div className='space-y-2'>
+                    <h6 className='text-sm font-semibold'>Derived Mode Contract</h6>
+                    <p className='text-muted-foreground text-sm leading-6'>
+                        These capabilities come from the selected role template and stay read-only here.
+                    </p>
+                    <MetadataSummary
+                        item={{
+                            authoringRole: draft.authoringRole,
+                            roleTemplate: draft.roleTemplate,
+                            internalModelRole: templateDefinition.internalModelRole,
+                            delegatedOnly: templateDefinition.delegatedOnly,
+                            sessionSelectable: templateDefinition.sessionSelectable,
+                            toolCapabilities: templateDefinition.toolCapabilities,
+                            workflowCapabilities: templateDefinition.workflowCapabilities,
+                            behaviorFlags: templateDefinition.behaviorFlags,
+                            runtimeProfile: templateDefinition.runtimeProfile,
+                        }}
+                    />
+                </div>
+            </div>
 
-            <label className='space-y-2'>
-                <span className='text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase'>
-                    When To Use
-                </span>
-                <textarea
-                    value={draft.whenToUse}
-                    onChange={(event) => {
-                        input.editor.setField('whenToUse', event.target.value);
-                    }}
-                    className='border-border bg-background min-h-24 w-full rounded-2xl border px-4 py-3 text-sm leading-6'
-                    spellCheck={false}
-                />
-            </label>
+            <div className='grid gap-4 md:grid-cols-2'>
+                <label className='space-y-2'>
+                    <span className='text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase'>Description</span>
+                    <textarea
+                        value={draft.description}
+                        onChange={(event) => input.editor.setField('description', event.target.value)}
+                        className='border-border bg-background min-h-24 w-full rounded-2xl border px-4 py-3 text-sm leading-6'
+                        spellCheck={false}
+                    />
+                </label>
+                <label className='space-y-2'>
+                    <span className='text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase'>When To Use</span>
+                    <textarea
+                        value={draft.whenToUse}
+                        onChange={(event) => input.editor.setField('whenToUse', event.target.value)}
+                        className='border-border bg-background min-h-24 w-full rounded-2xl border px-4 py-3 text-sm leading-6'
+                        spellCheck={false}
+                    />
+                </label>
+            </div>
 
             <label className='space-y-2'>
                 <span className='text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase'>Tags</span>
                 <textarea
                     value={draft.tagsText}
-                    onChange={(event) => {
-                        input.editor.setField('tagsText', event.target.value);
-                    }}
+                    onChange={(event) => input.editor.setField('tagsText', event.target.value)}
                     className='border-border bg-background min-h-20 w-full rounded-2xl border px-4 py-3 text-sm leading-6'
                     spellCheck={false}
                     placeholder='quality, review'
@@ -520,138 +552,42 @@ export function CustomModeEditorSection(input: {
                 <p className='text-muted-foreground text-xs leading-5'>Separate tags with commas or new lines.</p>
             </label>
 
-            <div className='space-y-2'>
-                <span className='text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase'>
-                    Tool Capabilities
-                </span>
-                <p className='text-muted-foreground text-xs leading-5'>
-                    Low-level tool authority for this mode, such as filesystem access or shell execution.
-                </p>
-                <div className='grid gap-3 md:grid-cols-2'>
-                    {toolCapabilities.map((toolCapability) => (
-                        <label
-                            key={toolCapability}
-                            className='border-border bg-background flex items-start gap-3 rounded-2xl border px-4 py-3 text-sm'>
-                            <input
-                                type='checkbox'
-                                className='mt-1'
-                                checked={draft.selectedToolCapabilities.includes(toolCapability)}
-                                onChange={() => {
-                                    input.editor.toggleToolCapability(toolCapability);
-                                }}
-                            />
-                            <span className='leading-6'>{formatToolCapabilityLabel(toolCapability)}</span>
-                        </label>
-                    ))}
-                </div>
-            </div>
-
-            <div className='space-y-2'>
-                <span className='text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase'>
-                    Workflow Capabilities
-                </span>
-                <p className='text-muted-foreground text-xs leading-5'>
-                    Higher-level product behaviors this mode is intended to participate in.
-                </p>
-                <div className='grid gap-3 md:grid-cols-2'>
-                    {workflowCapabilities.map((workflowCapability) => (
-                        <label
-                            key={workflowCapability}
-                            className='border-border bg-background flex items-start gap-3 rounded-2xl border px-4 py-3 text-sm'>
-                            <input
-                                type='checkbox'
-                                className='mt-1'
-                                checked={draft.selectedWorkflowCapabilities.includes(workflowCapability)}
-                                onChange={() => {
-                                    input.editor.toggleWorkflowCapability(workflowCapability);
-                                }}
-                            />
-                            <span className='leading-6'>{formatWorkflowCapabilityLabel(workflowCapability)}</span>
-                        </label>
-                    ))}
-                </div>
-            </div>
-
-            <div className='space-y-2'>
-                <span className='text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase'>
-                    Behavior Flags
-                </span>
-                <p className='text-muted-foreground text-xs leading-5'>
-                    Operational traits such as approval gating, artifact production, or worker delegation intent.
-                </p>
-                <div className='grid gap-3 md:grid-cols-2'>
-                    {behaviorFlags.map((behaviorFlag) => (
-                        <label
-                            key={behaviorFlag}
-                            className='border-border bg-background flex items-start gap-3 rounded-2xl border px-4 py-3 text-sm'>
-                            <input
-                                type='checkbox'
-                                className='mt-1'
-                                checked={draft.selectedBehaviorFlags.includes(behaviorFlag)}
-                                onChange={() => {
-                                    input.editor.toggleBehaviorFlag(behaviorFlag);
-                                }}
-                            />
-                            <span className='leading-6'>{formatBehaviorFlagLabel(behaviorFlag)}</span>
-                        </label>
-                    ))}
-                </div>
-            </div>
-
-            <label className='space-y-2'>
-                <span className='text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase'>
-                    Runtime Profile
-                </span>
-                <select
-                    className='border-border bg-background h-11 w-full rounded-2xl border px-3 text-sm'
-                    value={draft.selectedRuntimeProfile}
-                    onChange={(event) => {
-                        if (!runtimeRequirementProfiles.includes(event.target.value as RuntimeRequirementProfile)) {
-                            return;
-                        }
-                        input.editor.setRuntimeProfile(event.target.value as RuntimeRequirementProfile);
-                    }}>
-                    {runtimeRequirementProfiles.map((runtimeProfile) => (
-                        <option key={runtimeProfile} value={runtimeProfile}>
-                            {formatRuntimeProfileLabel(runtimeProfile)}
-                        </option>
-                    ))}
-                </select>
-                <p className='text-muted-foreground text-xs leading-5'>
-                    Routing and compatibility intent for this mode. Slice A records the profile now; runtime behavior
-                    still migrates in later slices.
-                </p>
-            </label>
-
             <div className='grid gap-4 xl:grid-cols-2'>
                 <label className='space-y-2'>
-                    <span className='text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase'>
-                        Role Definition
-                    </span>
+                    <span className='text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase'>Role Definition</span>
                     <textarea
                         value={draft.roleDefinition}
-                        onChange={(event) => {
-                            input.editor.setField('roleDefinition', event.target.value);
-                        }}
+                        onChange={(event) => input.editor.setField('roleDefinition', event.target.value)}
                         className='border-border bg-background min-h-32 w-full rounded-2xl border px-4 py-3 text-sm leading-6'
                         spellCheck={false}
                     />
                 </label>
-
                 <label className='space-y-2'>
-                    <span className='text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase'>
-                        Custom Instructions
-                    </span>
+                    <span className='text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase'>Custom Instructions</span>
                     <textarea
                         value={draft.customInstructions}
-                        onChange={(event) => {
-                            input.editor.setField('customInstructions', event.target.value);
-                        }}
+                        onChange={(event) => input.editor.setField('customInstructions', event.target.value)}
                         className='border-border bg-background min-h-32 w-full rounded-2xl border px-4 py-3 text-sm leading-6'
                         spellCheck={false}
                     />
                 </label>
             </div>
+
+            {draft.kind !== 'edit' ? (
+                <label className='space-y-2'>
+                    <span className='text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase'>Source Material</span>
+                    <textarea
+                        value={draft.sourceText}
+                        onChange={(event) => input.editor.setField('sourceText', event.target.value)}
+                        className='border-border bg-background min-h-28 w-full rounded-2xl border px-4 py-3 text-sm leading-6'
+                        spellCheck={false}
+                        placeholder='Paste transcript excerpts, artifacts, or notes to keep with this draft review.'
+                    />
+                    <p className='text-muted-foreground text-xs leading-5'>
+                        Optional provenance for a reviewed draft. Pasted content stays in the draft until you apply or discard it.
+                    </p>
+                </label>
+            ) : null}
 
             <div className='border-border/70 bg-background/60 rounded-2xl border px-4 py-3 text-sm'>
                 {draft.scope === 'workspace' ? (
@@ -662,6 +598,36 @@ export function CustomModeEditorSection(input: {
                     </span>
                 )}
             </div>
+
+            {draft.kind === 'draft' ? (
+                <div className='border-border/70 bg-background/60 space-y-3 rounded-2xl border px-4 py-4'>
+                    <p className='text-sm font-semibold'>Draft Validation</p>
+                    <p className='text-muted-foreground text-sm leading-6'>
+                        Status: <span className='text-foreground font-medium'>{draft.validationState}</span>
+                    </p>
+                    {draft.validationErrors.length > 0 ? (
+                        <div className='space-y-2 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-3 py-3 text-sm text-amber-900 dark:text-amber-100'>
+                            {draft.validationErrors.map((error) => (
+                                <p key={error}>{error}</p>
+                            ))}
+                        </div>
+                    ) : null}
+                    <label className='flex items-start gap-3 text-sm'>
+                        <input
+                            type='checkbox'
+                            className='mt-1'
+                            checked={input.editor.draftOverwriteConfirmed}
+                            onChange={(event) => input.editor.setDraftOverwriteConfirmed(event.target.checked)}
+                        />
+                        <span className='text-muted-foreground leading-6'>
+                            Allow overwrite if applying this draft would replace an existing file-backed mode with the same tab and key.
+                        </span>
+                    </label>
+                    <Button type='button' size='sm' variant='destructive' disabled={input.editor.isSaving} onClick={() => void input.editor.deleteMode()}>
+                        Discard Draft
+                    </Button>
+                </div>
+            ) : null}
 
             {draft.kind === 'edit' ? (
                 <div className='border-destructive/25 bg-destructive/5 space-y-3 rounded-2xl border px-4 py-4'>
@@ -675,13 +641,10 @@ export function CustomModeEditorSection(input: {
                             type='checkbox'
                             className='mt-1'
                             checked={draft.deleteConfirmed}
-                            onChange={(event) => {
-                                input.editor.setDeleteConfirmed(event.target.checked);
-                            }}
+                            onChange={(event) => input.editor.setDeleteConfirmed(event.target.checked)}
                         />
                         <span className='text-muted-foreground leading-6'>
-                            I understand this will delete the file-backed custom mode and rely on normal fallback
-                            resolution afterward.
+                            I understand this will delete the file-backed custom mode and fall back to normal resolution afterward.
                         </span>
                     </label>
                     <Button
@@ -689,14 +652,70 @@ export function CustomModeEditorSection(input: {
                         size='sm'
                         variant='destructive'
                         disabled={input.editor.isSaving || !draft.deleteConfirmed}
-                        onClick={() => {
-                            void input.editor.deleteMode();
-                        }}>
-                        {input.editor.isSaving ? 'Deleting…' : 'Delete Mode'}
+                        onClick={() => void input.editor.deleteMode()}>
+                        Delete Mode
                     </Button>
                 </div>
             ) : null}
         </section>
+    );
+}
+
+function ModeInventoryCard(input: {
+    mode: FileBackedCustomModeSettingsItem;
+    scope: 'global' | 'workspace';
+    isExporting: boolean;
+    onExport: (scope: 'global' | 'workspace', topLevelTab: TopLevelTab, modeKey: string) => void;
+    onEdit: (scope: 'global' | 'workspace', topLevelTab: TopLevelTab, modeKey: string) => void;
+    onDelete: (scope: 'global' | 'workspace', topLevelTab: TopLevelTab, modeKey: string) => void;
+}) {
+    return (
+        <article className='border-border/70 bg-card/50 space-y-3 rounded-[24px] border p-5'>
+            <div className='space-y-1'>
+                <div className='flex flex-wrap items-center justify-between gap-3'>
+                    <h6 className='text-sm font-semibold'>{input.mode.label}</h6>
+                    <span className='border-border/70 bg-background/80 rounded-full border px-3 py-1 text-[11px] font-medium'>
+                        {formatTopLevelLabel(input.mode.topLevelTab)} · {input.mode.modeKey}
+                    </span>
+                </div>
+                <p className='text-muted-foreground text-sm leading-6'>
+                    {input.mode.description ?? 'No description set for this file-backed mode yet.'}
+                </p>
+                {input.mode.whenToUse ? (
+                    <p className='text-muted-foreground text-sm leading-6'>
+                        <span className='text-foreground font-medium'>When to use:</span> {input.mode.whenToUse}
+                    </p>
+                ) : null}
+                {input.mode.tags && input.mode.tags.length > 0 ? (
+                    <div className='flex flex-wrap gap-2 pt-1'>
+                        {input.mode.tags.map((tag) => (
+                            <span
+                                key={`${input.mode.modeKey}:tag:${tag}`}
+                                className='border-border/70 bg-background/80 rounded-full border px-3 py-1 text-[11px] font-medium'>
+                                {tag}
+                            </span>
+                        ))}
+                    </div>
+                ) : null}
+            </div>
+            <MetadataSummary item={input.mode} />
+            <div className='flex flex-wrap gap-2'>
+                <Button type='button' size='sm' variant='outline' onClick={() => input.onEdit(input.scope, input.mode.topLevelTab, input.mode.modeKey)}>
+                    Edit
+                </Button>
+                <Button type='button' size='sm' variant='outline' onClick={() => input.onDelete(input.scope, input.mode.topLevelTab, input.mode.modeKey)}>
+                    Delete
+                </Button>
+                <Button
+                    type='button'
+                    size='sm'
+                    variant='outline'
+                    disabled={input.isExporting}
+                    onClick={() => input.onExport(input.scope, input.mode.topLevelTab, input.mode.modeKey)}>
+                    {input.isExporting ? 'Loading…' : 'Load Export JSON'}
+                </Button>
+            </div>
+        </article>
     );
 }
 
@@ -716,7 +735,7 @@ export function FileBackedModeInventorySection(input: {
                     No {input.scope === 'global' ? 'global' : 'workspace'} file-backed custom modes
                 </p>
                 <p className='text-muted-foreground mt-2 text-sm leading-6'>
-                    Import a portable mode JSON object here to create one through the existing registry root.
+                    Create a draft or import portable JSON to review new modes before applying them here.
                 </p>
             </div>
         );
@@ -734,117 +753,23 @@ export function FileBackedModeInventorySection(input: {
                     <div key={`${input.scope}:${topLevelTab}`} className='space-y-3'>
                         <div className='space-y-1'>
                             <h6 className='text-sm font-semibold'>
-                                {input.scope === 'global' ? 'Global' : 'Workspace'} {formatTopLevelLabel(topLevelTab)}{' '}
-                                Modes
+                                {input.scope === 'global' ? 'Global' : 'Workspace'} {formatTopLevelLabel(topLevelTab)} Modes
                             </h6>
                             <p className='text-muted-foreground text-sm leading-6'>
-                                These are file-backed custom modes discovered through the existing registry root.
+                                These file-backed modes are active in the normal registry for this scope.
                             </p>
                         </div>
-
                         <div className='grid gap-4 xl:grid-cols-2'>
                             {items.map((mode) => (
-                                <article
+                                <ModeInventoryCard
                                     key={`${input.scope}:${mode.topLevelTab}:${mode.modeKey}`}
-                                    className='border-border/70 bg-card/50 space-y-3 rounded-[24px] border p-5'>
-                                    <div className='space-y-1'>
-                                        <div className='flex flex-wrap items-center justify-between gap-3'>
-                                            <h6 className='text-sm font-semibold'>{mode.label}</h6>
-                                            <span className='border-border/70 bg-background/80 rounded-full border px-3 py-1 text-[11px] font-medium'>
-                                                {formatTopLevelLabel(mode.topLevelTab)} · {mode.modeKey}
-                                            </span>
-                                        </div>
-                                        <p className='text-muted-foreground text-sm leading-6'>
-                                            {mode.description ?? 'No description set for this file-backed mode yet.'}
-                                        </p>
-                                        {mode.whenToUse ? (
-                                            <p className='text-muted-foreground text-sm leading-6'>
-                                                <span className='text-foreground font-medium'>When to use:</span>{' '}
-                                                {mode.whenToUse}
-                                            </p>
-                                        ) : null}
-                                        {mode.tags && mode.tags.length > 0 ? (
-                                            <div className='flex flex-wrap gap-2 pt-1'>
-                                                {mode.tags.map((tag) => (
-                                                    <span
-                                                        key={`${mode.modeKey}:tag:${tag}`}
-                                                        className='border-border/70 bg-background/80 rounded-full border px-3 py-1 text-[11px] font-medium'>
-                                                        {tag}
-                                                    </span>
-                                                ))}
-                                            </div>
-                                        ) : null}
-                                        {mode.toolCapabilities && mode.toolCapabilities.length > 0 ? (
-                                            <div className='flex flex-wrap gap-2 pt-1'>
-                                                {mode.toolCapabilities.map((toolCapability) => (
-                                                    <span
-                                                        key={`${mode.modeKey}:tool:${toolCapability}`}
-                                                        className='border-border/70 bg-background/80 rounded-full border px-3 py-1 text-[11px] font-medium'>
-                                                            {formatToolCapabilityLabel(toolCapability)}
-                                                        </span>
-                                                ))}
-                                            </div>
-                                        ) : null}
-                                        {mode.workflowCapabilities && mode.workflowCapabilities.length > 0 ? (
-                                            <div className='flex flex-wrap gap-2 pt-1'>
-                                                {mode.workflowCapabilities.map((workflowCapability) => (
-                                                    <span
-                                                        key={`${mode.modeKey}:workflow:${workflowCapability}`}
-                                                        className='border-border/70 bg-background/80 rounded-full border px-3 py-1 text-[11px] font-medium'>
-                                                        {formatWorkflowCapabilityLabel(workflowCapability)}
-                                                    </span>
-                                                ))}
-                                            </div>
-                                        ) : null}
-                                        {mode.behaviorFlags && mode.behaviorFlags.length > 0 ? (
-                                            <div className='flex flex-wrap gap-2 pt-1'>
-                                                {mode.behaviorFlags.map((behaviorFlag) => (
-                                                    <span
-                                                        key={`${mode.modeKey}:behavior:${behaviorFlag}`}
-                                                        className='border-border/70 bg-background/80 rounded-full border px-3 py-1 text-[11px] font-medium'>
-                                                        {formatBehaviorFlagLabel(behaviorFlag)}
-                                                    </span>
-                                                ))}
-                                            </div>
-                                        ) : null}
-                                        <div className='flex flex-wrap gap-2 pt-1'>
-                                            <span className='border-border/70 bg-background/80 rounded-full border px-3 py-1 text-[11px] font-medium'>
-                                                Runtime Profile: {formatRuntimeProfileLabel(mode.runtimeProfile ?? 'general')}
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    <div className='flex flex-wrap gap-2'>
-                                        <Button
-                                            type='button'
-                                            size='sm'
-                                            variant='outline'
-                                            onClick={() => {
-                                                input.onEdit(input.scope, mode.topLevelTab, mode.modeKey);
-                                            }}>
-                                            Edit
-                                        </Button>
-                                        <Button
-                                            type='button'
-                                            size='sm'
-                                            variant='outline'
-                                            onClick={() => {
-                                                input.onDelete(input.scope, mode.topLevelTab, mode.modeKey);
-                                            }}>
-                                            Delete
-                                        </Button>
-                                        <Button
-                                            type='button'
-                                            size='sm'
-                                            variant='outline'
-                                            disabled={input.isExporting}
-                                            onClick={() => {
-                                                input.onExport(input.scope, mode.topLevelTab, mode.modeKey);
-                                            }}>
-                                            {input.isExporting ? 'Loading…' : 'Load Export JSON'}
-                                        </Button>
-                                    </div>
-                                </article>
+                                    mode={mode}
+                                    scope={input.scope}
+                                    isExporting={input.isExporting}
+                                    onExport={input.onExport}
+                                    onEdit={input.onEdit}
+                                    onDelete={input.onDelete}
+                                />
                             ))}
                         </div>
                     </div>
@@ -853,3 +778,125 @@ export function FileBackedModeInventorySection(input: {
         </div>
     );
 }
+
+export function DelegatedWorkerModeInventorySection(input: {
+    scope: 'global' | 'workspace';
+    items: FileBackedCustomModeSettingsItem[];
+    isExporting: boolean;
+    onExport: (scope: 'global' | 'workspace', topLevelTab: TopLevelTab, modeKey: string) => void;
+    onEdit: (scope: 'global' | 'workspace', topLevelTab: TopLevelTab, modeKey: string) => void;
+    onDelete: (scope: 'global' | 'workspace', topLevelTab: TopLevelTab, modeKey: string) => void;
+}) {
+    if (input.items.length === 0) {
+        return null;
+    }
+
+    return (
+        <div className='space-y-3'>
+            <div className='space-y-1'>
+                <h6 className='text-sm font-semibold'>
+                    {input.scope === 'global' ? 'Global' : 'Workspace'} Delegated Worker Modes
+                </h6>
+                <p className='text-muted-foreground text-sm leading-6'>
+                    These modes are persisted and editable, but they stay out of normal session selection because they are delegated-only.
+                </p>
+            </div>
+            <div className='grid gap-4 xl:grid-cols-2'>
+                {input.items.map((mode) => (
+                    <ModeInventoryCard
+                        key={`${input.scope}:${mode.topLevelTab}:${mode.modeKey}`}
+                        mode={mode}
+                        scope={input.scope}
+                        isExporting={input.isExporting}
+                        onExport={input.onExport}
+                        onEdit={input.onEdit}
+                        onDelete={input.onDelete}
+                    />
+                ))}
+            </div>
+        </div>
+    );
+}
+
+export function ModeDraftInventorySection(input: {
+    drafts: ModeDraftRecord[];
+    isBusy: boolean;
+    onOpenDraft: (draft: ModeDraftRecord) => void;
+    onValidateDraft: (draftId: string) => void;
+    onApplyDraft: (draftId: string) => void;
+    onDiscardDraft: (draftId: string) => void;
+}) {
+    if (input.drafts.length === 0) {
+        return (
+            <div className='border-border/70 bg-card/40 rounded-[24px] border p-5'>
+                <p className='text-sm font-semibold'>No mode drafts in review</p>
+                <p className='text-muted-foreground mt-2 text-sm leading-6'>
+                    Create a draft or import JSON above to review modes before they touch the live registry.
+                </p>
+            </div>
+        );
+    }
+
+    return (
+        <div className='space-y-3'>
+            <div className='space-y-1'>
+                <h6 className='text-sm font-semibold'>Mode Draft Review</h6>
+                <p className='text-muted-foreground text-sm leading-6'>
+                    Invalid drafts stay here until you update or discard them. Only valid drafts can be applied.
+                </p>
+            </div>
+            <div className='grid gap-4 xl:grid-cols-2'>
+                {input.drafts.map((draft) => (
+                    <article key={draft.id} className='border-border/70 bg-card/50 space-y-3 rounded-[24px] border p-5'>
+                        <div className='space-y-1'>
+                            <div className='flex flex-wrap items-center justify-between gap-3'>
+                                <h6 className='text-sm font-semibold'>{draft.mode.name ?? draft.mode.slug ?? draft.id}</h6>
+                                <span className='border-border/70 bg-background/80 rounded-full border px-3 py-1 text-[11px] font-medium'>
+                                    {draft.validationState}
+                                </span>
+                            </div>
+                            <p className='text-muted-foreground text-sm leading-6'>
+                                Source: {formatDelimitedLabel(draft.sourceKind)} · Scope:{' '}
+                                {draft.scope === 'global' ? 'Global' : 'Workspace'}
+                            </p>
+                            {draft.mode.authoringRole && draft.mode.roleTemplate ? (
+                                <MetadataSummary
+                                    item={{
+                                        ...getModeRoleTemplateDefinition(draft.mode.roleTemplate),
+                                    }}
+                                />
+                            ) : null}
+                            {draft.validationErrors.length > 0 ? (
+                                <div className='space-y-2 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-3 py-3 text-sm text-amber-900 dark:text-amber-100'>
+                                    {draft.validationErrors.map((error) => (
+                                        <p key={error}>{error}</p>
+                                    ))}
+                                </div>
+                            ) : null}
+                        </div>
+                        <div className='flex flex-wrap gap-2'>
+                            <Button type='button' size='sm' variant='outline' onClick={() => input.onOpenDraft(draft)}>
+                                Review
+                            </Button>
+                            <Button type='button' size='sm' variant='outline' disabled={input.isBusy} onClick={() => input.onValidateDraft(draft.id)}>
+                                Validate
+                            </Button>
+                            <Button
+                                type='button'
+                                size='sm'
+                                disabled={input.isBusy || draft.validationState !== 'valid'}
+                                onClick={() => input.onApplyDraft(draft.id)}>
+                                Apply
+                            </Button>
+                            <Button type='button' size='sm' variant='destructive' disabled={input.isBusy} onClick={() => input.onDiscardDraft(draft.id)}>
+                                Discard
+                            </Button>
+                        </div>
+                    </article>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+export { formatTopLevelLabel };

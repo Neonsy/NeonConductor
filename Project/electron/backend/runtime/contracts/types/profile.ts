@@ -1,6 +1,7 @@
-import type { ExecutionPreset } from '@/app/backend/runtime/contracts/enums';
+import type { ExecutionPreset, InternalModelRole } from '@/app/backend/runtime/contracts/enums';
 import type { ProfileInput } from '@/app/backend/runtime/contracts/types/common';
 import type { RuntimeProviderId, UtilityModelConsumerId } from '@/shared/contracts';
+import type { WorkflowRoutingTargetKey } from '@/app/backend/runtime/contracts/workflowRouting';
 
 export interface ProfileCreateInput {
     name?: string;
@@ -61,4 +62,33 @@ export interface MemoryRetrievalModelPreference {
 export interface ProfileSetMemoryRetrievalModelInput extends ProfileInput {
     providerId?: RuntimeProviderId;
     modelId?: string;
+}
+
+export type InternalModelRoleDiagnosticStatus = 'configured' | 'fallback' | 'unconfigured';
+
+export interface InternalModelRoleDiagnosticRecord {
+    role: InternalModelRole;
+    label: string;
+    status: InternalModelRoleDiagnosticStatus;
+    providerId?: RuntimeProviderId;
+    modelId?: string;
+    sourceLabel: string;
+    detail?: string;
+}
+
+export interface PlannerTargetDiagnosticRecord {
+    targetKey: WorkflowRoutingTargetKey;
+    label: string;
+    status: InternalModelRoleDiagnosticStatus;
+    providerId?: RuntimeProviderId;
+    modelId?: string;
+    sourceLabel: string;
+    resolvedTargetKey: WorkflowRoutingTargetKey;
+    fellBackToPlanning: boolean;
+}
+
+export interface InternalModelRoleDiagnostics {
+    roles: InternalModelRoleDiagnosticRecord[];
+    plannerTargets: PlannerTargetDiagnosticRecord[];
+    updatedAt: string;
 }

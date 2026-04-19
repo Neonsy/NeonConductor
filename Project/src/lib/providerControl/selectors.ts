@@ -58,6 +58,12 @@ export function getProviderControlWorkflowRoutingPreferences(
     return snapshot?.workflowRoutingPreferences ?? [];
 }
 
+export function getProviderControlInternalModelRoleDiagnostics(
+    snapshot: ProviderControlSnapshot | undefined
+): ProviderControlSnapshot['internalModelRoleDiagnostics'] | undefined {
+    return snapshot?.internalModelRoleDiagnostics;
+}
+
 export function findProviderControlWorkflowRoutingPreference(
     snapshot: ProviderControlSnapshot | undefined,
     targetKey: WorkflowRoutingTargetKey

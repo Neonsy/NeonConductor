@@ -33,10 +33,28 @@ function buildMode(input: {
         profileId: 'profile_default',
         topLevelTab: 'agent',
         modeKey: 'code',
+        authoringRole: 'single_task_agent',
+        roleTemplate:
+            input.planningOnly || input.workflowCapabilities?.includes('planning')
+                ? 'single_task_agent/plan'
+                : 'single_task_agent/apply',
+        internalModelRole:
+            input.planningOnly || input.workflowCapabilities?.includes('planning') ? 'planner' : 'apply',
+        delegatedOnly: false,
+        sessionSelectable: true,
         label: 'Agent Code',
         assetKey: 'agent.code',
         prompt: {},
         executionPolicy: {
+            authoringRole: 'single_task_agent',
+            roleTemplate:
+                input.planningOnly || input.workflowCapabilities?.includes('planning')
+                    ? 'single_task_agent/plan'
+                    : 'single_task_agent/apply',
+            internalModelRole:
+                input.planningOnly || input.workflowCapabilities?.includes('planning') ? 'planner' : 'apply',
+            delegatedOnly: false,
+            sessionSelectable: true,
             toolCapabilities: input.toolCapabilities,
             ...(input.planningOnly ? { planningOnly: true } : {}),
             ...(input.workflowCapabilities ? { workflowCapabilities: input.workflowCapabilities } : {}),

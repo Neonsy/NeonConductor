@@ -14,6 +14,7 @@ import {
     memoryEvidenceStore,
     memoryRevisionStore,
     mcpStore,
+    modeDraftStore,
     modeStore,
     permissionStore,
     providerSecretStore,
@@ -68,6 +69,42 @@ describe('persistence stores: runtime domain', () => {
         await builtInModePromptOverrideStore.delete(profileId, 'agent', 'code');
         const removed = await builtInModePromptOverrideStore.getByProfileTabMode(profileId, 'agent', 'code');
         expect(removed).toBeNull();
+    });
+
+    it('supports persisted mode drafts with validation state', async () => {
+        const profileId = getDefaultProfileId();
+
+        const initial = await modeDraftStore.listByProfile(profileId);
+        expect(initial).toEqual([]);
+
+        const saved = await modeDraftStore.upsert({
+            profileId,
+            scope: 'global',
+            sourceKind: 'portable_json_v2',
+            sourceText: '{"version":2}',
+            mode: {
+                slug: 'review',
+                name: 'Review',
+                authoringRole: 'single_task_agent',
+                roleTemplate: 'single_task_agent/review',
+            },
+            validationState: 'valid',
+            validationErrors: [],
+        });
+        expect(saved.mode).toEqual({
+            slug: 'review',
+            name: 'Review',
+            authoringRole: 'single_task_agent',
+            roleTemplate: 'single_task_agent/review',
+        });
+        expect(saved.validationState).toBe('valid');
+
+        const persisted = await modeDraftStore.getById(profileId, saved.id);
+        expect(persisted?.mode.roleTemplate).toBe('single_task_agent/review');
+        expect(persisted?.sourceKind).toBe('portable_json_v2');
+
+        await modeDraftStore.delete(profileId, saved.id);
+        expect(await modeDraftStore.getById(profileId, saved.id)).toBeNull();
     });
 
     it('supports permission store decision transitions', async () => {
@@ -647,7 +684,11 @@ describe('persistence stores: runtime domain', () => {
         expect(
             modes.find((mode) => mode.topLevelTab === 'agent' && mode.modeKey === 'plan')?.executionPolicy
         ).toEqual({
-            planningOnly: true,
+            authoringRole: 'single_task_agent',
+            roleTemplate: 'single_task_agent/plan',
+            internalModelRole: 'planner',
+            delegatedOnly: false,
+            sessionSelectable: true,
             toolCapabilities: ['filesystem_read', 'mcp'],
             workflowCapabilities: ['planning', 'artifact_view', 'recovery'],
             behaviorFlags: ['approval_gated', 'artifact_producing', 'read_only_execution'],
@@ -657,6 +698,11 @@ describe('persistence stores: runtime domain', () => {
             modes.find((mode) => mode.topLevelTab === 'orchestrator' && mode.modeKey === 'orchestrate')
                 ?.executionPolicy
         ).toEqual({
+            authoringRole: 'orchestrator_primary',
+            roleTemplate: 'orchestrator_primary/orchestrate',
+            internalModelRole: 'apply',
+            delegatedOnly: false,
+            sessionSelectable: true,
             toolCapabilities: ['filesystem_read'],
             workflowCapabilities: ['orchestration', 'artifact_view'],
             behaviorFlags: ['checkpoint_eligible', 'artifact_producing', 'child_worker_capable'],

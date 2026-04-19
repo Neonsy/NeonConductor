@@ -10,6 +10,7 @@ import { projectProviderSettingsControlPlaneCache } from '@/web/components/setti
 import { createFailClosedAsyncAction } from '@/web/lib/async/createFailClosedAsyncAction';
 import {
     getProviderControlDefaults,
+    getProviderControlInternalModelRoleDiagnostics,
     getProviderControlWorkflowRoutingPreferences,
     listProviderControlModels,
     listProviderControlProviders,
@@ -121,6 +122,7 @@ export function useProviderWorkflowRoutingController(input: {
     const providerModels = listProviderControlModels(providerControl);
     const defaults = getProviderControlDefaults(providerControl);
     const workflowRoutingPreferences = getProviderControlWorkflowRoutingPreferences(providerControl);
+    const internalModelRoleDiagnostics = getProviderControlInternalModelRoleDiagnostics(providerControl);
     const projectionProviderId = providers[0]?.id ?? 'openai';
 
     const setWorkflowRoutingPreferenceMutation = trpc.provider.setWorkflowRoutingPreference.useMutation({
@@ -213,6 +215,13 @@ export function useProviderWorkflowRoutingController(input: {
             (option) => option.providerId === selectedProviderId && option.id === selectedModelId
         );
         const sourceLabel = (() => {
+            const plannerTargetDiagnostic = internalModelRoleDiagnostics?.plannerTargets.find(
+                (diagnostic) => diagnostic.targetKey === targetKey
+            );
+            if (plannerTargetDiagnostic) {
+                return plannerTargetDiagnostic.sourceLabel;
+            }
+
             if (!effectivePreference) {
                 return 'Using shared fallback';
             }

@@ -36,9 +36,52 @@ function createResolvedMode(modeKey: string, topLevelTab: 'chat' | 'agent' | 'or
             profileId: runtimeContractProfileId,
             topLevelTab,
             modeKey,
+            authoringRole:
+                topLevelTab === 'chat'
+                    ? 'chat'
+                    : topLevelTab === 'orchestrator'
+                      ? 'orchestrator_primary'
+                      : 'single_task_agent',
+            roleTemplate:
+                topLevelTab === 'chat'
+                    ? 'chat/default'
+                    : topLevelTab === 'orchestrator'
+                      ? modeKey === 'orchestrate'
+                          ? 'orchestrator_primary/orchestrate'
+                          : 'orchestrator_primary/debug'
+                      : modeKey === 'plan'
+                        ? 'single_task_agent/plan'
+                        : modeKey === 'ask'
+                          ? 'single_task_agent/ask'
+                          : 'single_task_agent/apply',
+            internalModelRole: modeKey === 'plan' ? 'planner' : topLevelTab === 'chat' ? 'chat' : 'apply',
+            delegatedOnly: false,
+            sessionSelectable: true,
             label: `${topLevelTab} ${modeKey}`,
             prompt: {},
-            executionPolicy: {},
+            executionPolicy: {
+                authoringRole:
+                    topLevelTab === 'chat'
+                        ? 'chat'
+                        : topLevelTab === 'orchestrator'
+                          ? 'orchestrator_primary'
+                          : 'single_task_agent',
+                roleTemplate:
+                    topLevelTab === 'chat'
+                        ? 'chat/default'
+                        : topLevelTab === 'orchestrator'
+                          ? modeKey === 'orchestrate'
+                              ? 'orchestrator_primary/orchestrate'
+                              : 'orchestrator_primary/debug'
+                          : modeKey === 'plan'
+                            ? 'single_task_agent/plan'
+                            : modeKey === 'ask'
+                              ? 'single_task_agent/ask'
+                              : 'single_task_agent/apply',
+                internalModelRole: modeKey === 'plan' ? 'planner' : topLevelTab === 'chat' ? 'chat' : 'apply',
+                delegatedOnly: false,
+                sessionSelectable: true,
+            },
             source: 'system',
             enabled: true,
             createdAt: new Date().toISOString(),

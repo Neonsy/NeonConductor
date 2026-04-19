@@ -2,12 +2,13 @@ import type {
     BuiltInToolMetadataEntry,
     BuiltInModePromptSettingsItem,
     FileBackedCustomModeSettingsItem,
-    BehaviorFlag,
+    ModeAuthoringRole,
+    ModeDraftRecord,
+    ModeRoleTemplateKey,
     RuntimeRequirementProfile,
-    ToolCapability,
-    WorkflowCapability,
     TopLevelTab,
 } from '@/shared/contracts';
+import { listModeRoleTemplateDefinitions } from '@/shared/modeRoleCatalog';
 
 export type FileBackedModeItemsByTab = Record<TopLevelTab, FileBackedCustomModeSettingsItem[]>;
 
@@ -27,31 +28,37 @@ export type CustomModeScope = 'global' | 'workspace';
 
 export interface CustomModeEditorDraftBase {
     scope: CustomModeScope;
-    topLevelTab: TopLevelTab;
     slug: string;
     name: string;
+    authoringRole: ModeAuthoringRole;
+    roleTemplate: ModeRoleTemplateKey;
     description: string;
     roleDefinition: string;
     customInstructions: string;
     whenToUse: string;
     tagsText: string;
-    selectedToolCapabilities: ToolCapability[];
-    selectedWorkflowCapabilities: WorkflowCapability[];
-    selectedBehaviorFlags: BehaviorFlag[];
-    selectedRuntimeProfile: RuntimeRequirementProfile;
     deleteConfirmed: boolean;
+    sourceText: string;
 }
 
 export interface CreateCustomModeEditorDraft extends CustomModeEditorDraftBase {
     kind: 'create';
 }
 
+export interface DraftCustomModeEditorDraft extends CustomModeEditorDraftBase {
+    kind: 'draft';
+    draftId: string;
+    validationState: ModeDraftRecord['validationState'];
+    validationErrors: string[];
+}
+
 export interface EditCustomModeEditorDraft extends CustomModeEditorDraftBase {
     kind: 'edit';
+    topLevelTab: TopLevelTab;
     modeKey: string;
 }
 
-export type CustomModeEditorDraft = CreateCustomModeEditorDraft | EditCustomModeEditorDraft;
+export type CustomModeEditorDraft = CreateCustomModeEditorDraft | DraftCustomModeEditorDraft | EditCustomModeEditorDraft;
 
 export interface PromptSettingsSnapshot {
     appGlobalInstructions: string;
@@ -62,6 +69,11 @@ export interface PromptSettingsSnapshot {
         global: Record<TopLevelTab, FileBackedCustomModeSettingsItem[]>;
         workspace?: Record<TopLevelTab, FileBackedCustomModeSettingsItem[]>;
     };
+    delegatedWorkerModes: {
+        global: FileBackedCustomModeSettingsItem[];
+        workspace?: FileBackedCustomModeSettingsItem[];
+    };
+    modeDrafts: ModeDraftRecord[];
 }
 
 export type BuiltInToolMetadataSnapshot = BuiltInToolMetadataEntry[];
@@ -101,14 +113,6 @@ export function parseListText(value: string): string[] | undefined {
     return items.length > 0 ? Array.from(new Set(items)) : undefined;
 }
 
-export function toggleToolCapability(value: ToolCapability[], capability: ToolCapability): ToolCapability[] {
-    return value.includes(capability) ? value.filter((candidate) => candidate !== capability) : [...value, capability];
-}
-
-export function toggleListValue<TValue extends string>(value: TValue[], candidate: TValue): TValue[] {
-    return value.includes(candidate) ? value.filter((item) => item !== candidate) : [...value, candidate];
-}
-
 export function formatDelimitedLabel(value: string): string {
     return value
         .split(/[_-]+/g)
@@ -140,18 +144,27 @@ export function createEmptyCustomModeEditorDraft(scope: CustomModeScope): Create
     return {
         kind: 'create',
         scope,
-        topLevelTab: 'chat',
         slug: '',
         name: '',
+        authoringRole: 'chat',
+        roleTemplate: 'chat/default',
         description: '',
         roleDefinition: '',
         customInstructions: '',
         whenToUse: '',
         tagsText: '',
-        selectedToolCapabilities: [],
-        selectedWorkflowCapabilities: [],
-        selectedBehaviorFlags: [],
-        selectedRuntimeProfile: 'general',
         deleteConfirmed: false,
+        sourceText: '',
     };
+}
+
+export function resolveCustomModeEditorTopLevelTab(draft: CustomModeEditorDraft): TopLevelTab {
+    return draft.kind === 'edit'
+        ? draft.topLevelTab
+        : listModeRoleTemplateDefinitions().find((definition) => definition.roleTemplate === draft.roleTemplate)
+              ?.topLevelTab ?? 'agent';
+}
+
+export function getModeRoleTemplateOptions(authoringRole: ModeAuthoringRole) {
+    return listModeRoleTemplateDefinitions().filter((definition) => definition.authoringRole === authoringRole);
 }

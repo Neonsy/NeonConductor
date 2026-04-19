@@ -39,6 +39,7 @@ import type {
     KiloAccountContext,
     MarketplacePackage,
     ModeDefinition,
+    ModeDraftRecord,
     ModePromptDefinition,
     OpenAIExecutionMode,
     PlanAdvancedSnapshotView,
@@ -1055,6 +1056,7 @@ export interface OpenAISubscriptionRateLimitsSummary {
 }
 
 export type ModeDefinitionRecord = ModeDefinition;
+export type ModeDraftRecordType = ModeDraftRecord;
 
 export type RulesetDefinitionRecord = RulesetDefinition;
 

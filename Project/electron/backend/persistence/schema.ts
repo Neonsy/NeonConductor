@@ -668,6 +668,20 @@ export interface ModeDefinitionsTable {
     updated_at: string;
 }
 
+export interface ModeDraftsTable {
+    id: string;
+    profile_id: string;
+    scope: string;
+    workspace_fingerprint: string | null;
+    source_kind: string;
+    source_text: string | null;
+    draft_json: string;
+    validation_state: string;
+    validation_errors_json: string;
+    created_at: string;
+    updated_at: string;
+}
+
 export interface RulesetsTable {
     id: string;
     profile_id: string;
@@ -1183,6 +1197,7 @@ export interface DatabaseSchema {
     checkpoint_changeset_entries: CheckpointChangesetEntriesTable;
     sandboxes: SandboxesTable;
     mode_definitions: ModeDefinitionsTable;
+    mode_drafts: ModeDraftsTable;
     rulesets: RulesetsTable;
     skillfiles: SkillfilesTable;
     marketplace_packages: MarketplacePackagesTable;

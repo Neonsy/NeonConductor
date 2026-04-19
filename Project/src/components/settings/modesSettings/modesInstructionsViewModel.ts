@@ -172,8 +172,8 @@ export function buildModesInstructionsViewModel(input: {
             })),
         },
         modeLibrary: {
-            title: 'File-Backed Custom Modes',
-            description: 'Manage app-level file-backed custom modes while keeping the registry roots as the only source of truth.',
+            title: 'Live Mode Library',
+            description: 'Review the active file-backed mode library after draft validation and promotion have written into the registry roots.',
             global: input.fileBackedGlobalModes,
             workspace: input.fileBackedWorkspaceModes,
             hasWorkspaceScope: input.hasWorkspaceScope,

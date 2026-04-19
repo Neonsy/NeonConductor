@@ -113,7 +113,7 @@ export const MODES_SETTINGS_SUBSECTIONS: ReadonlyArray<SettingsSubsectionDefinit
     {
         id: 'instructions',
         label: 'Shared Modes & Instructions',
-        description: 'Manage shared instructions, built-in mode behavior, and portable custom mode files.',
+        description: 'Manage shared instructions, role-driven mode authoring, and draft-first custom mode promotion.',
         availability: 'available',
     },
 ];
@@ -146,8 +146,7 @@ export const PROFILE_SETTINGS_SUBSECTIONS: ReadonlyArray<SettingsSubsectionDefin
     {
         id: 'memoryRetrieval',
         label: 'Memory Retrieval',
-        description:
-            'Reserved for the future model used by semantic memory retrieval and other memory-specific background work.',
+        description: 'Choose the dedicated internal memory retrieval role target for semantic retrieval work.',
         availability: 'available',
     },
 ];

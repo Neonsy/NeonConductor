@@ -4,6 +4,7 @@ import type {
     SkillfileDefinitionRecord,
 } from '@/app/backend/persistence/types';
 import type { RegistryPresetKey, RegistryScope } from '@/app/backend/runtime/contracts';
+import { modeIsSessionSelectable } from '@/app/backend/runtime/services/mode/metadata';
 
 function modeLayerPriority(mode: ModeDefinitionRecord): number {
     if (mode.scope === 'session') {
@@ -73,6 +74,9 @@ export function resolveModeDefinitions(input: {
 }): ModeDefinitionRecord[] {
     const filtered = input.modes.filter((mode) => {
         if (!mode.enabled || mode.topLevelTab !== input.topLevelTab) {
+            return false;
+        }
+        if (!modeIsSessionSelectable(mode)) {
             return false;
         }
         if (mode.scope === 'workspace') {

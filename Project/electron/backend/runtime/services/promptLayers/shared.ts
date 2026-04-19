@@ -1,6 +1,7 @@
 import {
     appPromptLayerSettingsStore,
     builtInModePromptOverrideStore,
+    modeDraftStore,
     modeStore,
     settingsStore,
 } from '@/app/backend/persistence/stores';
@@ -10,23 +11,25 @@ import {
     topLevelTabs,
     type BuiltInModePromptSettingsItem,
     type ModeDefinition,
-    type ModeExecutionPolicy,
     type PromptLayerCustomModePayload,
     type PromptLayerCustomModeRecord,
     type PromptLayerSettings,
-    type ToolCapability,
     type TopLevelTab,
 } from '@/app/backend/runtime/contracts';
 import { errOp, okOp, type OperationalResult } from '@/app/backend/runtime/services/common/operationalError';
 import {
+    getModeAuthoringRole,
     getModeBehaviorFlags,
+    getModeInternalModelRole,
+    getModeRoleTemplate,
     getModeRuntimeProfile,
     getModeWorkflowCapabilities,
+    modeIsDelegatedOnly,
+    modeIsSessionSelectable,
 } from '@/app/backend/runtime/services/mode/metadata';
 import { buildCanonicalCustomModePayload } from '@/app/backend/runtime/services/promptLayers/customModePortability';
 import { buildDiscoveredAssets, replaceDiscoveredModes } from '@/app/backend/runtime/services/registry/discovery';
 import { resolveRegistryPaths } from '@/app/backend/runtime/services/registry/filesystem';
-
 
 export const PROFILE_GLOBAL_INSTRUCTIONS_KEY = 'prompt_layer.profile_global_instructions';
 const TOP_LEVEL_INSTRUCTIONS_KEY_PREFIX = 'prompt_layer.top_level.';
@@ -71,10 +74,15 @@ function sortFileBackedCustomModes(
 async function readFileBackedCustomModes(input: {
     profileId: string;
     workspaceFingerprint?: string;
-}): Promise<PromptLayerSettings['fileBackedCustomModes']> {
+}): Promise<{
+    fileBackedCustomModes: PromptLayerSettings['fileBackedCustomModes'];
+    delegatedWorkerModes: PromptLayerSettings['delegatedWorkerModes'];
+}> {
     const storedModes = await modeStore.listByProfile(input.profileId);
     const globalModes = createEmptyCustomModeGroups();
     const workspaceModes = createEmptyCustomModeGroups();
+    const globalDelegatedModes: FileBackedCustomModeSettingsItem[] = [];
+    const workspaceDelegatedModes: FileBackedCustomModeSettingsItem[] = [];
 
     for (const mode of storedModes) {
         if (mode.scope === 'system' || mode.sourceKind === 'system_seed' || mode.scope === 'session') {
@@ -94,6 +102,11 @@ async function readFileBackedCustomModes(input: {
             topLevelTab: mode.topLevelTab,
             modeKey: mode.modeKey,
             label: mode.label,
+            authoringRole: getModeAuthoringRole(mode.executionPolicy),
+            roleTemplate: getModeRoleTemplate(mode.executionPolicy),
+            internalModelRole: getModeInternalModelRole(mode.executionPolicy),
+            delegatedOnly: modeIsDelegatedOnly(mode),
+            sessionSelectable: modeIsSessionSelectable(mode),
             ...(mode.description ? { description: mode.description } : {}),
             ...(mode.whenToUse ? { whenToUse: mode.whenToUse } : {}),
             ...(mode.tags ? { tags: mode.tags } : {}),
@@ -110,6 +123,15 @@ async function readFileBackedCustomModes(input: {
                 ? { runtimeProfile }
                 : {}),
         };
+        if (item.delegatedOnly) {
+            if (mode.scope === 'workspace') {
+                workspaceDelegatedModes.push(item);
+            } else {
+                globalDelegatedModes.push(item);
+            }
+            continue;
+        }
+
         if (mode.scope === 'workspace') {
             workspaceModes[mode.topLevelTab].push(item);
             continue;
@@ -122,11 +144,33 @@ async function readFileBackedCustomModes(input: {
         globalModes[topLevelTab].sort(sortFileBackedCustomModes);
         workspaceModes[topLevelTab].sort(sortFileBackedCustomModes);
     }
+    globalDelegatedModes.sort(sortFileBackedCustomModes);
+    workspaceDelegatedModes.sort(sortFileBackedCustomModes);
 
     return {
-        global: globalModes,
-        ...(input.workspaceFingerprint ? { workspace: workspaceModes } : {}),
+        fileBackedCustomModes: {
+            global: globalModes,
+            ...(input.workspaceFingerprint ? { workspace: workspaceModes } : {}),
+        },
+        delegatedWorkerModes: {
+            global: globalDelegatedModes,
+            ...(input.workspaceFingerprint ? { workspace: workspaceDelegatedModes } : {}),
+        },
     };
+}
+
+async function readModeDrafts(input: {
+    profileId: string;
+    workspaceFingerprint?: string;
+}): Promise<PromptLayerSettings['modeDrafts']> {
+    const drafts = await modeDraftStore.listByProfile(input.profileId);
+    return drafts.filter((draft) => {
+        if (draft.scope === 'workspace') {
+            return draft.workspaceFingerprint === input.workspaceFingerprint;
+        }
+
+        return true;
+    });
 }
 
 export async function readBuiltInModes(
@@ -151,6 +195,9 @@ export async function readBuiltInModes(
             label: mode.label,
             prompt: override ? normalizeModePromptDefinition({ ...mode.prompt, ...override.prompt }) : mode.prompt,
             hasOverride: override !== undefined,
+            authoringRole: getModeAuthoringRole(mode.executionPolicy),
+            roleTemplate: getModeRoleTemplate(mode.executionPolicy),
+            internalModelRole: getModeInternalModelRole(mode.executionPolicy),
             ...(mode.executionPolicy.toolCapabilities ? { toolCapabilities: mode.executionPolicy.toolCapabilities } : {}),
             ...(workflowCapabilities.length > 0 ? { workflowCapabilities } : {}),
             ...(behaviorFlags.length > 0 ? { behaviorFlags } : {}),
@@ -198,13 +245,14 @@ export async function readPromptLayerSettings(input: {
     profileId: string;
     workspaceFingerprint?: string;
 }): Promise<PromptLayerSettings> {
-    const [appSettings, profileGlobalInstructions, topLevelInstructions, builtInModes, fileBackedCustomModes] =
+    const [appSettings, profileGlobalInstructions, topLevelInstructions, builtInModes, customModeInventories, modeDrafts] =
         await Promise.all([
             appPromptLayerSettingsStore.get(),
             settingsStore.getStringOptional(input.profileId, PROFILE_GLOBAL_INSTRUCTIONS_KEY),
             readTopLevelInstructions(input.profileId),
             readBuiltInModes(input.profileId),
             readFileBackedCustomModes(input),
+            readModeDrafts(input),
         ]);
 
     return {
@@ -212,7 +260,9 @@ export async function readPromptLayerSettings(input: {
         profileGlobalInstructions: normalizeInstructions(profileGlobalInstructions),
         topLevelInstructions,
         builtInModes,
-        fileBackedCustomModes,
+        fileBackedCustomModes: customModeInventories.fileBackedCustomModes,
+        delegatedWorkerModes: customModeInventories.delegatedWorkerModes,
+        modeDrafts,
     };
 }
 
@@ -244,6 +294,11 @@ export function toPromptLayerCustomModeRecord(mode: ModeDefinition): PromptLayer
         modeKey: mode.modeKey,
         slug: mode.modeKey,
         name: mode.label,
+        authoringRole: getModeAuthoringRole(mode.executionPolicy),
+        roleTemplate: getModeRoleTemplate(mode.executionPolicy),
+        internalModelRole: getModeInternalModelRole(mode.executionPolicy),
+        delegatedOnly: modeIsDelegatedOnly(mode),
+        sessionSelectable: modeIsSessionSelectable(mode),
         ...(mode.description ? { description: mode.description } : {}),
         ...(mode.prompt.roleDefinition ? { roleDefinition: mode.prompt.roleDefinition } : {}),
         ...(mode.prompt.customInstructions ? { customInstructions: mode.prompt.customInstructions } : {}),
@@ -265,28 +320,24 @@ export function toPromptLayerCustomModeRecord(mode: ModeDefinition): PromptLayer
 export function buildEditableCustomModePayload(input: {
     slug: string;
     name: string;
+    authoringRole: PromptLayerCustomModePayload['authoringRole'];
+    roleTemplate: PromptLayerCustomModePayload['roleTemplate'];
     description?: string;
     roleDefinition?: string;
     customInstructions?: string;
     whenToUse?: string;
     tags?: string[];
-    toolCapabilities?: ToolCapability[];
-    workflowCapabilities?: ModeExecutionPolicy['workflowCapabilities'];
-    behaviorFlags?: ModeExecutionPolicy['behaviorFlags'];
-    runtimeProfile?: ModeExecutionPolicy['runtimeProfile'];
 }): PromptLayerCustomModePayload {
     return buildCanonicalCustomModePayload({
         slug: input.slug,
         name: input.name,
+        authoringRole: input.authoringRole,
+        roleTemplate: input.roleTemplate,
         ...(input.description ? { description: input.description } : {}),
         ...(input.roleDefinition ? { roleDefinition: input.roleDefinition } : {}),
         ...(input.customInstructions ? { customInstructions: input.customInstructions } : {}),
         ...(input.whenToUse ? { whenToUse: input.whenToUse } : {}),
         ...(input.tags ? { tags: input.tags } : {}),
-        ...(input.toolCapabilities ? { toolCapabilities: input.toolCapabilities } : {}),
-        ...(input.workflowCapabilities ? { workflowCapabilities: input.workflowCapabilities } : {}),
-        ...(input.behaviorFlags ? { behaviorFlags: input.behaviorFlags } : {}),
-        ...(input.runtimeProfile ? { runtimeProfile: input.runtimeProfile } : {}),
     });
 }
 

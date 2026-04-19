@@ -1,6 +1,11 @@
 export {
+    getModeAuthoringRole,
     getModeBehaviorFlags,
+    getModeInternalModelRole,
+    getModeRoleTemplate,
     getModeRuntimeProfile,
+    modeIsDelegatedOnly,
+    modeIsSessionSelectable,
     getModeWorkflowCapabilities,
     modeCanExecuteRuns,
     modeHasBehaviorFlag,

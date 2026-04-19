@@ -6,13 +6,23 @@ import type {
     ToolCapability,
     WorkflowCapability,
 } from '@/shared/contracts';
+import { normalizeModeExecutionMetadata } from '@/shared/modeRoleCatalog';
 
 type ModePolicyLike = Pick<
     ModeExecutionPolicy,
-    'planningOnly' | 'toolCapabilities' | 'workflowCapabilities' | 'behaviorFlags' | 'runtimeProfile'
+    | 'authoringRole'
+    | 'roleTemplate'
+    | 'internalModelRole'
+    | 'delegatedOnly'
+    | 'sessionSelectable'
+    | 'planningOnly'
+    | 'toolCapabilities'
+    | 'workflowCapabilities'
+    | 'behaviorFlags'
+    | 'runtimeProfile'
 >;
 
-type ModeLike = Pick<ModeDefinition, 'executionPolicy'>;
+type ModeLike = Pick<ModeDefinition, 'topLevelTab' | 'modeKey' | 'executionPolicy'>;
 type ModePolicySource = ModePolicyLike | ModeLike | undefined;
 
 function uniqueValues<T extends string>(values: readonly T[] | undefined): T[] {
@@ -23,12 +33,18 @@ function uniqueValues<T extends string>(values: readonly T[] | undefined): T[] {
     return Array.from(new Set(values));
 }
 
-function resolveModePolicy(source: ModePolicySource): ModePolicyLike {
+function resolveModePolicy(source: ModePolicySource): ReturnType<typeof normalizeModeExecutionMetadata> {
     if (!source) {
-        return {};
+        return normalizeModeExecutionMetadata({});
     }
 
-    return 'executionPolicy' in source ? source.executionPolicy : source;
+    return 'executionPolicy' in source
+        ? normalizeModeExecutionMetadata({
+              topLevelTab: source.topLevelTab,
+              modeKey: source.modeKey,
+              policy: source.executionPolicy,
+          })
+        : normalizeModeExecutionMetadata({ policy: source });
 }
 
 export function getModeToolCapabilities(policy: ModePolicySource): ToolCapability[] {
@@ -113,4 +129,24 @@ export function modeAllowsToolCapabilities(
 
 export function getModeRuntimeProfile(policy: ModePolicySource): RuntimeRequirementProfile | undefined {
     return resolveModePolicy(policy).runtimeProfile;
+}
+
+export function getModeAuthoringRole(policy: ModePolicySource) {
+    return resolveModePolicy(policy).authoringRole;
+}
+
+export function getModeRoleTemplate(policy: ModePolicySource) {
+    return resolveModePolicy(policy).roleTemplate;
+}
+
+export function getModeInternalModelRole(policy: ModePolicySource) {
+    return resolveModePolicy(policy).internalModelRole;
+}
+
+export function modeIsDelegatedOnly(mode: ModeLike | undefined): boolean {
+    return Boolean(mode && resolveModePolicy(mode).delegatedOnly);
+}
+
+export function modeIsSessionSelectable(mode: ModeLike | undefined): boolean {
+    return Boolean(mode && resolveModePolicy(mode).sessionSelectable);
 }

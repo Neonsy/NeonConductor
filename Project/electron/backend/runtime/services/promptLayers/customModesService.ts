@@ -12,10 +12,8 @@ import {
     buildCanonicalCustomModePayload,
     deletePortableModeFile,
     fileExists,
-    parsePortableCustomModeJson,
     renderCanonicalModeMarkdown,
     resolveCustomModeDirectory,
-    toCanonicalCustomModePayload,
     toPortableModePayload,
     writePortableModeFile,
 } from '@/app/backend/runtime/services/promptLayers/customModePortability';
@@ -71,13 +69,10 @@ export async function createCustomMode(input: {
     mode: PromptLayerCustomModePayload;
 }): Promise<OperationalResult<PromptLayerSettings>> {
     const payload = buildCanonicalCustomModePayload(input.mode);
-    const { modeKey, fileContent } = renderCanonicalModeMarkdown({
-        topLevelTab: input.topLevelTab,
-        payload,
-    });
+    const { topLevelTab, modeKey, fileContent } = renderCanonicalModeMarkdown({ payload });
     const existingMode = await findFileBackedCustomMode({
         profileId: input.profileId,
-        topLevelTab: input.topLevelTab,
+        topLevelTab,
         modeKey,
         scope: input.scope,
         ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
@@ -87,12 +82,12 @@ export async function createCustomMode(input: {
         scope: input.scope,
         ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
     });
-    const absolutePath = path.join(directory, `${input.topLevelTab}-${modeKey}.md`);
+    const absolutePath = path.join(directory, `${topLevelTab}-${modeKey}.md`);
     const exists = existingMode !== undefined || (await fileExists(absolutePath));
     if (exists) {
         return errOp(
             'invalid_input',
-            `A ${input.scope} file-backed mode already exists for "${input.topLevelTab}:${modeKey}".`
+            `A ${input.scope} file-backed mode already exists for "${topLevelTab}:${modeKey}".`
         );
     }
 
@@ -134,20 +129,15 @@ export async function updateCustomMode(input: {
     const payload = buildEditableCustomModePayload({
         slug: existingMode.modeKey,
         name: input.mode.name,
+        authoringRole: input.mode.authoringRole,
+        roleTemplate: input.mode.roleTemplate,
         ...(input.mode.description ? { description: input.mode.description } : {}),
         ...(input.mode.roleDefinition ? { roleDefinition: input.mode.roleDefinition } : {}),
         ...(input.mode.customInstructions ? { customInstructions: input.mode.customInstructions } : {}),
         ...(input.mode.whenToUse ? { whenToUse: input.mode.whenToUse } : {}),
         ...(input.mode.tags ? { tags: input.mode.tags } : {}),
-        ...(input.mode.toolCapabilities ? { toolCapabilities: input.mode.toolCapabilities } : {}),
-        ...(input.mode.workflowCapabilities ? { workflowCapabilities: input.mode.workflowCapabilities } : {}),
-        ...(input.mode.behaviorFlags ? { behaviorFlags: input.mode.behaviorFlags } : {}),
-        ...(input.mode.runtimeProfile ? { runtimeProfile: input.mode.runtimeProfile } : {}),
     });
-    const { fileContent } = renderCanonicalModeMarkdown({
-        topLevelTab: existingMode.topLevelTab,
-        payload,
-    });
+    const { fileContent } = renderCanonicalModeMarkdown({ payload });
 
     await writePortableModeFile({
         absolutePath: existingMode.originPath,
@@ -204,7 +194,7 @@ export async function deleteCustomMode(input: {
     return okOp(await getPromptLayerSettings(input.profileId, input.workspaceFingerprint));
 }
 
-export async function importCustomMode(input: {
+export async function importCustomMode(_input: {
     profileId: string;
     topLevelTab: TopLevelTab;
     scope: 'global' | 'workspace';
@@ -212,45 +202,5 @@ export async function importCustomMode(input: {
     jsonText: string;
     overwrite: boolean;
 }): Promise<OperationalResult<PromptLayerSettings>> {
-    const portablePayload = parsePortableCustomModeJson(input.jsonText);
-    const payload = toCanonicalCustomModePayload(portablePayload);
-    const { modeKey, fileContent } = renderCanonicalModeMarkdown({
-        topLevelTab: input.topLevelTab,
-        payload,
-    });
-    const existingMode = await findFileBackedCustomMode({
-        profileId: input.profileId,
-        topLevelTab: input.topLevelTab,
-        modeKey,
-        scope: input.scope,
-        ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
-    });
-    const directory = await resolveCustomModeDirectory({
-        profileId: input.profileId,
-        scope: input.scope,
-        ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
-    });
-    const absolutePath = existingMode?.originPath ?? path.join(directory, `${input.topLevelTab}-${modeKey}.md`);
-    const exists = existingMode !== undefined || (await fileExists(absolutePath));
-    if (exists && !input.overwrite) {
-        return errOp(
-            'invalid_input',
-            `A ${input.scope} file-backed mode already exists for "${input.topLevelTab}:${modeKey}". Re-run with overwrite confirmation to replace it.`
-        );
-    }
-
-    await writePortableModeFile({
-        absolutePath,
-        fileContent,
-    });
-    const refreshed = await refreshDiscoveredModesForScope({
-        profileId: input.profileId,
-        scope: input.scope,
-        ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
-    });
-    if (refreshed.isErr()) {
-        return errOp(refreshed.error.code, refreshed.error.message);
-    }
-
-    return okOp(await getPromptLayerSettings(input.profileId, input.workspaceFingerprint));
+    return errOp('invalid_input', 'Direct custom mode import has been replaced by draft-first import.');
 }

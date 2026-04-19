@@ -11,6 +11,7 @@ export type EntityIdPrefix =
     | 'chg'
     | 'thr'
     | 'sb'
+    | 'mdr'
     | 'run'
     | 'msg'
     | 'part'

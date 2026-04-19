@@ -5,6 +5,14 @@ import type { ProviderControlSnapshot, ProviderListItem } from '@/app/backend/pr
 
 import { resolveContextPreviewTarget } from '@/web/components/settings/contextSettings/contextTargetPreview';
 
+function createInternalModelRoleDiagnostics(): ProviderControlSnapshot['internalModelRoleDiagnostics'] {
+    return {
+        roles: [],
+        plannerTargets: [],
+        updatedAt: '2026-03-21T10:00:00.000Z',
+    };
+}
+
 function createProvider(input: {
     id: ProviderListItem['id'];
     label: string;
@@ -79,6 +87,7 @@ describe('resolveContextPreviewTarget', () => {
                 modelId: 'openai/gpt-5',
             },
             specialistDefaults: [],
+            internalModelRoleDiagnostics: createInternalModelRoleDiagnostics(),
             entries: [
                 {
                     provider,
@@ -117,6 +126,7 @@ describe('resolveContextPreviewTarget', () => {
                 modelId: 'openai/gpt-4.1',
             },
             specialistDefaults: [],
+            internalModelRoleDiagnostics: createInternalModelRoleDiagnostics(),
             entries: [
                 {
                     provider,

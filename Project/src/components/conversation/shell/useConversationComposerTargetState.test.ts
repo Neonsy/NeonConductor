@@ -7,6 +7,14 @@ import type { ProviderControlSnapshot, ProviderListItem } from '@/app/backend/pr
 
 import type { RuntimeShellBootstrap } from '@/shared/contracts';
 
+function createInternalModelRoleDiagnostics(): ProviderControlSnapshot['internalModelRoleDiagnostics'] {
+    return {
+        roles: [],
+        plannerTargets: [],
+        updatedAt: '2026-03-21T10:00:00.000Z',
+    };
+}
+
 function createProvider(input: {
     id: ProviderListItem['id'];
     label: string;
@@ -110,6 +118,7 @@ function createProviderControl(): ProviderControlSnapshot {
             modelId: 'openai/gpt-5',
         },
         specialistDefaults: [],
+        internalModelRoleDiagnostics: createInternalModelRoleDiagnostics(),
     };
 }
 

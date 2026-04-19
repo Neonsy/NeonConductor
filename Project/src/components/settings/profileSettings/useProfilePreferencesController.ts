@@ -253,6 +253,15 @@ export function useProfilePreferencesController(input: ProfilePreferencesControl
             ...PROGRESSIVE_QUERY_OPTIONS,
         }
     );
+    const internalModelRoleDiagnosticsQuery = trpc.profile.getInternalModelRoleDiagnostics.useQuery(
+        {
+            profileId: input.selection.selectedProfileIdForSettings,
+        },
+        {
+            enabled: Boolean(input.selection.selectedProfileIdForSettings),
+            ...PROGRESSIVE_QUERY_OPTIONS,
+        }
+    );
     const setUtilityModelMutation = trpc.profile.setUtilityModel.useMutation({
         onMutate: async (variables) => {
             await utils.profile.getUtilityModel.cancel({
@@ -546,6 +555,8 @@ export function useProfilePreferencesController(input: ProfilePreferencesControl
         setMemoryRetrievalModelMutation,
         providerControlQuery,
         providerEmbeddingControlQuery,
+        internalModelRoleDiagnosticsQuery,
+        internalModelRoleDiagnostics: internalModelRoleDiagnosticsQuery.data?.diagnostics,
         utilityProviderItems,
         memoryRetrievalProviderItems,
         selectedUtilityProviderId,

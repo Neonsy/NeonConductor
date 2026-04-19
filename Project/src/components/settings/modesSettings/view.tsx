@@ -19,7 +19,7 @@ export function ModesSettingsView({
         <SettingsContentScaffold
             eyebrow='Modes & Instructions'
             title='Shared Modes & Instructions'
-            description='Manage app-level prompt layers, built-in mode overrides, and portable file-backed custom modes without mounting a second settings rail.'
+            description='Manage prompt layers, role-driven custom modes, delegated worker inventories, and draft-first mode promotion without mounting a second settings rail.'
             contentClassName='max-w-6xl'>
             <ModesInstructionsScreen
                 profileId={profileId}

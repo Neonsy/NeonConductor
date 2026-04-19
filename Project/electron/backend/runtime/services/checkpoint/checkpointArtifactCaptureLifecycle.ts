@@ -47,7 +47,9 @@ export async function resolveCheckpointCaptureMode(input: {
     return modes.find((candidate) => candidate.modeKey === input.modeKey) ?? null;
 }
 
-export function isMutatingCheckpointMode(mode: Pick<ModeDefinition, 'executionPolicy'>): boolean {
+export function isMutatingCheckpointMode(
+    mode: Pick<ModeDefinition, 'topLevelTab' | 'modeKey' | 'executionPolicy'>
+): boolean {
     return modeIsCheckpointEligible(mode) && modeMutatesWorkspace(mode);
 }
 

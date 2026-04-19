@@ -2,35 +2,20 @@ import { access, mkdir, rename, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import type { ModeDefinitionRecord } from '@/app/backend/persistence/types';
-import {
-    behaviorFlags as knownBehaviorFlags,
-    runtimeRequirementProfiles as knownRuntimeRequirementProfiles,
-    toolCapabilities as knownToolCapabilities,
-    workflowCapabilities as knownWorkflowCapabilities,
-    type ToolCapability,
-    type BehaviorFlag,
-    type RuntimeRequirementProfile,
-    type WorkflowCapability,
-    type TopLevelTab,
+import type {
+    ModeAuthoringRole,
+    ModeRoleTemplateKey,
+    PromptLayerCustomModePayload,
+    PromptLayerModeDraftPayload,
+    TopLevelTab,
 } from '@/app/backend/runtime/contracts';
 import { slugifyAssetKey, resolveRegistryPaths } from '@/app/backend/runtime/services/registry/filesystem';
 
+import { getModeRoleTemplateDefinition } from '@/shared/modeRoleCatalog';
 
-export interface CanonicalCustomModePayload {
-    slug: string;
-    name: string;
-    description?: string;
-    roleDefinition?: string;
-    customInstructions?: string;
-    whenToUse?: string;
-    tags?: string[];
-    toolCapabilities?: ToolCapability[];
-    workflowCapabilities?: WorkflowCapability[];
-    behaviorFlags?: BehaviorFlag[];
-    runtimeProfile?: RuntimeRequirementProfile;
-}
+export interface CanonicalCustomModePayload extends PromptLayerCustomModePayload {}
 
-export interface PortableCustomModePayload {
+export interface PortableCustomModePayloadV1 {
     slug: string;
     name: string;
     description?: string;
@@ -40,7 +25,24 @@ export interface PortableCustomModePayload {
     groups?: string[];
 }
 
-const portableModeAllowedKeys = new Set([
+export interface PortableCustomModePayloadV2 {
+    version: 2;
+    slug: string;
+    name: string;
+    authoringRole: ModeAuthoringRole;
+    roleTemplate: ModeRoleTemplateKey;
+    description?: string;
+    roleDefinition?: string;
+    customInstructions?: string;
+    whenToUse?: string;
+    tags?: string[];
+}
+
+export type ParsedPortableCustomModeJson =
+    | { version: 'v1'; payload: PortableCustomModePayloadV1 }
+    | { version: 'v2'; payload: PortableCustomModePayloadV2 };
+
+const portableModeV1AllowedKeys = new Set([
     'slug',
     'name',
     'description',
@@ -50,20 +52,20 @@ const portableModeAllowedKeys = new Set([
     'groups',
 ]);
 
-const portableModeUnsupportedKeys = new Set(['topLevelTab']);
+const portableModeV2AllowedKeys = new Set([
+    'version',
+    'slug',
+    'name',
+    'authoringRole',
+    'roleTemplate',
+    'description',
+    'roleDefinition',
+    'customInstructions',
+    'whenToUse',
+    'tags',
+]);
 
-const portableGroupCapabilityMap = {
-    read: ['filesystem_read'],
-    edit: ['filesystem_read', 'filesystem_write'],
-    command: ['shell'],
-} as const satisfies Record<string, ToolCapability[]>;
-
-const unsupportedPortableGroups = new Set(['browser', 'mcp', 'ask', 'modes']);
-
-function readOptionalPortableString(
-    value: unknown,
-    field: keyof PortableCustomModePayload | keyof CanonicalCustomModePayload
-): string | undefined {
+function readOptionalPortableString(value: unknown, field: string): string | undefined {
     if (value === undefined) {
         return undefined;
     }
@@ -83,68 +85,15 @@ function readOptionalPortableStringArray(value: unknown, field: 'groups' | 'tags
     }
 
     const items = value.map((item, index) => {
-        if (Array.isArray(item)) {
-            throw new Error(
-                `Unsupported "${field}[${String(index)}]": restricted tuple forms are not supported in this slice.`
-            );
-        }
-        if (typeof item !== 'string') {
-            throw new Error(`Invalid "${field}": expected string array.`);
-        }
-
-        return item.trim();
-    });
-    const filteredItems = items.filter((item) => item.length > 0);
-    return filteredItems.length > 0 ? Array.from(new Set(filteredItems)) : undefined;
-}
-
-function readOptionalToolCapabilities(value: unknown, field: 'toolCapabilities'): ToolCapability[] | undefined {
-    if (value === undefined) {
-        return undefined;
-    }
-    if (!Array.isArray(value)) {
-        throw new Error(`Invalid "${field}": expected string array.`);
-    }
-
-    const capabilities = value.map((item) => {
-        if (typeof item !== 'string' || !knownToolCapabilities.includes(item as ToolCapability)) {
-            throw new Error(`Invalid "${field}": expected only ${knownToolCapabilities.join(', ')}.`);
-        }
-
-        return item as ToolCapability;
-    });
-    return capabilities.length > 0 ? Array.from(new Set(capabilities)) : undefined;
-}
-
-function readOptionalEnumArray<const T extends readonly string[]>(
-    value: unknown,
-    field: string,
-    allowedValues: T
-): T[number][] | undefined {
-    if (value === undefined) {
-        return undefined;
-    }
-    if (!Array.isArray(value)) {
-        throw new Error(`Invalid "${field}": expected string array.`);
-    }
-
-    const values = value.map((item, index) => {
         if (typeof item !== 'string') {
             throw new Error(`Invalid "${field}[${String(index)}]": expected string.`);
         }
 
-        const normalized = item.trim();
-        if (!normalized) {
-            throw new Error(`Invalid "${field}[${String(index)}]": expected non-empty string.`);
-        }
-        if (!allowedValues.includes(normalized as T[number])) {
-            throw new Error(`Invalid "${field}": expected only ${allowedValues.join(', ')}.`);
-        }
-
-        return normalized as T[number];
+        return item.trim();
     });
 
-    return values.length > 0 ? Array.from(new Set(values)) : undefined;
+    const filteredItems = items.filter((item) => item.length > 0);
+    return filteredItems.length > 0 ? Array.from(new Set(filteredItems)) : undefined;
 }
 
 function normalizeCanonicalCustomModePayload(input: CanonicalCustomModePayload): CanonicalCustomModePayload {
@@ -157,39 +106,27 @@ function normalizeCanonicalCustomModePayload(input: CanonicalCustomModePayload):
         throw new Error('Invalid "name": expected non-empty string.');
     }
 
+    getModeRoleTemplateDefinition(input.roleTemplate);
     const description = readOptionalPortableString(input.description, 'description');
     const roleDefinition = readOptionalPortableString(input.roleDefinition, 'roleDefinition');
     const customInstructions = readOptionalPortableString(input.customInstructions, 'customInstructions');
     const whenToUse = readOptionalPortableString(input.whenToUse, 'whenToUse');
     const tags = readOptionalPortableStringArray(input.tags, 'tags');
-    const toolCapabilities = readOptionalToolCapabilities(input.toolCapabilities, 'toolCapabilities');
-    const workflowCapabilities = readOptionalEnumArray(
-        input.workflowCapabilities,
-        'workflowCapabilities',
-        knownWorkflowCapabilities
-    );
-    const behaviorFlags = readOptionalEnumArray(input.behaviorFlags, 'behaviorFlags', knownBehaviorFlags);
-    const runtimeProfile =
-        input.runtimeProfile && knownRuntimeRequirementProfiles.includes(input.runtimeProfile)
-            ? input.runtimeProfile
-            : undefined;
 
     return {
         slug,
         name,
+        authoringRole: input.authoringRole,
+        roleTemplate: input.roleTemplate,
         ...(description ? { description } : {}),
         ...(roleDefinition ? { roleDefinition } : {}),
         ...(customInstructions ? { customInstructions } : {}),
         ...(whenToUse ? { whenToUse } : {}),
         ...(tags ? { tags } : {}),
-        ...(toolCapabilities ? { toolCapabilities } : {}),
-        ...(workflowCapabilities ? { workflowCapabilities } : {}),
-        ...(behaviorFlags ? { behaviorFlags } : {}),
-        ...(runtimeProfile ? { runtimeProfile } : {}),
     };
 }
 
-function normalizePortableCustomModePayload(input: PortableCustomModePayload): PortableCustomModePayload {
+function normalizePortableCustomModePayloadV1(input: PortableCustomModePayloadV1): PortableCustomModePayloadV1 {
     const slug = readOptionalPortableString(input.slug, 'slug');
     if (!slug) {
         throw new Error('Invalid "slug": expected non-empty string.');
@@ -216,82 +153,55 @@ function normalizePortableCustomModePayload(input: PortableCustomModePayload): P
     };
 }
 
-function convertPortableGroupsToToolCapabilities(groups: string[] | undefined): ToolCapability[] | undefined {
-    if (!groups || groups.length === 0) {
-        return undefined;
-    }
+function normalizePortableCustomModePayloadV2(input: PortableCustomModePayloadV2): PortableCustomModePayloadV2 {
+    const normalized = normalizeCanonicalCustomModePayload(input);
 
-    const capabilities = new Set<ToolCapability>();
-    for (const group of groups) {
-        if (unsupportedPortableGroups.has(group)) {
-            throw new Error(`Unsupported portable tool group "${group}".`);
-        }
-        if (!(group in portableGroupCapabilityMap)) {
-            throw new Error(`Unsupported portable tool group "${group}".`);
-        }
-        const mappedCapabilities = portableGroupCapabilityMap[group as keyof typeof portableGroupCapabilityMap];
-
-        mappedCapabilities.forEach((capability) => capabilities.add(capability));
-    }
-
-    return capabilities.size > 0 ? Array.from(capabilities) : undefined;
+    return {
+        version: 2,
+        slug: normalized.slug,
+        name: normalized.name,
+        authoringRole: normalized.authoringRole,
+        roleTemplate: normalized.roleTemplate,
+        ...(normalized.description ? { description: normalized.description } : {}),
+        ...(normalized.roleDefinition ? { roleDefinition: normalized.roleDefinition } : {}),
+        ...(normalized.customInstructions ? { customInstructions: normalized.customInstructions } : {}),
+        ...(normalized.whenToUse ? { whenToUse: normalized.whenToUse } : {}),
+        ...(normalized.tags ? { tags: normalized.tags } : {}),
+    };
 }
 
-function convertToolCapabilitiesToPortableGroups(toolCapabilities: ToolCapability[] | undefined): string[] | undefined {
-    if (!toolCapabilities || toolCapabilities.length === 0) {
-        return undefined;
+function resolveLegacyImportRoleTemplate(input: {
+    topLevelTab: TopLevelTab;
+    groups?: string[];
+}): { authoringRole: ModeAuthoringRole; roleTemplate: ModeRoleTemplateKey } {
+    const groups = new Set(input.groups ?? []);
+    if (input.topLevelTab === 'chat') {
+        return {
+            authoringRole: 'chat',
+            roleTemplate: 'chat/default',
+        };
+    }
+    if (input.topLevelTab === 'orchestrator') {
+        return {
+            authoringRole: 'orchestrator_primary',
+            roleTemplate: groups.size === 0 ? 'orchestrator_primary/debug' : 'orchestrator_primary/orchestrate',
+        };
     }
 
-    const capabilitySet = new Set(toolCapabilities);
-    if (capabilitySet.has('git')) {
-        throw new Error('Portable export does not support the "git" tool capability in this slice.');
-    }
-    if (capabilitySet.has('code_runtime')) {
-        throw new Error('Portable export does not support the "code_runtime" tool capability in this slice.');
-    }
-    if (capabilitySet.has('filesystem_write') && !capabilitySet.has('filesystem_read')) {
-        throw new Error('Portable export cannot represent "filesystem_write" without "filesystem_read".');
+    if (groups.size === 0 || (groups.size === 1 && groups.has('read'))) {
+        return {
+            authoringRole: 'single_task_agent',
+            roleTemplate: 'single_task_agent/ask',
+        };
     }
 
-    const groups: string[] = [];
-    if (capabilitySet.has('filesystem_write')) {
-        groups.push('edit');
-        capabilitySet.delete('filesystem_write');
-        capabilitySet.delete('filesystem_read');
-    } else if (capabilitySet.has('filesystem_read')) {
-        groups.push('read');
-        capabilitySet.delete('filesystem_read');
-    }
-    if (capabilitySet.has('shell')) {
-        groups.push('command');
-        capabilitySet.delete('shell');
-    }
-    if (capabilitySet.size > 0) {
-        throw new Error(`Portable export cannot represent tool capabilities: ${Array.from(capabilitySet).join(', ')}.`);
-    }
-
-    return groups.length > 0 ? groups : undefined;
+    return {
+        authoringRole: 'single_task_agent',
+        roleTemplate: 'single_task_agent/apply',
+    };
 }
 
-function assertPortableMetadataCompatibility(mode: ModeDefinitionRecord): void {
-    if ((mode.executionPolicy.workflowCapabilities?.length ?? 0) > 0) {
-        throw new Error(
-            'Portable export does not support workflow capabilities in this slice. Re-export from a portable-only mode.'
-        );
-    }
-    if ((mode.executionPolicy.behaviorFlags?.length ?? 0) > 0) {
-        throw new Error(
-            'Portable export does not support behavior flags in this slice. Re-export from a portable-only mode.'
-        );
-    }
-    if (mode.executionPolicy.runtimeProfile) {
-        throw new Error(
-            'Portable export does not support runtime profiles in this slice. Re-export from a portable-only mode.'
-        );
-    }
-}
-
-export function parsePortableCustomModeJson(jsonText: string): PortableCustomModePayload {
+export function parsePortableCustomModeJson(jsonText: string): ParsedPortableCustomModeJson {
     let parsed: unknown;
     try {
         parsed = JSON.parse(jsonText);
@@ -306,53 +216,112 @@ export function parsePortableCustomModeJson(jsonText: string): PortableCustomMod
     }
 
     const source = parsed as Record<string, unknown>;
-    for (const key of Object.keys(source)) {
-        if (portableModeUnsupportedKeys.has(key)) {
-            throw new Error(`Unsupported custom mode field "${key}" is not supported in this slice.`);
+    if (source.version === 2) {
+        for (const key of Object.keys(source)) {
+            if (!portableModeV2AllowedKeys.has(key)) {
+                throw new Error(`Invalid custom mode field "${key}".`);
+            }
         }
-        if (!portableModeAllowedKeys.has(key)) {
+
+        return {
+            version: 'v2',
+            payload: normalizePortableCustomModePayloadV2({
+                version: 2,
+                slug: source.slug as string,
+                name: source.name as string,
+                authoringRole: source.authoringRole as ModeAuthoringRole,
+                roleTemplate: source.roleTemplate as ModeRoleTemplateKey,
+                ...(typeof source.description === 'string' ? { description: source.description } : {}),
+                ...(typeof source.roleDefinition === 'string' ? { roleDefinition: source.roleDefinition } : {}),
+                ...(typeof source.customInstructions === 'string' ? { customInstructions: source.customInstructions } : {}),
+                ...(typeof source.whenToUse === 'string' ? { whenToUse: source.whenToUse } : {}),
+                ...(source.tags !== undefined ? { tags: source.tags as string[] } : {}),
+            }),
+        };
+    }
+
+    for (const key of Object.keys(source)) {
+        if (!portableModeV1AllowedKeys.has(key)) {
             throw new Error(`Invalid custom mode field "${key}".`);
         }
     }
 
-    return normalizePortableCustomModePayload({
-        slug: source.slug as string,
-        name: source.name as string,
-        ...(typeof source.description === 'string' ? { description: source.description } : {}),
-        ...(typeof source.roleDefinition === 'string' ? { roleDefinition: source.roleDefinition } : {}),
-        ...(typeof source.customInstructions === 'string' ? { customInstructions: source.customInstructions } : {}),
-        ...(typeof source.whenToUse === 'string' ? { whenToUse: source.whenToUse } : {}),
-        ...(source.groups !== undefined ? { groups: source.groups as string[] } : {}),
-    });
+    return {
+        version: 'v1',
+        payload: normalizePortableCustomModePayloadV1({
+            slug: source.slug as string,
+            name: source.name as string,
+            ...(typeof source.description === 'string' ? { description: source.description } : {}),
+            ...(typeof source.roleDefinition === 'string' ? { roleDefinition: source.roleDefinition } : {}),
+            ...(typeof source.customInstructions === 'string' ? { customInstructions: source.customInstructions } : {}),
+            ...(typeof source.whenToUse === 'string' ? { whenToUse: source.whenToUse } : {}),
+            ...(source.groups !== undefined ? { groups: source.groups as string[] } : {}),
+        }),
+    };
 }
 
-export function toCanonicalCustomModePayload(input: PortableCustomModePayload): CanonicalCustomModePayload {
-    const payload = normalizePortableCustomModePayload(input);
-    const toolCapabilities = convertPortableGroupsToToolCapabilities(payload.groups);
+export function toDraftModePayloadFromPortableImport(input: {
+    parsed: ParsedPortableCustomModeJson;
+    topLevelTab?: TopLevelTab;
+}): PromptLayerModeDraftPayload {
+    if (input.parsed.version === 'v2') {
+        return {
+            slug: input.parsed.payload.slug,
+            name: input.parsed.payload.name,
+            authoringRole: input.parsed.payload.authoringRole,
+            roleTemplate: input.parsed.payload.roleTemplate,
+            ...(input.parsed.payload.description ? { description: input.parsed.payload.description } : {}),
+            ...(input.parsed.payload.roleDefinition ? { roleDefinition: input.parsed.payload.roleDefinition } : {}),
+            ...(input.parsed.payload.customInstructions
+                ? { customInstructions: input.parsed.payload.customInstructions }
+                : {}),
+            ...(input.parsed.payload.whenToUse ? { whenToUse: input.parsed.payload.whenToUse } : {}),
+            ...(input.parsed.payload.tags ? { tags: input.parsed.payload.tags } : {}),
+        };
+    }
 
-    return normalizeCanonicalCustomModePayload({
-        slug: payload.slug,
-        name: payload.name,
-        ...(payload.description ? { description: payload.description } : {}),
-        ...(payload.roleDefinition ? { roleDefinition: payload.roleDefinition } : {}),
-        ...(payload.customInstructions ? { customInstructions: payload.customInstructions } : {}),
-        ...(payload.whenToUse ? { whenToUse: payload.whenToUse } : {}),
-        ...(toolCapabilities ? { toolCapabilities } : {}),
-    });
+    const topLevelTab = input.topLevelTab;
+    if (!topLevelTab) {
+        throw new Error('Legacy custom mode JSON requires a topLevelTab during draft import.');
+    }
+
+    const resolvedRoleTemplate = resolveLegacyImportRoleTemplate(
+        input.parsed.payload.groups
+            ? {
+                  topLevelTab,
+                  groups: input.parsed.payload.groups,
+              }
+            : {
+                  topLevelTab,
+              }
+    );
+    return {
+        topLevelTab,
+        slug: input.parsed.payload.slug,
+        name: input.parsed.payload.name,
+        authoringRole: resolvedRoleTemplate.authoringRole,
+        roleTemplate: resolvedRoleTemplate.roleTemplate,
+        ...(input.parsed.payload.description ? { description: input.parsed.payload.description } : {}),
+        ...(input.parsed.payload.roleDefinition ? { roleDefinition: input.parsed.payload.roleDefinition } : {}),
+        ...(input.parsed.payload.customInstructions
+            ? { customInstructions: input.parsed.payload.customInstructions }
+            : {}),
+        ...(input.parsed.payload.whenToUse ? { whenToUse: input.parsed.payload.whenToUse } : {}),
+    };
 }
 
-export function toPortableModePayload(mode: ModeDefinitionRecord): PortableCustomModePayload {
-    assertPortableMetadataCompatibility(mode);
-    const groups = convertToolCapabilitiesToPortableGroups(mode.executionPolicy.toolCapabilities);
-
-    return normalizePortableCustomModePayload({
+export function toPortableModePayload(mode: ModeDefinitionRecord): PortableCustomModePayloadV2 {
+    return normalizePortableCustomModePayloadV2({
+        version: 2,
         slug: mode.modeKey,
         name: mode.label,
+        authoringRole: mode.authoringRole,
+        roleTemplate: mode.roleTemplate,
         ...(mode.description ? { description: mode.description } : {}),
         ...(mode.prompt.roleDefinition ? { roleDefinition: mode.prompt.roleDefinition } : {}),
         ...(mode.prompt.customInstructions ? { customInstructions: mode.prompt.customInstructions } : {}),
         ...(mode.whenToUse ? { whenToUse: mode.whenToUse } : {}),
-        ...(groups ? { groups } : {}),
+        ...(mode.tags ? { tags: mode.tags } : {}),
     });
 }
 
@@ -364,7 +333,8 @@ function stringifyFrontmatterValue(value: string): string {
     return JSON.stringify(value.replace(/\r\n?/g, '\n'));
 }
 
-export function renderCanonicalModeMarkdown(input: { topLevelTab: TopLevelTab; payload: CanonicalCustomModePayload }): {
+export function renderCanonicalModeMarkdown(input: { payload: CanonicalCustomModePayload }): {
+    topLevelTab: TopLevelTab;
     modeKey: string;
     fileContent: string;
 } {
@@ -374,30 +344,24 @@ export function renderCanonicalModeMarkdown(input: { topLevelTab: TopLevelTab; p
         throw new Error('Invalid "slug": could not derive a file-backed mode key.');
     }
 
+    const templateDefinition = getModeRoleTemplateDefinition(payload.roleTemplate);
     const lines = [
         '---',
-        `topLevelTab: ${input.topLevelTab}`,
+        `topLevelTab: ${templateDefinition.topLevelTab}`,
         `modeKey: ${modeKey}`,
         `label: ${stringifyFrontmatterValue(payload.name)}`,
+        `authoringRole: ${payload.authoringRole}`,
+        `roleTemplate: ${payload.roleTemplate}`,
         ...(payload.description ? [`description: ${stringifyFrontmatterValue(payload.description)}`] : []),
         ...(payload.whenToUse ? [`whenToUse: ${stringifyFrontmatterValue(payload.whenToUse)}`] : []),
         ...(payload.tags ? ['tags:', ...payload.tags.map((tag) => `  - ${stringifyFrontmatterValue(tag)}`)] : []),
-        ...(payload.toolCapabilities
-            ? ['toolCapabilities:', ...payload.toolCapabilities.map((capability) => `  - ${capability}`)]
-            : []),
-        ...(payload.workflowCapabilities
-            ? ['workflowCapabilities:', ...payload.workflowCapabilities.map((capability) => `  - ${capability}`)]
-            : []),
-        ...(payload.behaviorFlags
-            ? ['behaviorFlags:', ...payload.behaviorFlags.map((flag) => `  - ${flag}`)]
-            : []),
-        ...(payload.runtimeProfile ? [`runtimeProfile: ${payload.runtimeProfile}`] : []),
         ...(payload.roleDefinition ? [`roleDefinition: ${stringifyFrontmatterValue(payload.roleDefinition)}`] : []),
         '---',
     ];
     const body = payload.customInstructions?.replace(/\r\n?/g, '\n').trim() ?? '';
 
     return {
+        topLevelTab: templateDefinition.topLevelTab,
         modeKey,
         fileContent: body.length > 0 ? `${lines.join('\n')}\n${body}\n` : `${lines.join('\n')}\n`,
     };
@@ -431,8 +395,11 @@ export async function resolveCustomModeDirectory(input: {
 export async function writePortableModeFile(input: { absolutePath: string; fileContent: string }): Promise<void> {
     const directory = path.dirname(input.absolutePath);
     await mkdir(directory, { recursive: true });
-    const tempPath = `${input.absolutePath}.tmp`;
+    const tempPath = `${input.absolutePath}.${process.pid}.${Date.now()}.tmp`;
     await writeFile(tempPath, input.fileContent, 'utf8');
+    if (await fileExists(input.absolutePath)) {
+        await unlink(input.absolutePath);
+    }
     await rename(tempPath, input.absolutePath);
 }
 

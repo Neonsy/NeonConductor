@@ -6,7 +6,12 @@ import type {
     ProviderSpecialistDefaultTopLevelTab,
 } from '@/shared/contracts/specialistDefaults';
 import type { KiloModeHeader } from '@/shared/kiloModels';
-import { getModeRuntimeProfile, modeCanExecuteRuns, modeRequiresNativeTools } from '@/shared/modeBehavior';
+import {
+    getModeInternalModelRole,
+    getModeRuntimeProfile,
+    modeCanExecuteRuns,
+    modeRequiresNativeTools,
+} from '@/shared/modeBehavior';
 
 type ModeLike = Pick<ModeDefinition, 'topLevelTab' | 'modeKey' | 'executionPolicy'>;
 
@@ -96,6 +101,7 @@ export function resolveSpecialistAliasRoutingIntent(alias: ModeSpecialistAlias):
 
 export function resolveModeCompatibilityRequirements(mode: ModeLike | undefined): ModeCompatibilityRequirements {
     const runtimeProfile = mode ? getModeRuntimeProfile(mode.executionPolicy) : undefined;
+    const internalModelRole = mode ? getModeInternalModelRole(mode.executionPolicy) : undefined;
     const explicitNativeToolRequirement = runtimeProfileRequiresNativeTools(runtimeProfile);
     const requiresNativeTools =
         explicitNativeToolRequirement !== undefined
@@ -104,7 +110,7 @@ export function resolveModeCompatibilityRequirements(mode: ModeLike | undefined)
 
     return {
         ...(runtimeProfile ? { runtimeProfile } : {}),
-        requiresNativeTools,
+        requiresNativeTools: internalModelRole === 'chat' ? false : requiresNativeTools,
         allowsImageAttachments: Boolean(mode && modeCanExecuteRuns(mode) && mode.topLevelTab !== 'orchestrator'),
     };
 }

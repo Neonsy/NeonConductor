@@ -4,7 +4,9 @@ import {
     BuiltInModePromptCard,
     BuiltInToolMetadataCard,
     CustomModeEditorSection,
+    DelegatedWorkerModeInventorySection,
     FileBackedModeInventorySection,
+    ModeDraftInventorySection,
     PromptLayerCard,
     TopLevelPromptSection,
     formatTopLevelLabel,
@@ -200,7 +202,7 @@ export function ModesInstructionsScreen(input: {
                             onClick={() => {
                                 controller.customModes.editor.openCreate('global');
                             }}>
-                            Create Global Mode
+                            New Global Draft
                         </Button>
                         <Button
                             type='button'
@@ -210,7 +212,7 @@ export function ModesInstructionsScreen(input: {
                             onClick={() => {
                                 controller.customModes.editor.openCreate('workspace');
                             }}>
-                            Create Workspace Mode
+                            New Workspace Draft
                         </Button>
                     </div>
                 </div>
@@ -220,12 +222,10 @@ export function ModesInstructionsScreen(input: {
                 <div className='grid gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(340px,0.85fr)]'>
                     <section className='border-border/70 bg-card/50 space-y-4 rounded-[24px] border p-5'>
                         <div className='space-y-1'>
-                            <h6 className='text-sm font-semibold'>Import Portable Mode JSON</h6>
+                            <h6 className='text-sm font-semibold'>Import Portable Mode JSON To Draft</h6>
                             <p className='text-muted-foreground text-sm leading-6'>
-                                Supported fields: <code>slug</code>, <code>name</code>, <code>description</code>,{' '}
-                                <code>roleDefinition</code>, <code>customInstructions</code>, <code>whenToUse</code>,
-                                and <code>groups</code>. Portable <code>groups</code> map into Neon tool capabilities
-                                during import.
+                                Import never activates a mode immediately now. v2 JSON carries <code>authoringRole</code> and{' '}
+                                <code>roleTemplate</code>; legacy v1 JSON still imports, but only into draft review.
                             </p>
                         </div>
 
@@ -304,23 +304,8 @@ export function ModesInstructionsScreen(input: {
                                 }}
                                 className='border-border bg-background min-h-64 w-full rounded-2xl border px-4 py-3 font-mono text-sm leading-6'
                                 spellCheck={false}
-                                placeholder='{\n  "slug": "review",\n  "name": "Review",\n  "description": "Workspace review mode",\n  "roleDefinition": "Act as a precise reviewer.",\n  "customInstructions": "Review the workspace carefully.",\n  "whenToUse": "Use when a change needs a strict review pass.",\n  "groups": ["read", "command"]\n}'
+                                placeholder='{\n  "version": 2,\n  "slug": "review",\n  "name": "Review",\n  "authoringRole": "single_task_agent",\n  "roleTemplate": "single_task_agent/review",\n  "description": "Workspace review mode"\n}'
                             />
-                        </label>
-
-                        <label className='flex items-start gap-3 rounded-2xl border border-dashed px-4 py-3 text-sm'>
-                            <input
-                                type='checkbox'
-                                className='mt-1'
-                                checked={controller.customModes.importDraft.allowOverwrite}
-                                onChange={(event) => {
-                                    controller.customModes.setAllowOverwrite(event.target.checked);
-                                }}
-                            />
-                            <span className='text-muted-foreground leading-6'>
-                                Explicitly allow overwrite if a file-backed mode with the same tab and key already
-                                exists in the selected scope.
-                            </span>
                         </label>
 
                         <div className='flex flex-wrap gap-2'>
@@ -335,7 +320,7 @@ export function ModesInstructionsScreen(input: {
                                 onClick={() => {
                                     void controller.customModes.importMode();
                                 }}>
-                                {controller.customModes.isImporting ? 'Importing…' : 'Import Mode'}
+                                {controller.customModes.isImporting ? 'Importing…' : 'Import To Draft'}
                             </Button>
                         </div>
                     </section>
@@ -344,15 +329,14 @@ export function ModesInstructionsScreen(input: {
                         <div className='space-y-1'>
                             <h6 className='text-sm font-semibold'>Export Portable Mode JSON</h6>
                             <p className='text-muted-foreground text-sm leading-6'>
-                                Export reads from file-backed custom modes only. Built-in modes stay outside this
-                                portability slice.
+                                Export reads from live file-backed custom modes only and always emits portable v2 JSON.
                             </p>
                         </div>
 
                         <div className='border-border/70 bg-background/60 rounded-2xl border px-4 py-3 text-sm'>
                             {controller.customModes.exportState.selectedLabel
                                 ? `Selected export: ${controller.customModes.exportState.selectedLabel}`
-                                : 'Choose a file-backed custom mode below to load export JSON here.'}
+                                : 'Choose a live file-backed custom mode below to load export JSON here.'}
                         </div>
 
                         <label className='space-y-2'>
@@ -382,6 +366,23 @@ export function ModesInstructionsScreen(input: {
                     </section>
                 </div>
 
+                <ModeDraftInventorySection
+                    drafts={controller.customModes.modeDrafts}
+                    isBusy={controller.customModes.isDraftActionPending}
+                    onOpenDraft={(draft) => {
+                        controller.customModes.editor.openDraft(draft);
+                    }}
+                    onValidateDraft={(draftId) => {
+                        void controller.customModes.validateDraft(draftId);
+                    }}
+                    onApplyDraft={(draftId) => {
+                        void controller.customModes.applyDraft(draftId);
+                    }}
+                    onDiscardDraft={(draftId) => {
+                        void controller.customModes.discardDraft(draftId);
+                    }}
+                />
+
                 <FileBackedModeInventorySection
                     scope='global'
                     itemsByTab={viewModel.modeLibrary.global}
@@ -396,22 +397,52 @@ export function ModesInstructionsScreen(input: {
                         void controller.customModes.editor.openDelete(scope, topLevelTab, modeKey);
                     }}
                 />
+                <DelegatedWorkerModeInventorySection
+                    scope='global'
+                    items={controller.customModes.delegatedWorkerModes.global}
+                    isExporting={controller.customModes.isExporting}
+                    onExport={(scope, topLevelTab, modeKey) => {
+                        void controller.customModes.exportMode(scope, topLevelTab, modeKey);
+                    }}
+                    onEdit={(scope, topLevelTab, modeKey) => {
+                        void controller.customModes.editor.openEdit(scope, topLevelTab, modeKey);
+                    }}
+                    onDelete={(scope, topLevelTab, modeKey) => {
+                        void controller.customModes.editor.openDelete(scope, topLevelTab, modeKey);
+                    }}
+                />
 
                 {controller.workspace.fingerprint ? (
-                    <FileBackedModeInventorySection
-                        scope='workspace'
-                        itemsByTab={viewModel.modeLibrary.workspace}
-                        isExporting={controller.customModes.isExporting}
-                        onExport={(scope, topLevelTab, modeKey) => {
-                            void controller.customModes.exportMode(scope, topLevelTab, modeKey);
-                        }}
-                        onEdit={(scope, topLevelTab, modeKey) => {
-                            void controller.customModes.editor.openEdit(scope, topLevelTab, modeKey);
-                        }}
-                        onDelete={(scope, topLevelTab, modeKey) => {
-                            void controller.customModes.editor.openDelete(scope, topLevelTab, modeKey);
-                        }}
-                    />
+                    <>
+                        <FileBackedModeInventorySection
+                            scope='workspace'
+                            itemsByTab={viewModel.modeLibrary.workspace}
+                            isExporting={controller.customModes.isExporting}
+                            onExport={(scope, topLevelTab, modeKey) => {
+                                void controller.customModes.exportMode(scope, topLevelTab, modeKey);
+                            }}
+                            onEdit={(scope, topLevelTab, modeKey) => {
+                                void controller.customModes.editor.openEdit(scope, topLevelTab, modeKey);
+                            }}
+                            onDelete={(scope, topLevelTab, modeKey) => {
+                                void controller.customModes.editor.openDelete(scope, topLevelTab, modeKey);
+                            }}
+                        />
+                        <DelegatedWorkerModeInventorySection
+                            scope='workspace'
+                            items={controller.customModes.delegatedWorkerModes.workspace ?? []}
+                            isExporting={controller.customModes.isExporting}
+                            onExport={(scope, topLevelTab, modeKey) => {
+                                void controller.customModes.exportMode(scope, topLevelTab, modeKey);
+                            }}
+                            onEdit={(scope, topLevelTab, modeKey) => {
+                                void controller.customModes.editor.openEdit(scope, topLevelTab, modeKey);
+                            }}
+                            onDelete={(scope, topLevelTab, modeKey) => {
+                                void controller.customModes.editor.openDelete(scope, topLevelTab, modeKey);
+                            }}
+                        />
+                    </>
                 ) : null}
             </div>
         </div>

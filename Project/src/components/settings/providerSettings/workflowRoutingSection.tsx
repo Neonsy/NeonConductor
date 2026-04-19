@@ -13,10 +13,10 @@ export function ProviderWorkflowRoutingSection({ profileId }: ProviderWorkflowRo
     return (
         <section className='border-border/70 bg-card/40 space-y-4 rounded-[24px] border p-5'>
             <div className='space-y-1'>
-                <p className='text-sm font-semibold'>Workflow routing</p>
+                <p className='text-sm font-semibold'>Planner role routing</p>
                 <p className='text-muted-foreground text-xs leading-5'>
-                    Choose planning-first routing defaults for new plan surfaces. These preferences stay profile-wide
-                    and only affect planning, not the runnable specialist defaults below.
+                    Choose the internal planner role targets for planning surfaces. These preferences stay profile-wide
+                    and only affect planning, not the runnable defaults below.
                 </p>
             </div>
 
@@ -31,7 +31,7 @@ export function ProviderWorkflowRoutingSection({ profileId }: ProviderWorkflowRo
                                 <p className='text-muted-foreground text-xs leading-5'>{target.sourceLabel}</p>
                             </div>
                             <span className='text-muted-foreground text-[11px] font-semibold tracking-[0.12em] uppercase'>
-                                Workflow routing
+                                Planner role
                             </span>
                         </div>
 

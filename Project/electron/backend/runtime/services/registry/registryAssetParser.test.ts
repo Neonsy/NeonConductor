@@ -20,7 +20,7 @@ function buildAssetFile(input: Partial<RegistryAssetFile> & { parsed: RegistryAs
 }
 
 describe('registryAssetParser', () => {
-    it('normalizes mode assets and fails closed on invalid rows', () => {
+    it('normalizes mode assets into canonical role-template execution metadata', () => {
         const parsedMode = parseRegistryModeAsset(
             buildAssetFile({
                 parsed: {
@@ -57,6 +57,11 @@ describe('registryAssetParser', () => {
                 customInstructions: '# Guidance\nUse the tools wisely.',
             },
             executionPolicy: {
+                authoringRole: 'single_task_agent',
+                roleTemplate: 'single_task_agent/plan',
+                internalModelRole: 'planner',
+                delegatedOnly: false,
+                sessionSelectable: true,
                 planningOnly: true,
                 toolCapabilities: ['filesystem_write', 'filesystem_read'],
                 workflowCapabilities: ['planning', 'artifact_view'],
@@ -73,7 +78,9 @@ describe('registryAssetParser', () => {
             enabled: false,
             precedence: 7,
         });
+    });
 
+    it('fails closed on invalid mode rows', () => {
         expect(
             parseRegistryModeAsset(
                 buildAssetFile({
@@ -186,12 +193,23 @@ describe('registryAssetParser', () => {
         });
     });
 
-    it('keeps mode execution policy shaping predictable', () => {
+    it('keeps execution-policy derivation predictable', () => {
         expect(buildModeExecutionPolicy({ readOnly: true })).toEqual({
+            authoringRole: 'single_task_agent',
+            roleTemplate: 'single_task_agent/ask',
+            internalModelRole: 'apply',
+            delegatedOnly: false,
+            sessionSelectable: true,
             toolCapabilities: ['filesystem_read'],
+            workflowCapabilities: [],
+            behaviorFlags: ['read_only_execution'],
+            runtimeProfile: 'read_only_agent',
         });
+
         expect(
             buildModeExecutionPolicy({
+                topLevelTab: 'agent',
+                modeKey: 'plan',
                 planningOnly: false,
                 toolCapabilities: ['shell', 'shell'],
                 workflowCapabilities: ['planning', 'planning'],
@@ -199,6 +217,11 @@ describe('registryAssetParser', () => {
                 runtimeProfile: 'planner',
             })
         ).toEqual({
+            authoringRole: 'single_task_agent',
+            roleTemplate: 'single_task_agent/plan',
+            internalModelRole: 'planner',
+            delegatedOnly: false,
+            sessionSelectable: true,
             planningOnly: false,
             toolCapabilities: ['shell'],
             workflowCapabilities: ['planning'],

@@ -28,10 +28,54 @@ function createMode(input: {
         profileId: 'profile_default',
         topLevelTab: input.topLevelTab,
         modeKey: input.modeKey,
+        authoringRole:
+            input.topLevelTab === 'chat'
+                ? 'chat'
+                : input.topLevelTab === 'orchestrator'
+                  ? 'orchestrator_primary'
+                  : 'single_task_agent',
+        roleTemplate:
+            input.topLevelTab === 'chat'
+                ? 'chat/default'
+                : input.topLevelTab === 'orchestrator'
+                  ? input.modeKey === 'orchestrate'
+                      ? 'orchestrator_primary/orchestrate'
+                      : 'orchestrator_primary/debug'
+                  : input.modeKey === 'ask'
+                    ? 'single_task_agent/ask'
+                    : input.modeKey === 'plan'
+                      ? 'single_task_agent/plan'
+                      : 'single_task_agent/apply',
+        internalModelRole:
+            input.runtimeProfile === 'planner' ? 'planner' : input.topLevelTab === 'chat' ? 'chat' : 'apply',
+        delegatedOnly: false,
+        sessionSelectable: true,
         label: input.modeKey,
         assetKey: `${input.topLevelTab}.${input.modeKey}`,
         prompt: {},
         executionPolicy: {
+            authoringRole:
+                input.topLevelTab === 'chat'
+                    ? 'chat'
+                    : input.topLevelTab === 'orchestrator'
+                      ? 'orchestrator_primary'
+                      : 'single_task_agent',
+            roleTemplate:
+                input.topLevelTab === 'chat'
+                    ? 'chat/default'
+                    : input.topLevelTab === 'orchestrator'
+                      ? input.modeKey === 'orchestrate'
+                          ? 'orchestrator_primary/orchestrate'
+                          : 'orchestrator_primary/debug'
+                      : input.modeKey === 'ask'
+                        ? 'single_task_agent/ask'
+                        : input.modeKey === 'plan'
+                          ? 'single_task_agent/plan'
+                          : 'single_task_agent/apply',
+            internalModelRole:
+                input.runtimeProfile === 'planner' ? 'planner' : input.topLevelTab === 'chat' ? 'chat' : 'apply',
+            delegatedOnly: false,
+            sessionSelectable: true,
             ...(input.runtimeProfile ? { runtimeProfile: input.runtimeProfile } : {}),
         },
         source: 'test',

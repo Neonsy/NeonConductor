@@ -5,6 +5,7 @@ import {
     getSpecialistDefaults,
     getWorkflowRoutingPreferences,
 } from '@/app/backend/providers/service/preferenceService';
+import { internalModelRoleDiagnosticsService } from '@/app/backend/runtime/services/profile/internalModelRoleDiagnostics';
 import { listProviders } from '@/app/backend/providers/service/readService';
 import type {
     ProviderControlEntry,
@@ -27,11 +28,13 @@ function compareProviderEntries(left: ProviderListItem, right: ProviderListItem)
 export async function getProviderControlSnapshot(
     profileId: string
 ): Promise<ProviderServiceResult<ProviderControlSnapshot>> {
-    const [providers, defaults, specialistDefaults, workflowRoutingPreferences] = await Promise.all([
+    const [providers, defaults, specialistDefaults, workflowRoutingPreferences, internalModelRoleDiagnostics] =
+        await Promise.all([
         listProviders(profileId),
         getDefaults(profileId),
         getSpecialistDefaults(profileId),
         getWorkflowRoutingPreferences(profileId),
+        internalModelRoleDiagnosticsService.getDiagnostics(profileId),
     ]);
     const orderedProviders = providers.toSorted(compareProviderEntries);
 
@@ -63,5 +66,6 @@ export async function getProviderControlSnapshot(
         defaults,
         specialistDefaults,
         workflowRoutingPreferences,
+        internalModelRoleDiagnostics,
     });
 }

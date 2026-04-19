@@ -3,6 +3,9 @@ import type {
     RegistrySourceKind,
     RuleActivationMode,
     BehaviorFlag,
+    InternalModelRole,
+    ModeAuthoringRole,
+    ModeRoleTemplateKey,
     ToolCapability,
     WorkflowCapability,
     TopLevelTab,
@@ -12,6 +15,11 @@ import type {
 import type { ProfileInput } from '@/app/backend/runtime/contracts/types/common';
 
 export interface ModeExecutionPolicy {
+    authoringRole?: ModeAuthoringRole;
+    roleTemplate?: ModeRoleTemplateKey;
+    internalModelRole?: InternalModelRole;
+    delegatedOnly?: boolean;
+    sessionSelectable?: boolean;
     planningOnly?: boolean;
     toolCapabilities?: ToolCapability[];
     workflowCapabilities?: WorkflowCapability[];
@@ -98,6 +106,11 @@ export interface ModeDefinition {
     profileId: string;
     topLevelTab: TopLevelTab;
     modeKey: string;
+    authoringRole: ModeAuthoringRole;
+    roleTemplate: ModeRoleTemplateKey;
+    internalModelRole: InternalModelRole;
+    delegatedOnly: boolean;
+    sessionSelectable: boolean;
     label: string;
     assetKey: string;
     prompt: ModePromptDefinition;

@@ -18,7 +18,7 @@ registerRuntimeContractHooks();
 describe('runtime contracts: prompt layers', () => {
     const profileId = runtimeContractProfileId;
 
-    it('persists and resets app, profile, and top-level prompt layers', async () => {
+    it('returns canonical built-in prompt settings and seeded mode metadata', async () => {
         const caller = createCaller();
 
         const initialSettings = await caller.prompt.getSettings({ profileId });
@@ -29,117 +29,404 @@ describe('runtime contracts: prompt layers', () => {
             agent: '',
             orchestrator: '',
         });
-        expect(initialSettings.settings.fileBackedCustomModes).toEqual({
-            global: {
-                chat: [],
-                agent: [],
-                orchestrator: [],
-            },
-        });
+        expect(initialSettings.settings.modeDrafts).toEqual([]);
+        expect(initialSettings.settings.delegatedWorkerModes.global).toEqual([]);
         expect(initialSettings.settings.builtInModes.chat).toEqual([
-            {
+            expect.objectContaining({
                 topLevelTab: 'chat',
                 modeKey: 'chat',
                 label: 'Chat',
                 prompt: {},
                 hasOverride: false,
-                toolCapabilities: [],
+                authoringRole: 'chat',
+                roleTemplate: 'chat/default',
+                internalModelRole: 'chat',
                 runtimeProfile: 'general',
-            },
+                toolCapabilities: [],
+            }),
         ]);
-        expect(initialSettings.settings.builtInModes.agent.map((mode) => mode.modeKey)).toEqual([
-            'plan',
-            'ask',
-            'code',
-            'debug',
-        ]);
-        expect(initialSettings.settings.builtInModes.orchestrator.map((mode) => mode.modeKey)).toEqual([
-            'plan',
-            'orchestrate',
-            'debug',
-        ]);
-
-        const savedAppSettings = await caller.prompt.setAppGlobalInstructions({
-            profileId,
-            value: 'Use concise system behavior.',
-        });
-        expect(savedAppSettings.settings.appGlobalInstructions).toBe('Use concise system behavior.');
-
-        const savedProfileSettings = await caller.prompt.setProfileGlobalInstructions({
-            profileId,
-            value: 'Bias toward this profile context.',
-        });
-        expect(savedProfileSettings.settings.profileGlobalInstructions).toBe('Bias toward this profile context.');
-
-        const savedTopLevelSettings = await caller.prompt.setTopLevelInstructions({
-            profileId,
-            topLevelTab: 'chat',
-            value: 'Chat should stay lightweight.',
-        });
-        expect(savedTopLevelSettings.settings.topLevelInstructions.chat).toBe('Chat should stay lightweight.');
-
-        const resetTopLevelSettings = await caller.prompt.resetTopLevelInstructions({
-            profileId,
-            topLevelTab: 'chat',
-        });
-        expect(resetTopLevelSettings.settings.topLevelInstructions.chat).toBe('');
-
-        const savedBuiltInModeSettings = await caller.prompt.setBuiltInModePrompt({
-            profileId,
-            topLevelTab: 'agent',
-            modeKey: 'code',
-            roleDefinition: 'Act as the shipped coding specialist.',
-            customInstructions: 'Always explain the change plan before editing.',
-        });
-        expect(savedBuiltInModeSettings.settings.builtInModes.agent.find((mode) => mode.modeKey === 'code')).toEqual({
-            topLevelTab: 'agent',
-            modeKey: 'code',
-            label: 'Agent Code',
-            prompt: {
-                roleDefinition: 'Act as the shipped coding specialist.',
-                customInstructions: 'Always explain the change plan before editing.',
-            },
-            hasOverride: true,
-            toolCapabilities: ['filesystem_read', 'filesystem_write', 'shell', 'mcp', 'code_runtime'],
-            workflowCapabilities: ['artifact_view'],
-            behaviorFlags: ['workspace_mutating', 'checkpoint_eligible', 'artifact_producing'],
+        expect(initialSettings.settings.builtInModes.agent.find((mode) => mode.modeKey === 'code')).toMatchObject({
+            authoringRole: 'single_task_agent',
+            roleTemplate: 'single_task_agent/apply',
+            internalModelRole: 'apply',
             runtimeProfile: 'mutating_agent',
         });
-
-        const resetBuiltInModeSettings = await caller.prompt.resetBuiltInModePrompt({
-            profileId,
-            topLevelTab: 'agent',
-            modeKey: 'code',
-        });
-        expect(resetBuiltInModeSettings.settings.builtInModes.agent.find((mode) => mode.modeKey === 'code')).toEqual({
-            topLevelTab: 'agent',
-            modeKey: 'code',
-            label: 'Agent Code',
-            prompt: {},
-            hasOverride: false,
-            toolCapabilities: ['filesystem_read', 'filesystem_write', 'shell', 'mcp', 'code_runtime'],
-            workflowCapabilities: ['artifact_view'],
-            behaviorFlags: ['workspace_mutating', 'checkpoint_eligible', 'artifact_producing'],
-            runtimeProfile: 'mutating_agent',
-        });
-
-        const resetProfileSettings = await caller.prompt.resetProfileGlobalInstructions({ profileId });
-        expect(resetProfileSettings.settings.profileGlobalInstructions).toBe('');
-
-        const resetAppSettings = await caller.prompt.resetAppGlobalInstructions({ profileId });
-        expect(resetAppSettings.settings.appGlobalInstructions).toBe('');
 
         const seededModes = await caller.mode.list({
             profileId,
             topLevelTab: 'agent',
         });
-        expect(seededModes.modes.find((mode) => mode.modeKey === 'plan')?.executionPolicy).toEqual({
-            planningOnly: true,
-            toolCapabilities: ['filesystem_read', 'mcp'],
-            workflowCapabilities: ['planning', 'artifact_view', 'recovery'],
-            behaviorFlags: ['approval_gated', 'artifact_producing', 'read_only_execution'],
-            runtimeProfile: 'planner',
+        expect(seededModes.modes.find((mode) => mode.modeKey === 'plan')).toMatchObject({
+            authoringRole: 'single_task_agent',
+            roleTemplate: 'single_task_agent/plan',
+            internalModelRole: 'planner',
+            delegatedOnly: false,
+            sessionSelectable: true,
+                executionPolicy: {
+                    authoringRole: 'single_task_agent',
+                    roleTemplate: 'single_task_agent/plan',
+                    internalModelRole: 'planner',
+                    delegatedOnly: false,
+                    sessionSelectable: true,
+                    toolCapabilities: ['filesystem_read', 'mcp'],
+                    workflowCapabilities: ['planning', 'artifact_view', 'recovery'],
+                    behaviorFlags: ['approval_gated', 'artifact_producing', 'read_only_execution'],
+                    runtimeProfile: 'planner',
+                },
         });
+    });
+
+    it('creates, updates, exports, and deletes canonical file-backed custom modes', async () => {
+        const caller = createCaller();
+        const globalRegistry = await caller.registry.listResolved({ profileId });
+        const globalModesRoot = path.join(globalRegistry.paths.globalAssetsRoot, 'modes');
+        rmSync(globalModesRoot, { recursive: true, force: true });
+        mkdirSync(globalModesRoot, { recursive: true });
+
+        const created = await caller.prompt.createCustomMode({
+            profileId,
+            topLevelTab: 'agent',
+            scope: 'global',
+            mode: {
+                slug: 'workflow-review',
+                name: 'Workflow Review',
+                authoringRole: 'single_task_agent',
+                roleTemplate: 'single_task_agent/review',
+                description: 'Workflow-aware review mode',
+                roleDefinition: 'Act as a workflow review specialist.',
+                customInstructions: 'Review workflow boundaries carefully.',
+                whenToUse: 'Use when the plan needs a recovery-aware review.',
+                tags: ['workflow', 'review'],
+            },
+        });
+
+        expect(created.settings.fileBackedCustomModes.global.agent).toEqual([
+            {
+                topLevelTab: 'agent',
+                modeKey: 'workflow-review',
+                label: 'Workflow Review',
+                authoringRole: 'single_task_agent',
+                roleTemplate: 'single_task_agent/review',
+                internalModelRole: 'apply',
+                delegatedOnly: false,
+                sessionSelectable: true,
+                description: 'Workflow-aware review mode',
+                whenToUse: 'Use when the plan needs a recovery-aware review.',
+                tags: ['workflow', 'review'],
+                toolCapabilities: ['filesystem_read', 'mcp'],
+                workflowCapabilities: ['review', 'artifact_view'],
+                behaviorFlags: ['read_only_execution', 'artifact_producing'],
+                runtimeProfile: 'reviewer',
+            },
+        ]);
+
+        const loaded = await caller.prompt.getCustomMode({
+            profileId,
+            topLevelTab: 'agent',
+            modeKey: 'workflow-review',
+            scope: 'global',
+        });
+        expect(loaded.mode).toEqual({
+            scope: 'global',
+            topLevelTab: 'agent',
+            modeKey: 'workflow-review',
+            slug: 'workflow-review',
+            name: 'Workflow Review',
+            authoringRole: 'single_task_agent',
+            roleTemplate: 'single_task_agent/review',
+            internalModelRole: 'apply',
+            delegatedOnly: false,
+            sessionSelectable: true,
+            description: 'Workflow-aware review mode',
+            roleDefinition: 'Act as a workflow review specialist.',
+            customInstructions: 'Review workflow boundaries carefully.',
+            whenToUse: 'Use when the plan needs a recovery-aware review.',
+            tags: ['workflow', 'review'],
+            toolCapabilities: ['filesystem_read', 'mcp'],
+            workflowCapabilities: ['review', 'artifact_view'],
+            behaviorFlags: ['read_only_execution', 'artifact_producing'],
+            runtimeProfile: 'reviewer',
+        });
+
+        const modeFile = path.join(globalModesRoot, 'agent-workflow-review.md');
+        const modeMarkdown = readFileSync(modeFile, 'utf8');
+        expect(modeMarkdown).toContain('authoringRole: single_task_agent');
+        expect(modeMarkdown).toContain('roleTemplate: single_task_agent/review');
+        expect(modeMarkdown).not.toContain('toolCapabilities:');
+
+        const exported = await caller.prompt.exportCustomMode({
+            profileId,
+            topLevelTab: 'agent',
+            modeKey: 'workflow-review',
+            scope: 'global',
+        });
+        expect(JSON.parse(exported.jsonText)).toEqual({
+            version: 2,
+            slug: 'workflow-review',
+            name: 'Workflow Review',
+            authoringRole: 'single_task_agent',
+            roleTemplate: 'single_task_agent/review',
+            description: 'Workflow-aware review mode',
+            roleDefinition: 'Act as a workflow review specialist.',
+            customInstructions: 'Review workflow boundaries carefully.',
+            whenToUse: 'Use when the plan needs a recovery-aware review.',
+            tags: ['workflow', 'review'],
+        });
+
+        const updated = await caller.prompt.updateCustomMode({
+            profileId,
+            topLevelTab: 'agent',
+            modeKey: 'workflow-review',
+            scope: 'global',
+            mode: {
+                name: 'Workflow Review Updated',
+                authoringRole: 'single_task_agent',
+                roleTemplate: 'single_task_agent/review',
+                description: 'Updated review mode',
+                customInstructions: 'Review with stricter criteria.',
+                whenToUse: 'Use when the plan needs a stricter review.',
+                tags: ['workflow', 'strict'],
+            },
+        });
+        expect(updated.settings.fileBackedCustomModes.global.agent[0]).toMatchObject({
+            label: 'Workflow Review Updated',
+            description: 'Updated review mode',
+            whenToUse: 'Use when the plan needs a stricter review.',
+            tags: ['workflow', 'strict'],
+        });
+
+        await expect(
+            caller.prompt.deleteCustomMode({
+                profileId,
+                topLevelTab: 'agent',
+                modeKey: 'workflow-review',
+                scope: 'global',
+                confirm: false,
+            })
+        ).rejects.toThrow('explicit confirmation');
+
+        const deleted = await caller.prompt.deleteCustomMode({
+            profileId,
+            topLevelTab: 'agent',
+            modeKey: 'workflow-review',
+            scope: 'global',
+            confirm: true,
+        });
+        expect(deleted.settings.fileBackedCustomModes.global.agent).toEqual([]);
+        expect(() => readFileSync(modeFile, 'utf8')).toThrow();
+    });
+
+    it('supports draft lifecycle, apply, overwrite protection, and portable import', async () => {
+        const caller = createCaller();
+        const globalRegistry = await caller.registry.listResolved({ profileId });
+        const globalModesRoot = path.join(globalRegistry.paths.globalAssetsRoot, 'modes');
+        rmSync(globalModesRoot, { recursive: true, force: true });
+        mkdirSync(globalModesRoot, { recursive: true });
+
+        const createdDraft = await caller.prompt.createModeDraft({
+            profileId,
+            scope: 'global',
+            sourceKind: 'manual',
+            mode: {
+                slug: 'review',
+                name: 'Review',
+                authoringRole: 'single_task_agent',
+                roleTemplate: 'single_task_agent/review',
+                customInstructions: 'Review carefully.',
+            },
+        });
+        expect(createdDraft.draft).toMatchObject({
+            scope: 'global',
+            sourceKind: 'manual',
+            validationState: 'valid',
+            mode: {
+                slug: 'review',
+                name: 'Review',
+                authoringRole: 'single_task_agent',
+                roleTemplate: 'single_task_agent/review',
+            },
+        });
+
+        const validatedDraft = await caller.prompt.validateModeDraft({
+            profileId,
+            draftId: createdDraft.draft.id,
+        });
+        expect(validatedDraft.draft.validationState).toBe('valid');
+
+        const appliedDraft = await caller.prompt.applyModeDraft({
+            profileId,
+            draftId: createdDraft.draft.id,
+            overwrite: false,
+        });
+        expect(appliedDraft.settings.modeDrafts).toEqual([]);
+        expect(appliedDraft.settings.fileBackedCustomModes.global.agent).toEqual([
+            {
+                topLevelTab: 'agent',
+                modeKey: 'review',
+                label: 'Review',
+                authoringRole: 'single_task_agent',
+                roleTemplate: 'single_task_agent/review',
+                internalModelRole: 'apply',
+                delegatedOnly: false,
+                sessionSelectable: true,
+                toolCapabilities: ['filesystem_read', 'mcp'],
+                workflowCapabilities: ['review', 'artifact_view'],
+                behaviorFlags: ['read_only_execution', 'artifact_producing'],
+                runtimeProfile: 'reviewer',
+            },
+        ]);
+        expect(readFileSync(path.join(globalModesRoot, 'agent-review.md'), 'utf8')).toContain(
+            'roleTemplate: single_task_agent/review'
+        );
+
+        const conflictingDraft = await caller.prompt.createModeDraft({
+            profileId,
+            scope: 'global',
+            sourceKind: 'portable_json_v2',
+            sourceText: '{"version":2}',
+            mode: {
+                slug: 'review',
+                name: 'Review Replacement',
+                authoringRole: 'single_task_agent',
+                roleTemplate: 'single_task_agent/review',
+                customInstructions: 'Replacement instructions.',
+            },
+        });
+        await expect(
+            caller.prompt.applyModeDraft({
+                profileId,
+                draftId: conflictingDraft.draft.id,
+                overwrite: false,
+            })
+        ).rejects.toThrow('overwrite confirmation');
+
+        const overwrittenDraft = await caller.prompt.applyModeDraft({
+            profileId,
+            draftId: conflictingDraft.draft.id,
+            overwrite: true,
+        });
+        expect(overwrittenDraft.settings.fileBackedCustomModes.global.agent[0]).toMatchObject({
+            label: 'Review Replacement',
+        });
+
+        const importedV2 = await caller.prompt.importCustomMode({
+            profileId,
+            scope: 'global',
+            jsonText: JSON.stringify({
+                version: 2,
+                slug: 'debug-review',
+                name: 'Debug Review',
+                authoringRole: 'single_task_agent',
+                roleTemplate: 'single_task_agent/debug',
+                customInstructions: 'Debug carefully.',
+            }),
+            topLevelTab: 'agent',
+        });
+        expect(importedV2.draft).toMatchObject({
+            sourceKind: 'portable_json_v2',
+            validationState: 'valid',
+            mode: {
+                slug: 'debug-review',
+                roleTemplate: 'single_task_agent/debug',
+            },
+        });
+
+        const importedV1 = await caller.prompt.importCustomMode({
+            profileId,
+            scope: 'global',
+            topLevelTab: 'agent',
+            jsonText: JSON.stringify({
+                slug: 'legacy-ask',
+                name: 'Legacy Ask',
+                customInstructions: 'Legacy instructions.',
+                groups: ['read'],
+            }),
+        });
+        expect(importedV1.draft).toMatchObject({
+            sourceKind: 'portable_json_v1',
+            validationState: 'valid',
+            mode: {
+                slug: 'legacy-ask',
+                authoringRole: 'single_task_agent',
+                roleTemplate: 'single_task_agent/ask',
+            },
+        });
+    });
+
+    it('keeps exports fail-closed for legacy markdown-only modes and draft import isolated from live registry', async () => {
+        const caller = createCaller();
+        const workspaceFingerprint = 'wsf_prompt_mode_legacy';
+
+        await createSessionInScope(caller, profileId, {
+            scope: 'workspace',
+            workspaceFingerprint,
+            title: 'Prompt mode workspace',
+            kind: 'local',
+            topLevelTab: 'agent',
+        });
+
+        const workspaceRegistry = await caller.registry.listResolved({
+            profileId,
+            workspaceFingerprint,
+        });
+        const workspaceAssetsRoot = workspaceRegistry.paths.workspaceAssetsRoot;
+        if (!workspaceAssetsRoot) {
+            throw new Error('Expected workspace assets root.');
+        }
+
+        const workspaceModesRoot = path.join(workspaceAssetsRoot, 'modes');
+        rmSync(workspaceModesRoot, { recursive: true, force: true });
+        mkdirSync(workspaceModesRoot, { recursive: true });
+
+        const legacyModeFile = path.join(workspaceModesRoot, 'agent-legacy-review.md');
+        writeFileSync(
+            legacyModeFile,
+            `---
+topLevelTab: agent
+modeKey: legacy-review
+label: Legacy Review
+description: Legacy markdown-only review mode
+---
+# Legacy Review
+
+- Review the repository with the legacy markdown prompt only.
+`,
+            'utf8'
+        );
+
+        await caller.registry.refresh({ profileId, workspaceFingerprint });
+        const exported = await caller.prompt.exportCustomMode({
+            profileId,
+            topLevelTab: 'agent',
+            modeKey: 'legacy-review',
+            scope: 'workspace',
+            workspaceFingerprint,
+        });
+        expect(JSON.parse(exported.jsonText)).toEqual({
+            version: 2,
+            slug: 'legacy-review',
+            name: 'Legacy Review',
+            authoringRole: 'single_task_agent',
+            roleTemplate: 'single_task_agent/apply',
+            description: 'Legacy markdown-only review mode',
+            customInstructions: '# Legacy Review\n\n- Review the repository with the legacy markdown prompt only.',
+        });
+
+        const importedDraft = await caller.prompt.importCustomMode({
+            profileId,
+            scope: 'workspace',
+            workspaceFingerprint,
+            topLevelTab: 'orchestrator',
+            jsonText: JSON.stringify({
+                slug: 'workspace-orchestrator',
+                name: 'Workspace Orchestrator',
+                customInstructions: 'Coordinate from the workspace root first.',
+                groups: ['edit'],
+            }),
+        });
+        expect(importedDraft.settings.fileBackedCustomModes.workspace?.orchestrator).toEqual([]);
+        expect(importedDraft.draft.scope).toBe('workspace');
+        expect(readFileSync(legacyModeFile, 'utf8')).toContain('Legacy Review');
     });
 
     it('fails closed on malformed persisted prompt-layer records', async () => {
@@ -191,718 +478,13 @@ describe('runtime contracts: prompt layers', () => {
         expect(settings.settings.appGlobalInstructions).toBe('');
         expect(settings.settings.profileGlobalInstructions).toBe('');
         expect(settings.settings.topLevelInstructions.agent).toBe('');
-        expect(settings.settings.builtInModes.agent.find((mode) => mode.modeKey === 'code')).toEqual({
+        expect(settings.settings.builtInModes.agent.find((mode) => mode.modeKey === 'code')).toMatchObject({
             topLevelTab: 'agent',
             modeKey: 'code',
             label: 'Agent Code',
             prompt: {},
             hasOverride: true,
-            toolCapabilities: ['filesystem_read', 'filesystem_write', 'shell', 'mcp', 'code_runtime'],
-            workflowCapabilities: ['artifact_view'],
-            behaviorFlags: ['workspace_mutating', 'checkpoint_eligible', 'artifact_producing'],
-            runtimeProfile: 'mutating_agent',
+            roleTemplate: 'single_task_agent/apply',
         });
-    });
-
-    it('does not apply built-in overrides to a shadowing custom mode', async () => {
-        const caller = createCaller();
-        const { sqlite } = getPersistence();
-        const now = new Date().toISOString();
-
-        const insertCustomMode = sqlite.prepare(
-            `
-                INSERT INTO mode_definitions (
-                    id, profile_id, top_level_tab, mode_key, label, asset_key, prompt_json,
-                    execution_policy_json, source, source_kind, scope, workspace_fingerprint,
-                    origin_path, description, tags_json, enabled, precedence, created_at, updated_at
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `
-        );
-
-        insertCustomMode.run(
-            'mode_custom_agent_code',
-            profileId,
-            'agent',
-            'code',
-            'Custom Agent Code',
-            'custom_agent_code',
-            JSON.stringify({ customInstructions: 'Workspace-owned custom code mode.' }),
-            JSON.stringify({ toolCapabilities: ['filesystem_read'] }),
-            'user',
-            'global_file',
-            'global',
-            null,
-            'C:/registry/modes/code.md',
-            'Custom code mode',
-            '[]',
-            1,
-            10,
-            now,
-            now
-        );
-        insertCustomMode.run(
-            'mode_custom_chat_chat',
-            profileId,
-            'chat',
-            'chat',
-            'Custom Chat',
-            'custom_chat_chat',
-            JSON.stringify({ customInstructions: 'Custom chat mode instructions.' }),
-            JSON.stringify({}),
-            'user',
-            'global_file',
-            'global',
-            null,
-            'C:/registry/modes/chat.md',
-            'Custom chat mode',
-            '[]',
-            1,
-            10,
-            now,
-            now
-        );
-
-        await caller.prompt.setBuiltInModePrompt({
-            profileId,
-            topLevelTab: 'agent',
-            modeKey: 'code',
-            roleDefinition: 'Built-in role override',
-            customInstructions: 'Built-in custom override',
-        });
-        await caller.prompt.setBuiltInModePrompt({
-            profileId,
-            topLevelTab: 'chat',
-            modeKey: 'chat',
-            roleDefinition: 'Built-in chat role override',
-            customInstructions: 'Built-in chat custom override',
-        });
-
-        const agentModes = await caller.mode.list({
-            profileId,
-            topLevelTab: 'agent',
-        });
-        expect(agentModes.modes.find((mode) => mode.modeKey === 'code')).toEqual(
-            expect.objectContaining({
-                label: 'Custom Agent Code',
-                prompt: {
-                    customInstructions: 'Workspace-owned custom code mode.',
-                },
-            })
-        );
-
-        const chatModes = await caller.mode.list({
-            profileId,
-            topLevelTab: 'chat',
-        });
-        expect(chatModes.modes.find((mode) => mode.modeKey === 'chat')).toEqual(
-            expect.objectContaining({
-                label: 'Custom Chat',
-                prompt: {
-                    customInstructions: 'Custom chat mode instructions.',
-                },
-            })
-        );
-    });
-
-    it('imports and exports text-based file-backed custom modes without mutating unrelated settings', async () => {
-        const caller = createCaller();
-        const workspaceFingerprint = 'wsf_prompt_portability';
-
-        await caller.prompt.setBuiltInModePrompt({
-            profileId,
-            topLevelTab: 'chat',
-            modeKey: 'chat',
-            roleDefinition: 'Built-in chat role override',
-            customInstructions: 'Built-in chat custom override',
-        });
-
-        const globalRegistry = await caller.registry.listResolved({ profileId });
-        const globalModesRoot = path.join(globalRegistry.paths.globalAssetsRoot, 'modes');
-        rmSync(globalModesRoot, { recursive: true, force: true });
-        mkdirSync(globalModesRoot, { recursive: true });
-
-        const importedGlobal = await caller.prompt.importCustomMode({
-            profileId,
-            topLevelTab: 'chat',
-            scope: 'global',
-            jsonText: JSON.stringify({
-                slug: 'review',
-                name: 'Portable Review',
-                description: 'Global chat review mode',
-                roleDefinition: 'Act as a precise reviewer.',
-                customInstructions: 'Review the current conversation carefully.',
-                whenToUse: 'Use when a conversation needs a strict review pass.',
-                groups: ['read', 'command'],
-            }),
-            overwrite: false,
-        });
-        expect(importedGlobal.settings.fileBackedCustomModes.global.chat).toEqual([
-            {
-                topLevelTab: 'chat',
-                modeKey: 'review',
-                label: 'Portable Review',
-                description: 'Global chat review mode',
-                whenToUse: 'Use when a conversation needs a strict review pass.',
-                toolCapabilities: ['filesystem_read', 'shell'],
-            },
-        ]);
-        expect(importedGlobal.settings.builtInModes.chat.find((mode) => mode.modeKey === 'chat')?.prompt).toEqual({
-            roleDefinition: 'Built-in chat role override',
-            customInstructions: 'Built-in chat custom override',
-        });
-
-        const globalModeFile = path.join(globalModesRoot, 'chat-review.md');
-        const globalModeMarkdown = readFileSync(globalModeFile, 'utf8');
-        expect(globalModeMarkdown).toContain('topLevelTab: chat');
-        expect(globalModeMarkdown).toContain('modeKey: review');
-        expect(globalModeMarkdown).toContain('whenToUse: "Use when a conversation needs a strict review pass."');
-        expect(globalModeMarkdown).toContain('toolCapabilities:');
-        expect(globalModeMarkdown).toContain('- filesystem_read');
-        expect(globalModeMarkdown).toContain('- shell');
-        expect(globalModeMarkdown).toContain('roleDefinition: "Act as a precise reviewer."');
-        expect(globalModeMarkdown).toContain('Review the current conversation carefully.');
-
-        const exportedGlobal = await caller.prompt.exportCustomMode({
-            profileId,
-            topLevelTab: 'chat',
-            modeKey: 'review',
-            scope: 'global',
-        });
-        expect(JSON.parse(exportedGlobal.jsonText)).toEqual({
-            slug: 'review',
-            name: 'Portable Review',
-            description: 'Global chat review mode',
-            roleDefinition: 'Act as a precise reviewer.',
-            customInstructions: 'Review the current conversation carefully.',
-            whenToUse: 'Use when a conversation needs a strict review pass.',
-            groups: ['read', 'command'],
-        });
-
-        const globalModes = await caller.mode.list({
-            profileId,
-            topLevelTab: 'chat',
-        });
-        expect(globalModes.modes.find((mode) => mode.modeKey === 'review')).toEqual(
-            expect.objectContaining({
-                whenToUse: 'Use when a conversation needs a strict review pass.',
-                executionPolicy: {
-                    toolCapabilities: ['filesystem_read', 'shell'],
-                },
-            })
-        );
-
-        await createSessionInScope(caller, profileId, {
-            scope: 'workspace',
-            workspaceFingerprint,
-            title: 'Prompt portability workspace',
-            kind: 'local',
-            topLevelTab: 'orchestrator',
-        });
-        const workspaceRegistry = await caller.registry.listResolved({
-            profileId,
-            workspaceFingerprint,
-        });
-        const workspaceAssetsRoot = workspaceRegistry.paths.workspaceAssetsRoot;
-        if (!workspaceAssetsRoot) {
-            throw new Error('Expected workspace assets root for prompt portability test.');
-        }
-        const workspaceModesRoot = path.join(workspaceAssetsRoot, 'modes');
-        rmSync(workspaceModesRoot, { recursive: true, force: true });
-        mkdirSync(workspaceModesRoot, { recursive: true });
-
-        const importedWorkspace = await caller.prompt.importCustomMode({
-            profileId,
-            topLevelTab: 'orchestrator',
-            scope: 'workspace',
-            workspaceFingerprint,
-            jsonText: JSON.stringify({
-                slug: 'workspace-orchestrator',
-                name: 'Workspace Orchestrator',
-                customInstructions: 'Coordinate work from the workspace root first.',
-                whenToUse: 'Use when the workspace needs multi-step coordination.',
-                groups: ['edit'],
-            }),
-            overwrite: false,
-        });
-        expect(importedWorkspace.settings.fileBackedCustomModes.workspace?.orchestrator).toEqual([
-            {
-                topLevelTab: 'orchestrator',
-                modeKey: 'workspace-orchestrator',
-                label: 'Workspace Orchestrator',
-                whenToUse: 'Use when the workspace needs multi-step coordination.',
-                toolCapabilities: ['filesystem_read', 'filesystem_write'],
-            },
-        ]);
-        expect(readFileSync(globalModeFile, 'utf8')).toBe(globalModeMarkdown);
-
-        const workspaceModeFile = path.join(workspaceModesRoot, 'orchestrator-workspace-orchestrator.md');
-        const workspaceModeMarkdown = readFileSync(workspaceModeFile, 'utf8');
-        expect(workspaceModeMarkdown).toContain('topLevelTab: orchestrator');
-        expect(workspaceModeMarkdown).toContain('whenToUse: "Use when the workspace needs multi-step coordination."');
-        expect(workspaceModeMarkdown).toContain('Coordinate work from the workspace root first.');
-
-        const workspaceModes = await caller.mode.list({
-            profileId,
-            topLevelTab: 'orchestrator',
-            workspaceFingerprint,
-        });
-        expect(workspaceModes.modes.find((mode) => mode.modeKey === 'workspace-orchestrator')?.label).toBe(
-            'Workspace Orchestrator'
-        );
-    });
-
-    it('round-trips canonical workflow metadata for file-backed custom modes and fails closed on portable export', async () => {
-        const caller = createCaller();
-        const globalRegistry = await caller.registry.listResolved({ profileId });
-        const globalModesRoot = path.join(globalRegistry.paths.globalAssetsRoot, 'modes');
-        rmSync(globalModesRoot, { recursive: true, force: true });
-        mkdirSync(globalModesRoot, { recursive: true });
-
-        const created = await caller.prompt.createCustomMode({
-            profileId,
-            topLevelTab: 'agent',
-            scope: 'global',
-            mode: {
-                slug: 'workflow-review',
-                name: 'Workflow Review',
-                description: 'Workflow-aware review mode',
-                roleDefinition: 'Act as a workflow review specialist.',
-                customInstructions: 'Review workflow boundaries carefully.',
-                whenToUse: 'Use when the plan needs a recovery-aware review.',
-                tags: ['workflow', 'review'],
-                toolCapabilities: ['filesystem_read'],
-                workflowCapabilities: ['review', 'artifact_view'],
-                behaviorFlags: ['approval_gated', 'artifact_producing'],
-                runtimeProfile: 'reviewer',
-            },
-        });
-
-        expect(created.settings.fileBackedCustomModes.global.agent).toEqual([
-            {
-                topLevelTab: 'agent',
-                modeKey: 'workflow-review',
-                label: 'Workflow Review',
-                description: 'Workflow-aware review mode',
-                whenToUse: 'Use when the plan needs a recovery-aware review.',
-                tags: ['workflow', 'review'],
-                toolCapabilities: ['filesystem_read'],
-                workflowCapabilities: ['review', 'artifact_view'],
-                behaviorFlags: ['approval_gated', 'artifact_producing'],
-                runtimeProfile: 'reviewer',
-            },
-        ]);
-
-        const loaded = await caller.prompt.getCustomMode({
-            profileId,
-            topLevelTab: 'agent',
-            modeKey: 'workflow-review',
-            scope: 'global',
-        });
-        expect(loaded.mode).toEqual({
-            scope: 'global',
-            topLevelTab: 'agent',
-            modeKey: 'workflow-review',
-            slug: 'workflow-review',
-            name: 'Workflow Review',
-            description: 'Workflow-aware review mode',
-            roleDefinition: 'Act as a workflow review specialist.',
-            customInstructions: 'Review workflow boundaries carefully.',
-            whenToUse: 'Use when the plan needs a recovery-aware review.',
-            tags: ['workflow', 'review'],
-            toolCapabilities: ['filesystem_read'],
-            workflowCapabilities: ['review', 'artifact_view'],
-            behaviorFlags: ['approval_gated', 'artifact_producing'],
-            runtimeProfile: 'reviewer',
-        });
-
-        const modeFile = path.join(globalModesRoot, 'agent-workflow-review.md');
-        const modeMarkdown = readFileSync(modeFile, 'utf8');
-        expect(modeMarkdown).toContain('workflowCapabilities:');
-        expect(modeMarkdown).toContain('- review');
-        expect(modeMarkdown).toContain('behaviorFlags:');
-        expect(modeMarkdown).toContain('- approval_gated');
-        expect(modeMarkdown).toContain('runtimeProfile: reviewer');
-
-        await expect(
-            caller.prompt.exportCustomMode({
-                profileId,
-                topLevelTab: 'agent',
-                modeKey: 'workflow-review',
-                scope: 'global',
-            })
-        ).rejects.toThrow('Portable export does not support workflow capabilities');
-    });
-
-    it('creates, edits, and deletes file-backed custom modes without mutating unrelated state', async () => {
-        const caller = createCaller();
-        const globalRegistry = await caller.registry.listResolved({ profileId });
-        const globalModesRoot = path.join(globalRegistry.paths.globalAssetsRoot, 'modes');
-        rmSync(globalModesRoot, { recursive: true, force: true });
-        mkdirSync(globalModesRoot, { recursive: true });
-
-        await caller.prompt.setBuiltInModePrompt({
-            profileId,
-            topLevelTab: 'chat',
-            modeKey: 'chat',
-            roleDefinition: 'Built-in chat role override',
-            customInstructions: 'Built-in chat custom override',
-        });
-
-        const created = await caller.prompt.createCustomMode({
-            profileId,
-            topLevelTab: 'chat',
-            scope: 'global',
-            mode: {
-                slug: 'review',
-                name: 'Review',
-                description: 'Global review mode',
-                roleDefinition: 'Act as a careful reviewer.',
-                customInstructions: 'Review the conversation carefully.',
-                whenToUse: 'Use when a conversation needs a careful review pass.',
-                tags: ['quality', 'review'],
-                toolCapabilities: ['filesystem_read', 'shell'],
-            },
-        });
-        expect(created.settings.fileBackedCustomModes.global.chat).toEqual([
-            {
-                topLevelTab: 'chat',
-                modeKey: 'review',
-                label: 'Review',
-                description: 'Global review mode',
-                whenToUse: 'Use when a conversation needs a careful review pass.',
-                tags: ['quality', 'review'],
-                toolCapabilities: ['filesystem_read', 'shell'],
-            },
-        ]);
-        expect(created.settings.builtInModes.chat.find((mode) => mode.modeKey === 'chat')?.prompt).toEqual({
-            roleDefinition: 'Built-in chat role override',
-            customInstructions: 'Built-in chat custom override',
-        });
-
-        const modeFile = path.join(globalModesRoot, 'chat-review.md');
-        const initialMarkdown = readFileSync(modeFile, 'utf8');
-        expect(initialMarkdown).toContain('label: "Review"');
-        expect(initialMarkdown).toContain('tags:');
-        expect(initialMarkdown).toContain('- "quality"');
-        expect(initialMarkdown).toContain('toolCapabilities:');
-        expect(initialMarkdown).toContain('- filesystem_read');
-        expect(initialMarkdown).toContain('- shell');
-        expect(initialMarkdown).not.toContain('groups:');
-
-        const loaded = await caller.prompt.getCustomMode({
-            profileId,
-            topLevelTab: 'chat',
-            modeKey: 'review',
-            scope: 'global',
-        });
-        expect(loaded.mode).toEqual({
-            scope: 'global',
-            topLevelTab: 'chat',
-            modeKey: 'review',
-            slug: 'review',
-            name: 'Review',
-            description: 'Global review mode',
-            roleDefinition: 'Act as a careful reviewer.',
-            customInstructions: 'Review the conversation carefully.',
-            whenToUse: 'Use when a conversation needs a careful review pass.',
-            tags: ['quality', 'review'],
-            toolCapabilities: ['filesystem_read', 'shell'],
-        });
-
-        await expect(
-            caller.prompt.createCustomMode({
-                profileId,
-                topLevelTab: 'chat',
-                scope: 'global',
-                mode: {
-                    slug: 'review',
-                    name: 'Duplicate Review',
-                },
-            })
-        ).rejects.toThrow('already exists');
-        expect(readFileSync(modeFile, 'utf8')).toBe(initialMarkdown);
-
-        const updated = await caller.prompt.updateCustomMode({
-            profileId,
-            topLevelTab: 'chat',
-            modeKey: 'review',
-            scope: 'global',
-            mode: {
-                name: 'Review Updated',
-                description: 'Updated global review mode',
-                roleDefinition: 'Act as a stricter reviewer.',
-                customInstructions: 'Review the conversation with stricter criteria.',
-                whenToUse: 'Use when a conversation needs a stricter review pass.',
-                tags: ['quality', 'strict'],
-                toolCapabilities: ['filesystem_read'],
-            },
-        });
-        expect(updated.settings.fileBackedCustomModes.global.chat).toEqual([
-            {
-                topLevelTab: 'chat',
-                modeKey: 'review',
-                label: 'Review Updated',
-                description: 'Updated global review mode',
-                whenToUse: 'Use when a conversation needs a stricter review pass.',
-                tags: ['quality', 'strict'],
-                toolCapabilities: ['filesystem_read'],
-            },
-        ]);
-        const updatedMarkdown = readFileSync(modeFile, 'utf8');
-        expect(updatedMarkdown).toContain('label: "Review Updated"');
-        expect(updatedMarkdown).toContain('whenToUse: "Use when a conversation needs a stricter review pass."');
-
-        const activated = await caller.mode.setActive({
-            profileId,
-            topLevelTab: 'chat',
-            modeKey: 'review',
-        });
-        expect(activated.updated).toBe(true);
-
-        await expect(
-            caller.prompt.deleteCustomMode({
-                profileId,
-                topLevelTab: 'chat',
-                modeKey: 'review',
-                scope: 'global',
-                confirm: false,
-            })
-        ).rejects.toThrow('explicit confirmation');
-        expect(readFileSync(modeFile, 'utf8')).toBe(updatedMarkdown);
-
-        const deleted = await caller.prompt.deleteCustomMode({
-            profileId,
-            topLevelTab: 'chat',
-            modeKey: 'review',
-            scope: 'global',
-            confirm: true,
-        });
-        expect(deleted.settings.fileBackedCustomModes.global.chat).toEqual([]);
-        expect(() => readFileSync(modeFile, 'utf8')).toThrow();
-
-        const activeAfterDelete = await caller.mode.getActive({
-            profileId,
-            topLevelTab: 'chat',
-        });
-        expect(activeAfterDelete.activeMode.modeKey).toBe('chat');
-        expect(activeAfterDelete.activeMode.label).toBe('Chat');
-        expect(activeAfterDelete.activeMode.prompt).toEqual({
-            roleDefinition: 'Built-in chat role override',
-            customInstructions: 'Built-in chat custom override',
-        });
-    });
-
-    it('creates workspace file-backed custom modes in the workspace registry root', async () => {
-        const caller = createCaller();
-        const workspaceFingerprint = 'wsf_prompt_custom_mode_crud';
-
-        await createSessionInScope(caller, profileId, {
-            scope: 'workspace',
-            workspaceFingerprint,
-            title: 'Prompt mode workspace crud',
-            kind: 'local',
-            topLevelTab: 'agent',
-        });
-        const workspaceRegistry = await caller.registry.listResolved({
-            profileId,
-            workspaceFingerprint,
-        });
-        const workspaceAssetsRoot = workspaceRegistry.paths.workspaceAssetsRoot;
-        if (!workspaceAssetsRoot) {
-            throw new Error('Expected workspace assets root for custom mode workspace test.');
-        }
-        const workspaceModesRoot = path.join(workspaceAssetsRoot, 'modes');
-        rmSync(workspaceModesRoot, { recursive: true, force: true });
-        mkdirSync(workspaceModesRoot, { recursive: true });
-
-        const created = await caller.prompt.createCustomMode({
-            profileId,
-            topLevelTab: 'agent',
-            scope: 'workspace',
-            workspaceFingerprint,
-            mode: {
-                slug: 'workspace-review',
-                name: 'Workspace Review',
-                customInstructions: 'Review the active workspace first.',
-            },
-        });
-        expect(created.settings.fileBackedCustomModes.workspace?.agent).toEqual([
-            {
-                topLevelTab: 'agent',
-                modeKey: 'workspace-review',
-                label: 'Workspace Review',
-            },
-        ]);
-
-        const workspaceModeFile = path.join(workspaceModesRoot, 'agent-workspace-review.md');
-        expect(readFileSync(workspaceModeFile, 'utf8')).toContain('Review the active workspace first.');
-    });
-
-    it('fails closed on unsupported fields and overwrite without explicit confirmation', async () => {
-        const caller = createCaller();
-        const globalRegistry = await caller.registry.listResolved({ profileId });
-        const globalModesRoot = path.join(globalRegistry.paths.globalAssetsRoot, 'modes');
-        rmSync(globalModesRoot, { recursive: true, force: true });
-        mkdirSync(globalModesRoot, { recursive: true });
-        const existingModeFile = path.join(globalModesRoot, 'chat-review.md');
-
-        await caller.prompt.importCustomMode({
-            profileId,
-            topLevelTab: 'chat',
-            scope: 'global',
-            jsonText: JSON.stringify({
-                slug: 'review',
-                name: 'Original Review',
-                customInstructions: 'Original instructions.',
-            }),
-            overwrite: false,
-        });
-        const initialMarkdown = readFileSync(existingModeFile, 'utf8');
-
-        await expect(
-            caller.prompt.importCustomMode({
-                profileId,
-                topLevelTab: 'chat',
-                scope: 'global',
-                jsonText: JSON.stringify({
-                    slug: 'review',
-                    name: 'Replacement Review',
-                    customInstructions: 'Replacement instructions.',
-                }),
-                overwrite: false,
-            })
-        ).rejects.toThrow('overwrite confirmation');
-        expect(readFileSync(existingModeFile, 'utf8')).toBe(initialMarkdown);
-
-        await expect(
-            caller.prompt.importCustomMode({
-                profileId,
-                topLevelTab: 'chat',
-                scope: 'global',
-                jsonText: JSON.stringify({
-                    slug: 'invalid-mode',
-                    name: 'Invalid Mode',
-                    groups: ['read', 42],
-                }),
-                overwrite: false,
-            })
-        ).rejects.toThrow('Invalid "groups": expected string array.');
-
-        await expect(
-            caller.prompt.importCustomMode({
-                profileId,
-                topLevelTab: 'chat',
-                scope: 'global',
-                jsonText: JSON.stringify({
-                    slug: 'invalid-mode',
-                    name: 'Invalid Mode',
-                    groups: [['edit', { fileRegex: 'src/.*' }]],
-                }),
-                overwrite: false,
-            })
-        ).rejects.toThrow('restricted tuple forms');
-
-        await expect(
-            caller.prompt.importCustomMode({
-                profileId,
-                topLevelTab: 'chat',
-                scope: 'global',
-                jsonText: JSON.stringify({
-                    slug: 'invalid-mode',
-                    name: 'Invalid Mode',
-                    groups: ['browser'],
-                }),
-                overwrite: false,
-            })
-        ).rejects.toThrow('Unsupported portable tool group "browser"');
-
-        await expect(
-            caller.prompt.importCustomMode({
-                profileId,
-                topLevelTab: 'chat',
-                scope: 'global',
-                jsonText: JSON.stringify({
-                    slug: 'invalid-mode',
-                    name: 'Invalid Mode',
-                    unknownField: 'still fail closed',
-                }),
-                overwrite: false,
-            })
-        ).rejects.toThrow('Invalid custom mode field "unknownField"');
-
-        expect(readFileSync(existingModeFile, 'utf8')).toBe(initialMarkdown);
-    });
-
-    it('fails closed when portable export cannot faithfully represent internal tool capabilities', async () => {
-        const caller = createCaller();
-        const globalRegistry = await caller.registry.listResolved({ profileId });
-        const globalModesRoot = path.join(globalRegistry.paths.globalAssetsRoot, 'modes');
-        rmSync(globalModesRoot, { recursive: true, force: true });
-        mkdirSync(globalModesRoot, { recursive: true });
-
-        await caller.prompt.createCustomMode({
-            profileId,
-            topLevelTab: 'agent',
-            scope: 'global',
-            mode: {
-                slug: 'git-review',
-                name: 'Git Review',
-                customInstructions: 'Inspect repository history before reviewing.',
-                toolCapabilities: ['git'],
-            },
-        });
-
-        await expect(
-            caller.prompt.exportCustomMode({
-                profileId,
-                topLevelTab: 'agent',
-                modeKey: 'git-review',
-                scope: 'global',
-            })
-        ).rejects.toThrow('Portable export does not support the "git" tool capability');
-        expect(readFileSync(path.join(globalModesRoot, 'agent-git-review.md'), 'utf8')).toContain('- git');
-    });
-
-    it('exports a legacy markdown-only custom mode as the supported portable subset without mutation', async () => {
-        const caller = createCaller();
-        const globalRegistry = await caller.registry.listResolved({ profileId });
-        const globalModesRoot = path.join(globalRegistry.paths.globalAssetsRoot, 'modes');
-        rmSync(globalModesRoot, { recursive: true, force: true });
-        mkdirSync(globalModesRoot, { recursive: true });
-        const legacyModeFile = path.join(globalModesRoot, 'agent-legacy-review.md');
-
-        writeFileSync(
-            legacyModeFile,
-            `---
-topLevelTab: agent
-modeKey: legacy-review
-label: Legacy Review
-description: Legacy markdown-only review mode
----
-# Legacy Review
-
-- Review the repository with the legacy markdown prompt only.
-`,
-            'utf8'
-        );
-
-        await caller.registry.refresh({ profileId });
-        const beforeExport = readFileSync(legacyModeFile, 'utf8');
-
-        const exported = await caller.prompt.exportCustomMode({
-            profileId,
-            topLevelTab: 'agent',
-            modeKey: 'legacy-review',
-            scope: 'global',
-        });
-
-        expect(JSON.parse(exported.jsonText)).toEqual({
-            slug: 'legacy-review',
-            name: 'Legacy Review',
-            description: 'Legacy markdown-only review mode',
-            customInstructions: '# Legacy Review\n\n- Review the repository with the legacy markdown prompt only.',
-        });
-        expect(readFileSync(legacyModeFile, 'utf8')).toBe(beforeExport);
     });
 });

@@ -657,6 +657,22 @@ CREATE TABLE mode_definitions (
     updated_at TEXT NOT NULL
 );
 
+CREATE TABLE mode_drafts (
+    id TEXT PRIMARY KEY,
+    profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    scope TEXT NOT NULL CHECK (scope IN ('global', 'workspace')),
+    workspace_fingerprint TEXT NULL,
+    source_kind TEXT NOT NULL CHECK (
+        source_kind IN ('manual', 'portable_json_v1', 'portable_json_v2', 'pasted_source_material')
+    ),
+    source_text TEXT NULL,
+    draft_json TEXT NOT NULL,
+    validation_state TEXT NOT NULL CHECK (validation_state IN ('unvalidated', 'valid', 'invalid')),
+    validation_errors_json TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
 CREATE TABLE rulesets (
     id TEXT PRIMARY KEY,
     profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
@@ -1514,6 +1530,9 @@ CREATE UNIQUE INDEX idx_mode_definitions_profile_registry_asset
 
 CREATE INDEX idx_mode_definitions_profile_tab_scope
     ON mode_definitions(profile_id, top_level_tab, scope, workspace_fingerprint);
+
+CREATE INDEX idx_mode_drafts_profile_scope
+    ON mode_drafts(profile_id, scope, workspace_fingerprint, updated_at);
 
 CREATE UNIQUE INDEX idx_rulesets_profile_registry_asset
     ON rulesets(profile_id, scope, ifnull(workspace_fingerprint, ''), asset_key);

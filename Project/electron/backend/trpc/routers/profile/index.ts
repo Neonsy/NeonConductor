@@ -4,6 +4,7 @@ import {
     profileDeleteInputSchema,
     profileDuplicateInputSchema,
     profileGetExecutionPresetInputSchema,
+    profileInputSchema,
     profileGetMemoryRetrievalModelInputSchema,
     profileGetUtilityModelConsumerPreferencesInputSchema,
     profileGetUtilityModelInputSchema,
@@ -15,6 +16,7 @@ import {
     profileSetUtilityModelInputSchema,
 } from '@/app/backend/runtime/contracts';
 import { getExecutionPreset, setExecutionPreset } from '@/app/backend/runtime/services/profile/executionPreset';
+import { internalModelRoleDiagnosticsService } from '@/app/backend/runtime/services/profile/internalModelRoleDiagnostics';
 import { memoryRetrievalModelService } from '@/app/backend/runtime/services/profile/memoryRetrievalModel';
 import { utilityModelConsumerPreferencesService } from '@/app/backend/runtime/services/profile/utilityModelConsumerPreferences';
 import { utilityModelService } from '@/app/backend/runtime/services/profile/utilityModel';
@@ -44,6 +46,11 @@ export const profileRouter = router({
     getExecutionPreset: publicProcedure.input(profileGetExecutionPresetInputSchema).query(async ({ input }) => {
         return {
             preset: await getExecutionPreset(input.profileId),
+        };
+    }),
+    getInternalModelRoleDiagnostics: publicProcedure.input(profileInputSchema).query(async ({ input }) => {
+        return {
+            diagnostics: await internalModelRoleDiagnosticsService.getDiagnostics(input.profileId),
         };
     }),
     getUtilityModel: publicProcedure.input(profileGetUtilityModelInputSchema).query(async ({ input }) => {

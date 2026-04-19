@@ -145,6 +145,7 @@ function patchProviderControlSnapshot(
         entries: nextEntries,
         defaults: nextDefaults,
         specialistDefaults: input.specialistDefaults ?? current.specialistDefaults,
+        internalModelRoleDiagnostics: current.internalModelRoleDiagnostics,
         ...((input.workflowRoutingPreferences ?? current.workflowRoutingPreferences) !== undefined
             ? {
                   workflowRoutingPreferences:

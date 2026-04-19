@@ -48,7 +48,9 @@ function summarizeCheckpoint(input: {
         : `Automatic checkpoint for ${input.executionTargetLabel}`;
 }
 
-function isCheckpointCapableMode(mode: Pick<ModeDefinition, 'executionPolicy'>): boolean {
+function isCheckpointCapableMode(
+    mode: Pick<ModeDefinition, 'topLevelTab' | 'modeKey' | 'executionPolicy'>
+): boolean {
     return modeIsCheckpointEligible(mode) && modeMutatesWorkspace(mode);
 }
 

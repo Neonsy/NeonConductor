@@ -8,6 +8,14 @@ import type { ProviderControlSnapshot, ProviderListItem } from '@/app/backend/pr
 import type { RuntimeProviderId } from '@/shared/contracts';
 import type { WorkflowRoutingPreferenceRecord } from '@/shared/contracts/types/provider';
 
+function createInternalModelRoleDiagnostics(): ProviderControlSnapshot['internalModelRoleDiagnostics'] {
+    return {
+        roles: [],
+        plannerTargets: [],
+        updatedAt: '2026-03-30T00:00:00.000Z',
+    };
+}
+
 function createSetDataSpy<T>() {
     let current: T | undefined;
     const setData = vi.fn((_input: unknown, next: T | ((value: T | undefined) => T | undefined)) => {
@@ -138,6 +146,7 @@ describe('projectProviderSettingsControlPlaneCache', () => {
             ],
             defaults: { providerId: 'openai', modelId: 'openai/gpt-4o-mini' },
             specialistDefaults: [],
+            internalModelRoleDiagnostics: createInternalModelRoleDiagnostics(),
             workflowRoutingPreferences: [
                 {
                     targetKey: 'planning',
@@ -259,6 +268,7 @@ describe('projectProviderSettingsControlPlaneCache', () => {
                         modelId: 'openai/gpt-5',
                     },
                 ],
+                internalModelRoleDiagnostics: createInternalModelRoleDiagnostics(),
                 workflowRoutingPreferences: [
                     {
                         targetKey: 'planning',
@@ -297,6 +307,7 @@ describe('projectProviderSettingsControlPlaneCache', () => {
                         modelId: 'openai/gpt-5',
                     },
                 ],
+                internalModelRoleDiagnostics: createInternalModelRoleDiagnostics(),
                 workflowRoutingPreferences: [
                     {
                         targetKey: 'planning',

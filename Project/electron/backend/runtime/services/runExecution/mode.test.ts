@@ -18,10 +18,20 @@ function buildMode(input: {
     profileId: string;
     topLevelTab: 'agent' | 'orchestrator';
     modeKey: string;
+    authoringRole: 'single_task_agent';
+    roleTemplate: 'single_task_agent/apply' | 'single_task_agent/plan';
+    internalModelRole: 'apply' | 'planner';
+    delegatedOnly: false;
+    sessionSelectable: true;
     label: string;
     assetKey: string;
     prompt: Record<string, never>;
     executionPolicy: {
+        authoringRole: 'single_task_agent';
+        roleTemplate: 'single_task_agent/apply' | 'single_task_agent/plan';
+        internalModelRole: 'apply' | 'planner';
+        delegatedOnly: false;
+        sessionSelectable: true;
         workflowCapabilities?: string[];
     };
     source: string;
@@ -37,10 +47,24 @@ function buildMode(input: {
         profileId: 'profile_default',
         topLevelTab: 'agent',
         modeKey: input.modeKey,
+        authoringRole: 'single_task_agent',
+        roleTemplate: input.workflowCapabilities?.includes('planning')
+            ? 'single_task_agent/plan'
+            : 'single_task_agent/apply',
+        internalModelRole: input.workflowCapabilities?.includes('planning') ? 'planner' : 'apply',
+        delegatedOnly: false,
+        sessionSelectable: true,
         label: input.modeKey,
         assetKey: `agent.${input.modeKey}`,
         prompt: {},
         executionPolicy: {
+            authoringRole: 'single_task_agent',
+            roleTemplate: input.workflowCapabilities?.includes('planning')
+                ? 'single_task_agent/plan'
+                : 'single_task_agent/apply',
+            internalModelRole: input.workflowCapabilities?.includes('planning') ? 'planner' : 'apply',
+            delegatedOnly: false,
+            sessionSelectable: true,
             ...(input.workflowCapabilities ? { workflowCapabilities: input.workflowCapabilities } : {}),
         },
         source: 'test',

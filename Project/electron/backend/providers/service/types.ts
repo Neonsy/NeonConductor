@@ -1,6 +1,7 @@
 import type { ProviderModelRecord, ProviderRecord } from '@/app/backend/persistence/types';
 import type { ProviderCatalogStrategy } from '@/app/backend/providers/registry';
 import type {
+    InternalModelRoleDiagnostics,
     ProviderEmbeddingModelRecord,
     ProviderConnectionProfile,
     ProviderExecutionPreference,
@@ -58,6 +59,7 @@ export interface ProviderControlSnapshot {
     };
     specialistDefaults: import('@/app/backend/runtime/contracts/types/provider').ProviderSpecialistDefaultRecord[];
     workflowRoutingPreferences?: import('@/app/backend/runtime/contracts/types/provider').WorkflowRoutingPreferenceRecord[];
+    internalModelRoleDiagnostics: InternalModelRoleDiagnostics;
 }
 
 export interface ProviderEmbeddingControlEntry {

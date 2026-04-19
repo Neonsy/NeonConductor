@@ -14,6 +14,18 @@ interface ProfileSettingsViewProps {
     onSubsectionChange?: (subsection: ProfileSettingsSubsectionId) => void;
 }
 
+function InternalRoleDiagnosticBanner(input: {
+    label: string;
+    detail: string;
+}) {
+    return (
+        <div className='border-border/70 bg-background/60 rounded-2xl border px-4 py-3 text-sm'>
+            <p className='font-medium'>{input.label}</p>
+            <p className='text-muted-foreground mt-1 text-xs leading-5'>{input.detail}</p>
+        </div>
+    );
+}
+
 function ProfileSelectionToolbar({
     selectedProfileId,
     profiles,
@@ -254,6 +266,9 @@ function ProfileConversationNamingScreen({
 
 function ProfileUtilityAiScreen({ controller }: { controller: ReturnType<typeof useProfileSettingsController> }) {
     const utilityConsumerTogglePending = controller.preferences.setUtilityModelConsumerPreferenceMutation.isPending;
+    const utilityDiagnostic = controller.preferences.internalModelRoleDiagnostics?.roles.find(
+        (role) => role.role === 'utility'
+    );
 
     function renderConsumerToggle(input: {
         label: string;
@@ -297,6 +312,13 @@ function ProfileUtilityAiScreen({ controller }: { controller: ReturnType<typeof 
                     a feature toggle below is off, Neon falls back to the active conversation model for that task.
                 </p>
             </div>
+
+            {utilityDiagnostic ? (
+                <InternalRoleDiagnosticBanner
+                    label={`Internal Role: ${utilityDiagnostic.label}`}
+                    detail={`${utilityDiagnostic.sourceLabel}${utilityDiagnostic.providerId && utilityDiagnostic.modelId ? ` · ${utilityDiagnostic.providerId}/${utilityDiagnostic.modelId}` : ''}${utilityDiagnostic.detail ? ` · ${utilityDiagnostic.detail}` : ''}`}
+                />
+            ) : null}
 
             <div className='grid gap-4 md:grid-cols-[minmax(0,0.34fr)_minmax(0,0.66fr)]'>
                 <label className='space-y-2'>
@@ -422,6 +444,9 @@ function ProfileUtilityAiScreen({ controller }: { controller: ReturnType<typeof 
 
 function ProfileMemoryRetrievalScreen({ controller }: { controller: ReturnType<typeof useProfileSettingsController> }) {
     const hasModelOptions = controller.preferences.memoryRetrievalModelOptions.length > 0;
+    const memoryRetrievalDiagnostic = controller.preferences.internalModelRoleDiagnostics?.roles.find(
+        (role) => role.role === 'memory_retrieval'
+    );
 
     return (
         <section className='border-border/70 bg-card/55 space-y-4 rounded-[24px] border p-5'>
@@ -432,6 +457,13 @@ function ProfileMemoryRetrievalScreen({ controller }: { controller: ReturnType<t
                     shared Utility AI model.
                 </p>
             </div>
+
+            {memoryRetrievalDiagnostic ? (
+                <InternalRoleDiagnosticBanner
+                    label={`Internal Role: ${memoryRetrievalDiagnostic.label}`}
+                    detail={`${memoryRetrievalDiagnostic.sourceLabel}${memoryRetrievalDiagnostic.providerId && memoryRetrievalDiagnostic.modelId ? ` · ${memoryRetrievalDiagnostic.providerId}/${memoryRetrievalDiagnostic.modelId}` : ''}${memoryRetrievalDiagnostic.detail ? ` · ${memoryRetrievalDiagnostic.detail}` : ''}`}
+                />
+            ) : null}
 
             {hasModelOptions ? (
                 <>
@@ -556,13 +588,13 @@ function getProfileSectionMetadata(subsection: ProfileSettingsSubsectionId): {
             return {
                 title: 'Utility AI',
                 description:
-                    'Choose the shared utility model and control which profile features use it before they fall back to the active conversation model.',
+                    'Choose the internal utility role target and control which profile features use it before they fall back to the active conversation model.',
             };
         case 'memoryRetrieval':
             return {
                 title: 'Memory Retrieval',
                 description:
-                    'Choose the dedicated model Neon will reserve for future semantic memory retrieval work. This stays separate from Utility AI.',
+                    'Choose the dedicated internal memory retrieval role target for semantic retrieval work. This stays separate from Utility AI.',
             };
     }
 }

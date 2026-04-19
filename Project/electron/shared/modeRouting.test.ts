@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { ModeDefinition } from '@/shared/contracts';
+import type { ModeDefinition, RuntimeRequirementProfile, ToolCapability } from '@/shared/contracts';
 import {
     isSupportedModeSpecialistAlias,
     resolveModeCompatibilityRequirements,
@@ -12,15 +12,23 @@ import {
 function createMode(input: {
     topLevelTab: ModeDefinition['topLevelTab'];
     modeKey: string;
-    runtimeProfile?: ModeDefinition['executionPolicy']['runtimeProfile'];
+    authoringRole?: ModeDefinition['authoringRole'];
+    roleTemplate?: ModeDefinition['roleTemplate'];
+    internalModelRole?: ModeDefinition['internalModelRole'];
+    runtimeProfile?: RuntimeRequirementProfile;
     planningOnly?: boolean;
-    toolCapabilities?: ModeDefinition['executionPolicy']['toolCapabilities'];
+    toolCapabilities?: ToolCapability[];
 }): ModeDefinition {
     return {
         id: `mode_${input.topLevelTab}_${input.modeKey}`,
         profileId: 'profile_default',
         topLevelTab: input.topLevelTab,
         modeKey: input.modeKey,
+        authoringRole: input.authoringRole ?? 'single_task_agent',
+        roleTemplate: input.roleTemplate ?? 'single_task_agent/apply',
+        internalModelRole: input.internalModelRole ?? 'apply',
+        delegatedOnly: false,
+        sessionSelectable: true,
         label: input.modeKey,
         assetKey: `${input.topLevelTab}.${input.modeKey}`,
         prompt: {},
@@ -28,6 +36,9 @@ function createMode(input: {
             ...(input.runtimeProfile ? { runtimeProfile: input.runtimeProfile } : {}),
             ...(input.planningOnly ? { planningOnly: true } : {}),
             ...(input.toolCapabilities ? { toolCapabilities: input.toolCapabilities } : {}),
+            ...(input.authoringRole ? { authoringRole: input.authoringRole } : {}),
+            ...(input.roleTemplate ? { roleTemplate: input.roleTemplate } : {}),
+            ...(input.internalModelRole ? { internalModelRole: input.internalModelRole } : {}),
         },
         source: 'test',
         sourceKind: 'system_seed',
@@ -44,6 +55,7 @@ describe('mode routing intent', () => {
         const codeMode = createMode({
             topLevelTab: 'agent',
             modeKey: 'code',
+            roleTemplate: 'single_task_agent/apply',
             runtimeProfile: 'mutating_agent',
         });
 
@@ -67,13 +79,14 @@ describe('mode routing intent', () => {
         const customMode = createMode({
             topLevelTab: 'agent',
             modeKey: 'custom_review',
-            runtimeProfile: 'mutating_agent',
+            roleTemplate: 'single_task_agent/review',
+            runtimeProfile: 'reviewer',
         });
 
         expect(resolveModeSpecialistAlias(customMode)).toBeUndefined();
         expect(resolveModeRoutingIntent(customMode)).toMatchObject({
-            runtimeProfile: 'mutating_agent',
-            requiresNativeTools: true,
+            runtimeProfile: 'reviewer',
+            requiresNativeTools: false,
             allowsImageAttachments: true,
         });
         expect(resolveModeRoutingIntent(customMode).specialistAlias).toBeUndefined();
@@ -84,6 +97,8 @@ describe('mode routing intent', () => {
         const planMode = createMode({
             topLevelTab: 'agent',
             modeKey: 'plan',
+            roleTemplate: 'single_task_agent/plan',
+            internalModelRole: 'planner',
             runtimeProfile: 'planner',
             planningOnly: true,
         });
@@ -95,10 +110,13 @@ describe('mode routing intent', () => {
         });
     });
 
-    it('uses runtimeProfile as the authoritative native-tool requirement when available', () => {
+    it('keeps chat-role modes from claiming native tool requirements', () => {
         const generalMode = createMode({
-            topLevelTab: 'agent',
-            modeKey: 'custom_general',
+            topLevelTab: 'chat',
+            modeKey: 'chat',
+            authoringRole: 'chat',
+            roleTemplate: 'chat/default',
+            internalModelRole: 'chat',
             runtimeProfile: 'general',
             toolCapabilities: ['filesystem_read', 'shell'],
         });

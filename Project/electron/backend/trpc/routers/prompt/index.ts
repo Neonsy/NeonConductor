@@ -1,5 +1,8 @@
 import {
+    promptLayerApplyModeDraftInputSchema,
+    promptLayerCreateModeDraftInputSchema,
     promptLayerCreateCustomModeInputSchema,
+    promptLayerDiscardModeDraftInputSchema,
     promptLayerDeleteCustomModeInputSchema,
     promptLayerExportCustomModeInputSchema,
     promptLayerGetCustomModeInputSchema,
@@ -14,14 +17,19 @@ import {
     promptLayerSetProfileGlobalInstructionsInputSchema,
     promptLayerSetTopLevelInstructionsInputSchema,
     promptLayerUpdateCustomModeInputSchema,
+    promptLayerUpdateModeDraftInputSchema,
+    promptLayerValidateModeDraftInputSchema,
 } from '@/app/backend/runtime/contracts';
 import {
+    applyModeDraft,
+    createModeDraft,
     createCustomMode,
+    discardModeDraft,
     deleteCustomMode,
     exportCustomMode,
     getCustomMode,
     getPromptLayerSettings,
-    importCustomMode,
+    importCustomModeToDraft,
     resetBuiltInModePrompt,
     resetAppGlobalInstructions,
     resetProfileGlobalInstructions,
@@ -31,6 +39,8 @@ import {
     setProfileGlobalInstructions,
     setTopLevelInstructions,
     updateCustomMode,
+    updateModeDraft,
+    validateModeDraft,
 } from '@/app/backend/runtime/services/promptLayers/service';
 import { publicProcedure, router } from '@/app/backend/trpc/init';
 import { raiseMappedTrpcError, toTrpcError } from '@/app/backend/trpc/trpcErrorMap';
@@ -39,6 +49,11 @@ export const promptRouter = router({
     getSettings: publicProcedure.input(promptLayerGetSettingsInputSchema).query(async ({ input }) => {
         return {
             settings: await getPromptLayerSettings(input.profileId, input.workspaceFingerprint),
+        };
+    }),
+    listModeDrafts: publicProcedure.input(promptLayerGetSettingsInputSchema).query(async ({ input }) => {
+        return {
+            modeDrafts: (await getPromptLayerSettings(input.profileId, input.workspaceFingerprint)).modeDrafts,
         };
     }),
     setAppGlobalInstructions: publicProcedure
@@ -140,8 +155,40 @@ export const promptRouter = router({
         );
     }),
     importCustomMode: publicProcedure.input(promptLayerImportCustomModeInputSchema).mutation(async ({ input }) => {
+        return (await importCustomModeToDraft(input)).match(
+            (value) => value,
+            (error) => raiseMappedTrpcError(error, toTrpcError)
+        );
+    }),
+    createModeDraft: publicProcedure.input(promptLayerCreateModeDraftInputSchema).mutation(async ({ input }) => {
+        return (await createModeDraft(input)).match(
+            (value) => value,
+            (error) => raiseMappedTrpcError(error, toTrpcError)
+        );
+    }),
+    updateModeDraft: publicProcedure.input(promptLayerUpdateModeDraftInputSchema).mutation(async ({ input }) => {
+        return (await updateModeDraft(input)).match(
+            (value) => value,
+            (error) => raiseMappedTrpcError(error, toTrpcError)
+        );
+    }),
+    validateModeDraft: publicProcedure
+        .input(promptLayerValidateModeDraftInputSchema)
+        .mutation(async ({ input }) => {
+            return (await validateModeDraft(input)).match(
+                (value) => value,
+                (error) => raiseMappedTrpcError(error, toTrpcError)
+            );
+        }),
+    applyModeDraft: publicProcedure.input(promptLayerApplyModeDraftInputSchema).mutation(async ({ input }) => {
+        return (await applyModeDraft(input)).match(
+            (value) => value,
+            (error) => raiseMappedTrpcError(error, toTrpcError)
+        );
+    }),
+    discardModeDraft: publicProcedure.input(promptLayerDiscardModeDraftInputSchema).mutation(async ({ input }) => {
         return {
-            settings: (await importCustomMode(input)).match(
+            settings: (await discardModeDraft(input)).match(
                 (value) => value,
                 (error) => raiseMappedTrpcError(error, toTrpcError)
             ),

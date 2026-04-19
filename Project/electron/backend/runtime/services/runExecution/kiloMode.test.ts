@@ -4,17 +4,59 @@ import { resolveKiloModeHeader } from '@/app/backend/runtime/services/runExecuti
 
 import type { ModeDefinition } from '@/shared/contracts';
 
-
 function createMode(topLevelTab: ModeDefinition['topLevelTab'], modeKey: string): ModeDefinition {
     return {
         id: `mode_test_${topLevelTab}_${modeKey}`,
         profileId: 'profile_test',
         topLevelTab,
         modeKey,
+        authoringRole:
+            topLevelTab === 'chat'
+                ? 'chat'
+                : topLevelTab === 'orchestrator'
+                  ? 'orchestrator_primary'
+                  : 'single_task_agent',
+        roleTemplate:
+            topLevelTab === 'chat'
+                ? 'chat/default'
+                : topLevelTab === 'orchestrator'
+                  ? modeKey === 'orchestrate'
+                      ? 'orchestrator_primary/orchestrate'
+                      : 'orchestrator_primary/debug'
+                  : modeKey === 'ask'
+                    ? 'single_task_agent/ask'
+                    : modeKey === 'debug'
+                      ? 'single_task_agent/debug'
+                      : 'single_task_agent/apply',
+        internalModelRole: topLevelTab === 'chat' ? 'chat' : 'apply',
+        delegatedOnly: false,
+        sessionSelectable: true,
         label: `${topLevelTab}:${modeKey}`,
         assetKey: `${topLevelTab}.${modeKey}`,
         prompt: {},
-        executionPolicy: {},
+        executionPolicy: {
+            authoringRole:
+                topLevelTab === 'chat'
+                    ? 'chat'
+                    : topLevelTab === 'orchestrator'
+                      ? 'orchestrator_primary'
+                      : 'single_task_agent',
+            roleTemplate:
+                topLevelTab === 'chat'
+                    ? 'chat/default'
+                    : topLevelTab === 'orchestrator'
+                      ? modeKey === 'orchestrate'
+                          ? 'orchestrator_primary/orchestrate'
+                          : 'orchestrator_primary/debug'
+                      : modeKey === 'ask'
+                        ? 'single_task_agent/ask'
+                        : modeKey === 'debug'
+                          ? 'single_task_agent/debug'
+                          : 'single_task_agent/apply',
+            internalModelRole: topLevelTab === 'chat' ? 'chat' : 'apply',
+            delegatedOnly: false,
+            sessionSelectable: true,
+        },
         source: 'test',
         sourceKind: 'system_seed',
         scope: 'system',

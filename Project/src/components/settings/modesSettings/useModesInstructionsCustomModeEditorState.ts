@@ -3,18 +3,11 @@ import { useState } from 'react';
 import type { CustomModeEditorDraft, CustomModeScope } from '@/web/components/settings/modesSettings/modesInstructionsControllerShared';
 import {
     createEmptyCustomModeEditorDraft,
-    toggleListValue,
-    toggleToolCapability,
+    getModeRoleTemplateOptions,
 } from '@/web/components/settings/modesSettings/modesInstructionsControllerShared';
 import { trpc } from '@/web/trpc/client';
 
-import type {
-    BehaviorFlag,
-    RuntimeRequirementProfile,
-    ToolCapability,
-    TopLevelTab,
-    WorkflowCapability,
-} from '@/shared/contracts';
+import type { ModeAuthoringRole, ModeDraftRecord, ModeRoleTemplateKey, TopLevelTab } from '@/shared/contracts';
 
 interface UseModesInstructionsCustomModeEditorStateInput {
     profileId: string;
@@ -48,20 +41,19 @@ export function useModesInstructionsCustomModeEditorState(input: UseModesInstruc
             setDraft({
                 kind: 'edit',
                 scope: result.mode.scope,
-                topLevelTab: result.mode.topLevelTab,
                 modeKey: result.mode.modeKey,
+                topLevelTab: result.mode.topLevelTab,
                 slug: result.mode.slug,
                 name: result.mode.name,
+                authoringRole: result.mode.authoringRole,
+                roleTemplate: result.mode.roleTemplate,
                 description: result.mode.description ?? '',
                 roleDefinition: result.mode.roleDefinition ?? '',
                 customInstructions: result.mode.customInstructions ?? '',
                 whenToUse: result.mode.whenToUse ?? '',
                 tagsText: result.mode.tags?.join(', ') ?? '',
-                selectedToolCapabilities: result.mode.toolCapabilities ?? [],
-                selectedWorkflowCapabilities: result.mode.workflowCapabilities ?? [],
-                selectedBehaviorFlags: result.mode.behaviorFlags ?? [],
-                selectedRuntimeProfile: result.mode.runtimeProfile ?? 'general',
                 deleteConfirmed: false,
+                sourceText: '',
             });
         } catch (error) {
             input.setErrorFeedback(error instanceof Error ? error.message : 'Custom mode could not be loaded.');
@@ -74,6 +66,27 @@ export function useModesInstructionsCustomModeEditorState(input: UseModesInstruc
         draft,
         isLoading,
         setDraft,
+        openDraft: (draft: ModeDraftRecord) => {
+            setDraft({
+                kind: 'draft',
+                draftId: draft.id,
+                scope: draft.scope,
+                slug: draft.mode.slug ?? '',
+                name: draft.mode.name ?? '',
+                authoringRole: draft.mode.authoringRole ?? 'chat',
+                roleTemplate: draft.mode.roleTemplate ?? 'chat/default',
+                description: draft.mode.description ?? '',
+                roleDefinition: draft.mode.roleDefinition ?? '',
+                customInstructions: draft.mode.customInstructions ?? '',
+                whenToUse: draft.mode.whenToUse ?? '',
+                tagsText: draft.mode.tags?.join(', ') ?? '',
+                deleteConfirmed: false,
+                sourceText: draft.sourceText ?? '',
+                validationState: draft.validationState,
+                validationErrors: draft.validationErrors,
+            });
+            input.clearFeedback();
+        },
         openCreate: (scope: CustomModeScope) => {
             setDraft(createEmptyCustomModeEditorDraft(scope));
             input.clearFeedback();
@@ -99,12 +112,24 @@ export function useModesInstructionsCustomModeEditorState(input: UseModesInstruc
             );
             input.clearFeedback();
         },
-        setTopLevelTab: (topLevelTab: TopLevelTab) => {
+        setAuthoringRole: (authoringRole: ModeAuthoringRole) => {
             setDraft((currentDraft) =>
-                currentDraft?.kind === 'create'
+                currentDraft
                     ? {
                           ...currentDraft,
-                          topLevelTab,
+                          authoringRole,
+                          roleTemplate: getModeRoleTemplateOptions(authoringRole)[0]?.roleTemplate ?? currentDraft.roleTemplate,
+                      }
+                    : currentDraft
+            );
+            input.clearFeedback();
+        },
+        setRoleTemplate: (roleTemplate: ModeRoleTemplateKey) => {
+            setDraft((currentDraft) =>
+                currentDraft
+                    ? {
+                          ...currentDraft,
+                          roleTemplate,
                       }
                     : currentDraft
             );
@@ -118,7 +143,8 @@ export function useModesInstructionsCustomModeEditorState(input: UseModesInstruc
                 | 'roleDefinition'
                 | 'customInstructions'
                 | 'whenToUse'
-                | 'tagsText',
+                | 'tagsText'
+                | 'sourceText',
             value: string
         ) => {
             setDraft((currentDraft) =>
@@ -126,56 +152,6 @@ export function useModesInstructionsCustomModeEditorState(input: UseModesInstruc
                     ? {
                           ...currentDraft,
                           [field]: value,
-                      }
-                    : currentDraft
-            );
-            input.clearFeedback();
-        },
-        toggleToolCapability: (capability: ToolCapability) => {
-            setDraft((currentDraft) =>
-                currentDraft
-                    ? {
-                          ...currentDraft,
-                          selectedToolCapabilities: toggleToolCapability(
-                              currentDraft.selectedToolCapabilities,
-                              capability
-                          ),
-                      }
-                    : currentDraft
-            );
-            input.clearFeedback();
-        },
-        toggleWorkflowCapability: (capability: WorkflowCapability) => {
-            setDraft((currentDraft) =>
-                currentDraft
-                    ? {
-                          ...currentDraft,
-                          selectedWorkflowCapabilities: toggleListValue(
-                              currentDraft.selectedWorkflowCapabilities,
-                              capability
-                          ),
-                      }
-                    : currentDraft
-            );
-            input.clearFeedback();
-        },
-        toggleBehaviorFlag: (behaviorFlag: BehaviorFlag) => {
-            setDraft((currentDraft) =>
-                currentDraft
-                    ? {
-                          ...currentDraft,
-                          selectedBehaviorFlags: toggleListValue(currentDraft.selectedBehaviorFlags, behaviorFlag),
-                      }
-                    : currentDraft
-            );
-            input.clearFeedback();
-        },
-        setRuntimeProfile: (runtimeProfile: RuntimeRequirementProfile) => {
-            setDraft((currentDraft) =>
-                currentDraft
-                    ? {
-                          ...currentDraft,
-                          selectedRuntimeProfile: runtimeProfile,
                       }
                     : currentDraft
             );

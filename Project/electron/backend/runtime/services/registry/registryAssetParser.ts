@@ -21,10 +21,17 @@ import type {
 
 import {
     behaviorFlags as knownBehaviorFlags,
+    type InternalModelRole,
+    type ModeAuthoringRole,
+    type ModeRoleTemplateKey,
+    internalModelRoles as knownInternalModelRoles,
+    modeAuthoringRoles as knownModeAuthoringRoles,
+    modeRoleTemplateKeys as knownModeRoleTemplateKeys,
     runtimeRequirementProfiles as knownRuntimeRequirementProfiles,
     toolCapabilities as knownToolCapabilities,
     workflowCapabilities as knownWorkflowCapabilities,
 } from '@/shared/contracts/enums';
+import { getModeRoleTemplateDefinition, normalizeModeExecutionMetadata } from '@/shared/modeRoleCatalog';
 
 function readString(value: unknown): string | undefined {
     return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
@@ -116,6 +123,39 @@ function readRuntimeRequirementProfile(value: unknown): RuntimeRequirementProfil
         : null;
 }
 
+function readModeAuthoringRole(value: unknown): ModeAuthoringRole | null | undefined {
+    if (value === undefined) {
+        return undefined;
+    }
+    if (typeof value !== 'string') {
+        return null;
+    }
+
+    return (knownModeAuthoringRoles as readonly string[]).includes(value) ? (value as ModeAuthoringRole) : null;
+}
+
+function readModeRoleTemplateKey(value: unknown): ModeRoleTemplateKey | null | undefined {
+    if (value === undefined) {
+        return undefined;
+    }
+    if (typeof value !== 'string') {
+        return null;
+    }
+
+    return (knownModeRoleTemplateKeys as readonly string[]).includes(value) ? (value as ModeRoleTemplateKey) : null;
+}
+
+function readInternalModelRole(value: unknown): InternalModelRole | null | undefined {
+    if (value === undefined) {
+        return undefined;
+    }
+    if (typeof value !== 'string') {
+        return null;
+    }
+
+    return (knownInternalModelRoles as readonly string[]).includes(value) ? (value as InternalModelRole) : null;
+}
+
 function mapModePrompt(input: { bodyMarkdown: string; attributes: Record<string, unknown> }): ModePromptDefinition {
     const bodyInstructions = input.bodyMarkdown.trim();
     const customInstructions = readString(input.attributes['customInstructions']) ?? bodyInstructions;
@@ -133,12 +173,19 @@ function mergeTags(values: Array<string[] | undefined>): string[] | undefined {
 }
 
 export function buildModeExecutionPolicy(input: {
+    authoringRole?: ReturnType<typeof readModeAuthoringRole> extends infer T ? Exclude<T, null | undefined> : never;
+    roleTemplate?: ReturnType<typeof readModeRoleTemplateKey> extends infer T ? Exclude<T, null | undefined> : never;
+    internalModelRole?: ReturnType<typeof readInternalModelRole> extends infer T ? Exclude<T, null | undefined> : never;
+    delegatedOnly?: boolean;
+    sessionSelectable?: boolean;
     planningOnly?: boolean;
     readOnly?: boolean;
     toolCapabilities?: ToolCapability[];
     workflowCapabilities?: WorkflowCapability[];
     behaviorFlags?: BehaviorFlag[];
     runtimeProfile?: RuntimeRequirementProfile;
+    topLevelTab?: TopLevelTab;
+    modeKey?: string;
 }): ModeExecutionPolicy {
     const normalizedToolCapabilities: ToolCapability[] | undefined =
         input.toolCapabilities && input.toolCapabilities.length > 0
@@ -147,8 +194,14 @@ export function buildModeExecutionPolicy(input: {
               ? ['filesystem_read']
               : undefined;
 
-    return {
+    const policy = {
+        ...(input.authoringRole ? { authoringRole: input.authoringRole } : {}),
+        ...(input.roleTemplate ? { roleTemplate: input.roleTemplate } : {}),
+        ...(input.internalModelRole ? { internalModelRole: input.internalModelRole } : {}),
+        ...(input.delegatedOnly !== undefined ? { delegatedOnly: input.delegatedOnly } : {}),
+        ...(input.sessionSelectable !== undefined ? { sessionSelectable: input.sessionSelectable } : {}),
         ...(input.planningOnly !== undefined ? { planningOnly: input.planningOnly } : {}),
+        ...(input.readOnly !== undefined ? { readOnly: input.readOnly } : {}),
         ...(normalizedToolCapabilities ? { toolCapabilities: normalizedToolCapabilities } : {}),
         ...(input.workflowCapabilities && input.workflowCapabilities.length > 0
             ? { workflowCapabilities: Array.from(new Set(input.workflowCapabilities)) }
@@ -158,6 +211,12 @@ export function buildModeExecutionPolicy(input: {
             : {}),
         ...(input.runtimeProfile ? { runtimeProfile: input.runtimeProfile } : {}),
     };
+
+    return normalizeModeExecutionMetadata({
+        ...(input.topLevelTab ? { topLevelTab: input.topLevelTab } : {}),
+        ...(input.modeKey ? { modeKey: input.modeKey } : {}),
+        policy,
+    });
 }
 
 export interface RegistryAssetParserContext {
@@ -211,6 +270,20 @@ export function parseRegistryModeAsset(
 
     const description = readString(file.parsed.attributes['description']);
     const mergedTags = mergeTags([readTags(file.parsed.attributes['tags']), parsedLegacyGroups ?? undefined]);
+    const authoringRole = readModeAuthoringRole(file.parsed.attributes['authoringRole']);
+    if (authoringRole === null) {
+        return null;
+    }
+    const roleTemplate = readModeRoleTemplateKey(file.parsed.attributes['roleTemplate']);
+    if (roleTemplate === null) {
+        return null;
+    }
+    const internalModelRole = readInternalModelRole(file.parsed.attributes['internalModelRole']);
+    if (internalModelRole === null) {
+        return null;
+    }
+    const delegatedOnly = readBoolean(file.parsed.attributes['delegatedOnly']);
+    const sessionSelectable = readBoolean(file.parsed.attributes['sessionSelectable']);
     const planningOnly = readBoolean(file.parsed.attributes['planningOnly']);
     const readOnly = readBoolean(file.parsed.attributes['readOnly']);
     const toolCapabilities = readToolCapabilities(file.parsed.attributes['toolCapabilities']);
@@ -229,7 +302,11 @@ export function parseRegistryModeAsset(
     if (runtimeProfile === null) {
         return null;
     }
-    const topLevelTab = parsedTopLevelTab ?? 'agent';
+    const templateTopLevelTab = roleTemplate ? getModeRoleTemplateDefinition(roleTemplate).topLevelTab : undefined;
+    if (parsedTopLevelTab && templateTopLevelTab && parsedTopLevelTab !== templateTopLevelTab) {
+        return null;
+    }
+    const topLevelTab = templateTopLevelTab ?? parsedTopLevelTab ?? 'agent';
 
     return {
         topLevelTab,
@@ -248,12 +325,19 @@ export function parseRegistryModeAsset(
             attributes: file.parsed.attributes,
         }),
         executionPolicy: buildModeExecutionPolicy({
+            ...(authoringRole !== undefined ? { authoringRole } : {}),
+            ...(roleTemplate !== undefined ? { roleTemplate } : {}),
+            ...(internalModelRole !== undefined ? { internalModelRole } : {}),
+            ...(delegatedOnly !== undefined ? { delegatedOnly } : {}),
+            ...(sessionSelectable !== undefined ? { sessionSelectable } : {}),
             ...(planningOnly !== undefined ? { planningOnly } : {}),
             ...(readOnly !== undefined ? { readOnly } : {}),
             ...(toolCapabilities !== undefined ? { toolCapabilities } : {}),
             ...(workflowCapabilities !== undefined ? { workflowCapabilities } : {}),
             ...(behaviorFlags !== undefined ? { behaviorFlags } : {}),
             ...(runtimeProfile !== undefined ? { runtimeProfile } : {}),
+            topLevelTab,
+            modeKey,
         }),
         source: context.source,
         sourceKind: context.sourceKind,

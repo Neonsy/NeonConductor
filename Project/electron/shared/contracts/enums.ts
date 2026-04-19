@@ -31,6 +31,40 @@ export type UtilityModelConsumerId = (typeof utilityModelConsumerIds)[number];
 export const topLevelTabs = ['chat', 'agent', 'orchestrator'] as const;
 export type TopLevelTab = (typeof topLevelTabs)[number];
 
+export const modeAuthoringRoles = [
+    'chat',
+    'single_task_agent',
+    'orchestrator_primary',
+    'orchestrator_worker_agent',
+] as const;
+export type ModeAuthoringRole = (typeof modeAuthoringRoles)[number];
+
+export const modeRoleTemplateKeys = [
+    'chat/default',
+    'single_task_agent/ask',
+    'single_task_agent/plan',
+    'single_task_agent/apply',
+    'single_task_agent/debug',
+    'single_task_agent/review',
+    'orchestrator_primary/plan',
+    'orchestrator_primary/orchestrate',
+    'orchestrator_primary/debug',
+    'orchestrator_worker_agent/apply',
+    'orchestrator_worker_agent/debug',
+] as const;
+export type ModeRoleTemplateKey = (typeof modeRoleTemplateKeys)[number];
+
+export const internalModelRoles = [
+    'chat',
+    'planner',
+    'apply',
+    'utility',
+    'memory_retrieval',
+    'embeddings',
+    'rerank',
+] as const;
+export type InternalModelRole = (typeof internalModelRoles)[number];
+
 export const sessionEditModes = ['truncate', 'branch'] as const;
 export type SessionEditMode = (typeof sessionEditModes)[number];
 

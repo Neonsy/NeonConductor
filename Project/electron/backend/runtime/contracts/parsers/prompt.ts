@@ -1,11 +1,7 @@
 import {
-    behaviorFlags as knownBehaviorFlags,
-    toolCapabilities as knownToolCapabilities,
-    runtimeRequirementProfiles as knownRuntimeRequirementProfiles,
-    workflowCapabilities as knownWorkflowCapabilities,
+    modeAuthoringRoles,
+    modeRoleTemplateKeys,
     topLevelTabs,
-    type ToolCapability,
-    type RuntimeRequirementProfile,
 } from '@/app/backend/runtime/contracts/enums';
 import {
     createParser,
@@ -18,13 +14,18 @@ import {
     readStringArray,
 } from '@/app/backend/runtime/contracts/parsers/helpers';
 import type {
+    ModeDraftSourceKind,
     PromptLayerCreateCustomModeInput,
+    PromptLayerCreateModeDraftInput,
+    PromptLayerDiscardModeDraftInput,
     PromptLayerDeleteCustomModeInput,
     PromptLayerEditableCustomModePayload,
+    PromptLayerApplyModeDraftInput,
     PromptLayerExportCustomModeInput,
     PromptLayerGetCustomModeInput,
     PromptLayerGetSettingsInput,
     PromptLayerImportCustomModeInput,
+    PromptLayerModeDraftPayload,
     PromptLayerResetBuiltInModePromptInput,
     PromptLayerResetAppGlobalInstructionsInput,
     PromptLayerResetProfileGlobalInstructionsInput,
@@ -35,6 +36,8 @@ import type {
     PromptLayerSetProfileGlobalInstructionsInput,
     PromptLayerSetTopLevelInstructionsInput,
     PromptLayerUpdateCustomModeInput,
+    PromptLayerUpdateModeDraftInput,
+    PromptLayerValidateModeDraftInput,
     ProfileInput,
 } from '@/app/backend/runtime/contracts/types';
 
@@ -95,49 +98,24 @@ function readOptionalStringList(value: unknown, field: string): string[] | undef
     return values.length > 0 ? Array.from(new Set(values)) : undefined;
 }
 
-function readOptionalToolCapabilities(value: unknown, field: string): ToolCapability[] | undefined {
+function readOptionalModeAuthoringRole(value: unknown, field: string) {
     if (value === undefined) {
         return undefined;
     }
 
-    const capabilities = readStringArray(value, field).map((capability) => capability.trim());
-    const invalidCapability = capabilities.find(
-        (capability) => !knownToolCapabilities.includes(capability as ToolCapability)
-    );
-    if (invalidCapability) {
-        throw new Error(`Invalid "${field}": expected only ${knownToolCapabilities.join(', ')}.`);
-    }
-
-    return capabilities.length > 0 ? Array.from(new Set(capabilities as ToolCapability[])) : undefined;
+    return readEnumValue(value, field, modeAuthoringRoles);
 }
 
-function readOptionalEnumList<const T extends readonly string[]>(
-    value: unknown,
-    field: string,
-    allowedValues: T
-): T[number][] | undefined {
+function readOptionalModeRoleTemplate(value: unknown, field: string) {
     if (value === undefined) {
         return undefined;
     }
 
-    const entries = readStringArray(value, field).map((entry) => entry.trim());
-    const invalidEntry = entries.find((entry) => !allowedValues.includes(entry as T[number]));
-    if (invalidEntry) {
-        throw new Error(`Invalid "${field}": expected only ${allowedValues.join(', ')}.`);
-    }
-
-    return entries.length > 0 ? Array.from(new Set(entries as T[number][])) : undefined;
+    return readEnumValue(value, field, modeRoleTemplateKeys);
 }
 
-function readOptionalRuntimeRequirementProfile(
-    value: unknown,
-    field: string
-): RuntimeRequirementProfile | undefined {
-    if (value === undefined) {
-        return undefined;
-    }
-
-    return readEnumValue(value, field, knownRuntimeRequirementProfiles);
+function readModeDraftSourceKind(value: unknown, field: string): ModeDraftSourceKind {
+    return readEnumValue(value, field, ['manual', 'portable_json_v1', 'portable_json_v2', 'pasted_source_material'] as const);
 }
 
 function parsePromptLayerCustomModePayload(value: unknown, field: string): PromptLayerCustomModePayload {
@@ -147,31 +125,19 @@ function parsePromptLayerCustomModePayload(value: unknown, field: string): Promp
     const customInstructions = readOptionalInstructionText(source.customInstructions, `${field}.customInstructions`);
     const whenToUse = readOptionalInstructionText(source.whenToUse, `${field}.whenToUse`);
     const tags = readOptionalStringList(source.tags, `${field}.tags`);
-    const toolCapabilities = readOptionalToolCapabilities(source.toolCapabilities, `${field}.toolCapabilities`);
-    const workflowCapabilities = readOptionalEnumList(
-        source.workflowCapabilities,
-        `${field}.workflowCapabilities`,
-        knownWorkflowCapabilities
-    );
-    const behaviorFlags = readOptionalEnumList(
-        source.behaviorFlags,
-        `${field}.behaviorFlags`,
-        knownBehaviorFlags
-    );
-    const runtimeProfile = readOptionalRuntimeRequirementProfile(source.runtimeProfile, `${field}.runtimeProfile`);
+    const authoringRole = readEnumValue(source.authoringRole, `${field}.authoringRole`, modeAuthoringRoles);
+    const roleTemplate = readEnumValue(source.roleTemplate, `${field}.roleTemplate`, modeRoleTemplateKeys);
 
     return {
         slug: readString(source.slug, `${field}.slug`),
         name: readString(source.name, `${field}.name`),
+        authoringRole,
+        roleTemplate,
         ...(description ? { description } : {}),
         ...(roleDefinition ? { roleDefinition } : {}),
         ...(customInstructions ? { customInstructions } : {}),
         ...(whenToUse ? { whenToUse } : {}),
         ...(tags ? { tags } : {}),
-        ...(toolCapabilities ? { toolCapabilities } : {}),
-        ...(workflowCapabilities ? { workflowCapabilities } : {}),
-        ...(behaviorFlags ? { behaviorFlags } : {}),
-        ...(runtimeProfile ? { runtimeProfile } : {}),
     };
 }
 
@@ -185,30 +151,46 @@ function parsePromptLayerEditableCustomModePayload(
     const customInstructions = readOptionalInstructionText(source.customInstructions, `${field}.customInstructions`);
     const whenToUse = readOptionalInstructionText(source.whenToUse, `${field}.whenToUse`);
     const tags = readOptionalStringList(source.tags, `${field}.tags`);
-    const toolCapabilities = readOptionalToolCapabilities(source.toolCapabilities, `${field}.toolCapabilities`);
-    const workflowCapabilities = readOptionalEnumList(
-        source.workflowCapabilities,
-        `${field}.workflowCapabilities`,
-        knownWorkflowCapabilities
-    );
-    const behaviorFlags = readOptionalEnumList(
-        source.behaviorFlags,
-        `${field}.behaviorFlags`,
-        knownBehaviorFlags
-    );
-    const runtimeProfile = readOptionalRuntimeRequirementProfile(source.runtimeProfile, `${field}.runtimeProfile`);
+    const authoringRole = readEnumValue(source.authoringRole, `${field}.authoringRole`, modeAuthoringRoles);
+    const roleTemplate = readEnumValue(source.roleTemplate, `${field}.roleTemplate`, modeRoleTemplateKeys);
 
     return {
         name: readString(source.name, `${field}.name`),
+        authoringRole,
+        roleTemplate,
         ...(description ? { description } : {}),
         ...(roleDefinition ? { roleDefinition } : {}),
         ...(customInstructions ? { customInstructions } : {}),
         ...(whenToUse ? { whenToUse } : {}),
         ...(tags ? { tags } : {}),
-        ...(toolCapabilities ? { toolCapabilities } : {}),
-        ...(workflowCapabilities ? { workflowCapabilities } : {}),
-        ...(behaviorFlags ? { behaviorFlags } : {}),
-        ...(runtimeProfile ? { runtimeProfile } : {}),
+    };
+}
+
+function parsePromptLayerModeDraftPayload(value: unknown, field: string): PromptLayerModeDraftPayload {
+    const source = readObject(value, field);
+    const topLevelTab =
+        source.topLevelTab === undefined ? undefined : readEnumValue(source.topLevelTab, `${field}.topLevelTab`, topLevelTabs);
+    const slug = readOptionalInstructionText(source.slug, `${field}.slug`);
+    const name = readOptionalInstructionText(source.name, `${field}.name`);
+    const description = readOptionalInstructionText(source.description, `${field}.description`);
+    const authoringRole = readOptionalModeAuthoringRole(source.authoringRole, `${field}.authoringRole`);
+    const roleTemplate = readOptionalModeRoleTemplate(source.roleTemplate, `${field}.roleTemplate`);
+    const roleDefinition = readOptionalInstructionText(source.roleDefinition, `${field}.roleDefinition`);
+    const customInstructions = readOptionalInstructionText(source.customInstructions, `${field}.customInstructions`);
+    const whenToUse = readOptionalInstructionText(source.whenToUse, `${field}.whenToUse`);
+    const tags = readOptionalStringList(source.tags, `${field}.tags`);
+
+    return {
+        ...(topLevelTab ? { topLevelTab } : {}),
+        ...(slug ? { slug } : {}),
+        ...(name ? { name } : {}),
+        ...(authoringRole ? { authoringRole } : {}),
+        ...(roleTemplate ? { roleTemplate } : {}),
+        ...(description ? { description } : {}),
+        ...(roleDefinition ? { roleDefinition } : {}),
+        ...(customInstructions ? { customInstructions } : {}),
+        ...(whenToUse ? { whenToUse } : {}),
+        ...(tags ? { tags } : {}),
     };
 }
 
@@ -375,14 +357,71 @@ export function parsePromptLayerImportCustomModeInput(input: unknown): PromptLay
     const source = readObject(input, 'input');
     const scope = readCustomModeScope(source.scope, 'scope');
     const workspaceFingerprint = readWorkspaceFingerprintForScope(source, scope);
+    const topLevelTab =
+        source.topLevelTab === undefined ? undefined : readEnumValue(source.topLevelTab, 'topLevelTab', topLevelTabs);
 
     return {
         profileId: readProfileId(source),
-        topLevelTab: readEnumValue(source.topLevelTab, 'topLevelTab', topLevelTabs),
         scope,
         ...(workspaceFingerprint ? { workspaceFingerprint } : {}),
         jsonText: readString(source.jsonText, 'jsonText'),
+        ...(topLevelTab ? { topLevelTab } : {}),
+    };
+}
+
+export function parsePromptLayerCreateModeDraftInput(input: unknown): PromptLayerCreateModeDraftInput {
+    const source = readObject(input, 'input');
+    const scope = readCustomModeScope(source.scope, 'scope');
+    const workspaceFingerprint = readWorkspaceFingerprintForScope(source, scope);
+    const sourceText = readOptionalInstructionText(source.sourceText, 'sourceText');
+
+    return {
+        profileId: readProfileId(source),
+        scope,
+        ...(workspaceFingerprint ? { workspaceFingerprint } : {}),
+        sourceKind: readModeDraftSourceKind(source.sourceKind, 'sourceKind'),
+        ...(sourceText ? { sourceText } : {}),
+        mode: parsePromptLayerModeDraftPayload(source.mode, 'mode'),
+    };
+}
+
+export function parsePromptLayerUpdateModeDraftInput(input: unknown): PromptLayerUpdateModeDraftInput {
+    const source = readObject(input, 'input');
+    const sourceText = readOptionalInstructionText(source.sourceText, 'sourceText');
+
+    return {
+        profileId: readProfileId(source),
+        draftId: readString(source.draftId, 'draftId'),
+        mode: parsePromptLayerModeDraftPayload(source.mode, 'mode'),
+        ...(sourceText ? { sourceText } : {}),
+    };
+}
+
+export function parsePromptLayerValidateModeDraftInput(input: unknown): PromptLayerValidateModeDraftInput {
+    const source = readObject(input, 'input');
+
+    return {
+        profileId: readProfileId(source),
+        draftId: readString(source.draftId, 'draftId'),
+    };
+}
+
+export function parsePromptLayerApplyModeDraftInput(input: unknown): PromptLayerApplyModeDraftInput {
+    const source = readObject(input, 'input');
+
+    return {
+        profileId: readProfileId(source),
+        draftId: readString(source.draftId, 'draftId'),
         overwrite: readBoolean(source.overwrite, 'overwrite'),
+    };
+}
+
+export function parsePromptLayerDiscardModeDraftInput(input: unknown): PromptLayerDiscardModeDraftInput {
+    const source = readObject(input, 'input');
+
+    return {
+        profileId: readProfileId(source),
+        draftId: readString(source.draftId, 'draftId'),
     };
 }
 
@@ -411,3 +450,8 @@ export const promptLayerCreateCustomModeInputSchema = createParser(parsePromptLa
 export const promptLayerUpdateCustomModeInputSchema = createParser(parsePromptLayerUpdateCustomModeInput);
 export const promptLayerDeleteCustomModeInputSchema = createParser(parsePromptLayerDeleteCustomModeInput);
 export const promptLayerImportCustomModeInputSchema = createParser(parsePromptLayerImportCustomModeInput);
+export const promptLayerCreateModeDraftInputSchema = createParser(parsePromptLayerCreateModeDraftInput);
+export const promptLayerUpdateModeDraftInputSchema = createParser(parsePromptLayerUpdateModeDraftInput);
+export const promptLayerValidateModeDraftInputSchema = createParser(parsePromptLayerValidateModeDraftInput);
+export const promptLayerApplyModeDraftInputSchema = createParser(parsePromptLayerApplyModeDraftInput);
+export const promptLayerDiscardModeDraftInputSchema = createParser(parsePromptLayerDiscardModeDraftInput);

@@ -23,6 +23,7 @@ export { memoryRevisionStore } from '@/app/backend/persistence/stores/runtime/me
 export { memoryRetrievalUsageStore } from '@/app/backend/persistence/stores/runtime/memoryRetrievalUsageStore';
 export { memoryStore } from '@/app/backend/persistence/stores/runtime/memoryStore';
 export { modelLimitOverrideStore } from '@/app/backend/persistence/stores/runtime/modelLimitOverrideStore';
+export { modeDraftStore } from '@/app/backend/persistence/stores/registry/modeDraftStore';
 export { modeStore } from '@/app/backend/persistence/stores/registry/modeStore';
 export { orchestratorStore } from '@/app/backend/persistence/stores/runtime/orchestratorStore';
 export { permissionStore } from '@/app/backend/persistence/stores/runtime/permissionStore';

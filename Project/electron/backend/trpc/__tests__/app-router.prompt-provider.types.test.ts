@@ -58,12 +58,28 @@ test('AppRouter exposes prompt and provider procedure contracts to clients', () 
         mode: {
             slug: string;
             name: string;
+            authoringRole:
+                | 'chat'
+                | 'single_task_agent'
+                | 'orchestrator_primary'
+                | 'orchestrator_worker_agent';
+            roleTemplate:
+                | 'chat/default'
+                | 'single_task_agent/ask'
+                | 'single_task_agent/plan'
+                | 'single_task_agent/apply'
+                | 'single_task_agent/debug'
+                | 'single_task_agent/review'
+                | 'orchestrator_primary/plan'
+                | 'orchestrator_primary/orchestrate'
+                | 'orchestrator_primary/debug'
+                | 'orchestrator_worker_agent/apply'
+                | 'orchestrator_worker_agent/debug';
             description?: string;
             roleDefinition?: string;
             customInstructions?: string;
             whenToUse?: string;
             tags?: string[];
-            toolCapabilities?: Array<'filesystem_read' | 'filesystem_write' | 'shell' | 'git' | 'mcp' | 'code_runtime'>;
         };
     }>();
     expectTypeOf<AppRouterInputs['prompt']['updateCustomMode']>().toExtend<{
@@ -74,12 +90,28 @@ test('AppRouter exposes prompt and provider procedure contracts to clients', () 
         workspaceFingerprint?: string;
         mode: {
             name: string;
+            authoringRole:
+                | 'chat'
+                | 'single_task_agent'
+                | 'orchestrator_primary'
+                | 'orchestrator_worker_agent';
+            roleTemplate:
+                | 'chat/default'
+                | 'single_task_agent/ask'
+                | 'single_task_agent/plan'
+                | 'single_task_agent/apply'
+                | 'single_task_agent/debug'
+                | 'single_task_agent/review'
+                | 'orchestrator_primary/plan'
+                | 'orchestrator_primary/orchestrate'
+                | 'orchestrator_primary/debug'
+                | 'orchestrator_worker_agent/apply'
+                | 'orchestrator_worker_agent/debug';
             description?: string;
             roleDefinition?: string;
             customInstructions?: string;
             whenToUse?: string;
             tags?: string[];
-            toolCapabilities?: Array<'filesystem_read' | 'filesystem_write' | 'shell' | 'git' | 'mcp' | 'code_runtime'>;
         };
     }>();
     expectTypeOf<AppRouterInputs['prompt']['deleteCustomMode']>().toExtend<{
@@ -92,10 +124,43 @@ test('AppRouter exposes prompt and provider procedure contracts to clients', () 
     }>();
     expectTypeOf<AppRouterInputs['prompt']['importCustomMode']>().toExtend<{
         profileId: string;
-        topLevelTab: 'chat' | 'agent' | 'orchestrator';
         scope: 'global' | 'workspace';
         workspaceFingerprint?: string;
         jsonText: string;
+        topLevelTab?: 'chat' | 'agent' | 'orchestrator';
+    }>();
+    expectTypeOf<AppRouterInputs['prompt']['createModeDraft']>().toExtend<{
+        profileId: string;
+        scope: 'global' | 'workspace';
+        workspaceFingerprint?: string;
+        sourceKind: 'manual' | 'portable_json_v1' | 'portable_json_v2' | 'pasted_source_material';
+        sourceText?: string;
+        mode: {
+            topLevelTab?: 'chat' | 'agent' | 'orchestrator';
+            slug?: string;
+            name?: string;
+            authoringRole?:
+                | 'chat'
+                | 'single_task_agent'
+                | 'orchestrator_primary'
+                | 'orchestrator_worker_agent';
+            roleTemplate?:
+                | 'chat/default'
+                | 'single_task_agent/ask'
+                | 'single_task_agent/plan'
+                | 'single_task_agent/apply'
+                | 'single_task_agent/debug'
+                | 'single_task_agent/review'
+                | 'orchestrator_primary/plan'
+                | 'orchestrator_primary/orchestrate'
+                | 'orchestrator_primary/debug'
+                | 'orchestrator_worker_agent/apply'
+                | 'orchestrator_worker_agent/debug';
+        };
+    }>();
+    expectTypeOf<AppRouterInputs['prompt']['applyModeDraft']>().toExtend<{
+        profileId: string;
+        draftId: string;
         overwrite: boolean;
     }>();
 
@@ -339,6 +404,20 @@ test('AppRouter exposes prompt and provider procedure contracts to clients', () 
                     label: string;
                     prompt: { roleDefinition?: string; customInstructions?: string };
                     hasOverride: boolean;
+                    authoringRole:
+                        | 'chat'
+                        | 'single_task_agent'
+                        | 'orchestrator_primary'
+                        | 'orchestrator_worker_agent';
+                    roleTemplate: string;
+                    internalModelRole:
+                        | 'chat'
+                        | 'planner'
+                        | 'apply'
+                        | 'utility'
+                        | 'memory_retrieval'
+                        | 'embeddings'
+                        | 'rerank';
                 }>
             >;
             fileBackedCustomModes: {
@@ -348,6 +427,22 @@ test('AppRouter exposes prompt and provider procedure contracts to clients', () 
                         topLevelTab: 'chat' | 'agent' | 'orchestrator';
                         modeKey: string;
                         label: string;
+                        authoringRole:
+                            | 'chat'
+                            | 'single_task_agent'
+                            | 'orchestrator_primary'
+                            | 'orchestrator_worker_agent';
+                        roleTemplate: string;
+                        internalModelRole:
+                            | 'chat'
+                            | 'planner'
+                            | 'apply'
+                            | 'utility'
+                            | 'memory_retrieval'
+                            | 'embeddings'
+                            | 'rerank';
+                        delegatedOnly: boolean;
+                        sessionSelectable: boolean;
                         description?: string;
                         whenToUse?: string;
                         tags?: string[];
@@ -360,6 +455,22 @@ test('AppRouter exposes prompt and provider procedure contracts to clients', () 
                         topLevelTab: 'chat' | 'agent' | 'orchestrator';
                         modeKey: string;
                         label: string;
+                        authoringRole:
+                            | 'chat'
+                            | 'single_task_agent'
+                            | 'orchestrator_primary'
+                            | 'orchestrator_worker_agent';
+                        roleTemplate: string;
+                        internalModelRole:
+                            | 'chat'
+                            | 'planner'
+                            | 'apply'
+                            | 'utility'
+                            | 'memory_retrieval'
+                            | 'embeddings'
+                            | 'rerank';
+                        delegatedOnly: boolean;
+                        sessionSelectable: boolean;
                         description?: string;
                         whenToUse?: string;
                         tags?: string[];
@@ -367,6 +478,41 @@ test('AppRouter exposes prompt and provider procedure contracts to clients', () 
                     }>
                 >;
             };
+            delegatedWorkerModes: {
+                global: Array<{
+                    topLevelTab: 'chat' | 'agent' | 'orchestrator';
+                    modeKey: string;
+                    label: string;
+                }>;
+                workspace?: Array<{
+                    topLevelTab: 'chat' | 'agent' | 'orchestrator';
+                    modeKey: string;
+                    label: string;
+                }>;
+            };
+            modeDrafts: Array<{
+                id: string;
+                profileId: string;
+                scope: 'global' | 'workspace';
+                workspaceFingerprint?: string;
+                sourceKind: 'manual' | 'portable_json_v1' | 'portable_json_v2' | 'pasted_source_material';
+                sourceText?: string;
+                mode: {
+                    topLevelTab?: 'chat' | 'agent' | 'orchestrator';
+                    slug?: string;
+                    name?: string;
+                    authoringRole?:
+                        | 'chat'
+                        | 'single_task_agent'
+                        | 'orchestrator_primary'
+                        | 'orchestrator_worker_agent';
+                    roleTemplate?: string;
+                };
+                validationState: 'unvalidated' | 'valid' | 'invalid';
+                validationErrors: string[];
+                createdAt: string;
+                updatedAt: string;
+            }>;
         };
     }>();
     expectTypeOf<AppRouterOutputs['prompt']['exportCustomMode']>().toExtend<{
@@ -381,6 +527,22 @@ test('AppRouter exposes prompt and provider procedure contracts to clients', () 
             modeKey: string;
             slug: string;
             name: string;
+            authoringRole:
+                | 'chat'
+                | 'single_task_agent'
+                | 'orchestrator_primary'
+                | 'orchestrator_worker_agent';
+            roleTemplate: string;
+            internalModelRole:
+                | 'chat'
+                | 'planner'
+                | 'apply'
+                | 'utility'
+                | 'memory_retrieval'
+                | 'embeddings'
+                | 'rerank';
+            delegatedOnly: boolean;
+            sessionSelectable: boolean;
             description?: string;
             roleDefinition?: string;
             customInstructions?: string;
@@ -390,4 +552,3 @@ test('AppRouter exposes prompt and provider procedure contracts to clients', () 
         };
     }>();
 });
-

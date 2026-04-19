@@ -507,7 +507,7 @@ precedence: 5
         });
 
         const promptSettings = await caller.prompt.getSettings({ profileId });
-        expect(promptSettings.settings.builtInModes.chat.find((mode) => mode.modeKey === 'chat')).toEqual({
+        expect(promptSettings.settings.builtInModes.chat.find((mode) => mode.modeKey === 'chat')).toMatchObject({
             topLevelTab: 'chat',
             modeKey: 'chat',
             label: 'Chat',
@@ -516,6 +516,9 @@ precedence: 5
                 customInstructions: 'Built-in chat custom override',
             },
             hasOverride: true,
+            authoringRole: 'chat',
+            roleTemplate: 'chat/default',
+            internalModelRole: 'chat',
         });
 
         const orchestratorAfterPrune = await caller.mode.getActive({

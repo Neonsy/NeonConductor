@@ -21,6 +21,9 @@ describe('buildModesInstructionsViewModel', () => {
                     {
                         topLevelTab: 'agent',
                         modeKey: 'code',
+                        authoringRole: 'single_task_agent',
+                        roleTemplate: 'single_task_agent/apply',
+                        internalModelRole: 'apply',
                         label: 'Agent Code',
                         prompt: {
                             roleDefinition: 'role',

@@ -104,10 +104,8 @@ const MODE_SEED = [
         label: 'Chat',
         prompt: {},
         executionPolicy: {
-            toolCapabilities: [],
-            workflowCapabilities: [],
-            behaviorFlags: [],
-            runtimeProfile: 'general',
+            authoringRole: 'chat',
+            roleTemplate: 'chat/default',
         },
     },
     {
@@ -116,11 +114,8 @@ const MODE_SEED = [
         label: 'Agent Plan',
         prompt: {},
         executionPolicy: {
-            planningOnly: true,
-            toolCapabilities: ['filesystem_read', 'mcp'],
-            workflowCapabilities: ['planning', 'artifact_view', 'recovery'],
-            behaviorFlags: ['approval_gated', 'artifact_producing', 'read_only_execution'],
-            runtimeProfile: 'planner',
+            authoringRole: 'single_task_agent',
+            roleTemplate: 'single_task_agent/plan',
         },
     },
     {
@@ -129,10 +124,8 @@ const MODE_SEED = [
         label: 'Agent Debug',
         prompt: {},
         executionPolicy: {
-            toolCapabilities: ['filesystem_read', 'filesystem_write', 'shell', 'mcp', 'code_runtime'],
-            workflowCapabilities: ['artifact_view'],
-            behaviorFlags: ['workspace_mutating', 'checkpoint_eligible', 'artifact_producing'],
-            runtimeProfile: 'mutating_agent',
+            authoringRole: 'single_task_agent',
+            roleTemplate: 'single_task_agent/debug',
         },
     },
     {
@@ -141,10 +134,8 @@ const MODE_SEED = [
         label: 'Agent Code',
         prompt: {},
         executionPolicy: {
-            toolCapabilities: ['filesystem_read', 'filesystem_write', 'shell', 'mcp', 'code_runtime'],
-            workflowCapabilities: ['artifact_view'],
-            behaviorFlags: ['workspace_mutating', 'checkpoint_eligible', 'artifact_producing'],
-            runtimeProfile: 'mutating_agent',
+            authoringRole: 'single_task_agent',
+            roleTemplate: 'single_task_agent/apply',
         },
     },
     {
@@ -153,10 +144,8 @@ const MODE_SEED = [
         label: 'Agent Ask',
         prompt: {},
         executionPolicy: {
-            toolCapabilities: ['filesystem_read'],
-            workflowCapabilities: [],
-            behaviorFlags: ['read_only_execution'],
-            runtimeProfile: 'read_only_agent',
+            authoringRole: 'single_task_agent',
+            roleTemplate: 'single_task_agent/ask',
         },
     },
     {
@@ -165,11 +154,8 @@ const MODE_SEED = [
         label: 'Orchestrator Plan',
         prompt: {},
         executionPolicy: {
-            planningOnly: true,
-            toolCapabilities: ['filesystem_read', 'mcp'],
-            workflowCapabilities: ['planning', 'orchestration', 'artifact_view', 'recovery'],
-            behaviorFlags: ['approval_gated', 'artifact_producing', 'read_only_execution'],
-            runtimeProfile: 'planner',
+            authoringRole: 'orchestrator_primary',
+            roleTemplate: 'orchestrator_primary/plan',
         },
     },
     {
@@ -178,10 +164,8 @@ const MODE_SEED = [
         label: 'Orchestrator Orchestrate',
         prompt: {},
         executionPolicy: {
-            toolCapabilities: ['filesystem_read'],
-            workflowCapabilities: ['orchestration', 'artifact_view'],
-            behaviorFlags: ['checkpoint_eligible', 'artifact_producing', 'child_worker_capable'],
-            runtimeProfile: 'orchestrator',
+            authoringRole: 'orchestrator_primary',
+            roleTemplate: 'orchestrator_primary/orchestrate',
         },
     },
     {
@@ -190,10 +174,8 @@ const MODE_SEED = [
         label: 'Orchestrator Debug',
         prompt: {},
         executionPolicy: {
-            toolCapabilities: ['filesystem_read'],
-            workflowCapabilities: ['orchestration', 'artifact_view'],
-            behaviorFlags: ['checkpoint_eligible', 'artifact_producing', 'child_worker_capable'],
-            runtimeProfile: 'orchestrator',
+            authoringRole: 'orchestrator_primary',
+            roleTemplate: 'orchestrator_primary/debug',
         },
     },
 ] as const;

@@ -10,8 +10,7 @@ import { useModesInstructionsCustomModeEditorState } from '@/web/components/sett
 import { createFailClosedAsyncAction } from '@/web/lib/async/createFailClosedAsyncAction';
 import { trpc } from '@/web/trpc/client';
 
-import type { TopLevelTab } from '@/shared/contracts';
-
+import type { ModeDraftRecord, TopLevelTab } from '@/shared/contracts';
 
 export function useModesInstructionsCustomModesController(input: {
     profileId: string;
@@ -27,8 +26,8 @@ export function useModesInstructionsCustomModesController(input: {
         createFailClosedAsyncAction(action);
     const [importJsonText, setImportJsonText] = useState('');
     const [importScope, setImportScope] = useState<'global' | 'workspace'>('global');
-    const [importTopLevelTab, setImportTopLevelTab] = useState<TopLevelTab>('chat');
-    const [allowOverwrite, setAllowOverwrite] = useState(false);
+    const [importTopLevelTab, setImportTopLevelTab] = useState<TopLevelTab>('agent');
+    const [draftOverwriteConfirmed, setDraftOverwriteConfirmed] = useState(false);
     const [exportJsonText, setExportJsonText] = useState('');
     const [selectedExportLabel, setSelectedExportLabel] = useState<string | undefined>(undefined);
     const editorState = useModesInstructionsCustomModeEditorState({
@@ -47,8 +46,7 @@ export function useModesInstructionsCustomModesController(input: {
         onSuccess: ({ settings }) => {
             input.applySettings(settings);
             setImportJsonText('');
-            setAllowOverwrite(false);
-            input.setSuccessFeedback('Imported file-backed custom mode.');
+            input.setSuccessFeedback('Imported custom mode JSON into draft review.');
         },
         onError: (error) => {
             input.setErrorFeedback(error.message);
@@ -64,12 +62,51 @@ export function useModesInstructionsCustomModesController(input: {
             input.setErrorFeedback(error.message);
         },
     });
-    const createCustomModeMutation = trpc.prompt.createCustomMode.useMutation({
+    const createModeDraftMutation = trpc.prompt.createModeDraft.useMutation({
         onSuccess: ({ settings }) => {
             input.applySettings(settings);
             editorState.close();
+            input.setSuccessFeedback('Created mode draft.');
+        },
+        onError: (error) => {
+            input.setErrorFeedback(error.message);
+        },
+    });
+    const updateModeDraftMutation = trpc.prompt.updateModeDraft.useMutation({
+        onSuccess: ({ settings }) => {
+            input.applySettings(settings);
+            input.setSuccessFeedback('Updated mode draft.');
+        },
+        onError: (error) => {
+            input.setErrorFeedback(error.message);
+        },
+    });
+    const validateModeDraftMutation = trpc.prompt.validateModeDraft.useMutation({
+        onSuccess: ({ settings }) => {
+            input.applySettings(settings);
+            input.setSuccessFeedback('Validated mode draft.');
+        },
+        onError: (error) => {
+            input.setErrorFeedback(error.message);
+        },
+    });
+    const applyModeDraftMutation = trpc.prompt.applyModeDraft.useMutation({
+        onSuccess: ({ settings }) => {
+            input.applySettings(settings);
+            editorState.close();
+            setDraftOverwriteConfirmed(false);
             clearExportSelection();
-            input.setSuccessFeedback('Created file-backed custom mode.');
+            input.setSuccessFeedback('Applied mode draft to the registry.');
+        },
+        onError: (error) => {
+            input.setErrorFeedback(error.message);
+        },
+    });
+    const discardModeDraftMutation = trpc.prompt.discardModeDraft.useMutation({
+        onSuccess: ({ settings }) => {
+            input.applySettings(settings);
+            editorState.close();
+            input.setSuccessFeedback('Discarded mode draft.');
         },
         onError: (error) => {
             input.setErrorFeedback(error.message);
@@ -119,128 +156,196 @@ export function useModesInstructionsCustomModesController(input: {
         });
     }
 
+    async function saveEditorDraft(): Promise<void> {
+        const customModeEditorDraft = editorState.draft;
+        if (!customModeEditorDraft) {
+            return;
+        }
+
+        const tags = parseListText(customModeEditorDraft.tagsText);
+        const description = normalizeOptionalText(customModeEditorDraft.description);
+        const roleDefinition = normalizeOptionalText(customModeEditorDraft.roleDefinition);
+        const customInstructions = normalizeOptionalText(customModeEditorDraft.customInstructions);
+        const whenToUse = normalizeOptionalText(customModeEditorDraft.whenToUse);
+        const sourceText = normalizeOptionalText(customModeEditorDraft.sourceText);
+
+        if (customModeEditorDraft.kind === 'create') {
+            await createModeDraftMutation.mutateAsync({
+                profileId: input.profileId,
+                scope: customModeEditorDraft.scope,
+                ...(customModeEditorDraft.scope === 'workspace' && input.workspaceFingerprint
+                    ? { workspaceFingerprint: input.workspaceFingerprint }
+                    : {}),
+                sourceKind: sourceText ? 'pasted_source_material' : 'manual',
+                ...(sourceText ? { sourceText } : {}),
+                mode: {
+                    slug: customModeEditorDraft.slug,
+                    name: customModeEditorDraft.name,
+                    authoringRole: customModeEditorDraft.authoringRole,
+                    roleTemplate: customModeEditorDraft.roleTemplate,
+                    ...(description ? { description } : {}),
+                    ...(roleDefinition ? { roleDefinition } : {}),
+                    ...(customInstructions ? { customInstructions } : {}),
+                    ...(whenToUse ? { whenToUse } : {}),
+                    ...(tags ? { tags } : {}),
+                },
+            });
+            return;
+        }
+
+        if (customModeEditorDraft.kind === 'draft') {
+            await updateModeDraftMutation.mutateAsync({
+                profileId: input.profileId,
+                draftId: customModeEditorDraft.draftId,
+                ...(sourceText ? { sourceText } : {}),
+                mode: {
+                    slug: customModeEditorDraft.slug,
+                    name: customModeEditorDraft.name,
+                    authoringRole: customModeEditorDraft.authoringRole,
+                    roleTemplate: customModeEditorDraft.roleTemplate,
+                    ...(description ? { description } : {}),
+                    ...(roleDefinition ? { roleDefinition } : {}),
+                    ...(customInstructions ? { customInstructions } : {}),
+                    ...(whenToUse ? { whenToUse } : {}),
+                    ...(tags ? { tags } : {}),
+                },
+            });
+            return;
+        }
+
+        await updateCustomModeMutation.mutateAsync({
+            profileId: input.profileId,
+            topLevelTab: customModeEditorDraft.topLevelTab,
+            modeKey: customModeEditorDraft.modeKey,
+            scope: customModeEditorDraft.scope,
+            ...(customModeEditorDraft.scope === 'workspace' && input.workspaceFingerprint
+                ? { workspaceFingerprint: input.workspaceFingerprint }
+                : {}),
+            mode: {
+                name: customModeEditorDraft.name,
+                authoringRole: customModeEditorDraft.authoringRole,
+                roleTemplate: customModeEditorDraft.roleTemplate,
+                ...(description ? { description } : {}),
+                ...(roleDefinition ? { roleDefinition } : {}),
+                ...(customInstructions ? { customInstructions } : {}),
+                ...(whenToUse ? { whenToUse } : {}),
+                ...(tags ? { tags } : {}),
+            },
+        });
+    }
+
+    async function deleteOrDiscardCurrentEditorItem(): Promise<void> {
+        const customModeEditorDraft = editorState.draft;
+        if (!customModeEditorDraft) {
+            return;
+        }
+
+        if (customModeEditorDraft.kind === 'draft') {
+            await discardModeDraftMutation.mutateAsync({
+                profileId: input.profileId,
+                draftId: customModeEditorDraft.draftId,
+            });
+            return;
+        }
+
+        if (customModeEditorDraft.kind !== 'edit') {
+            return;
+        }
+
+        await deleteCustomModeMutation.mutateAsync({
+            profileId: input.profileId,
+            topLevelTab: customModeEditorDraft.topLevelTab,
+            modeKey: customModeEditorDraft.modeKey,
+            scope: customModeEditorDraft.scope,
+            ...(customModeEditorDraft.scope === 'workspace' && input.workspaceFingerprint
+                ? { workspaceFingerprint: input.workspaceFingerprint }
+                : {}),
+            confirm: customModeEditorDraft.deleteConfirmed,
+        });
+    }
+
+    async function applyDraft(draftId: string): Promise<void> {
+        await applyModeDraftMutation.mutateAsync({
+            profileId: input.profileId,
+            draftId,
+            overwrite: draftOverwriteConfirmed,
+        });
+    }
+
+    async function validateDraft(draftId: string): Promise<void> {
+        await validateModeDraftMutation.mutateAsync({
+            profileId: input.profileId,
+            draftId,
+        });
+    }
+
+    async function discardDraft(draftId: string): Promise<void> {
+        await discardModeDraftMutation.mutateAsync({
+            profileId: input.profileId,
+            draftId,
+        });
+    }
+
+    function openDraft(draft: ModeDraftRecord): void {
+        editorState.openDraft(draft);
+        setDraftOverwriteConfirmed(false);
+    }
+
     return {
         customModes: {
             global: input.persistedSettings?.fileBackedCustomModes.global ?? emptyModeItems(),
             workspace: input.persistedSettings?.fileBackedCustomModes.workspace ?? emptyModeItems(),
+            delegatedWorkerModes: input.persistedSettings?.delegatedWorkerModes ?? { global: [], workspace: [] },
+            modeDrafts: input.persistedSettings?.modeDrafts ?? [],
             editor: {
                 draft: editorState.draft,
                 isLoading: editorState.isLoading,
                 isSaving:
-                    createCustomModeMutation.isPending ||
+                    createModeDraftMutation.isPending ||
+                    updateModeDraftMutation.isPending ||
                     updateCustomModeMutation.isPending ||
-                    deleteCustomModeMutation.isPending,
+                    deleteCustomModeMutation.isPending ||
+                    discardModeDraftMutation.isPending ||
+                    applyModeDraftMutation.isPending ||
+                    validateModeDraftMutation.isPending,
                 hasWorkspaceScope: Boolean(input.workspaceFingerprint),
                 selectedWorkspaceLabel: input.selectedWorkspaceLabel,
                 openCreate: editorState.openCreate,
                 openEdit: editorState.openEdit,
+                openDraft,
                 openDelete: editorState.openDelete,
                 close: editorState.close,
                 setScope: editorState.setScope,
-                setTopLevelTab: editorState.setTopLevelTab,
+                setAuthoringRole: editorState.setAuthoringRole,
+                setRoleTemplate: editorState.setRoleTemplate,
                 setField: editorState.setField,
-                toggleToolCapability: editorState.toggleToolCapability,
-                toggleWorkflowCapability: editorState.toggleWorkflowCapability,
-                toggleBehaviorFlag: editorState.toggleBehaviorFlag,
-                setRuntimeProfile: editorState.setRuntimeProfile,
                 setDeleteConfirmed: editorState.setDeleteConfirmed,
-                save: wrapFailClosedAction(async () => {
-                    const customModeEditorDraft = editorState.draft;
-                    if (!customModeEditorDraft) {
+                save: wrapFailClosedAction(saveEditorDraft),
+                deleteMode: wrapFailClosedAction(deleteOrDiscardCurrentEditorItem),
+                validateDraft: wrapFailClosedAction(async () => {
+                    const draft = editorState.draft;
+                    if (draft?.kind !== 'draft') {
                         return;
                     }
-
-                    const tags = parseListText(customModeEditorDraft.tagsText);
-                    const description = normalizeOptionalText(customModeEditorDraft.description);
-                    const roleDefinition = normalizeOptionalText(customModeEditorDraft.roleDefinition);
-                    const customInstructions = normalizeOptionalText(customModeEditorDraft.customInstructions);
-                    const whenToUse = normalizeOptionalText(customModeEditorDraft.whenToUse);
-                    const toolCapabilities =
-                        customModeEditorDraft.selectedToolCapabilities.length > 0
-                            ? customModeEditorDraft.selectedToolCapabilities
-                            : undefined;
-                    const workflowCapabilities =
-                        customModeEditorDraft.selectedWorkflowCapabilities.length > 0
-                            ? customModeEditorDraft.selectedWorkflowCapabilities
-                            : undefined;
-                    const behaviorFlags =
-                        customModeEditorDraft.selectedBehaviorFlags.length > 0
-                            ? customModeEditorDraft.selectedBehaviorFlags
-                            : undefined;
-                    const runtimeProfile =
-                        customModeEditorDraft.selectedRuntimeProfile !== 'general'
-                            ? customModeEditorDraft.selectedRuntimeProfile
-                            : undefined;
-                    if (customModeEditorDraft.kind === 'create') {
-                        await createCustomModeMutation.mutateAsync({
-                            profileId: input.profileId,
-                            topLevelTab: customModeEditorDraft.topLevelTab,
-                            scope: customModeEditorDraft.scope,
-                            ...(customModeEditorDraft.scope === 'workspace' && input.workspaceFingerprint
-                                ? { workspaceFingerprint: input.workspaceFingerprint }
-                                : {}),
-                            mode: {
-                                slug: customModeEditorDraft.slug,
-                                name: customModeEditorDraft.name,
-                                ...(description ? { description } : {}),
-                                ...(roleDefinition ? { roleDefinition } : {}),
-                                ...(customInstructions ? { customInstructions } : {}),
-                                ...(whenToUse ? { whenToUse } : {}),
-                                ...(tags ? { tags } : {}),
-                                ...(toolCapabilities ? { toolCapabilities } : {}),
-                                ...(workflowCapabilities ? { workflowCapabilities } : {}),
-                                ...(behaviorFlags ? { behaviorFlags } : {}),
-                                ...(runtimeProfile ? { runtimeProfile } : {}),
-                            },
-                        });
-                        return;
-                    }
-
-                    await updateCustomModeMutation.mutateAsync({
-                        profileId: input.profileId,
-                        topLevelTab: customModeEditorDraft.topLevelTab,
-                        modeKey: customModeEditorDraft.modeKey,
-                        scope: customModeEditorDraft.scope,
-                        ...(customModeEditorDraft.scope === 'workspace' && input.workspaceFingerprint
-                            ? { workspaceFingerprint: input.workspaceFingerprint }
-                            : {}),
-                        mode: {
-                            name: customModeEditorDraft.name,
-                            ...(description ? { description } : {}),
-                            ...(roleDefinition ? { roleDefinition } : {}),
-                            ...(customInstructions ? { customInstructions } : {}),
-                            ...(whenToUse ? { whenToUse } : {}),
-                            ...(tags ? { tags } : {}),
-                            ...(toolCapabilities ? { toolCapabilities } : {}),
-                            ...(workflowCapabilities ? { workflowCapabilities } : {}),
-                            ...(behaviorFlags ? { behaviorFlags } : {}),
-                            ...(runtimeProfile ? { runtimeProfile } : {}),
-                        },
-                    });
+                    await validateDraft(draft.draftId);
                 }),
-                deleteMode: wrapFailClosedAction(async () => {
-                    const customModeEditorDraft = editorState.draft;
-                    if (!customModeEditorDraft || customModeEditorDraft.kind !== 'edit') {
+                applyDraft: wrapFailClosedAction(async () => {
+                    const draft = editorState.draft;
+                    if (draft?.kind !== 'draft') {
                         return;
                     }
-
-                    await deleteCustomModeMutation.mutateAsync({
-                        profileId: input.profileId,
-                        topLevelTab: customModeEditorDraft.topLevelTab,
-                        modeKey: customModeEditorDraft.modeKey,
-                        scope: customModeEditorDraft.scope,
-                        ...(customModeEditorDraft.scope === 'workspace' && input.workspaceFingerprint
-                            ? { workspaceFingerprint: input.workspaceFingerprint }
-                            : {}),
-                        confirm: customModeEditorDraft.deleteConfirmed,
-                    });
+                    await applyDraft(draft.draftId);
                 }),
+                draftOverwriteConfirmed,
+                setDraftOverwriteConfirmed: (value: boolean) => {
+                    setDraftOverwriteConfirmed(value);
+                    input.clearFeedback();
+                },
             },
             importDraft: {
                 jsonText: importJsonText,
                 scope: importScope,
                 topLevelTab: importTopLevelTab,
-                allowOverwrite,
                 hasWorkspaceScope: Boolean(input.workspaceFingerprint),
                 selectedWorkspaceLabel: input.selectedWorkspaceLabel,
             },
@@ -251,6 +356,10 @@ export function useModesInstructionsCustomModesController(input: {
             },
             isImporting: importCustomModeMutation.isPending,
             isExporting: exportCustomModeMutation.isPending,
+            isDraftActionPending:
+                validateModeDraftMutation.isPending ||
+                applyModeDraftMutation.isPending ||
+                discardModeDraftMutation.isPending,
             setImportJsonText: (value: string) => {
                 setImportJsonText(value);
                 input.clearFeedback();
@@ -263,24 +372,22 @@ export function useModesInstructionsCustomModesController(input: {
                 setImportTopLevelTab(topLevelTab);
                 input.clearFeedback();
             },
-            setAllowOverwrite: (value: boolean) => {
-                setAllowOverwrite(value);
-                input.clearFeedback();
-            },
             importMode: wrapFailClosedAction(async () => {
                 await importCustomModeMutation.mutateAsync({
                     profileId: input.profileId,
-                    topLevelTab: importTopLevelTab,
                     scope: importScope,
                     ...(importScope === 'workspace' && input.workspaceFingerprint
                         ? { workspaceFingerprint: input.workspaceFingerprint }
                         : {}),
                     jsonText: importJsonText,
-                    overwrite: allowOverwrite,
+                    ...(importTopLevelTab ? { topLevelTab: importTopLevelTab } : {}),
                 });
             }),
             exportMode: wrapFailClosedAction(loadExportJson),
             copyExportJson: wrapFailClosedAction(copyExportJson),
+            validateDraft: wrapFailClosedAction(validateDraft),
+            applyDraft: wrapFailClosedAction(applyDraft),
+            discardDraft: wrapFailClosedAction(discardDraft),
         },
     };
 }
